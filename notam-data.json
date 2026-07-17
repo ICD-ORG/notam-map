@@ -1,0 +1,174 @@
+{
+ "fetched_at": "16/07/2026 08:04 UTC",
+ "fetched_iso": "2026-07-16T08:04:00Z",
+ "notams": [
+  {
+   "id": "C1519/26",
+   "loc": "LLEY",
+   "name": "מנחת עין יהב (LLEY)",
+   "heb": "פעילות כטב\"מ תתקיים בתוך מנחת עין יהב, מהקרקע ועד 3,000 רגל מעל פני הים.\nהפעילות תתואם ותאושר ע\"י בקרת התעופה.\nמומלצת זהירות.\nלו\"ז (UTC): 21/07 בשעות 03:00–05:45, 09:15–09:55, 13:25–16:00; 22/07 בשעות 03:00–04:25.",
+   "raw": "C1519/26 NOTAMN\nQ) LLLL/QFALT/IV/NBO/A /000/999/3037N03512E005\nA) LLEY B) 2607210300 C) 2607220425\nD) 21 0300-0545 0915-0955 1325-1600, 22 0300-0425\nE) UAS ACT WILL TAKE PLACE WI AIRSTRIP, FM GND UP TO 3,000FT AMSL.\nOPS WILL BE COORD AND APPROVED BY ATC.\nCTN ADZ.)"
+  },
+  {
+   "id": "C1512/26",
+   "loc": "LLLL",
+   "name": "תענכים / גדיש",
+   "heb": "פעילות כטב\"מ תתקיים בתענכים/גדיש.\nאזור ברדיוס 400 מטר סביב נ.צ. 32°33'09\"N 35°14'47\"E סגור לכל הטיסות, כולל טיסות ריסוס חקלאיות, מהקרקע ועד 100 מטר מעל הקרקע (560 רגל מעל פני הים).\nמומלצת זהירות.",
+   "raw": "C1512/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/006/3233N03515E001\nA) LLLL B) 2607151042 C) 2607312059\nE) UAS ACT WILL TAKE PLACE AT TAANACHIM/GADISH.\nAN AREA WI 400M RADIUS CENTERED ON PSN 323309N0351447E\nFM GND UP TO 100M AGL, 560FT AMSL CLSD TO ALL FLT\nINCLUDING AGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 560FT AMSL)"
+  },
+  {
+   "id": "C1511/26",
+   "loc": "LLLL",
+   "name": "תענכים",
+   "heb": "פעילות כטב\"מ תתקיים בתענכים.\nאזור (פוליגון) בין נקודות הציון סגור מהקרקע ועד 100 מטר מעל הקרקע (560 רגל מעל פני הים).\nטיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה.\nמומלצת זהירות.",
+   "raw": "C1511/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/006/3233N03517E002\nA) LLLL B) 2607151018 C) 2607312059\nE) UAS ACT WILL TAKE PLACE AT TAANACHIM.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 100M AGL 560FT AMSL\n323333N0351719E 323219N0351747E 323221N0351759E\n323207N0351803E 323201N0351722E 323254N0351640E\n323313N0351637E 323317N0351558E 323335N0351558E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 560FT AMSL)"
+  },
+  {
+   "id": "C1487/26",
+   "loc": "LLLL",
+   "name": "תלמי בילו",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בתלמי בילו.\nאזור (פוליגון) סגור מהקרקע ועד 150 מטר (1,000 רגל מעל פני הים).\nלו\"ז: מדי יום 02:20–16:30 UTC.\nמומלצת זהירות.",
+   "raw": "C1487/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3125N03439E002\nA) LLLL B) 2607140220 C) 2607161630\nD) DAILY 0220-1630\nE) UAS/UAV ACT WILL TAKE PLACE AT TALMEI-BILU.\nAN AREA FM GND UP TO 150M, 1,000FT AMSL CLSD BTN FLW PSN\n312543N0343847E 312544N0343910E 312334N0343920E\n312334N0343857E.\nCTN ADZ.\nF) GND G) 1000FT AMSL)"
+  },
+  {
+   "id": "C1476/26",
+   "loc": "LLLL",
+   "name": "ירוחם",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בירוחם, מהקרקע ועד 600 מטר מעל הקרקע.\nאזור ברדיוס 0.3 מייל ימי סביב נ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים.\nלו\"ז: מדי יום 03:00–14:30 UTC.\nמומלצת זהירות.",
+   "raw": "C1476/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2607120300 C) 2607161430\nD) DAILY 0300-1430\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
+  },
+  {
+   "id": "C1459/26",
+   "loc": "LLHZ",
+   "name": "הרצליה (LLHZ) — טריגר",
+   "heb": "נוטמ טריגר — עדכון AIP פנים-ארצי 01/26, בתוקף מ-06/08/2026:\nטיסות אווירובטיות באזור אימונים 12, כתובת דוא\"ל לתיאום פעילות כטב\"מ, ועדכון מפת נקודות חמות (Hotspot).",
+   "raw": "C1459/26 NOTAMN\nQ) LLLL/QOATT/IV/BO /AE/000/999/3211N03450E005\nA) LLHZ B) 2608060001 C) 2608192359\nE) TRIGGER NOTAM - AIRAC DOM AIP AMDT 01/26 WEF 06 AUG 2026\nAEROBATICS FLT WI TRG AREA 12, EMAIL FOR COOR UAS ACT,\nHOTSPOT CHART UPDATED.)"
+  },
+  {
+   "id": "C1434/26",
+   "loc": "LLLL",
+   "name": "כפר המכביה (בתוך CTR בן-גוריון)",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בכפר המכביה, בתוך אזור הבקרה של נתב\"ג.\nמהקרקע ועד 100 מטר מעל הקרקע (עד 830 רגל מעל פני הים), אזור בין נקודות הציון (פוליגון).\nמומלצת זהירות.",
+   "raw": "C1434/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/009/3203N03450E001\nA) LLLL B) 2607010001 C) 2607242059\nE) UAS/UAV ACT WILL TAKE PLACE AT KFAR-HAMACABIYA WI LLBG CTR,\nFM GND UP TO 100M AGL, BTN FLW PSN  320311N0344907E\n320325N0344914E 320339N0344932E 320337N0344953E\n320328N0345004E 320315N0345005E 320303N0344959E\n320255N0344950E 320253N0344937E 320258N0344917E\nCTN ADZ.\nF) GND G) 830FT AMSL)"
+  },
+  {
+   "id": "C1405/26",
+   "loc": "LLLL",
+   "name": "קיסריה",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בקיסריה, עד 100 מטר מעל הקרקע.\nאזור ברדיוס 0.8 מייל ימי סביב נ.צ. 32°29'41\"N 34°54'39\"E סגור מהקרקע ועד 500 רגל מעל פני הים.\nלו\"ז: מדי לילה 19:00–02:15 UTC.\nמומלצת זהירות.",
+   "raw": "C1405/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/005/3230N03455E001\nA) LLLL B) 2607011900 C) 2608010215\nD) DAILY 1900-0215\nE) UAS/UAV ACT WILL TAKE PLACE AT KESARYA UP TO 100M AGL,\nAN AREA WI 0.8NM RADIUS CENTERED ON PSN 322941N0345439E\nCLSD FM GND UP TO 500FT AMSL.\nCTN ADZ.\nF) GND G) 500FT AMSL)"
+  },
+  {
+   "id": "C1395/26",
+   "loc": "LLGV",
+   "name": "גבעולים (LLGV)",
+   "heb": "אזור הבקרה (CTR) של גבעולים זמין לטיסות כטב\"מ/רחפנים או טיסות ריסוס חקלאיות בלבד.",
+   "raw": "C1395/26 NOTAMR C1164/26\nQ) LLLL/QACLP/IV/NBO/AE/000/015/3113N03428E002\nA) LLGV B) 2606280808 C) 2607312059\nE) CTR AVBL FOR UAS/UAV OR AGRICULTURE FLT ONLY.)"
+  },
+  {
+   "id": "C1386/26",
+   "loc": "LLLL",
+   "name": "רצועת גבול לבנון (8 ק\"מ)",
+   "heb": "אזור מגבול לבנון ועד 8 ק\"מ דרומה סגור לכל הטיסות הפנים-ארציות,\nלמעט משטרה, כיבוי אש, פינוי רפואי, או טיסות כטב\"מ/רחפנים למטרות חירום, ביטחון ופינוי רפואי בלבד.\nכל טיסת חירום מאושרת תתואם עם בקרת התעופה ומב\"ח.\n(האזור במפה משוער — רצועה לאורך הגבול)",
+   "raw": "C1386/26 NOTAMR C1158/26\nQ) LLLL/QAELC/IV/NBO/E /000/999/3308N03526E019\nA) LLLL B) 2606280801 C) 2607312059\nE) AN AREA FM LEBANON BOUNDRAY TO 8KM SB CLSD TO ALL DOM FLT,\nEXC POLICE, FIREFIGHTING, MEDEVAC FLT OR UAS/UAV FLT FOR\nEMERG, SECURITY, MEDEVAC PURPOSES ONLY.\nALL EMERG APPROVED FLT SHALL COORD WITH ATC AND MABBAH.)"
+  },
+  {
+   "id": "C1387/26",
+   "loc": "LLLL",
+   "name": "רצועת גבול סוריה (6 ק\"מ)",
+   "heb": "אזור מגבול סוריה ועד 6 ק\"מ מערבה סגור לכל הטיסות הפנים-ארציות,\nלמעט משטרה, כיבוי אש, פינוי רפואי, או טיסות כטב\"מ/רחפנים למטרות חירום, ביטחון ופינוי רפואי בלבד.\nכל טיסת חירום מאושרת תתואם עם בקרת התעופה ומב\"ח.\n(האזור במפה משוער — רצועה לאורך הגבול)",
+   "raw": "C1387/26 NOTAMR C1159/26\nQ) LLLL/QAELP/IV/NBO/E /000/999/3302N03547E018\nA) LLLL B) 2606280802 C) 2607312059\nE) AN AREA FM SYRIA BOUNDRAY TO 6KM WB CLSD TO ALL DOM FLT,\nEXC POLICE, FIREFIGHTING, MEDEVAC FLT OR UAS/UAV FLT FOR\nEMERG, SECURITY, MEDEVAC PURPOSES ONLY.\nALL EMERG APPROVED FLT SHALL COORD WITH ATC AND MABBAH.)"
+  },
+  {
+   "id": "C1361/26",
+   "loc": "LLLL",
+   "name": "אשדוד",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים באשדוד, מהקרקע ועד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 950 רגל מעל פני הים.\nבתוקף עד סוף דצמבר 2026.\nמומלצת זהירות.",
+   "raw": "C1361/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3151N03440E002\nA) LLLL B) 2607010001 C) 2612312159\nE) UAS/UAV ACT WILL TAKE PLACE AT ASHDOD, FM GND UP TO 100M AGL.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 950FT AMSL\n315119N0344122E 315127N0344037E 315123N0344007E\n315132N0343931E 315055N0343917E 315038N0344013E\n315035N0344120E.\nCTN ADZ.\nF) GND G) 950FT AMSL)"
+  },
+  {
+   "id": "C1359/26",
+   "loc": "LLLL",
+   "name": "פארק רעים",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בפארק רעים.\nאזור ברדיוס 0.5 מייל ימי סביב נ.צ. 31°46'33\"N 34°45'20\"E סגור מהקרקע ועד 25 מטר מעל הקרקע (300 רגל מעל פני הים).\nהפעלה באישור מוקדם מבקרת התעופה בלבד.\nמומלצת זהירות.",
+   "raw": "C1359/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3146N03445E001\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT PARK-REEM.\nAN AREA WI 0.5NM RADIUS CENTERED ON PSN 314633N0344520E\nCLSD FM GND UP TO 25M AGL 300FT AMSL.\nOPS AVBL WITH PPR FM ATC ONLY.\nCTN ADZ.\nF) GND G) 300FT AMSL)"
+  },
+  {
+   "id": "C1358/26",
+   "loc": "LLLL",
+   "name": "דליה / צפית (בועת גוברין דרום)",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בדליה/צפית, בתוך בועת הזעירים גוברין דרום (BGOVS), עד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 1,400 רגל מעל פני הים.\nמומלצת זהירות.",
+   "raw": "C1358/26 NOTAMR C1356/26\nQ) LLLL/QWULW/IV/BO /W /000/014/3143N03450E002\nA) LLLL B) 2606250629 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT DALIA/TZAFIT, WI ULTRALIGHT\nBUBBLE GOVRIN SOUTH (BGOVS) UP TO 100M AGL.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 1,400FT AMSL\n314353N0345038E 314339N0345010E 314221N0344925E\n314150N0345023E 314222N0345118E 314323N0345123E.\nCTN ADZ.\nF) GND G) 1400FT AMSL)"
+  },
+  {
+   "id": "C1348/26",
+   "loc": "LLLL",
+   "name": "מגן שאול",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים במגן שאול, עד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 1,500 רגל מעל פני הים.\nמומלצת זהירות.",
+   "raw": "C1348/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3231N03518E002\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT MAGEN-SHAUL, UP TO 100M AGL.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 1,500FT AMSL\n323145N0351642E 323024N0351638E 323039N0352004E\n323139N0351954E 323153N0351930E 323159N0351907E\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
+  },
+  {
+   "id": "C1345/26",
+   "loc": "LLLL",
+   "name": "צומת סגולה (פתח תקווה)",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בצומת סגולה.\nאזור ברדיוס 0.65 מייל ימי סביב נ.צ. 32°06'12\"N 34°54'20\"E, מהקרקע ועד 300 רגל מעל פני הים.\nמומלצת זהירות.",
+   "raw": "C1345/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3206N03454E001\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT SEGULA JUNCTION,\nWI 0.65NM RADIUS CENTERED ON PSN 320612N0345420E\nFM GND UP TO 300FT AMSL.\nCTN ADZ.\nF) GND G) 300FT AMSL)"
+  },
+  {
+   "id": "C1313/26",
+   "loc": "LLLL",
+   "name": "בית חולים איתנים",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בבית החולים איתנים.\nאזור ברדיוס 500 מטר סביב נ.צ. 31°46'43\"N 35°05'39\"E סגור לכל הטיסות, כולל טיסות ריסוס, מהקרקע ועד 100 מטר מעל הקרקע (2,800 רגל מעל פני הים).\nלו\"ז: מדי יום 05:00–15:00 UTC.\nחציית הסגירה באישור מוקדם מ: אלון קלוס 052-9459432, חאתם סעד 052-5582412, 04-9523999.\nמומלצת זהירות.",
+   "raw": "C1313/26 NOTAMR C1312/26\nQ) LLLL/QWULW/IV/BO /W /000/028/3147N03506E001\nA) LLLL B) 2606171235 C) 2607311500\nD) DAILY 0500-1500\nE) UAS/UAV ACT WILL TAKE PLACE AT EITANIM-HOSPITAL.\nAN AREA WI 500M RADIUS CENTERED ON PSN 314643N0350539E\nFM GND UP TO 100M AGL, 2,800FT AMSL CLSD TO ALL FLT\nINCLUDING AGRICULTURE FLT.\nXNG CLOSURE BY PPR FM FLW\nALON KLOSS 052-9459432, HATEM SAAD 052-5582412, 04-9523999.\nCTN ADZ.\nF) GND G) 2800FT AMSL)"
+  },
+  {
+   "id": "C1284/26",
+   "loc": "LLLL",
+   "name": "נשר (בתוך CTR חיפה)",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בנשר, בתוך אזור הבקרה של חיפה.\nמהקרקע ועד 460 מטר מעל הקרקע (1,510 רגל מעל פני הים), אזור בין נקודות הציון (פוליגון).\nמומלצת זהירות.",
+   "raw": "C1284/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3246N03502E002\nA) LLLL B) 2606151332 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT NESHER WI LLHA CTR\nFM GND UP TO 460M AGL 1,510FT AMSL, BTN FLW PSN\n324637N0350134E 324629N0350037E 324552N0350043E\n324514N0350131E 324513N0350243E 324559N0350245E\n324617N0350207E.\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
+  },
+  {
+   "id": "C1116/26",
+   "loc": "LLLL",
+   "name": "בית חולים בילינסון",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים בבית החולים בילינסון.\nאזור בין נקודות הציון (פוליגון) מהקרקע ועד 300 רגל מעל פני הים.\nטיסות מסוקים באישור מוקדם ממפעיל המנחת (LLBL).\nמומלצת זהירות.",
+   "raw": "C1116/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3205N03452E001\nA) LLLL B) 2606010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT BELINSON-HOSPITAL,\nBTN FLW PSN FM GND UP TO 300FT AMSL\n320545N0345149E 320536N0345134E 320507N0345130E\n320458N0345138E 320453N0345206E 320459N0345220E\n320529N0345227E 320542N0345218E.\nOPS OF HEL BY PPR FM HELIPAD OPR (LLBL).\nCTN ADZ.\nF) GND G) 300FT AMSL)"
+  },
+  {
+   "id": "C0431/26",
+   "loc": "LLLL",
+   "name": "צפון תל אביב — איסור קבוע",
+   "heb": "איסור קבוע: הפעלת כטב\"מ/רחפנים או טיסנים ברדיוס 500 מטר סביב נ.צ. 32°04'18\"N 34°47'10\"E אסורה, מהקרקע ועד 300 רגל מעל פני הים.\nהפניה: AIP פנים-ארצי, חלק A-17, עמ' 5, סעיף 1א.ג ונספח ג.",
+   "raw": "C0431/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3204N03447E001\nA) LLLL B) 2602111125 C) PERM\nE) OPS OF UAS/UAV OR MODEL ACFT WI 500M RADIUS CENTERED ON\nPSN 320418N0344709.6E FM GND UP TO 300FT AMSL PROHIBITED.\nDOM AIP, PART A-17, PAGE 5, PARA 1A.C. AND NISPACH C. REF.\nF) GND G) 300FT AMSL)"
+  },
+  {
+   "id": "C0162/26",
+   "loc": "LLLL",
+   "name": "טלפונים — בקרה צבאית (הודעה כללית)",
+   "heb": "שינוי זמני במספרי הטלפון של הבקרה הצבאית:\nהגב גובה-נמוך: 08-6502307\nהגב לכטב\"מים: 08-6502308 (רוקק)",
+   "raw": "C0162/26 NOTAMR C0161/26\nQ) LLLL/QSCCI/IV/BO /E /000/999/3048N03428E078\nA) LLLL B) 2601141307 C) PERM\nE) MIL ATC PHONE NR TEMPO CHG AS FLW\nHAGAV LOW-LEVEL 08-6502307.\nHAGAV FOR UAS/UAV 08-6502308 (ROKAK).)"
+  },
+  {
+   "id": "C0090/26",
+   "loc": "LLLL",
+   "name": "נוהל כטב\"מ — טיסה מקומית (הודעה כללית)",
+   "heb": "הפעלת כטב\"מ בתוך אזור אימונים / בועת כטב\"מ או בתוך סגירה — מוגדרת כטיסה מקומית ופטורה מהגשת תוכנית טיסה.\nמפעיל הכטב\"מ חייב לקבל אישור מבקרת התעופה לפני ההמראה.\nהפניה: AIP פנים-ארצי, חלק A-11 וחלק B-09.",
+   "raw": "C0090/26 NOTAMN\nQ) LLLL/QPLCH/IV/M  /E /000/999/3125N03521E117\nA) LLLL B) 2601071605 C) PERM\nE) OPS OF UAS WI TRG AREA/UAS BUBBLE OR WI CLOSURE DESIGNATED\nAS LOCAL FLIGHT AND EXEMPTED OF SUBMISSION FPL.\nOPR OF UAS SHALL GET APPROVAL FM ATC BFR TKOF.\nDOM AIP, PART A-11, PAGE 2, PARA 2.F. AND PART B-09,\nPAGE 6, PARA 6.D. REF.)"
+  },
+  {
+   "id": "C0010/26",
+   "loc": "LLLL",
+   "name": "לטרון — קבוע",
+   "heb": "פעילות כטב\"מ מתקיימת בלטרון (נוטמ קבוע).\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 300 רגל מעל הקרקע (950 רגל מעל פני הים).\nמומלצת זהירות.\nהפניה: AIP פנים-ארצי, חלק B-03 ו-B-08.",
+   "raw": "C0010/26 NOTAMR C2794/25\nQ) LLLL/QWULW/IV/BO /W /000/010/3149N03458E001\nA) LLLL B) 2601010640 C) PERM\nE) UAS ACT WILL TAKE PLACE AT LATRUN.\nAN AREA BTN THE FLW PSNS  N314945E0345822 N314949E0345806\nN314936E0345743 N314910E0345813 CLSD FM GND UP TO\n300FT AGL, 950FT AMSL.\nCTN ADZ.\nDOM AIP, PART B-03, CHART A, B-08, CHART A. REF.\nF) GND G) 1000FT AMSL)"
+  },
+  {
+   "id": "C0005/26",
+   "loc": "LLLL",
+   "name": "אזור תעשייה אור עקיבא — קבוע",
+   "heb": "פעילות כטב\"מ/רחפנים מתקיימת באזור התעשייה אור עקיבא (נוטמ קבוע).\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 500 רגל מעל פני הים.\nמומלצת זהירות.\nהפניה: AIP פנים-ארצי, חלק A-17, נספח 2.",
+   "raw": "C0005/26 NOTAMR C0731/25\nQ) LLLL/QWULW/IV/BO /W /000/005/3231N03455E001\nA) LLLL B) 2601010630 C) PERM\nE) UAS/UAV ACT WILL TAKE PLACE AT OR-AKIVA INDUSTRY AREA.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 500FT AMSL\nN323122E0345511 N323119E0345512 N323119E0345515\nN323123E0345514.\nCTN ADZ.\nDOM AIP, PART A-17, PAGE 10, PARA 3. NISPACH 2 REF.\nF) GND G) 500FT AMSL)"
+  }
+ ]
+}
