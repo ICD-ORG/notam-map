@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מפת נוט״מ — כטב״מים ורחפנים</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1220">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="נוט״מ">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<!-- תצוגה מקדימה בשיתוף (וואטסאפ, פייסבוק, טלגרם) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="הארגון הישראלי לרחפנים — ISRAEL DRONE ORGANIZATION">
+<meta property="og:title" content="מפת נוט״מ — כטב״מים ורחפנים בישראל">
+<meta property="og:description" content="כל הנוטמים הפנים-ארציים על מפה אחת, מפוענחים לעברית ומתעדכנים אוטומטית. באדיבות הארגון הישראלי לרחפנים · icd.org.il">
+<meta property="og:url" content="https://icd-org.github.io/notam-map-/">
+<meta property="og:image" content="https://icd-org.github.io/notam-map-/og-banner.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="he_IL">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="מפת נוט״מ — כטב״מים ורחפנים בישראל">
+<meta name="twitter:description" content="כל הנוטמים על מפה אחת, בעברית, מתעדכן אוטומטית — הארגון הישראלי לרחפנים">
+<meta name="twitter:image" content="https://icd-org.github.io/notam-map-/og-banner.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1220; --panel:#121c2e; --panel-2:#0f1726; --line:#22304a;
+  --ink:#e9eff9; --muted:#8fa0ba; --amber:#ffb84d; --red:#ff3b3b; --green:#4ade80; --cyan:#67d8e8;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,sans-serif}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+
+header{padding:20px 22px 14px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(255,184,77,.06), transparent 60%),var(--panel-2)}
+.wrap{max-width:1280px;margin:0 auto}
+.brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.brand h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
+.brand h1 span{color:var(--amber)}
+.brand .sub{color:var(--muted);font-size:13.5px}
+.org{margin-top:8px;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.org img{width:34px;height:34px;border-radius:8px;background:#fff;padding:2px;flex:none}
+.org a{color:var(--cyan);text-decoration:none}
+.org a:hover{text-decoration:underline}
+.org .phone{color:var(--muted);font-weight:500}
+.org .phone a{color:var(--green);font-weight:700}
+#toast{display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;
+  max-width:min(560px,92vw);background:#131d2e;border:1px solid var(--amber);border-radius:12px;
+  padding:14px 40px 14px 18px;font-size:14px;line-height:1.7;white-space:pre-wrap;
+  box-shadow:0 8px 30px rgba(0,0,0,.55);direction:rtl;text-align:right}
+#toast .x{position:absolute;top:8px;right:12px;cursor:pointer;color:var(--amber);font-weight:900;font-size:16px}
+.disclaim{margin-top:8px;padding:8px 12px;border:1px solid rgba(255,59,59,.45);border-radius:10px;
+  background:rgba(255,59,59,.08);color:#ffb3b3;font-size:12.5px;font-weight:600;line-height:1.6}
+.fresh{border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;border:1px solid var(--line)}
+.fresh.g{color:var(--green);border-color:rgba(74,222,128,.5)}
+.fresh.y{color:var(--amber);border-color:rgba(255,184,77,.5)}
+.fresh.r{color:var(--red);border-color:rgba(255,59,59,.5)}
+body{-webkit-user-select:none;user-select:none}
+textarea,input{-webkit-user-select:text;user-select:text}
+.strip{margin-top:10px;height:4px;border-radius:2px;
+  background:repeating-linear-gradient(90deg,var(--amber) 0 26px, transparent 26px 40px);opacity:.8}
+
+.tabs{display:flex;gap:8px;margin-top:14px}
+.tab{padding:9px 20px;border-radius:10px 10px 0 0;border:1px solid var(--line);border-bottom:none;
+  background:var(--panel-2);color:var(--muted);cursor:pointer;font-weight:700;font-size:14px}
+.tab.active{background:var(--panel);color:var(--amber)}
+.tab:focus-visible{outline:2px solid var(--cyan)}
+
+main{padding:18px 22px}
+button{font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;border-radius:10px;
+  padding:9px 16px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);transition:.15s}
+button:hover{border-color:var(--amber);color:var(--amber)}
+button.primary{background:var(--amber);border-color:var(--amber);color:#1a1204}
+button.primary:hover{filter:brightness(1.08);color:#1a1204}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h2{font-size:14.5px;font-weight:700;color:var(--amber);margin-bottom:10px}
+
+/* ===== לשונית מפה ===== */
+#tab-map{display:block}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.topbar .stamp{color:var(--muted);font-size:13px}
+.topbar .stamp b{color:var(--green)}
+.topbar .actions{display:flex;gap:8px;flex-wrap:wrap}
+.layout{display:grid;grid-template-columns:330px 1fr;gap:14px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.side{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;max-height:640px;display:flex;flex-direction:column}
+.side .head{padding:11px 14px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:700;color:var(--amber);display:flex;justify-content:space-between;align-items:center}
+.side .list{overflow-y:auto;flex:1}
+.item{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
+.item:hover{background:var(--panel-2)}
+.item.sel{background:var(--panel-2);box-shadow:inset 3px 0 0 var(--red)}
+.item .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.item .name{font-weight:600;font-size:14px}
+.item .nid{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--cyan)}
+.item .meta{color:var(--muted);font-size:12px;margin-top:3px;display:flex;gap:8px;align-items:center}
+.dotv{width:8px;height:8px;border-radius:50%;flex:none}
+.dotv.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dotv.off{background:#5b6a84}
+.sechead{padding:8px 14px;background:var(--panel-2);color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.5px}
+.catbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.catbtn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-size:13px;font-weight:700;transition:.15s}
+.catbtn .cdot{width:10px;height:10px;border-radius:50%;flex:none}
+.catbtn.on{color:var(--ink);border-color:currentColor;background:var(--panel)}
+.catbtn .cnt{font-size:11px;opacity:.75}
+.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+#bigmap{height:640px;background:#060a12}
+#tilewarn{display:none;padding:9px 14px;color:var(--amber);font-size:12.5px;border-bottom:1px solid var(--line)}
+.gratlbl{color:#5e79a3;font-size:10px;white-space:nowrap;font-family:'IBM Plex Mono',monospace}
+
+/* פופאפ */
+.leaflet-popup-content-wrapper{background:#131d2e;color:var(--ink);border:1px solid var(--line);border-radius:12px;direction:rtl;text-align:right}
+.leaflet-popup-tip{background:#131d2e}
+.leaflet-popup-content{margin:14px 16px;font-family:'Rubik',sans-serif;font-size:13.5px;line-height:1.75;max-height:340px;overflow-y:auto}
+.pp-id{font-family:'IBM Plex Mono',monospace;color:var(--red);font-weight:700;font-size:14px}
+.pp-name{font-weight:700;font-size:15px;margin-bottom:4px}
+.pp-meta{color:var(--muted);font-size:12px;margin:6px 0;line-height:1.6}
+.pp-heb{white-space:pre-wrap;border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
+.pp-raw{direction:ltr;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a9bcd8;white-space:pre-wrap;background:#0a101c;border-radius:8px;padding:8px;margin-top:8px}
+details summary{cursor:pointer;color:var(--cyan);font-size:12.5px;margin-top:8px}
+.approx-note{color:var(--amber);font-size:12px}
+
+/* ===== לשונית מפענח ===== */
+#tab-decode{display:none}
+textarea{width:100%;min-height:150px;resize:vertical;background:#0a101c;border:1px solid var(--line);border-radius:10px;
+  color:#d7e3f4;padding:13px;font-size:13px;line-height:1.6;direction:ltr;text-align:left;font-family:'IBM Plex Mono',monospace}
+textarea:focus{outline:2px solid var(--amber);outline-offset:-1px;border-color:transparent}
+.btnrow{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+#dResults{display:none;margin-top:16px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:12.5px;color:var(--muted)}
+.chip b{color:var(--ink);font-weight:600}
+.chip.red{border-color:rgba(255,59,59,.5)} .chip.red b{color:var(--red)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media (max-width:860px){.split{grid-template-columns:1fr}}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+.pane .head{padding:9px 14px;font-size:12.5px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.pane.orig .head{color:var(--cyan)} .pane.heb .head{color:var(--amber)}
+.pane .body{padding:14px;font-size:14px;line-height:1.85;flex:1;white-space:pre-wrap;word-break:break-word}
+.pane.orig .body{direction:ltr;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#c7d6ec}
+.badge{font-size:10.5px;font-weight:600;border-radius:999px;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
+.badge.ai{border-color:rgba(103,216,232,.5);color:var(--cyan)}
+.badge.wait{border-color:rgba(255,184,77,.5);color:var(--amber);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.45}}
+.err{color:var(--red);margin-top:10px;font-size:13.5px;display:none}
+
+footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-top:1px solid var(--line);margin-top:24px;line-height:1.8}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <h1>מפת <span>נוט״מ</span> — כטב״מים ורחפנים</h1>
+      <div class="sub">כל הנוטמים הפנים-ארציים · פענוח בעברית · ברירת מחדל: כטב״מים — לחצו על הקטגוריות להצגת שכבות נוספות</div>
+    </div>
+    <div class="org">
+      <img src="https://static.wixstatic.com/media/3ae480_a8339612d16542de9e6da2f0f9c98429~mv2.png/v1/fill/w_96,h_96,lg_1/3ae480_a8339612d16542de9e6da2f0f9c98429~mv2.png" alt="לוגו הארגון הישראלי לרחפנים" onerror="this.style.display='none'">
+      <a href="https://www.icd.org.il" target="_blank" rel="noopener">הארגון הישראלי לרחפנים · ISRAEL DRONE ORGANIZATION · icd.org.il</a>
+      <span class="phone">· לכל בעיה טכנית: <a href="tel:0525076677" dir="ltr">052-5076677</a></span>
+    </div>
+    <div class="disclaim">⚠ השימוש בערכה זו באחריות המשתמש בלבד · המפה אינה מחליפה את הנוטמ הרשמי ומיועדת לעזרה בלבד · כלל אחריות ההטסה חלה על המטיס עצמו</div>
+    <div class="strip"></div>
+    <div class="tabs">
+      <div class="tab active" id="tabBtnMap" role="button" tabindex="0">מפת מצב ארצית</div>
+      <div class="tab" id="tabBtnDecode" role="button" tabindex="0">מפענח נוטמ בודד</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ לשונית 1: מפה ארצית ============ -->
+<div id="tab-map">
+  <div class="topbar">
+    <div class="stamp">נתונים נמשכו מאתר רש״ת: <b id="fetchStamp"></b> · <span id="countStamp"></span> · <span id="freshBadge" class="fresh"></span> · <span id="visitBox" style="display:none">👁 כניסות: <b id="visitCount" style="color:var(--cyan)"></b></span></div>
+    <div class="actions">
+      <button id="nearBtn">📍 בקרבתי</button>
+      <button id="onlyActiveBtn">הצג בתוקף עכשיו בלבד</button>
+      <button id="layerBtn2">מפה / לוויין</button>
+      <button id="allKmlBtn" class="primary">הורד KML של כל המפה ל-Google Earth</button>
+      <button id="refreshBtn">עדכון נתונים</button>
+    </div>
+  </div>
+
+  <div class="catbar" id="catBar"></div>
+
+  <div class="layout">
+    <div class="side">
+      <div class="head"><span>נוטמים פעילים</span><span id="sideCount" class="badge"></span></div>
+      <div class="list" id="sideList"></div>
+    </div>
+    <div class="mapbox">
+      <div id="tilewarn">שכבת הלוויין חסומה בתצוגה הזו — האזורים מוצגים בשרטוט וקטורי על רשת קואורדינטות. הורד את הקובץ ופתח ב-Chrome לתצוגת לוויין מלאה.</div>
+      <div id="bigmap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ לשונית 2: מפענח בודד ============ -->
+<div id="tab-decode">
+  <div class="card">
+    <h2>הדבק נוטמ (שורת E או הודעה מלאה) — פענוח, מפה ו-KML</h2>
+    <textarea id="input"></textarea>
+    <div class="btnrow">
+      <button class="primary" id="decodeBtn">פענח נוטמ</button>
+      <button id="exampleBtn">טען דוגמה</button>
+      <button id="clearBtn">נקה</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="dResults">
+    <div class="chips" id="chips" style="margin-top:14px"></div>
+    <div class="split">
+      <div class="pane orig">
+        <div class="head"><span>ORIGINAL NOTAM · מקור</span><span class="badge">EN</span></div>
+        <div class="body" id="origBody"></div>
+      </div>
+      <div class="pane heb">
+        <div class="head"><span>פענוח בעברית</span><span class="badge" id="hebBadge">פענוח אוטומטי</span></div>
+        <div class="body" id="hebBody"></div>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="showOnMapBtn">הצג במפה הארצית</button>
+      <button id="kmlBtn">הורד KML ל-Google Earth</button>
+      <button id="webmapBtn">פתח מפה בדפדפן</button>
+      <button id="gmapsBtn">פתח ב-Google Maps</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div id="toast"><span class="x" onclick="this.parentNode.style.display='none'">✕</span><span id="toastMsg"></span></div>
+
+<footer>
+  <div style="max-width:900px;margin:0 auto;text-align:right">
+    <b style="color:var(--amber)">תנאי שימוש</b><br>
+    המפה והפענוח בעברית מוצגים כעזר בלבד ואינם מחליפים את הנוטמ הרשמי או כל פרסום תעופתי מחייב אחר.
+    חובה לבדוק את הנוטמים במקורות הרשמיים לפני כל טיסה. במקרה של סתירה או אי-התאמה בין המידע במפה לבין הפרסום הרשמי — הפרסום הרשמי גובר.
+    כלל האחריות על ההטסה, לרבות בדיקת מרחב אווירי, מגבלות ותנאים — חלה על המטיס עצמו בלבד.
+    אזורים מקווקווים במפה = מיקום משוער לפי שורת ה-Q של הנוטמ.<br><br>
+    <b style="color:var(--amber)">מקורות רשמיים</b> ·
+    <a href="https://brin.iaa.gov.il/aeroinfo/AeroInfo.aspx?msgType=Notam" target="_blank" rel="noopener" style="color:var(--cyan)">מודיעין טיס — רשות שדות התעופה</a> ·
+    <a href="https://www.gov.il/he/pages/aip" target="_blank" rel="noopener" style="color:var(--cyan)">פרסומי AIP — רשות התעופה האזרחית (רת״א)</a><br><br>
+    © <a href="https://www.icd.org.il" target="_blank" rel="noopener" style="color:var(--cyan)">הארגון הישראלי לרחפנים — ISRAEL DRONE ORGANIZATION</a> ·
+    כל הזכויות שמורות · אין להעתיק, לשכפל או להפיץ ערכה זו ללא אישור הארגון · Fly safe ✈
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ================= נתונים מוטמעים (נמשכו מאתר רש״ת) ================= */
+const FETCHED_AT = "16/07/2026 08:04 UTC";
+const FETCHED_ISO = "2026-07-16T08:04:00Z";
+/* === הגדרות אתר === */
+/* כשהקובץ מוטמע באתר icd.org.il, המפה תנסה למשוך נתונים עדכניים מנקודת הקצה
+   של האתר (Velo HTTP Function), ואם אין — מקובץ notam-data.json שלצידה. */
+const DATA_URLS = ["../notam-data.json", "https://www.icd.org.il/_functions/notamData"];
+/* מעקב כניסות: הדביקו כאן את מזהה Google Analytics שלכם (למשל "G-ABC123XYZ")
+   ולחלופין — בהטמעה ב-Wix, האנליטיקס של האתר סופר כניסות אוטומטית. */
+const GA_ID = "";
+const NOTAM_DATA = [{"id": "C1519/26", "loc": "LLEY", "name": "מנחת עין יהב (LLEY)", "heb": "פעילות כטב\"מ תתקיים בתוך מנחת עין יהב, מהקרקע ועד 3,000 רגל מעל פני הים.\nהפעילות תתואם ותאושר ע\"י בקרת התעופה.\nמומלצת זהירות.\nלו\"ז (UTC): 21/07 בשעות 03:00–05:45, 09:15–09:55, 13:25–16:00; 22/07 בשעות 03:00–04:25.", "raw": "C1519/26 NOTAMN\nQ) LLLL/QFALT/IV/NBO/A /000/999/3037N03512E005\nA) LLEY B) 2607210300 C) 2607220425\nD) 21 0300-0545 0915-0955 1325-1600, 22 0300-0425\nE) UAS ACT WILL TAKE PLACE WI AIRSTRIP, FM GND UP TO 3,000FT AMSL.\nOPS WILL BE COORD AND APPROVED BY ATC.\nCTN ADZ.)"}, {"id": "C1512/26", "loc": "LLLL", "name": "תענכים / גדיש", "heb": "פעילות כטב\"מ תתקיים בתענכים/גדיש.\nאזור ברדיוס 400 מטר סביב נ.צ. 32°33'09\"N 35°14'47\"E סגור לכל הטיסות, כולל טיסות ריסוס חקלאיות, מהקרקע ועד 100 מטר מעל הקרקע (560 רגל מעל פני הים).\nמומלצת זהירות.", "raw": "C1512/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/006/3233N03515E001\nA) LLLL B) 2607151042 C) 2607312059\nE) UAS ACT WILL TAKE PLACE AT TAANACHIM/GADISH.\nAN AREA WI 400M RADIUS CENTERED ON PSN 323309N0351447E\nFM GND UP TO 100M AGL, 560FT AMSL CLSD TO ALL FLT\nINCLUDING AGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 560FT AMSL)"}, {"id": "C1511/26", "loc": "LLLL", "name": "תענכים", "heb": "פעילות כטב\"מ תתקיים בתענכים.\nאזור (פוליגון) בין נקודות הציון סגור מהקרקע ועד 100 מטר מעל הקרקע (560 רגל מעל פני הים).\nטיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה.\nמומלצת זהירות.", "raw": "C1511/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/006/3233N03517E002\nA) LLLL B) 2607151018 C) 2607312059\nE) UAS ACT WILL TAKE PLACE AT TAANACHIM.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 100M AGL 560FT AMSL\n323333N0351719E 323219N0351747E 323221N0351759E\n323207N0351803E 323201N0351722E 323254N0351640E\n323313N0351637E 323317N0351558E 323335N0351558E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 560FT AMSL)"}, {"id": "C1487/26", "loc": "LLLL", "name": "תלמי בילו", "heb": "פעילות כטב\"מ/רחפנים תתקיים בתלמי בילו.\nאזור (פוליגון) סגור מהקרקע ועד 150 מטר (1,000 רגל מעל פני הים).\nלו\"ז: מדי יום 02:20–16:30 UTC.\nמומלצת זהירות.", "raw": "C1487/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3125N03439E002\nA) LLLL B) 2607140220 C) 2607161630\nD) DAILY 0220-1630\nE) UAS/UAV ACT WILL TAKE PLACE AT TALMEI-BILU.\nAN AREA FM GND UP TO 150M, 1,000FT AMSL CLSD BTN FLW PSN\n312543N0343847E 312544N0343910E 312334N0343920E\n312334N0343857E.\nCTN ADZ.\nF) GND G) 1000FT AMSL)"}, {"id": "C1476/26", "loc": "LLLL", "name": "ירוחם", "heb": "פעילות כטב\"מ/רחפנים תתקיים בירוחם, מהקרקע ועד 600 מטר מעל הקרקע.\nאזור ברדיוס 0.3 מייל ימי סביב נ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים.\nלו\"ז: מדי יום 03:00–14:30 UTC.\nמומלצת זהירות.", "raw": "C1476/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2607120300 C) 2607161430\nD) DAILY 0300-1430\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"}, {"id": "C1459/26", "loc": "LLHZ", "name": "הרצליה (LLHZ) — טריגר", "heb": "נוטמ טריגר — עדכון AIP פנים-ארצי 01/26, בתוקף מ-06/08/2026:\nטיסות אווירובטיות באזור אימונים 12, כתובת דוא\"ל לתיאום פעילות כטב\"מ, ועדכון מפת נקודות חמות (Hotspot).", "raw": "C1459/26 NOTAMN\nQ) LLLL/QOATT/IV/BO /AE/000/999/3211N03450E005\nA) LLHZ B) 2608060001 C) 2608192359\nE) TRIGGER NOTAM - AIRAC DOM AIP AMDT 01/26 WEF 06 AUG 2026\nAEROBATICS FLT WI TRG AREA 12, EMAIL FOR COOR UAS ACT,\nHOTSPOT CHART UPDATED.)"}, {"id": "C1434/26", "loc": "LLLL", "name": "כפר המכביה (בתוך CTR בן-גוריון)", "heb": "פעילות כטב\"מ/רחפנים תתקיים בכפר המכביה, בתוך אזור הבקרה של נתב\"ג.\nמהקרקע ועד 100 מטר מעל הקרקע (עד 830 רגל מעל פני הים), אזור בין נקודות הציון (פוליגון).\nמומלצת זהירות.", "raw": "C1434/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/009/3203N03450E001\nA) LLLL B) 2607010001 C) 2607242059\nE) UAS/UAV ACT WILL TAKE PLACE AT KFAR-HAMACABIYA WI LLBG CTR,\nFM GND UP TO 100M AGL, BTN FLW PSN  320311N0344907E\n320325N0344914E 320339N0344932E 320337N0344953E\n320328N0345004E 320315N0345005E 320303N0344959E\n320255N0344950E 320253N0344937E 320258N0344917E\nCTN ADZ.\nF) GND G) 830FT AMSL)"}, {"id": "C1405/26", "loc": "LLLL", "name": "קיסריה", "heb": "פעילות כטב\"מ/רחפנים תתקיים בקיסריה, עד 100 מטר מעל הקרקע.\nאזור ברדיוס 0.8 מייל ימי סביב נ.צ. 32°29'41\"N 34°54'39\"E סגור מהקרקע ועד 500 רגל מעל פני הים.\nלו\"ז: מדי לילה 19:00–02:15 UTC.\nמומלצת זהירות.", "raw": "C1405/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/005/3230N03455E001\nA) LLLL B) 2607011900 C) 2608010215\nD) DAILY 1900-0215\nE) UAS/UAV ACT WILL TAKE PLACE AT KESARYA UP TO 100M AGL,\nAN AREA WI 0.8NM RADIUS CENTERED ON PSN 322941N0345439E\nCLSD FM GND UP TO 500FT AMSL.\nCTN ADZ.\nF) GND G) 500FT AMSL)"}, {"id": "C1395/26", "loc": "LLGV", "name": "גבעולים (LLGV)", "heb": "אזור הבקרה (CTR) של גבעולים זמין לטיסות כטב\"מ/רחפנים או טיסות ריסוס חקלאיות בלבד.", "raw": "C1395/26 NOTAMR C1164/26\nQ) LLLL/QACLP/IV/NBO/AE/000/015/3113N03428E002\nA) LLGV B) 2606280808 C) 2607312059\nE) CTR AVBL FOR UAS/UAV OR AGRICULTURE FLT ONLY.)"}, {"id": "C1386/26", "loc": "LLLL", "name": "רצועת גבול לבנון (8 ק\"מ)", "heb": "אזור מגבול לבנון ועד 8 ק\"מ דרומה סגור לכל הטיסות הפנים-ארציות,\nלמעט משטרה, כיבוי אש, פינוי רפואי, או טיסות כטב\"מ/רחפנים למטרות חירום, ביטחון ופינוי רפואי בלבד.\nכל טיסת חירום מאושרת תתואם עם בקרת התעופה ומב\"ח.\n(האזור במפה משוער — רצועה לאורך הגבול)", "raw": "C1386/26 NOTAMR C1158/26\nQ) LLLL/QAELC/IV/NBO/E /000/999/3308N03526E019\nA) LLLL B) 2606280801 C) 2607312059\nE) AN AREA FM LEBANON BOUNDRAY TO 8KM SB CLSD TO ALL DOM FLT,\nEXC POLICE, FIREFIGHTING, MEDEVAC FLT OR UAS/UAV FLT FOR\nEMERG, SECURITY, MEDEVAC PURPOSES ONLY.\nALL EMERG APPROVED FLT SHALL COORD WITH ATC AND MABBAH.)"}, {"id": "C1387/26", "loc": "LLLL", "name": "רצועת גבול סוריה (6 ק\"מ)", "heb": "אזור מגבול סוריה ועד 6 ק\"מ מערבה סגור לכל הטיסות הפנים-ארציות,\nלמעט משטרה, כיבוי אש, פינוי רפואי, או טיסות כטב\"מ/רחפנים למטרות חירום, ביטחון ופינוי רפואי בלבד.\nכל טיסת חירום מאושרת תתואם עם בקרת התעופה ומב\"ח.\n(האזור במפה משוער — רצועה לאורך הגבול)", "raw": "C1387/26 NOTAMR C1159/26\nQ) LLLL/QAELP/IV/NBO/E /000/999/3302N03547E018\nA) LLLL B) 2606280802 C) 2607312059\nE) AN AREA FM SYRIA BOUNDRAY TO 6KM WB CLSD TO ALL DOM FLT,\nEXC POLICE, FIREFIGHTING, MEDEVAC FLT OR UAS/UAV FLT FOR\nEMERG, SECURITY, MEDEVAC PURPOSES ONLY.\nALL EMERG APPROVED FLT SHALL COORD WITH ATC AND MABBAH.)"}, {"id": "C1361/26", "loc": "LLLL", "name": "אשדוד", "heb": "פעילות כטב\"מ/רחפנים תתקיים באשדוד, מהקרקע ועד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 950 רגל מעל פני הים.\nבתוקף עד סוף דצמבר 2026.\nמומלצת זהירות.", "raw": "C1361/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3151N03440E002\nA) LLLL B) 2607010001 C) 2612312159\nE) UAS/UAV ACT WILL TAKE PLACE AT ASHDOD, FM GND UP TO 100M AGL.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 950FT AMSL\n315119N0344122E 315127N0344037E 315123N0344007E\n315132N0343931E 315055N0343917E 315038N0344013E\n315035N0344120E.\nCTN ADZ.\nF) GND G) 950FT AMSL)"}, {"id": "C1359/26", "loc": "LLLL", "name": "פארק רעים", "heb": "פעילות כטב\"מ/רחפנים תתקיים בפארק רעים.\nאזור ברדיוס 0.5 מייל ימי סביב נ.צ. 31°46'33\"N 34°45'20\"E סגור מהקרקע ועד 25 מטר מעל הקרקע (300 רגל מעל פני הים).\nהפעלה באישור מוקדם מבקרת התעופה בלבד.\nמומלצת זהירות.", "raw": "C1359/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3146N03445E001\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT PARK-REEM.\nAN AREA WI 0.5NM RADIUS CENTERED ON PSN 314633N0344520E\nCLSD FM GND UP TO 25M AGL 300FT AMSL.\nOPS AVBL WITH PPR FM ATC ONLY.\nCTN ADZ.\nF) GND G) 300FT AMSL)"}, {"id": "C1358/26", "loc": "LLLL", "name": "דליה / צפית (בועת גוברין דרום)", "heb": "פעילות כטב\"מ/רחפנים תתקיים בדליה/צפית, בתוך בועת הזעירים גוברין דרום (BGOVS), עד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 1,400 רגל מעל פני הים.\nמומלצת זהירות.", "raw": "C1358/26 NOTAMR C1356/26\nQ) LLLL/QWULW/IV/BO /W /000/014/3143N03450E002\nA) LLLL B) 2606250629 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT DALIA/TZAFIT, WI ULTRALIGHT\nBUBBLE GOVRIN SOUTH (BGOVS) UP TO 100M AGL.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 1,400FT AMSL\n314353N0345038E 314339N0345010E 314221N0344925E\n314150N0345023E 314222N0345118E 314323N0345123E.\nCTN ADZ.\nF) GND G) 1400FT AMSL)"}, {"id": "C1348/26", "loc": "LLLL", "name": "מגן שאול", "heb": "פעילות כטב\"מ/רחפנים תתקיים במגן שאול, עד 100 מטר מעל הקרקע.\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 1,500 רגל מעל פני הים.\nמומלצת זהירות.", "raw": "C1348/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3231N03518E002\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT MAGEN-SHAUL, UP TO 100M AGL.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 1,500FT AMSL\n323145N0351642E 323024N0351638E 323039N0352004E\n323139N0351954E 323153N0351930E 323159N0351907E\nCTN ADZ.\nF) GND G) 1500FT AMSL)"}, {"id": "C1345/26", "loc": "LLLL", "name": "צומת סגולה (פתח תקווה)", "heb": "פעילות כטב\"מ/רחפנים תתקיים בצומת סגולה.\nאזור ברדיוס 0.65 מייל ימי סביב נ.צ. 32°06'12\"N 34°54'20\"E, מהקרקע ועד 300 רגל מעל פני הים.\nמומלצת זהירות.", "raw": "C1345/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3206N03454E001\nA) LLLL B) 2607010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT SEGULA JUNCTION,\nWI 0.65NM RADIUS CENTERED ON PSN 320612N0345420E\nFM GND UP TO 300FT AMSL.\nCTN ADZ.\nF) GND G) 300FT AMSL)"}, {"id": "C1313/26", "loc": "LLLL", "name": "בית חולים איתנים", "heb": "פעילות כטב\"מ/רחפנים תתקיים בבית החולים איתנים.\nאזור ברדיוס 500 מטר סביב נ.צ. 31°46'43\"N 35°05'39\"E סגור לכל הטיסות, כולל טיסות ריסוס, מהקרקע ועד 100 מטר מעל הקרקע (2,800 רגל מעל פני הים).\nלו\"ז: מדי יום 05:00–15:00 UTC.\nחציית הסגירה באישור מוקדם מ: אלון קלוס 052-9459432, חאתם סעד 052-5582412, 04-9523999.\nמומלצת זהירות.", "raw": "C1313/26 NOTAMR C1312/26\nQ) LLLL/QWULW/IV/BO /W /000/028/3147N03506E001\nA) LLLL B) 2606171235 C) 2607311500\nD) DAILY 0500-1500\nE) UAS/UAV ACT WILL TAKE PLACE AT EITANIM-HOSPITAL.\nAN AREA WI 500M RADIUS CENTERED ON PSN 314643N0350539E\nFM GND UP TO 100M AGL, 2,800FT AMSL CLSD TO ALL FLT\nINCLUDING AGRICULTURE FLT.\nXNG CLOSURE BY PPR FM FLW\nALON KLOSS 052-9459432, HATEM SAAD 052-5582412, 04-9523999.\nCTN ADZ.\nF) GND G) 2800FT AMSL)"}, {"id": "C1284/26", "loc": "LLLL", "name": "נשר (בתוך CTR חיפה)", "heb": "פעילות כטב\"מ/רחפנים תתקיים בנשר, בתוך אזור הבקרה של חיפה.\nמהקרקע ועד 460 מטר מעל הקרקע (1,510 רגל מעל פני הים), אזור בין נקודות הציון (פוליגון).\nמומלצת זהירות.", "raw": "C1284/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3246N03502E002\nA) LLLL B) 2606151332 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT NESHER WI LLHA CTR\nFM GND UP TO 460M AGL 1,510FT AMSL, BTN FLW PSN\n324637N0350134E 324629N0350037E 324552N0350043E\n324514N0350131E 324513N0350243E 324559N0350245E\n324617N0350207E.\nCTN ADZ.\nF) GND G) 1500FT AMSL)"}, {"id": "C1116/26", "loc": "LLLL", "name": "בית חולים בילינסון", "heb": "פעילות כטב\"מ/רחפנים תתקיים בבית החולים בילינסון.\nאזור בין נקודות הציון (פוליגון) מהקרקע ועד 300 רגל מעל פני הים.\nטיסות מסוקים באישור מוקדם ממפעיל המנחת (LLBL).\nמומלצת זהירות.", "raw": "C1116/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3205N03452E001\nA) LLLL B) 2606010001 C) 2607312059\nE) UAS/UAV ACT WILL TAKE PLACE AT BELINSON-HOSPITAL,\nBTN FLW PSN FM GND UP TO 300FT AMSL\n320545N0345149E 320536N0345134E 320507N0345130E\n320458N0345138E 320453N0345206E 320459N0345220E\n320529N0345227E 320542N0345218E.\nOPS OF HEL BY PPR FM HELIPAD OPR (LLBL).\nCTN ADZ.\nF) GND G) 300FT AMSL)"}, {"id": "C0431/26", "loc": "LLLL", "name": "צפון תל אביב — איסור קבוע", "heb": "איסור קבוע: הפעלת כטב\"מ/רחפנים או טיסנים ברדיוס 500 מטר סביב נ.צ. 32°04'18\"N 34°47'10\"E אסורה, מהקרקע ועד 300 רגל מעל פני הים.\nהפניה: AIP פנים-ארצי, חלק A-17, עמ' 5, סעיף 1א.ג ונספח ג.", "raw": "C0431/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/003/3204N03447E001\nA) LLLL B) 2602111125 C) PERM\nE) OPS OF UAS/UAV OR MODEL ACFT WI 500M RADIUS CENTERED ON\nPSN 320418N0344709.6E FM GND UP TO 300FT AMSL PROHIBITED.\nDOM AIP, PART A-17, PAGE 5, PARA 1A.C. AND NISPACH C. REF.\nF) GND G) 300FT AMSL)"}, {"id": "C0162/26", "loc": "LLLL", "name": "טלפונים — בקרה צבאית (הודעה כללית)", "heb": "שינוי זמני במספרי הטלפון של הבקרה הצבאית:\nהגב גובה-נמוך: 08-6502307\nהגב לכטב\"מים: 08-6502308 (רוקק)", "raw": "C0162/26 NOTAMR C0161/26\nQ) LLLL/QSCCI/IV/BO /E /000/999/3048N03428E078\nA) LLLL B) 2601141307 C) PERM\nE) MIL ATC PHONE NR TEMPO CHG AS FLW\nHAGAV LOW-LEVEL 08-6502307.\nHAGAV FOR UAS/UAV 08-6502308 (ROKAK).)"}, {"id": "C0090/26", "loc": "LLLL", "name": "נוהל כטב\"מ — טיסה מקומית (הודעה כללית)", "heb": "הפעלת כטב\"מ בתוך אזור אימונים / בועת כטב\"מ או בתוך סגירה — מוגדרת כטיסה מקומית ופטורה מהגשת תוכנית טיסה.\nמפעיל הכטב\"מ חייב לקבל אישור מבקרת התעופה לפני ההמראה.\nהפניה: AIP פנים-ארצי, חלק A-11 וחלק B-09.", "raw": "C0090/26 NOTAMN\nQ) LLLL/QPLCH/IV/M  /E /000/999/3125N03521E117\nA) LLLL B) 2601071605 C) PERM\nE) OPS OF UAS WI TRG AREA/UAS BUBBLE OR WI CLOSURE DESIGNATED\nAS LOCAL FLIGHT AND EXEMPTED OF SUBMISSION FPL.\nOPR OF UAS SHALL GET APPROVAL FM ATC BFR TKOF.\nDOM AIP, PART A-11, PAGE 2, PARA 2.F. AND PART B-09,\nPAGE 6, PARA 6.D. REF.)"}, {"id": "C0010/26", "loc": "LLLL", "name": "לטרון — קבוע", "heb": "פעילות כטב\"מ מתקיימת בלטרון (נוטמ קבוע).\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 300 רגל מעל הקרקע (950 רגל מעל פני הים).\nמומלצת זהירות.\nהפניה: AIP פנים-ארצי, חלק B-03 ו-B-08.", "raw": "C0010/26 NOTAMR C2794/25\nQ) LLLL/QWULW/IV/BO /W /000/010/3149N03458E001\nA) LLLL B) 2601010640 C) PERM\nE) UAS ACT WILL TAKE PLACE AT LATRUN.\nAN AREA BTN THE FLW PSNS  N314945E0345822 N314949E0345806\nN314936E0345743 N314910E0345813 CLSD FM GND UP TO\n300FT AGL, 950FT AMSL.\nCTN ADZ.\nDOM AIP, PART B-03, CHART A, B-08, CHART A. REF.\nF) GND G) 1000FT AMSL)"}, {"id": "C0005/26", "loc": "LLLL", "name": "אזור תעשייה אור עקיבא — קבוע", "heb": "פעילות כטב\"מ/רחפנים מתקיימת באזור התעשייה אור עקיבא (נוטמ קבוע).\nאזור בין נקודות הציון (פוליגון) סגור מהקרקע ועד 500 רגל מעל פני הים.\nמומלצת זהירות.\nהפניה: AIP פנים-ארצי, חלק A-17, נספח 2.", "raw": "C0005/26 NOTAMR C0731/25\nQ) LLLL/QWULW/IV/BO /W /000/005/3231N03455E001\nA) LLLL B) 2601010630 C) PERM\nE) UAS/UAV ACT WILL TAKE PLACE AT OR-AKIVA INDUSTRY AREA.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 500FT AMSL\nN323122E0345511 N323119E0345512 N323119E0345515\nN323123E0345514.\nCTN ADZ.\nDOM AIP, PART A-17, PAGE 10, PARA 3. NISPACH 2 REF.\nF) GND G) 500FT AMSL)"}];
+
+/* ================= מילון ותרגום תבניתי ================= */
+const PHRASES=[
+["UAS/UAV ACT WILL TAKE PLACE AT","פעילות כטב״מ/רחפנים תתקיים ב"],
+["UAS ACT WILL TAKE PLACE AT","פעילות כטב״מ תתקיים ב"],
+["UAS ACT WILL TAKE PLACE WI AIRSTRIP","פעילות כטב״מ תתקיים בתוך המנחת"],
+["PJE WILL TAKE PLACE AT","פעילות צניחה חופשית תתקיים ב"],
+["CAPTIVE BALLOON WILL TAKE PLACE AT","בלון קשור יופעל ב"],
+["AN AREA BTN THE FLW PSNS","אזור בין נקודות הציון הבאות"],
+["AN AREA BTN THE FLW PSN","אזור בין נקודות הציון הבאות"],
+["AN AREA BTN FLW PSN","אזור בין נקודות הציון הבאות"],
+["CLSD BTN FLW PSN","סגור בין נקודות הציון הבאות"],
+["BTN FLW PSN","בין נקודות הציון הבאות"],
+["RADIUS CENTERED ON PSN","רדיוס שמרכזו בנ.צ."],
+["RADIUS CENTRED ON PSN","רדיוס שמרכזו בנ.צ."],
+["CENTERED ON PSN","שמרכזו בנ.צ."],
+["AN AREA AT","אזור ב"],["AN AREA WI","אזור בתוך"],["AN AREA FM","אזור מ"],
+["CLSD TO ALL FLT INCLUDING AGRICULTURE FLT","סגור לכל הטיסות כולל טיסות ריסוס חקלאיות"],
+["CLSD TO ALL FLT INCLUDING","סגור לכל הטיסות כולל"],
+["CLSD TO ALL FLT","סגור לכל הטיסות"],
+["TO ALL FLT","לכל הטיסות"],
+["CLSD FM GND UP TO","סגור מהקרקע ועד"],
+["FM GND UP TO","מהקרקע ועד"],["FM GND UP","מהקרקע ועד"],
+["DUE WIP","עקב עבודות"],
+["OPS WILL BE COORD AND APPROVED BY ATC","הפעילות תתואם ותאושר ע״י בקרת התעופה"],
+["OPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC","טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה"],
+["OPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC","טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה"],
+["OPS OF AGRICULTURE FLT","טיסות ריסוס חקלאיות"],["AGRICULTURE FLT","טיסות ריסוס חקלאיות"],
+["OPS AVBL WITH PPR FM ATC ONLY","הפעלה באישור מוקדם מבקרת התעופה בלבד"],
+["OPR BY PPR FM ATC ONLY","הפעלה באישור מוקדם מבקרת התעופה בלבד"],
+["BY PPR FM ATC","באישור מוקדם מבקרת התעופה"],
+["WITH 15MIN PPR FM ATC","באישור מוקדם של 15 דקות מבקרת התעופה"],
+["PPR FM ATC","אישור מוקדם מבקרת התעופה"],
+["XNG CLOSURE BY PPR FM FLW","חציית הסגירה באישור מוקדם מהגורמים הבאים"],
+["CTN ADZ","מומלצת זהירות"],
+["WITHDRAWN FOR MAINT","מושבת לצורך תחזוקה"],
+["LIT AND DAY MARKED","מואר ומסומן לשעות היום"],
+["FT AMSL","רגל מעל פני הים"],["FT AGL","רגל מעל הקרקע"],["M AGL","מטר מעל הקרקע"],
+["NM RADIUS","מייל ימי רדיוס"],["KM RADIUS","ק״מ רדיוס"],["M RADIUS","מטר רדיוס"],
+["ULTRALIGHT BUBBLE","בועת זעירים"],["MODEL ACFT","טיסנים"],["TRG AREA","אזור אימונים"],
+["MIL FLT","טיסות צבאיות"],["DOM FLT","טיסות פנים-ארציות"],
+["NOT AVBL","לא זמין"],["AVBL","זמין"],["PROHIBITED","אסור"],["EXC","למעט"],["INCLUDING","כולל"],
+["FLW PSN","נקודות הציון הבאות"],["PSNS","נקודות ציון"],["PSN","נ.צ."],["CLSD","סגור"],["BTN","בין"],
+["OPS OF","הפעלת"],["OPS","פעילות"],["FREQ","תדר"],["RWY","מסלול"],["TWY","מסלול הסעה"],
+["TKOF","המראה"],["LDG","נחיתה"],["HEL","מסוקים"],["FLT","טיסות"],["ACFT","כלי טיס"],
+["UP TO","עד"],["S OF","מדרום ל"],["N OF","מצפון ל"],["E OF","ממזרח ל"],["W OF","ממערב ל"],
+["ROAD NR","כביש מס׳"],["PHONE NR","מספר טלפון"],["CHG TO","שוּנה ל"],["CHG AS FLW","שוּנה כדלקמן"],
+["AS FLW","כדלקמן"],["WEF","בתוקף מ-"],["H24","מסביב לשעון"],["MAX","מקסימום"],["MNM","מינימום"],
+[" AT "," ב-"],[" WI "," בתוך "],[" FM "," מ-"]
+];
+
+/* ================= פרסור ================= */
+function dms(d,m,s){ return (+d)+(+m)/60+(+s)/3600; }
+function parseCoords(text){
+  const out=[]; let re=/(\d{2})(\d{2})(\d{2}(?:\.\d+)?)N\s?0?(\d{2})(\d{2})(\d{2}(?:\.\d+)?)E/g, m;
+  while((m=re.exec(text))!==null) out.push({lat:dms(m[1],m[2],m[3]),lng:dms(m[4],m[5],m[6]),idx:m.index,raw:m[0]});
+  re=/N(\d{2})(\d{2})(\d{2}(?:\.\d+)?)E\s?0?(\d{2})(\d{2})(\d{2}(?:\.\d+)?)/g;
+  while((m=re.exec(text))!==null){
+    if(out.some(c=>Math.abs(c.idx-m.index)<3)) continue;
+    out.push({lat:dms(m[1],m[2],m[3]),lng:dms(m[4],m[5],m[6]),idx:m.index,raw:m[0]});
+  }
+  out.sort((a,b)=>a.idx-b.idx); return out;
+}
+function parseRadius(text){
+  const m=/([\d.]+)\s*(NM|KM|M)\s+RADIUS/i.exec(text);
+  if(!m) return null;
+  const v=parseFloat(m[1]);
+  const meters=m[2].toUpperCase()==="NM"?v*1852:m[2].toUpperCase()==="KM"?v*1000:v;
+  return {value:v,unit:m[2].toUpperCase(),meters,label:`${m[1]} ${m[2].toUpperCase()}`};
+}
+function parseTimes(text){
+  const b=/B\)\s*(\d{10})/.exec(text), c=/C\)\s*(\d{10})(\s*EST)?/.exec(text);
+  const perm=/C\)\s*PERM/i.test(text);
+  const fmt=t=>`${t.slice(4,6)}/${t.slice(2,4)}/20${t.slice(0,2)} ${t.slice(6,8)}:${t.slice(8,10)} UTC`;
+  const toDate=t=>Date.UTC(2000+ +t.slice(0,2), +t.slice(2,4)-1, +t.slice(4,6), +t.slice(6,8), +t.slice(8,10));
+  return {from:b?fmt(b[1]):null, to:perm?"קבוע (PERM)":(c?fmt(c[1])+(c[2]?" (משוער)":""):null),
+          fromD:b?toDate(b[1]):null, toD:perm?null:(c?toDate(c[1]):null), perm};
+}
+/* Q-line fallback: 3037N03512E005 → מרכז + רדיוס NM (משוער) */
+function parseQline(text){
+  const m=/Q\)[^\n]*?(\d{2})(\d{2})N(\d{3})(\d{2})E(\d{3})/.exec(text);
+  if(!m) return null;
+  return {center:{lat:dms(m[1],m[2],0),lng:dms(m[3],m[4],0)}, radius:(+m[5])*1852};
+}
+function parseNotam(raw){
+  const text=raw.toUpperCase();
+  const id=/([A-Z]\d{4}\/\d{2})/.exec(text);
+  let eText=text;
+  const eM=/E\)\s*([\s\S]*?)(?=\n[FG]\)|$)/.exec(text);
+  if(eM) eText=eM[1].trim();
+  const gM=/G\)\s*([^\n]*)/.exec(text), fM=/F\)\s*([^\n]*)/.exec(text), dM=/D\)\s*([^\n]*)/.exec(text);
+  const coords=parseCoords(eText);
+  const radius=parseRadius(eText);
+  const times=parseTimes(text);
+  let alt=null;
+  const aM=/(?:FM\s+GND\s+)?UP\s*(?:TO)?\s*([\d,]+)\s*FT\s+AMSL/.exec(eText);
+  if(aM) alt="קרקע עד "+aM[1]+" רגל מעל פני הים";
+  else if(gM) alt=(fM?fM[1].trim():"GND")+" עד "+gM[1].trim().replace(")","");
+  let geometry=null, approx=false;
+  const centered=/CENT(?:E?)RED\s+ON/.test(eText);
+  if(radius && coords.length>=1 && (centered||coords.length<3)){
+    let center=coords[0];
+    const ci=eText.search(/CENT(?:E?)RED\s+ON/);
+    if(ci>=0){let best=null,bd=1e9;coords.forEach(c=>{const d=Math.abs(c.idx-ci);if(c.idx>ci&&d<bd){bd=d;best=c;}});if(best)center=best;}
+    geometry={type:"circle",center,radius:radius.meters};
+  } else if(coords.length>=3){
+    geometry={type:"polygon",points:coords};
+  } else if(coords.length===1 && radius){
+    geometry={type:"circle",center:coords[0],radius:radius.meters};
+  } else {
+    const q=parseQline(text);
+    if(q){ geometry={type:"circle",center:q.center,radius:q.radius}; approx=true; }
+  }
+  return {id:id?id[1]:null,eText,coords,radius,times,alt,geometry,approx,schedule:dM?dM[1].trim():null,raw};
+}
+function fmtCoordHe(c){
+  const f=v=>{const d=Math.floor(v),mm=Math.floor((v-d)*60),ss=Math.round(((v-d)*60-mm)*60);return `${d}°${String(mm).padStart(2,"0")}'${String(ss).padStart(2,"0")}"`;};
+  return f(c.lat)+"N "+f(c.lng)+"E";
+}
+function localTranslate(eText){
+  let t=" "+eText.replace(/\s+/g," ").trim()+" ";
+  parseCoords(t).slice().reverse().forEach(c=>{t=t.replace(c.raw,fmtCoordHe(c));});
+  for(const [en,he] of PHRASES) t=t.split(en).join(he);
+  return t.replace(/\s+,/g,",").replace(/\s+\./g,".").replace(/\)\s*$/,"").trim();
+}
+
+/* ================= קטגוריות ================= */
+const CATS={
+ uas:{label:"כטב״מ ורחפנים",color:"#ff2d2d"},
+ pje:{label:"הצנחות",color:"#b16dff"},
+ frng:{label:"ירי ואימונים",color:"#ff8a3b"},
+ act:{label:"פעילות אווירית",color:"#ff6dc0"},
+ obst:{label:"מנופים ומכשולים",color:"#ffd24d"},
+ ad:{label:"שדות תעופה",color:"#5b8cff"},
+ other:{label:"כללי",color:"#9aa8c0"}
+};
+let activeCats=new Set(["uas"]);
+function renderCatBar(){
+  const bar=document.getElementById("catBar"); bar.innerHTML="";
+  const counts={}; DATA.forEach(it=>{counts[it.cat]=(counts[it.cat]||0)+1;});
+  Object.entries(CATS).forEach(([k,c])=>{
+    if(!counts[k]) return;
+    const b=document.createElement("div");
+    b.className="catbtn"+(activeCats.has(k)?" on":"");
+    b.style.color=activeCats.has(k)?c.color:"";
+    b.innerHTML='<span class="cdot" style="background:'+c.color+'"></span>'+c.label+' <span class="cnt">('+counts[k]+')</span>';
+    b.onclick=()=>{ activeCats.has(k)?activeCats.delete(k):activeCats.add(k); renderCatBar(); renderAll(); };
+    bar.appendChild(b);
+  });
+  const all=document.createElement("div");
+  const allOn=Object.keys(CATS).every(k=>!counts[k]||activeCats.has(k));
+  all.className="catbtn"+(allOn?" on":"");
+  all.textContent=allOn?"הצג כטב״מים בלבד":"הצג הכל";
+  all.onclick=()=>{ activeCats=allOn?new Set(["uas"]):new Set(Object.keys(CATS)); renderCatBar(); renderAll(); };
+  bar.appendChild(all);
+}
+
+/* ================= מפה ראשית ================= */
+let map=null, satLayer, osmLayer, usingSat=true, gratDrawn=false;
+const shapes={}; let selectedId=null; let tempLayer=null;
+
+function drawGraticule(){
+  if(gratDrawn||!map) return; gratDrawn=true;
+  const g=L.layerGroup().addTo(map);
+  for(let la=29;la<=34.01;la+=0.25){
+    L.polyline([[la,33.0],[la,36.8]],{color:"#22406a",weight:1,interactive:false}).addTo(g);
+    L.marker([la,33.06],{interactive:false,icon:L.divIcon({className:"gratlbl",html:la.toFixed(2)+"°N"})}).addTo(g);
+  }
+  for(let lo=33.0;lo<=36.81;lo+=0.25)
+    L.polyline([[29,lo],[34.2,lo]],{color:"#22406a",weight:1,interactive:false}).addTo(g);
+}
+function initMap(){
+  map=L.map("bigmap",{zoomControl:true}).setView([31.9,34.95],8);
+  satLayer=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Esri World Imagery"});
+  osmLayer=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"OpenStreetMap"});
+  satLayer.addTo(map);
+  let tileOK=false;
+  const ok=()=>{tileOK=true;document.getElementById("tilewarn").style.display="none";};
+  const bad=()=>{if(tileOK)return;document.getElementById("tilewarn").style.display="block";drawGraticule();};
+  satLayer.on("load",ok).on("tileerror",bad);
+  osmLayer.on("load",ok).on("tileerror",bad);
+  setTimeout(()=>{if(!tileOK)bad();},2500);
+}
+
+function isActiveNow(p){
+  const now=Date.now();
+  if(p.times.perm) return true;
+  if(p.times.fromD && now<p.times.fromD) return false;
+  if(p.times.toD && now>p.times.toD) return false;
+  return true;
+}
+
+function popupHtml(item,p){
+  const meta=[];
+  if(p.times.from) meta.push("מ־"+p.times.from);
+  if(p.times.to) meta.push("עד "+p.times.to);
+  if(p.radius) meta.push("רדיוס "+p.radius.label);
+  if(p.alt) meta.push(p.alt);
+  return `<div class="pp-name">${item.name}</div>
+  <span class="pp-id" style="color:${(CATS[item.cat]||CATS.uas).color}">${item.id}</span> <span class="badge" style="color:${(CATS[item.cat]||CATS.uas).color};border-color:currentColor">${(CATS[item.cat]||CATS.uas).label}</span>
+  ${p.approx?'<div class="approx-note">⚠ מיקום משוער לפי שורת Q</div>':""}
+  <div class="pp-meta">${meta.join(" · ")}</div>
+  <div class="pp-heb">${item.heb.replace(/</g,"&lt;")}</div>
+  <details><summary>הצג נוטמ מקורי</summary><div class="pp-raw">${item.raw.replace(/</g,"&lt;")}</div></details>`;
+}
+
+function drawItem(item){
+  const p=item.parsed, geo=p.geometry;
+  if(!geo) return null;
+  const col=(CATS[item.cat]||CATS.uas).color;
+  const style=p.approx
+    ? {color:col,weight:2,dashArray:"7 6",fillColor:col,fillOpacity:.10}
+    : {color:col,weight:3,fillColor:col,fillOpacity:.22};
+  let layer;
+  if(geo.type==="circle") layer=L.circle([geo.center.lat,geo.center.lng],{radius:geo.radius,...style});
+  else layer=L.polygon(geo.points.map(c=>[c.lat,c.lng]),style);
+  layer.bindPopup(popupHtml(item,p),{maxWidth:340});
+  layer.on("click",()=>selectItem(item.id,false));
+  layer.addTo(map);
+  return layer;
+}
+
+function selectItem(id,fly=true){
+  selectedId=id;
+  document.querySelectorAll(".item").forEach(el=>el.classList.toggle("sel",el.dataset.id===id));
+  const item=DATA.find(x=>x.id===id);
+  if(item&&shapes[id]){
+    if(fly) map.fitBounds(shapes[id].getBounds().pad(0.6));
+    shapes[id].openPopup();
+  }
+  const el=document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
+  if(el) el.scrollIntoView({block:"nearest"});
+}
+
+/* חישוב שטח משוער (מ״ר) — לקביעת סדר שכבות: גדולים למטה, קטנים למעלה */
+function areaOf(p){
+  const g=p.geometry; if(!g) return 0;
+  if(g.type==="circle") return Math.PI*g.radius*g.radius;
+  const pts=g.points, R=111320; let a=0;
+  for(let i=0;i<pts.length;i++){
+    const j=(i+1)%pts.length;
+    const xi=pts[i].lng*R*Math.cos(pts[i].lat*Math.PI/180), yi=pts[i].lat*R;
+    const xj=pts[j].lng*R*Math.cos(pts[j].lat*Math.PI/180), yj=pts[j].lat*R;
+    a+=xi*yj-xj*yi;
+  }
+  return Math.abs(a/2);
+}
+
+let onlyActive=false;
+function renderAll(){
+  Object.values(shapes).forEach(l=>{try{map.removeLayer(l)}catch(e){}});
+  const list=document.getElementById("sideList"); list.innerHTML="";
+  const mapped=[], general=[];
+  DATA.forEach(it=>{ (it.parsed.geometry?mapped:general).push(it); });
+
+  /* ציור: מהגדול לקטן — כך שהפוליגונים הקטנים תמיד בשכבה העליונה וניתנים ללחיצה */
+  const drawOrder=[...mapped].sort((a,b)=>areaOf(b.parsed)-areaOf(a.parsed));
+  let shown=0;
+  drawOrder.forEach(it=>{
+    if(!activeCats.has(it.cat)) return;
+    const active=isActiveNow(it.parsed);
+    if(onlyActive && !active) return;
+    shown++;
+    shapes[it.id]=drawItem(it);
+  });
+
+  const addSec=t=>{const d=document.createElement("div");d.className="sechead";d.textContent=t;list.appendChild(d);};
+  addSec("אזורים במפה — "+mapped.length);
+  let listOrder=mapped;
+  if(userPos){
+    listOrder=[...mapped].map(it=>({it,d:it.parsed.geometry?distKm(userPos,geomCenter(it.parsed.geometry)):9999}))
+      .sort((a,b)=>a.d-b.d).map(x=>(x.it._dist=x.d,x.it));
+  }
+  listOrder.forEach(it=>{
+    if(!activeCats.has(it.cat)) return;
+    const active=isActiveNow(it.parsed);
+    if(onlyActive && !active) return;
+    const div=document.createElement("div");
+    div.className="item"; div.dataset.id=it.id;
+    div.innerHTML=`<div class="t"><span class="name"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(CATS[it.cat]||CATS.uas).color};margin-left:6px"></span>${it.name}</span><span class="nid">${it.id}</span></div>
+      <div class="meta"><span class="dotv ${active?"on":"off"}"></span>
+      <span>${active?"בתוקף עכשיו":"לא בתוקף כרגע"}</span>
+      ${it.parsed.times.perm?"<span>· קבוע</span>":(it.parsed.times.to?`<span>· עד ${it.parsed.times.to.slice(0,8)}</span>`:"")}
+      ${it.parsed.approx?'<span style="color:var(--amber)">· משוער</span>':""}${(userPos&&it._dist<9999)?`<span style="color:var(--cyan)">· ${it._dist.toFixed(1)} ק״מ ממך</span>`:""}</div>`;
+    div.onclick=()=>selectItem(it.id);
+    list.appendChild(div);
+  });
+  const genShow=general.filter(it=>activeCats.has(it.cat));
+  if(genShow.length){
+    addSec("הודעות כלליות (ללא אזור) — "+genShow.length);
+    genShow.forEach(it=>{
+      const div=document.createElement("div");
+      div.className="item"; div.dataset.id=it.id;
+      div.innerHTML=`<div class="t"><span class="name">${it.name}</span><span class="nid">${it.id}</span></div>
+        <div class="meta"><span>${it.heb.split("\n")[0].slice(0,60)}…</span></div>`;
+      div.onclick=()=>{ showMsg(it.id+" — "+it.name+"\n\n"+it.heb); };
+      list.appendChild(div);
+    });
+  }
+  document.getElementById("sideCount").textContent=shown+" במפה";
+  document.getElementById("countStamp").textContent=`${DATA.length} נוטמים · מוצגים ${shown} במפה`;
+}
+
+/* ================= KML ================= */
+function circlePoints(lat,lng,rM,n=72){
+  const pts=[],R=6371000;
+  for(let i=0;i<=n;i++){
+    const b=2*Math.PI*i/n, la1=lat*Math.PI/180, lo1=lng*Math.PI/180, d=rM/R;
+    const la2=Math.asin(Math.sin(la1)*Math.cos(d)+Math.cos(la1)*Math.sin(d)*Math.cos(b));
+    const lo2=lo1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la1),Math.cos(d)-Math.sin(la1)*Math.sin(la2));
+    pts.push([lo2*180/Math.PI,la2*180/Math.PI]);
+  }
+  return pts;
+}
+function kmlPlacemark(item){
+  const p=item.parsed, geo=p.geometry;
+  if(!geo) return "";
+  let coordsStr;
+  if(geo.type==="circle") coordsStr=circlePoints(geo.center.lat,geo.center.lng,geo.radius).map(x=>x[0]+","+x[1]+",0").join(" ");
+  else{
+    const ring=geo.points.map(c=>c.lng+","+c.lat+",0"); ring.push(geo.points[0].lng+","+geo.points[0].lat+",0");
+    coordsStr=ring.join(" ");
+  }
+  const meta=[p.times.from?("מ־"+p.times.from):"",p.times.to?("עד "+p.times.to):"",p.radius?("רדיוס "+p.radius.label):"",p.alt||""].filter(Boolean).join(" · ");
+  const heb=item.heb.replace(/</g,"&lt;").replace(/\n/g,"<br/>");
+  const raw=item.raw.replace(/</g,"&lt;").replace(/\n/g,"<br/>");
+  return `<Placemark><name>${item.id} — ${item.name}</name>
+<description><![CDATA[<div dir="rtl" style="font-family:Arial;max-width:380px;text-align:right;line-height:1.6">
+<b style="font-size:15px">${item.name}</b> (${item.id})<br/>${p.approx?"⚠ מיקום משוער לפי שורת Q<br/>":""}
+<span style="color:#666">${meta}</span><hr/><b>פענוח בעברית:</b><br/>${heb}<hr/>
+<b>מקור:</b><br/><span style="font-family:monospace;direction:ltr;display:inline-block;text-align:left;font-size:11px">${raw}</span></div>]]></description>
+<styleUrl>#${item.cat||"uas"}</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>${coordsStr}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`;
+}
+function hex2kml(hex,alpha){const r=hex.slice(1,3),g=hex.slice(3,5),b=hex.slice(5,7);return alpha+b+g+r;}
+function kmlStyles(){
+  return Object.entries(CATS).map(([k,c])=>
+    '<Style id="'+k+'"><LineStyle><color>'+hex2kml(c.color,"ff")+'</color><width>3</width></LineStyle><PolyStyle><color>'+hex2kml(c.color,"4d")+'</color></PolyStyle></Style>'
+  ).join("\n");
+}
+function makeAllKML(){
+  const marks=DATA.filter(it=>activeCats.has(it.cat)).map(kmlPlacemark).filter(Boolean).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<name>נוט״מ כטב״מים — ${FETCHED_AT}</name>
+${kmlStyles()}
+${marks}
+</Document></kml>`;
+}
+function download(name,content,type){
+  const blob=new Blob([content],{type});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);
+}
+
+/* הודעות בתוך הדף — במקום חלונות קופצים שנחסמים בתצוגות מוטמעות */
+function showMsg(text, sticky){
+  const t=document.getElementById("toast");
+  document.getElementById("toastMsg").textContent=text;
+  t.style.display="block";
+  clearTimeout(showMsg._tm);
+  if(!sticky) showMsg._tm=setTimeout(()=>{t.style.display="none";}, 12000);
+}
+
+/* ================= לשוניות ================= */
+const $=id=>document.getElementById(id);
+function showTab(which){
+  $("tab-map").style.display=which==="map"?"block":"none";
+  $("tab-decode").style.display=which==="decode"?"block":"none";
+  $("tabBtnMap").classList.toggle("active",which==="map");
+  $("tabBtnDecode").classList.toggle("active",which==="decode");
+  if(which==="map") setTimeout(()=>map&&map.invalidateSize(),80);
+}
+$("tabBtnMap").onclick=()=>showTab("map");
+$("tabBtnDecode").onclick=()=>showTab("decode");
+
+/* ================= כפתורי מפה ================= */
+$("layerBtn2").onclick=()=>{
+  if(usingSat){map.removeLayer(satLayer);osmLayer.addTo(map);}
+  else{map.removeLayer(osmLayer);satLayer.addTo(map);}
+  usingSat=!usingSat;
+};
+$("allKmlBtn").onclick=()=>download("notam-uas-map.kml",makeAllKML(),"application/vnd.google-earth.kml+xml");
+$("onlyActiveBtn").onclick=function(){
+  onlyActive=!onlyActive;
+  this.textContent=onlyActive?"הצג את כולם":"הצג בתוקף עכשיו בלבד";
+  this.classList.toggle("primary",onlyActive);
+  renderAll();
+};
+$("refreshBtn").onclick=async function(){
+  this.textContent="בודק עדכונים…"; this.disabled=true;
+  /* שלב 1: ניסיון עדכון אמיתי מקובץ הנתונים של האתר המארח */
+  const updated=await tryLoadFromSite(false);
+  if(updated){ this.disabled=false; this.textContent="עדכון נתונים"; return; }
+  /* שלב 2: בדיקת נגישות ישירה לאתר רש״ת */
+  const target=encodeURIComponent("https://brin.iaa.gov.il/aeroinfo/AeroInfo.aspx?msgType=Notam");
+  const proxies=["https://corsproxy.io/?url="+target,"https://api.allorigins.win/raw?url="+target,"https://api.codetabs.com/v1/proxy?quest="+target];
+  let reachable=false;
+  for(const u of proxies){
+    try{
+      const r=await fetch(u,{signal:AbortSignal.timeout(15000)});
+      if(r.ok){const t=await r.text(); if(t.includes("NotamID")){reachable=true;break;}}
+    }catch(e){}
+  }
+  this.disabled=false; this.textContent="עדכון נתונים";
+  const hrs=Math.round((Date.now()-Date.parse(curISO))/3600000);
+  showMsg("לא נמצא מקור נתונים מעודכן.\n\nגיל הנתונים הנוכחיים: כ-"+hrs+" שעות ("+curStamp+").\n\n"+
+    (reachable?"אתר רש״ת נגיש — נדרש עדכון קובץ הנתונים באתר המארח.":"חומת האש של רש״ת חוסמת גישה ישירה מהדפדפן.")+
+    "\n\nלעדכון מיידי: כתבו ל-Claude בצ׳אט ״עדכן נוטמים״ ותקבלו קובץ חדש תוך דקה,\nאו העלו notam-data.json מעודכן לאתר לצד הקובץ הזה.");
+};
+
+/* ================= מפענח בודד ================= */
+let currentParsed=null,currentHebrew="";
+const EXAMPLE=`C1513/26 NOTAMN
+Q) LLLL/QAELC/IV/NBO/E /000/015/3243N03524E001
+A) LLLL B) 2607191000 C) 2607221300
+E) AN AREA AT KFAR-TAVOR WI 1.1NM RADIUS CENTERED ON
+PSN 324241N0352429E CLSD FM GND UP TO 1,500FT AMSL
+TO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN
+PPR FM ATC.`;
+$("exampleBtn").onclick=()=>{$("input").value=EXAMPLE;};
+$("clearBtn").onclick=()=>{$("input").value="";$("dResults").style.display="none";$("err").style.display="none";};
+
+async function aiTranslate(raw){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,
+      messages:[{role:"user",content:`אתה מפענח נוטמים (NOTAM) עבור טייסים ישראלים. תרגם את הנוטמ הבא לעברית ברורה ומקצועית. פענח את כל הקיצורים. שמור על שורות קצרות. קואורדינטות בפורמט מעלות/דקות/שניות. ציין תוקף אם קיים בשורות B/C. החזר את התרגום בלבד.\n\nNOTAM:\n${raw}`}]})
+  });
+  if(!res.ok) throw new Error("API "+res.status);
+  const data=await res.json();
+  return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+}
+
+$("decodeBtn").onclick=async()=>{
+  const raw=$("input").value.trim();
+  $("err").style.display="none";
+  if(!raw){$("err").textContent="הדבק נוטמ קודם.";$("err").style.display="block";return;}
+  const p=parseNotam(raw); currentParsed=p;
+  $("dResults").style.display="block";
+  const chips=[];
+  if(p.id)chips.push(`<div class="chip">נוטמ <b>${p.id}</b></div>`);
+  if(p.times.from)chips.push(`<div class="chip">מתוקף <b>${p.times.from}</b></div>`);
+  if(p.times.to)chips.push(`<div class="chip">עד <b>${p.times.to}</b></div>`);
+  if(p.schedule)chips.push(`<div class="chip">לו״ז <b class="mono">${p.schedule}</b></div>`);
+  if(p.radius)chips.push(`<div class="chip red">רדיוס <b>${p.radius.label}</b></div>`);
+  if(p.geometry&&p.geometry.type==="polygon")chips.push(`<div class="chip red">פוליגון <b>${p.geometry.points.length} נקודות</b></div>`);
+  if(p.alt)chips.push(`<div class="chip">גובה <b>${p.alt}</b></div>`);
+  $("chips").innerHTML=chips.join("")||`<div class="chip">הודעה כללית</div>`;
+  $("origBody").textContent=raw;
+  currentHebrew=localTranslate(p.eText);
+  $("hebBody").textContent=currentHebrew;
+  const badge=$("hebBadge"); badge.className="badge wait"; badge.textContent="משפר תרגום…";
+  try{
+    const t=await aiTranslate(raw);
+    if(t&&currentParsed===p){currentHebrew=t;$("hebBody").textContent=t;badge.className="badge ai";badge.textContent="תורגם ע״י Claude";}
+  }catch(e){badge.className="badge";badge.textContent="פענוח אוטומטי";}
+};
+
+$("showOnMapBtn").onclick=()=>{
+  if(!currentParsed||!currentParsed.geometry){showMsg("לא נמצאו קואורדינטות בנוטמ הזה.");return;}
+  if(tempLayer){try{map.removeLayer(tempLayer)}catch(e){}}
+  const item={id:currentParsed.id||"NOTAM",name:"נוטמ שהודבק ידנית",cat:"uas",heb:currentHebrew,raw:currentParsed.raw,parsed:currentParsed};
+  tempLayer=drawItem(item);
+  showTab("map");
+  setTimeout(()=>{map.fitBounds(tempLayer.getBounds().pad(0.6));tempLayer.openPopup();},150);
+};
+$("kmlBtn").onclick=()=>{
+  if(!currentParsed||!currentParsed.geometry)return;
+  const item={id:currentParsed.id||"NOTAM",name:"נוטמ",heb:currentHebrew,raw:currentParsed.raw,parsed:currentParsed};
+  const kml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<Style id="red"><LineStyle><color>ff0000ff</color><width>3</width></LineStyle><PolyStyle><color>4d0000ff</color></PolyStyle></Style>
+<Style id="orange"><LineStyle><color>ff3b8aff</color><width>2</width></LineStyle><PolyStyle><color>2e3b8aff</color></PolyStyle></Style>
+${kmlPlacemark(item)}</Document></kml>`;
+  download((currentParsed.id||"notam").replace("/","-")+".kml",kml,"application/vnd.google-earth.kml+xml");
+};
+$("webmapBtn").onclick=()=>{
+  if(!currentParsed||!currentParsed.geometry)return;
+  const geo=currentParsed.geometry;
+  let geometry;
+  if(geo.type==="circle") geometry={type:"Polygon",coordinates:[circlePoints(geo.center.lat,geo.center.lng,geo.radius)]};
+  else{const ring=geo.points.map(c=>[c.lng,c.lat]);ring.push([geo.points[0].lng,geo.points[0].lat]);geometry={type:"Polygon",coordinates:[ring]};}
+  const gj={type:"FeatureCollection",features:[{type:"Feature",properties:{title:currentParsed.id||"NOTAM","stroke":"#ff0000","stroke-width":3,"fill":"#ff0000","fill-opacity":0.25,"פענוח":(currentHebrew||"").slice(0,600)},geometry}]};
+  window.open("https://geojson.io/#data=data:application/json,"+encodeURIComponent(JSON.stringify(gj)),"_blank");
+};
+$("gmapsBtn").onclick=()=>{
+  if(!currentParsed||!currentParsed.geometry)return;
+  const g=currentParsed.geometry, c=g.center||g.points[0];
+  window.open(`https://www.google.com/maps/search/?api=1&query=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`,"_blank");
+};
+
+/* ================= אתחול ================= */
+let DATA=NOTAM_DATA.map(it=>({...it,cat:it.cat||"uas",parsed:parseNotam(it.raw)}));
+let curStamp=FETCHED_AT, curISO=FETCHED_ISO;
+
+function refreshFreshBadge(){
+  const el=document.getElementById("freshBadge");
+  const hrs=(Date.now()-Date.parse(curISO))/3600000;
+  let cls,txt;
+  if(hrs<24){cls="g";txt=hrs<1?"עודכן לפני פחות משעה":"עודכן לפני "+Math.round(hrs)+" שעות";}
+  else if(hrs<72){cls="y";txt="עודכן לפני "+Math.round(hrs/24)+" ימים — מומלץ לרענן";}
+  else{cls="r";txt="עודכן לפני "+Math.round(hrs/24)+" ימים — נדרש רענון!";}
+  el.className="fresh "+cls; el.textContent=txt;
+}
+function applyData(notams, stampText, stampISO){
+  DATA=notams.map(it=>({...it,cat:it.cat||"uas",parsed:parseNotam(it.raw)}));
+  curStamp=stampText||curStamp; curISO=stampISO||curISO;
+  document.getElementById("fetchStamp").textContent=curStamp;
+  refreshFreshBadge();
+  renderCatBar();
+  renderAll();
+}
+/* ניסיון טעינת נתונים עדכניים מהאתר המארח (כשהקובץ מוטמע ב-icd.org.il) */
+async function tryLoadFromSite(silent){
+  for(const url of DATA_URLS){
+    try{
+      const r=await fetch(url+(url.includes("?")?"&":"?")+"t="+Date.now(),{signal:AbortSignal.timeout(12000)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      if(j && Array.isArray(j.notams) && j.notams.length){
+        applyData(j.notams, j.fetched_at, j.fetched_iso);
+        if(!silent) showMsg("✅ הנתונים עודכנו בהצלחה!\nעדכון אחרון: "+(j.fetched_at||""));
+        return true;
+      }
+    }catch(e){}
+  }
+  return false;
+}
+/* מעקב כניסות — Google Analytics (אם הוגדר GA_ID) */
+if(GA_ID){
+  const s=document.createElement("script");
+  s.src="https://www.googletagmanager.com/gtag/js?id="+GA_ID; s.async=true;
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js",new Date()); gtag("config",GA_ID);
+}
+/* הגנת העתקה בסיסית */
+document.addEventListener("contextmenu",e=>{ if(!e.target.closest("textarea,input,#bigmap")) e.preventDefault(); });
+document.addEventListener("copy",e=>{
+  if(e.target.closest("textarea,input")) return;
+  e.preventDefault();
+  e.clipboardData.setData("text/plain","© הארגון הישראלי לרחפנים — icd.org.il — אין להעתיק ללא אישור");
+});
+console.log("%c© הארגון הישראלי לרחפנים · ISRAEL DRONE ORGANIZATION · icd.org.il","color:#ffb84d;font-size:14px;font-weight:bold");
+
+/* ================= מונה כניסות ================= */
+/* כל טעינת דף נרשמת במונה מרכזי ומוצגת. שירות חינמי: counterapi.dev */
+async function countVisit(){
+  try{
+    const r=await fetch("https://api.counterapi.dev/v1/icd-notam/map-visits/up",{signal:AbortSignal.timeout(10000)});
+    if(!r.ok) return;
+    const j=await r.json();
+    if(j && typeof j.count==="number"){
+      document.getElementById("visitCount").textContent=j.count.toLocaleString("he-IL");
+      document.getElementById("visitBox").style.display="";
+    }
+  }catch(e){ /* אם השירות לא זמין — פשוט לא מציגים מונה */ }
+}
+countVisit();
+
+/* ================= בקרבתי — איתור מיקום ================= */
+let userPos=null, userMarker=null;
+function geomCenter(g){
+  if(g.type==="circle"||g.type==="point") return g.center;
+  const pts=g.points; let la=0,ln=0; pts.forEach(c=>{la+=c.lat;ln+=c.lng;});
+  return {lat:la/pts.length,lng:ln/pts.length};
+}
+function distKm(a,b){
+  const R=6371,dLa=(b.lat-a.lat)*Math.PI/180,dLn=(b.lng-a.lng)*Math.PI/180;
+  const x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLn/2)*Math.sin(dLn/2);
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+document.getElementById("nearBtn").onclick=()=>{
+  if(!navigator.geolocation){showMsg("הדפדפן לא תומך באיתור מיקום.");return;}
+  showMsg("מאתר את מיקומך…");
+  navigator.geolocation.getCurrentPosition(p=>{
+    userPos={lat:p.coords.latitude,lng:p.coords.longitude};
+    if(userMarker){try{map.removeLayer(userMarker)}catch(e){}}
+    userMarker=L.circleMarker([userPos.lat,userPos.lng],{radius:9,color:"#67d8e8",weight:3,fillColor:"#67d8e8",fillOpacity:.85})
+      .addTo(map).bindPopup("📍 המיקום שלך");
+    map.setView([userPos.lat,userPos.lng],11);
+    renderAll();
+    const near=DATA.filter(it=>it.parsed.geometry&&activeCats.has(it.cat)&&distKm(userPos,geomCenter(it.parsed.geometry))<=15);
+    showMsg(near.length
+      ? "נמצאו "+near.length+" נוטמים ברדיוס 15 ק\"מ ממך (בקטגוריות המסומנות).\nהרשימה מוינה לפי מרחק — הקרוב ביותר למעלה."
+      : "אין נוטמים ברדיוס 15 ק\"מ ממך בקטגוריות המסומנות.\nנסה להדליק עוד קטגוריות.");
+  },e=>{showMsg("לא הצלחתי לאתר מיקום.\nודא שאישרת לדפדפן הרשאת מיקום.");},
+  {enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+};
+/* רישום ה-Service Worker — הופך את הדף לאפליקציה מותקנת */
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}
+
+document.getElementById("fetchStamp").textContent=FETCHED_AT;
+refreshFreshBadge();
+initMap();
+renderCatBar();
+renderAll();
+tryLoadFromSite(true);
+</script>
+</body>
+</html>
