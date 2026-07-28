@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, shrink-to-fit=no">
 <title>מפת נוט״מ — כטב״מים ורחפנים</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b1220">
@@ -35,12 +35,23 @@
   --radius:14px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,sans-serif}
+.leaflet-popup,.leaflet-popup *{box-sizing:content-box}
+.leaflet-popup-content-wrapper,.leaflet-popup-content{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,sans-serif;overflow-x:hidden;
+  max-width:100%;scrollbar-width:thin;scrollbar-color:#2a3a58 transparent}
+body::-webkit-scrollbar{width:5px}
+body::-webkit-scrollbar-thumb{background:#2a3a58;border-radius:99px}
+body::-webkit-scrollbar-track{background:transparent}
+.wrap,header,main,footer,.topbar,.layout,.catbar{max-width:100%}
+.layout>*,.mapbox,.side,.mobcard,.topbar>*{min-width:0}
+#appRoot{display:flex;flex-direction:column;min-height:100%}
+#appRoot>main{-webkit-overflow-scrolling:touch;min-width:0;width:100%;max-width:100%}
 .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
 
 header{padding:20px 22px 14px;border-bottom:1px solid var(--line);
   background:linear-gradient(180deg, rgba(255,184,77,.06), transparent 60%),var(--panel-2)}
-.wrap{max-width:1280px;margin:0 auto}
+.wrap{max-width:1280px;margin:0 auto;min-width:0;width:100%}
 .brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
 .brand h1{font-size:26px;font-weight:900;letter-spacing:-.5px}
 .brand h1 span{color:var(--amber)}
@@ -86,14 +97,15 @@ button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 /* ===== לשונית מפה ===== */
 #tab-map{display:block}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.topbar .stamp{color:var(--muted);font-size:13px}
+.topbar .stamp{color:var(--muted);font-size:13px;max-width:100%;min-width:0;overflow-wrap:anywhere;flex:1 1 220px}
 .topbar .stamp b{color:var(--green)}
+.fresh{display:inline-block;max-width:100%;white-space:normal;vertical-align:middle}
 .topbar .actions{display:flex;gap:8px;flex-wrap:wrap}
 .layout{display:grid;grid-template-columns:330px 1fr;gap:14px}
-@media (max-width:900px){.layout{grid-template-columns:1fr}}
-.side{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;max-height:640px;display:flex;flex-direction:column}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.side{max-height:260px}#bigmap{height:48vh;min-height:280px}}
+.side{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;max-height:min(640px,62vh);display:flex;flex-direction:column}
 .side .head{padding:11px 14px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:700;color:var(--amber);display:flex;justify-content:space-between;align-items:center}
-.side .list{overflow-y:auto;flex:1}
+.side .list{overflow-y:auto;flex:1;overscroll-behavior:contain}
 .item{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:.12s}
 .item:hover{background:var(--panel-2)}
 .item.sel{background:var(--panel-2);box-shadow:inset 3px 0 0 var(--red)}
@@ -105,21 +117,43 @@ button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .dotv.on{background:var(--green);box-shadow:0 0 6px var(--green)}
 .dotv.off{background:#5b6a84}
 .sechead{padding:8px 14px;background:var(--panel-2);color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.5px}
+.daydiv{padding:7px 14px;background:linear-gradient(90deg,rgba(255,184,77,.14),transparent);
+  color:var(--amber);font-size:12px;font-weight:800;border-top:1px solid var(--line);border-bottom:1px solid rgba(255,184,77,.25);
+  display:flex;align-items:center;gap:6px}
+.daydiv.today{color:var(--green);border-bottom-color:rgba(74,222,128,.3);background:linear-gradient(90deg,rgba(74,222,128,.14),transparent)}
+.removed-toggle{padding:11px 14px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:700;
+  border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.removed-toggle:hover{background:var(--panel-2)}
+.removed-item{padding:9px 14px;border-bottom:1px solid var(--line);opacity:.6;cursor:pointer}
+.removed-item:hover{opacity:.9}
+.removed-item .name{text-decoration:line-through;font-size:13.5px}
+.removed-item .meta{color:var(--muted);font-size:11.5px;margin-top:2px}
 .catbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .catbtn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;cursor:pointer;
   border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-size:13px;font-weight:700;transition:.15s}
 .catbtn .cdot{width:10px;height:10px;border-radius:50%;flex:none}
 .catbtn.on{color:var(--ink);border-color:currentColor;background:var(--panel)}
 .catbtn .cnt{font-size:11px;opacity:.75}
-.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-#bigmap{height:640px;background:#060a12}
+.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+#bigmap{height:min(640px,62vh);min-height:300px;background:#060a12}
 #tilewarn{display:none;padding:9px 14px;color:var(--amber);font-size:12.5px;border-bottom:1px solid var(--line)}
 .gratlbl{color:#5e79a3;font-size:10px;white-space:nowrap;font-family:'IBM Plex Mono',monospace}
 
 /* פופאפ */
 .leaflet-popup-content-wrapper{background:#131d2e;color:var(--ink);border:1px solid var(--line);border-radius:12px;direction:rtl;text-align:right}
 .leaflet-popup-tip{background:#131d2e}
-.leaflet-popup-content{margin:14px 16px;font-family:'Rubik',sans-serif;font-size:13.5px;line-height:1.75;max-height:340px;overflow-y:auto}
+.leaflet-popup-content{margin:14px 16px!important;font-family:'Rubik',sans-serif;font-size:13.5px;line-height:1.75;max-height:340px;overflow-y:auto;
+  width:min(340px,calc(100vw - 60px))!important;min-width:240px}
+.leaflet-popup-content-wrapper{min-width:0;width:auto}
+.leaflet-popup{margin-bottom:26px}
+.leaflet-popup-close-button{top:6px!important;left:6px!important;right:auto!important;
+  width:34px!important;height:34px!important;line-height:34px!important;font-size:22px!important;
+  background:var(--red)!important;color:#fff!important;border-radius:50%!important;
+  text-align:center!important;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.leaflet-popup-close-button:hover{background:#ff5c5c!important;color:#fff!important}
+.pp-bigclose{position:sticky;top:-14px;margin:-14px -16px 8px!important;padding:10px 16px;width:auto;
+  background:var(--red);color:#fff;font-weight:800;font-size:14px;text-align:center;
+  border-radius:12px 12px 0 0;cursor:pointer;z-index:5}
 .pp-id{font-family:'IBM Plex Mono',monospace;color:var(--red);font-weight:700;font-size:14px}
 .pp-name{font-weight:700;font-size:15px;margin-bottom:4px}
 .pp-meta{color:var(--muted);font-size:12px;margin:6px 0;line-height:1.6}
@@ -144,7 +178,7 @@ textarea:focus{outline:2px solid var(--amber);outline-offset:-1px;border-color:t
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
 .pane .head{padding:9px 14px;font-size:12.5px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
 .pane.orig .head{color:var(--cyan)} .pane.heb .head{color:var(--amber)}
-.pane .body{padding:14px;font-size:14px;line-height:1.85;flex:1;white-space:pre-wrap;word-break:break-word}
+.pane .body{padding:14px;font-size:14px;line-height:1.85;flex:1;white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain}
 .pane.orig .body{direction:ltr;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#c7d6ec}
 .badge{font-size:10.5px;font-weight:600;border-radius:999px;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
 .badge.ai{border-color:rgba(103,216,232,.5);color:var(--cyan)}
@@ -152,11 +186,88 @@ textarea:focus{outline:2px solid var(--amber);outline-offset:-1px;border-color:t
 @keyframes pulse{50%{opacity:.45}}
 .err{color:var(--red);margin-top:10px;font-size:13.5px;display:none}
 
+/* ===== קוביית מידע — מתחת למפה, מחשב ונייד ===== */
+.mobcard{display:block;background:var(--panel);border:1px solid var(--amber);
+  border-radius:var(--radius);overflow:hidden;animation:cardin .22s ease;margin-top:10px}
+.mobcard[hidden]{display:none}
+@keyframes cardin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.mobcard-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;
+  padding:10px 14px;background:#18243d;border-bottom:1px solid var(--line)}
+.mobcard-title{font-weight:800;font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:1;text-align:center}
+.mobcard-close{flex:none;width:34px;height:34px;border:none;border-radius:50%;
+  background:var(--red);color:#fff;font-size:18px;font-weight:800;cursor:pointer;line-height:1}
+.mobcard-body{padding:14px 18px;font-size:14px;line-height:1.85;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;direction:rtl;text-align:center;
+  overflow-wrap:anywhere;word-break:break-word;max-width:100%;box-sizing:border-box;max-height:300px}
+.mobcard-body .pp-heb{white-space:pre-line;border-top:1px solid var(--line);padding-top:10px;margin-top:8px;
+  text-align:center;overflow-wrap:anywhere}
+.mobcard-body .pp-meta{color:var(--muted);font-size:12.5px;margin:6px 0 8px;text-align:center}
+.mobcard-body details{margin-top:10px;text-align:center}
+.mobcard-body details summary{cursor:pointer;color:var(--cyan)}
+.mobcard-body .pp-raw{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);
+  white-space:pre-wrap;background:var(--panel-2);border-radius:8px;padding:8px;margin-top:6px;
+  direction:ltr;text-align:left}
+/* תווית מספר נוטמ במרכז הפוליגון הפתוח */
+.notam-lbl{background:transparent;border:none}
+.notam-lbl span{display:inline-block;background:#0b1220;color:var(--amber);border:1.5px solid var(--amber);
+  border-radius:999px;padding:3px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;
+  white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.55);transform:translate(-50%,-50%);pointer-events:none}
+@media (max-width:760px){
+  body.mobcard-open .side{display:none}
+  body.mobcard-open #bigmap{height:min(46vh,380px)!important;min-height:220px!important}
+  body.mobcard-open .mobcard{display:flex;flex-direction:column;height:min(46vh,400px);min-height:240px;
+    max-width:100%;box-sizing:border-box}
+  body.mobcard-open .mobcard .mobcard-body{flex:1;max-height:none}
+  .mobcard-body{padding:12px 16px;font-size:13.5px}
+}
+
 footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-top:1px solid var(--line);margin-top:24px;line-height:1.8}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ============ מעטפת אפליקציה לנייד: מפה במסך מלא + מגירת רשימה ============ */
+@media (max-width:760px){
+  .leaflet-popup-content{
+    width:calc(100vw - 76px)!important;
+    max-width:300px!important;
+    min-width:0!important;
+    margin:11px 13px!important;
+    font-size:12.5px!important;
+    line-height:1.65!important;
+    max-height:min(300px,42vh)!important;
+  }
+  .pp-bigclose{margin:-11px -13px 7px!important;padding:9px 13px;font-size:13px}
+  .pp-name{font-size:14px}
+  .pp-id{font-size:13px}
+  .leaflet-popup-close-button{width:30px!important;height:30px!important;line-height:30px!important;font-size:19px!important}
+}
+@media (max-width:400px){
+  .leaflet-popup-content{font-size:12px!important;max-height:min(260px,38vh)!important}
+}
+@media (max-width:760px){
+  header{padding:14px 14px 10px}
+  .brand h1{font-size:20px}
+  .org img{width:26px;height:26px}
+  .disclaim{font-size:11px;padding:6px 10px;margin-top:6px}
+  main{padding:8px}
+  .topbar{flex-direction:column;align-items:stretch}
+  .topbar .actions{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:4px;
+    max-width:100%;min-width:0;width:100%}
+  .topbar .actions::-webkit-scrollbar{display:none}
+  .topbar .actions button{flex:none;min-height:40px}
+  .layout{display:flex;flex-direction:column}
+  .side{max-height:280px;order:3}
+  .mapbox{order:1}
+  #bigmap{height:min(50vh,420px);min-height:300px}
+  .catbar{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .catbar::-webkit-scrollbar{display:none}
+  .catbtn{flex:none;min-height:38px}
+  .item{padding:13px 14px}
+}
 </style>
 </head>
 <body>
+<div id="appRoot">
 
 <header>
   <div class="wrap">
@@ -195,6 +306,7 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
 
   <div class="catbar" id="catBar"></div>
 
+  <!-- אלמנטי נייד: כפתור מגירה צף + סרגל פעולות תחתון + מגירת רשימה -->
   <div class="layout">
     <div class="side">
       <div class="head"><span>נוטמים פעילים</span><span id="sideCount" class="badge"></span></div>
@@ -203,6 +315,13 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
     <div class="mapbox">
       <div id="tilewarn">שכבת הלוויין חסומה בתצוגה הזו — האזורים מוצגים בשרטוט וקטורי על רשת קואורדינטות. הורד את הקובץ ופתח ב-Chrome לתצוגת לוויין מלאה.</div>
       <div id="bigmap"></div>
+      <div id="mobcard" class="mobcard" hidden>
+        <div class="mobcard-head">
+          <span class="mobcard-title" id="mobcardTitle"></span>
+          <button class="mobcard-close" id="mobcardClose" aria-label="סגור">✕</button>
+        </div>
+        <div class="mobcard-body" id="mobcardBody"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -246,6 +365,9 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
 <div id="toast"><span class="x" onclick="this.parentNode.style.display='none'">✕</span><span id="toastMsg"></span></div>
 
 <footer>
+  <div style="max-width:900px;margin:0 auto 14px;text-align:center;background:var(--panel);border:1px solid var(--amber);border-radius:12px;padding:10px 14px;color:var(--ink);font-size:13px">
+    💻 <b style="color:var(--amber)">לחוויה מיטבית מומלץ לפתוח את המפה במחשב</b> — מסך גדול יותר מציג את המפה, הרשימה והמידע בצורה נוחה וברורה יותר.
+  </div>
   <div style="max-width:900px;margin:0 auto;text-align:right">
     <b style="color:var(--amber)">תנאי שימוש</b><br>
     המפה והפענוח בעברית מוצגים כעזר בלבד ואינם מחליפים את הנוטמ הרשמי או כל פרסום תעופתי מחייב אחר.
@@ -259,6 +381,7 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
     כל הזכויות שמורות · אין להעתיק, לשכפל או להפיץ ערכה זו ללא אישור הארגון · Fly safe ✈
   </div>
 </footer>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -455,6 +578,41 @@ function initMap(){
   satLayer.on("load",ok).on("tileerror",bad);
   osmLayer.on("load",ok).on("tileerror",bad);
   setTimeout(()=>{if(!tileOK)bad();},2500);
+  /* תיקון: לפעמים Leaflet נוצר לפני שהקונטיינר קיבל את מידותיו הסופיות (במיוחד בנייד) —
+     מכריחים חישוב גודל מחדש בכמה נקודות זמן, וגם בכל שינוי גודל מסך */
+  setTimeout(()=>map&&map.invalidateSize(),150);
+  setTimeout(()=>map&&map.invalidateSize(),600);
+  setTimeout(()=>map&&map.invalidateSize(),1500);
+  map.on("popupopen",function(e){
+    var pop=e.popup;
+    var fix=function(){
+      try{
+        var el=pop.getElement(); if(!el) return;
+        var c=el.querySelector(".leaflet-popup-content");
+        if(c){
+          var vw=window.innerWidth, w;
+          if(vw<=760){ w=Math.min(300,vw-76); }
+          else { w=Math.min(340,Math.max(240,vw-60)); }
+          c.style.width=Math.max(180,w)+"px";
+        }
+        pop.update();
+      }catch(err){}
+    };
+    fix();
+    setTimeout(fix,60);
+    setTimeout(fix,300);
+    if(document.fonts&&document.fonts.ready){ document.fonts.ready.then(fix); }
+  });
+  window.addEventListener("resize",()=>map&&map.invalidateSize());
+  try{
+    window.matchMedia("(max-width:760px)").addEventListener("change",e=>{
+      const card=document.getElementById("mobcard");
+      const open=card&&!card.hidden;
+      document.body.classList.toggle("mobcard-open",open&&e.matches);
+      setTimeout(()=>{ try{map.invalidateSize()}catch(err){} },150);
+    });
+  }catch(e){}
+  window.addEventListener("orientationchange",()=>setTimeout(()=>map&&map.invalidateSize(),300));
 }
 
 function isActiveNow(p){
@@ -465,13 +623,94 @@ function isActiveNow(p){
   return true;
 }
 
+function closeCurrentPopup(){
+  try{ if(map){ map.closePopup(); } }catch(e){}
+}
+
+/* ===== קוביית מידע מתחת למפה — מחשב ונייד ===== */
+function isMobileView(){ return window.matchMedia("(max-width:760px)").matches; }
+
+let notamLabel=null;
+function removeNotamLabel(){
+  try{ if(notamLabel){ map.removeLayer(notamLabel); notamLabel=null; } }catch(e){}
+}
+function addNotamLabel(item){
+  removeNotamLabel();
+  try{
+    const layer=shapes[item.id]; if(!layer) return;
+    let center=null;
+    if(layer.getBounds) center=layer.getBounds().getCenter();
+    else if(layer.getLatLng) center=layer.getLatLng();
+    if(!center) return;
+    notamLabel=L.marker(center,{
+      icon:L.divIcon({className:"notam-lbl",html:"<span>"+item.id+"</span>",iconSize:[0,0]}),
+      interactive:false,keyboard:false
+    }).addTo(map);
+  }catch(e){}
+}
+
+function mobcardHtml(item,p){
+  const meta=[];
+  if(p.times.from) meta.push("מ־"+p.times.from);
+  if(p.times.to) meta.push("עד "+p.times.to);
+  if(p.radius) meta.push("רדיוס "+p.radius.label);
+  if(p.alt) meta.push(p.alt);
+  return `<span class="pp-id" style="color:${(CATS[item.cat]||CATS.uas).color}">${item.id}</span> <span class="badge" style="color:${(CATS[item.cat]||CATS.uas).color};border-color:currentColor">${(CATS[item.cat]||CATS.uas).label}</span>
+  ${p.approx?'<div class="approx-note">⚠ מיקום משוער לפי שורת Q</div>':""}
+  <div class="pp-meta">${meta.join(" · ")}</div>
+  <div class="pp-heb">${item.heb.replace(/</g,"&lt;")}</div>
+  <details><summary>הצג נוטמ מקורי</summary><div class="pp-raw">${item.raw.replace(/</g,"&lt;")}</div></details>`;
+}
+
+function showMobileCard(item){
+  const card=document.getElementById("mobcard");
+  if(!card) return;
+  document.getElementById("mobcardTitle").textContent=item.name;
+  document.getElementById("mobcardBody").innerHTML=mobcardHtml(item,item.parsed);
+  card.hidden=false;
+  if(isMobileView()) document.body.classList.add("mobcard-open");
+  document.getElementById("mobcardBody").scrollTop=0;
+  addNotamLabel(item);
+  /* מרכוז על הנוטמ הספציפי — אחרי שהפריסה התייצבה */
+  const layer=shapes[item.id];
+  setTimeout(()=>{
+    try{
+      map.invalidateSize();
+      let center, bounds=null;
+      if(layer&&layer.getBounds){ bounds=layer.getBounds(); center=bounds.getCenter(); }
+      else if(layer&&layer.getLatLng){ center=layer.getLatLng(); }
+      if(center){
+        let z=map.getZoom();
+        if(bounds){ z=map.getBoundsZoom(bounds.pad(0.35)); }
+        z=Math.min(13,Math.max(10,z));   /* לא רחוק מדי, לא קרוב מדי */
+        map.setView(center,z,{animate:true});
+      }
+      if(isMobileView()){
+        const mb=document.querySelector(".mapbox");
+        if(mb) mb.scrollIntoView({behavior:"smooth",block:"start"});
+      }
+    }catch(e){}
+  },120);
+}
+function hideMobileCard(){
+  const card=document.getElementById("mobcard");
+  if(card) card.hidden=true;
+  document.body.classList.remove("mobcard-open");
+  removeNotamLabel();
+  setTimeout(()=>{ try{map.invalidateSize()}catch(e){} },120);
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const btn=document.getElementById("mobcardClose");
+  if(btn) btn.addEventListener("click",hideMobileCard);
+});
 function popupHtml(item,p){
   const meta=[];
   if(p.times.from) meta.push("מ־"+p.times.from);
   if(p.times.to) meta.push("עד "+p.times.to);
   if(p.radius) meta.push("רדיוס "+p.radius.label);
   if(p.alt) meta.push(p.alt);
-  return `<div class="pp-name">${item.name}</div>
+  return `<div class="pp-bigclose" onclick="closeCurrentPopup()">✕ סגור</div>
+  <div class="pp-name">${item.name}</div>
   <span class="pp-id" style="color:${(CATS[item.cat]||CATS.uas).color}">${item.id}</span> <span class="badge" style="color:${(CATS[item.cat]||CATS.uas).color};border-color:currentColor">${(CATS[item.cat]||CATS.uas).label}</span>
   ${p.approx?'<div class="approx-note">⚠ מיקום משוער לפי שורת Q</div>':""}
   <div class="pp-meta">${meta.join(" · ")}</div>
@@ -489,8 +728,11 @@ function drawItem(item){
   let layer;
   if(geo.type==="circle") layer=L.circle([geo.center.lat,geo.center.lng],{radius:geo.radius,...style});
   else layer=L.polygon(geo.points.map(c=>[c.lat,c.lng]),style);
-  layer.bindPopup(popupHtml(item,p),{maxWidth:340});
-  layer.on("click",()=>selectItem(item.id,false));
+  layer.on("click",()=>{
+    try{ map.closePopup(); }catch(e){}
+    showMobileCard(item);
+    selectItem(item.id,false);
+  });
   layer.addTo(map);
   return layer;
 }
@@ -500,8 +742,7 @@ function selectItem(id,fly=true){
   document.querySelectorAll(".item").forEach(el=>el.classList.toggle("sel",el.dataset.id===id));
   const item=DATA.find(x=>x.id===id);
   if(item&&shapes[id]){
-    if(fly) map.fitBounds(shapes[id].getBounds().pad(0.6));
-    shapes[id].openPopup();
+    showMobileCard(item);
   }
   const el=document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
   if(el) el.scrollIntoView({block:"nearest"});
@@ -521,6 +762,18 @@ function areaOf(p){
   return Math.abs(a/2);
 }
 
+function dayLabel(iso){
+  if(!iso) return "וותיק";
+  const d=new Date(iso), now=new Date();
+  const d0=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());
+  const n0=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate());
+  const days=Math.round((n0-d0)/86400000);
+  if(days<=0) return "היום 🆕";
+  if(days===1) return "אתמול";
+  if(days<=6) return "לפני "+days+" ימים";
+  return d.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
+}
+let showRemoved=false;
 let onlyActive=false;
 function renderAll(){
   Object.values(shapes).forEach(l=>{try{map.removeLayer(l)}catch(e){}});
@@ -546,10 +799,24 @@ function renderAll(){
     listOrder=[...mapped].map(it=>({it,d:it.parsed.geometry?distKm(userPos,geomCenter(it.parsed.geometry)):9999}))
       .sort((a,b)=>a.d-b.d).map(x=>(x.it._dist=x.d,x.it));
   }
+  if(!userPos){
+    listOrder=[...mapped].sort((a,b)=>new Date(b.first_seen||0)-new Date(a.first_seen||0));
+  }
+  let lastDay=null;
   listOrder.forEach(it=>{
     if(!activeCats.has(it.cat)) return;
     const active=isActiveNow(it.parsed);
     if(onlyActive && !active) return;
+    if(!userPos){
+      const lbl=dayLabel(it.first_seen);
+      if(lbl!==lastDay){
+        lastDay=lbl;
+        const dd=document.createElement("div");
+        dd.className="daydiv"+(lbl.includes("היום")?" today":"");
+        dd.textContent="📅 "+lbl;
+        list.appendChild(dd);
+      }
+    }
     const div=document.createElement("div");
     div.className="item"; div.dataset.id=it.id;
     div.innerHTML=`<div class="t"><span class="name"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${(CATS[it.cat]||CATS.uas).color};margin-left:6px"></span>${it.name}</span><span class="nid">${it.id}</span></div>
@@ -571,6 +838,24 @@ function renderAll(){
       div.onclick=()=>{ showMsg(it.id+" — "+it.name+"\n\n"+it.heb); };
       list.appendChild(div);
     });
+  }
+  if(typeof REMOVED!=="undefined" && REMOVED.length){
+    const tog=document.createElement("div");
+    tog.className="removed-toggle";
+    tog.innerHTML=`<span>🗑️ נוטמים שירדו לאחרונה (${REMOVED.length})</span><span>${showRemoved?"▲":"▼"}</span>`;
+    tog.onclick=()=>{ showRemoved=!showRemoved; renderAll(); };
+    list.appendChild(tog);
+    if(showRemoved){
+      REMOVED.forEach(r=>{
+        const div=document.createElement("div");
+        div.className="removed-item";
+        const col=(CATS[r.cat]||CATS.other).color;
+        div.innerHTML=`<div class="name" style="color:${col}">${r.name}</div>
+          <div class="meta">${r.id} · ירד ${dayLabel(r.removed_at)}</div>`;
+        div.onclick=()=>showMsg(r.id+" — "+r.name+" (הנוטמ הזה כבר לא פעיל)\n\n"+(r.heb||""));
+        list.appendChild(div);
+      });
+    }
   }
   document.getElementById("sideCount").textContent=shown+" במפה";
   document.getElementById("countStamp").textContent=`${DATA.length} נוטמים · מוצגים ${shown} במפה`;
@@ -765,8 +1050,26 @@ $("gmapsBtn").onclick=()=>{
   window.open(`https://www.google.com/maps/search/?api=1&query=${c.lat.toFixed(6)},${c.lng.toFixed(6)}`,"_blank");
 };
 
+/* מסך שגיאה ידידותי — מוצג רק אם משהו נכשל בפועל, במקום מסך ריק/תקוע */
+function showFatalError(msg){
+  const el=document.createElement("div");
+  el.style.cssText="position:fixed;inset:0;z-index:99999;background:#0b1220;color:#e9eff9;"+
+    "display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center;font-family:'Rubik',sans-serif";
+  el.innerHTML='<div style="font-size:40px;margin-bottom:14px">⚠️</div>'+
+    '<div style="font-size:16px;line-height:1.8;max-width:420px;margin-bottom:20px">'+msg+'</div>'+
+    '<button onclick="location.reload()" style="background:#ffb84d;color:#1a1204;border:none;font-weight:800;'+
+    'font-size:15px;padding:12px 28px;border-radius:12px;cursor:pointer">🔄 נסה לרענן</button>';
+  document.body.appendChild(el);
+}
+window.addEventListener("error", e=>{
+  if(!document.getElementById("bigmap")) return;
+  if(document.getElementById("bigmap").childElementCount>0) return; // המפה כבר עלתה בהצלחה — שגיאה מאוחרת לא קריטית
+  showFatalError("המפה נתקלה בבעיה בטעינה.<br>אם עברת עכשיו הרשמה/תשלום, לפעמים לוקח לWix דקה להכיר בכך — נסו לרענן.");
+});
+
 /* ================= אתחול ================= */
-let DATA=NOTAM_DATA.map(it=>({...it,cat:it.cat||"uas",parsed:parseNotam(it.raw)}));
+let DATA=NOTAM_DATA.map(it=>({...it,cat:it.cat||"uas",first_seen:it.first_seen||"2026-07-01T00:00:00Z",parsed:parseNotam(it.raw)}));
+let REMOVED=(typeof NOTAM_REMOVED!=="undefined")?NOTAM_REMOVED:[];
 let curStamp=FETCHED_AT, curISO=FETCHED_ISO;
 
 function refreshFreshBadge(){
@@ -778,8 +1081,9 @@ function refreshFreshBadge(){
   else{cls="r";txt="עודכן לפני "+Math.round(hrs/24)+" ימים — נדרש רענון!";}
   el.className="fresh "+cls; el.textContent=txt;
 }
-function applyData(notams, stampText, stampISO){
+function applyData(notams, stampText, stampISO, removedList){
   DATA=notams.map(it=>({...it,cat:it.cat||"uas",parsed:parseNotam(it.raw)}));
+  if(removedList) REMOVED=removedList;
   curStamp=stampText||curStamp; curISO=stampISO||curISO;
   document.getElementById("fetchStamp").textContent=curStamp;
   refreshFreshBadge();
@@ -794,7 +1098,7 @@ async function tryLoadFromSite(silent){
       if(!r.ok) continue;
       const j=await r.json();
       if(j && Array.isArray(j.notams) && j.notams.length){
-        applyData(j.notams, j.fetched_at, j.fetched_iso);
+        applyData(j.notams, j.fetched_at, j.fetched_iso, j.removed);
         if(!silent) showMsg("✅ הנתונים עודכנו בהצלחה!\nעדכון אחרון: "+(j.fetched_at||""));
         return true;
       }
@@ -867,12 +1171,25 @@ document.getElementById("nearBtn").onclick=()=>{
 /* רישום ה-Service Worker — הופך את הדף לאפליקציה מותקנת */
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}
 
+/* מצב מנהל: גישה ישירה לכתובת הזו (ללא Wix) עוקפת תמיד את התשלום —
+   זו כבר "הדלת האחורית" הקיימת. מוסיפים תזכורת חזותית כשמזהים גישה ישירה. */
+if(new URLSearchParams(location.search).get("dev")==="icd2026"){
+  const b=document.createElement("div");
+  b.style.cssText="background:#ff8a3b;color:#1a1204;text-align:center;font-weight:800;font-size:13px;padding:6px";
+  b.textContent="🔑 מצב מנהל — גישה ישירה, לא דרך Wix. אל תשתפו כתובת זו.";
+  document.body.insertBefore(b, document.body.firstChild);
+}
 document.getElementById("fetchStamp").textContent=FETCHED_AT;
 refreshFreshBadge();
-initMap();
-renderCatBar();
-renderAll();
-tryLoadFromSite(true);
+try{
+  initMap();
+  renderCatBar();
+  renderAll();
+  tryLoadFromSite(true);
+}catch(e){
+  showFatalError("המפה נתקלה בבעיה בטעינה.<br>אם עברת עכשיו הרשמה/תשלום, לפעמים לוקח לWix דקה להכיר בכך — נסו לרענן.<br><small style=\'color:#8fa0ba\'>"+
+    (e&&e.message||"")+"</small>");
+}
 </script>
 </body>
 </html>
