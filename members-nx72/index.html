@@ -129,6 +129,7 @@ button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .removed-item .name{text-decoration:line-through;font-size:13.5px}
 .removed-item .meta{color:var(--muted);font-size:11.5px;margin-top:2px}
 .catbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+#filterToggle{display:none}
 .catbtn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;cursor:pointer;
   border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-size:13px;font-weight:700;transition:.15s}
 .catbtn .cdot{width:10px;height:10px;border-radius:50%;flex:none}
@@ -259,8 +260,18 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
   .side{max-height:280px;order:3}
   .mapbox{order:1}
   #bigmap{height:min(50vh,420px);min-height:300px}
-  .catbar{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:4px}
-  .catbar::-webkit-scrollbar{display:none}
+  /* סינון בנייד: כפתור שפותח חלונית, בלי גלילה לצדדים */
+  #filterToggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    padding:11px 14px;margin-bottom:10px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+  #filterToggle .chev{transition:transform .2s ease;color:var(--amber)}
+  body.filters-open #filterToggle .chev{transform:rotate(180deg)}
+  #filterToggle #filterCount{color:var(--amber);font-weight:800}
+  .catbar{display:none}
+  body.filters-open .catbar{display:flex;flex-wrap:wrap;gap:8px;overflow:visible;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;
+    animation:cardin .18s ease}
+  body.filters-open .catbtn{flex:1 1 calc(50% - 8px);min-height:42px;justify-content:center;margin:0}
   .catbtn{flex:none;min-height:38px}
   .item{padding:13px 14px}
 }
@@ -304,6 +315,7 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
     </div>
   </div>
 
+  <button id="filterToggle" aria-expanded="false">⚙ סינון קטגוריות <span id="filterCount"></span> <span class="chev">▾</span></button>
   <div class="catbar" id="catBar"></div>
 
   <!-- אלמנטי נייד: כפתור מגירה צף + סרגל פעולות תחתון + מגירת רשימה -->
@@ -551,6 +563,7 @@ function renderCatBar(){
   all.textContent=allOn?"הצג כטב״מים בלבד":"הצג הכל";
   all.onclick=()=>{ activeCats=allOn?new Set(["uas"]):new Set(Object.keys(CATS)); renderCatBar(); renderAll(); };
   bar.appendChild(all);
+  updateFilterCount();
 }
 
 /* ================= מפה ראשית ================= */
@@ -702,7 +715,19 @@ function hideMobileCard(){
 document.addEventListener("DOMContentLoaded",()=>{
   const btn=document.getElementById("mobcardClose");
   if(btn) btn.addEventListener("click",hideMobileCard);
+  const ft=document.getElementById("filterToggle");
+  if(ft) ft.addEventListener("click",()=>{
+    const open=document.body.classList.toggle("filters-open");
+    ft.setAttribute("aria-expanded",open?"true":"false");
+  });
 });
+function updateFilterCount(){
+  try{
+    const el=document.getElementById("filterCount");
+    if(!el||typeof activeCats==="undefined"||typeof CATS==="undefined") return;
+    el.textContent="("+activeCats.size+"/"+Object.keys(CATS).length+")";
+  }catch(e){}
+}
 function popupHtml(item,p){
   const meta=[];
   if(p.times.from) meta.push("מ־"+p.times.from);
