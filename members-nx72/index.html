@@ -252,10 +252,9 @@ footer{padding:22px;color:var(--muted);font-size:12px;text-align:center;border-t
   .disclaim{font-size:11px;padding:6px 10px;margin-top:6px}
   main{padding:8px}
   .topbar{flex-direction:column;align-items:stretch}
-  .topbar .actions{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:4px;
-    max-width:100%;min-width:0;width:100%}
-  .topbar .actions::-webkit-scrollbar{display:none}
-  .topbar .actions button{flex:none;min-height:40px}
+  .topbar .actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;
+    overflow:visible;flex-wrap:nowrap;padding-bottom:0;max-width:100%;min-width:0;width:100%}
+  .topbar .actions button{flex:none;width:100%;min-height:44px;font-size:14px;justify-content:center}
   .layout{display:flex;flex-direction:column}
   .side{max-height:280px;order:3}
   .mapbox{order:1}
