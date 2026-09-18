@@ -174,8 +174,8 @@
       <button id="closeside" title="הסתר מקרא">✕</button>
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
-      <span class="stamp" id="pamatStamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" id="mapStamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.0 · 11 AUG 2026</span>
+      <span class="stamp" id="pamatStamp" style="display:none">UPDATE 1/26 · 06 AUG 2026</span>
+      <span class="stamp" id="mapStamp" style="display:none; color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.0 · 11 AUG 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
@@ -619,7 +619,8 @@ const NO_COORDS=[
 ];
  
 /* ===== map ===== */
-const map=L.map('map',{zoomControl:true, preferCanvas:true}).setView([31.6,35.0],8);
+const map=L.map('map',{zoomControl:false, preferCanvas:true}).setView([31.6,35.0],8);
+/* בקרת הזום (+/-) הוסרה — לא בשימוש, יש צביטה (נייד) וגלגלת עכבר (מחשב) */
 /* תיקון תצוגה בנייד: ספארי משנה את גובה החלון בפועל כשסרגל הכתובת מופיע/נעלם —
    בלי זה המפה יכולה להיראות מוגדלת/לא פרופורציונלית אחרי רענון או גלילה */
 let _resizeT=null;
@@ -1120,7 +1121,23 @@ document.addEventListener('DOMContentLoaded',()=>{
   ntSt.id='nt-status';
   ntSt.style.cssText='display:none;font-size:10.5px;color:var(--dim);margin:0 14px 6px;line-height:1.4';
   foot.before(row); foot.before(ntSt);
-  ntBtn.onclick=async()=>{ await ntLoadAuto(); };
+  function showDateToast(text){
+    let t=document.getElementById('dateToast');
+    if(!t){
+      t=document.createElement('div');
+      t.id='dateToast';
+      t.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:5000;background:var(--panel);color:#f5c46a;border:1px solid #6a5320;border-radius:8px;padding:8px 16px;font-size:12.5px;font-family:Consolas,monospace;box-shadow:0 6px 18px rgba(0,0,0,.5);direction:ltr;pointer-events:none;transition:opacity .3s';
+      document.body.appendChild(t);
+    }
+    t.textContent=text;
+    t.style.opacity='1';
+    clearTimeout(t._hideT);
+    t._hideT=setTimeout(()=>{ t.style.opacity='0'; },2000);
+  }
+  ntBtn.onclick=async()=>{
+    const ok=await ntLoadAuto();
+    if(ok && ntLastFetch) showDateToast('עדכון נוט"מ אחרון: '+ntLastFetch.toLocaleString('he-IL'));
+  };
   a17Btn.onclick=async()=>{
     a17Btn.textContent='בודק…'; a17Btn.disabled=true;
     try{
@@ -1128,8 +1145,18 @@ document.addEventListener('DOMContentLoaded',()=>{
         const reg=await navigator.serviceWorker.getRegistration();
         if(reg){ await reg.update(); }
       }
-      ntSt.textContent='נתוני הפמ"ת מוטמעים בקוד (גרסה 1/26). עדכון מלא מגיע כשמעלים גרסה חדשה.';
-      ntSt.style.display='block'; setTimeout(()=>ntSt.style.display='none',7000);
+      for(const url of PAMAT_META_URLS){
+        try{
+          const r=await fetch(url+(url.includes('?')?"&":"?")+"t="+Date.now(),{signal:AbortSignal.timeout(8000)});
+          if(!r.ok) continue;
+          const m=await r.json();
+          if(m.pamat_update && m.pamat_date){
+            showDateToast('עדכון פמ"ת: '+m.pamat_update+' · '+m.pamat_date);
+            const ps=document.getElementById('pamatStamp'); if(ps) ps.textContent=`UPDATE ${m.pamat_update} · ${m.pamat_date}`;
+          }
+          break;
+        }catch(e){}
+      }
     }catch(e){}
     a17Btn.textContent='\ud83d\udd04 עדכן פמ"ת'; a17Btn.disabled=false;
   };
