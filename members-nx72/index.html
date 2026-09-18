@@ -754,7 +754,8 @@ AIRPORTS.forEach((ap,ai)=>{
   mk.addTo(groups.A);
 });
 groups.P.addTo(map); groups.R.addTo(map); groups.D.addTo(map); groups.U.addTo(map); groups.A.addTo(map); groups.B.addTo(map);
-groups.NT_uas.addTo(map); groups.NT_pje.addTo(map); groups.NT_frng.addTo(map); groups.NT_act.addTo(map); groups.NT_obst.addTo(map); groups.NT_ad.addTo(map); groups.NT_other.addTo(map);
+groups.NT_pje.addTo(map); groups.NT_frng.addTo(map); groups.NT_act.addTo(map); groups.NT_obst.addTo(map); groups.NT_ad.addTo(map); groups.NT_other.addTo(map);
+// שכבת נוט"מ - כטב"מ/רחפנים (NT_uas) כבויה כברירת מחדל: עלולה להכיל פוליגונים גדולים שמכסים את רוב המפה — המשתמש בוחר להפעיל
 // שכבת המוחרגים (X) והבלונים (O) כבויות כברירת מחדל
  
 /* בורר מפה/לוויין + מונה כניסות עברו לפאנל הימני — הבקרה הכפולה של Leaflet הוסרה */
@@ -775,7 +776,7 @@ function renderList(filter){
   ORDER.forEach(k=>{
     const items=AREAS.filter(a=>a.cat===k && (!filter || (a.code+" "+(a.dispCode||"")+" "+a.name).toLowerCase().includes(filter)));
     if(!items.length && filter) return;
-    const g=document.createElement('div'); g.className='grp'+((filter||k==='P')?' open':'');
+    const g=document.createElement('div'); g.className='grp'+(filter?' open':'');
     const row=document.createElement('div'); row.style.cssText='display:flex; align-items:center; gap:4px';
     const cb=document.createElement('input'); cb.type='checkbox'; cb.className='cat-toggle';
     cb.style.cssText=`margin-right:8px; accent-color:${CATS[k].color}; flex-shrink:0; cursor:pointer`;
