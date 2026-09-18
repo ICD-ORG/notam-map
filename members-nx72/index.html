@@ -51,7 +51,7 @@
   #searchResults.open, .search-results.open{display:block}
   #searchResults .sr-group-title, .search-results .sr-group-title{padding:6px 10px 3px; font-size:10.5px; color:var(--dim); font-weight:700; border-top:1px solid var(--line)}
   #searchResults .sr-group-title:first-child, .search-results .sr-group-title:first-child{border-top:none}
-  #searchResults .sr-item, .search-results .sr-item{padding:7px 10px; cursor:pointer; font-size:12.5px; display:flex; align-items:center; gap:7px}
+  #searchResults .sr-item, .search-results .sr-item{padding:11px 10px; min-height:38px; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:7px}
   #searchResults .sr-item:hover, .search-results .sr-item:hover{background:var(--panel2)}
   #searchResults .sr-item .sr-badge, .search-results .sr-item .sr-badge{font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700; flex-shrink:0}
   #searchResults .sr-item .sr-txt, .search-results .sr-item .sr-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -641,6 +641,13 @@ const NO_COORDS=[
  
 /* ===== map ===== */
 const map=L.map('map',{zoomControl:true, preferCanvas:true}).setView([31.6,35.0],8);
+/* תיקון תצוגה בנייד: ספארי משנה את גובה החלון בפועל כשסרגל הכתובת מופיע/נעלם —
+   בלי זה המפה יכולה להיראות מוגדלת/לא פרופורציונלית אחרי רענון או גלילה */
+let _resizeT=null;
+function _fixMapSize(){ clearTimeout(_resizeT); _resizeT=setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },120); }
+window.addEventListener('resize',_fixMapSize);
+window.addEventListener('orientationchange',_fixMapSize);
+if(window.visualViewport) window.visualViewport.addEventListener('resize',_fixMapSize);
 /* סגירה אוטומטית של חלונית מידע (נוטם/אזור) אחרי 15 שניות */
 let _popupAutoCloseTimer=null;
 map.on('popupopen',function(e){
@@ -1387,10 +1394,11 @@ function srFlyToNotam(it){
 }
 function srFlyToPlace(loc,label){
   if(gPlaceMarker){ try{map.removeLayer(gPlaceMarker);}catch(e){} }
-  const targetZoom=Math.min(map.getZoom(),11);
-  map.setView([loc.lat(),loc.lng()],targetZoom);
-  gPlaceMarker=L.circleMarker([loc.lat(),loc.lng()],{radius:8,color:'#3b6ea5',weight:3,fillColor:'#3b6ea5',fillOpacity:.85}).addTo(map)
-    .bindTooltip(label,{permanent:true,direction:'top',offset:[0,-8],className:'place-label'});
+  map.panTo([loc.lat(),loc.lng()]);
+  const pinIcon=L.divIcon({className:'',iconSize:[22,30],iconAnchor:[11,30],
+    html:'<svg width="22" height="30" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg"><path d="M11 0C4.9 0 0 4.9 0 11c0 8.3 11 19 11 19s11-10.7 11-19C22 4.9 17.1 0 11 0z" fill="#3b6ea5" stroke="#e8f0fa" stroke-width="1.5"/><circle cx="11" cy="11" r="4" fill="#e8f0fa"/></svg>'});
+  gPlaceMarker=L.marker([loc.lat(),loc.lng()],{icon:pinIcon}).addTo(map)
+    .bindTooltip(label,{permanent:true,direction:'top',offset:[0,-28],className:'place-label'});
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
