@@ -55,6 +55,8 @@
   #searchResults .sr-item .sr-badge{font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700; flex-shrink:0}
   #searchResults .sr-item .sr-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #searchResults .sr-empty{padding:10px; font-size:12px; color:var(--dim); text-align:center}
+  .place-label{background:var(--panel); color:var(--text); border:1px solid #3b6ea5; border-radius:5px; padding:3px 8px; font-size:12px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.4)}
+  .place-label::before{border-top-color:#3b6ea5}
   #groups{flex:1; overflow-y:auto; padding:4px 8px 20px}
   .grp{margin:8px 6px}
   .grp>button{width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; color:var(--text); font-size:13px; font-weight:700; padding:7px 6px; cursor:pointer; border-radius:5px; text-align:right}
@@ -1356,10 +1358,9 @@ function srFlyToNotam(it){
 }
 function srFlyToPlace(loc,label){
   if(gPlaceMarker){ try{map.removeLayer(gPlaceMarker);}catch(e){} }
-  map.setView([loc.lat(),loc.lng()],15);
-  gPlaceMarker=L.marker([loc.lat(),loc.lng()]).addTo(map)
-    .bindPopup(`<div class="pp-name">📍 ${label}</div><div class="pp-note">תוצאת חיפוש מקום — לא אזור מוגבל</div>`)
-    .openPopup();
+  map.setView([loc.lat(),loc.lng()],14);
+  gPlaceMarker=L.circleMarker([loc.lat(),loc.lng()],{radius:8,color:'#3b6ea5',weight:3,fillColor:'#3b6ea5',fillOpacity:.85}).addTo(map)
+    .bindTooltip(label,{permanent:true,direction:'top',offset:[0,-8],className:'place-label'});
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
