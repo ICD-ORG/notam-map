@@ -1138,7 +1138,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   ntBtn.onclick=async()=>{
     const ok=await ntLoadAuto();
-    if(ok && ntLastFetch) showDateToast('עדכון נוט"מ אחרון: '+ntLastFetch.toLocaleString('he-IL'));
+    if(ok && ntLastFetchedAt) showDateToast('תאריך איסוף הנוט"מים: '+ntLastFetchedAt);
   };
   a17Btn.onclick=async()=>{
     a17Btn.textContent='בודק…'; a17Btn.disabled=true;
@@ -1169,6 +1169,7 @@ const NT_ORDER=["NT_uas","NT_pje","NT_frng","NT_act","NT_obst","NT_ad","NT_other
  
 /* ---- עדכון אוטומטי של נוטמים ---- */
 let ntLastFetch=null;
+let ntLastFetchedAt=null; // התאריך האמיתי שבו הנתונים נאספו מרש"ת (לא זמן ההורדה מהדפדפן)
 const NT_REFRESH_MS=5*60*1000; // רענון כל 5 דקות
  
 async function ntLoadAuto(){
@@ -1184,6 +1185,7 @@ async function ntLoadAuto(){
           ntData=j.notams;
           const n=ntDraw(ntData);
           ntLastFetch=new Date();
+          ntLastFetchedAt=j.fetched_at||null;
           ntUpdateStamp(n, j.fetched_at);
           if(btn){ btn.textContent='🔄 עדכן נוט"מ'; btn.disabled=false; }
           return true;
@@ -1195,6 +1197,7 @@ async function ntLoadAuto(){
       ntData=NOTAM_DATA;
       const n=ntDraw(ntData);
       ntLastFetch=new Date();
+      ntLastFetchedAt="16/07/2026 08:04 UTC (מוטמע)";
       ntUpdateStamp(n,"16/07/2026 08:04 UTC (מוטמע)");
     }
   }catch(e){}
