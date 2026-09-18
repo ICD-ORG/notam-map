@@ -1,0 +1,51 @@
+name: עדכון נוטמים יומי
+
+on:
+  schedule:
+    # ריצת צהריים: 13:00 UTC = 16:00 שעון ישראל (קיץ)
+    - cron: '0 13 * * *'
+    # ריצת בוקר: 03:30 UTC = 06:30 שעון ישראל (קיץ)
+    - cron: '30 3 * * *'
+  workflow_dispatch: {}   # מאפשר גם הרצה ידנית בלחיצת כפתור
+
+permissions:
+  contents: write
+
+jobs:
+  update-notams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: משיכת הקוד
+        uses: actions/checkout@v4
+
+      - name: התקנת Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: הרצת מושך הנוטמים (עד 3 ניסיונות)
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            echo "===== ניסיון $i מתוך 3 ====="
+            if python updater.py; then ok=1; break; fi
+            echo "ניסיון $i נכשל — ממתין דקה לפני ניסיון נוסף..."
+            sleep 60
+          done
+          if [ "$ok" != "1" ]; then
+            echo "כל שלושת הניסיונות נכשלו (כנראה חסימה זמנית של רש\"ת)."
+            exit 1
+          fi
+
+      - name: שמירת הנתונים החדשים
+        run: |
+          git config user.name "notam-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add notam-data.json
+          if git diff --cached --quiet; then
+            echo "אין שינויים בנתונים"
+          else
+            git commit -m "עדכון נוטמים אוטומטי $(date -u +'%d/%m/%Y %H:%M UTC')"
+            git push
+          fi
