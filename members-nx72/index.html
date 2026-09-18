@@ -685,10 +685,24 @@ function popupHtml(a){
   ${a.note?`<div class="pp-note">${a.cat==="U"?`<b>${a.dispCode||a.code} "${a.name}"</b>: `:""}${a.note}</div>`:`<div class="pp-note">לא פורסם גורם תיאום ייעודי בפרק. בקשה לטיסה חורגת: אגף פיקוח אווירי רת"א — caai-charigot@mot.gov.il</div>`}
   <div class="pp-note">מקור: פמ"ת א'-17, עדכון 1/26 · תיחום מקורב, לידיעה בלבד</div>`;
 }
+/* ===== פאנל מידע מאוחד בתחתית (foot) — במקום חלונית שחוסמת את המסך ===== */
+const _footDefaultHtml=(document.getElementById('foot')||{}).innerHTML||"";
+function footShowInfo(bodyHtml){
+  const foot=document.getElementById('foot');
+  if(!foot) return;
+  foot.innerHTML=`<div id="footClose" style="cursor:pointer;color:#8fd0a0;font-size:12px;text-align:left;margin-bottom:6px;font-weight:700">✕ סגור וחזרה למידע הכללי</div>${bodyHtml}`;
+  const cb=document.getElementById('footClose');
+  if(cb) cb.onclick=footShowDefault;
+  try{ foot.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+}
+function footShowDefault(){
+  const foot=document.getElementById('foot');
+  if(foot) foot.innerHTML=_footDefaultHtml;
+}
 const layersByCode={};
 AREAS.forEach(a=>{
   const layer=buildGeom(a); if(!layer) return;
-  layer.bindPopup(popupHtml(a),{maxWidth:290});
+  layer.on('click',()=>footShowInfo(popupHtml(a)));
   if(a.g.k!=="line"){
     layer.on('mouseover',function(){this.setStyle({weight:3, fillOpacity:0.38});});
     layer.on('mouseout',function(){this.setStyle({weight:1.6, fillOpacity:0.22});});
@@ -697,7 +711,7 @@ AREAS.forEach(a=>{
   /* מעגלים קטנים (בתי כלא, תחנות משטרה וכד') נעלמים בזום ארצי — מוסיפים נקודת סימון קבועה */
   if(a.g.k==="circle" && a.g.r<=1000){
     const dot=L.circleMarker(a.g.c,{radius:4, color:CATS[a.cat].color, weight:1.5, fillColor:CATS[a.cat].color, fillOpacity:0.9});
-    dot.bindPopup(popupHtml(a),{maxWidth:290});
+    dot.on('click',()=>footShowInfo(popupHtml(a)));
     dot.addTo(groups[a.cat]);
   }
   layersByCode[a.code]={layer, area:a};
@@ -712,7 +726,7 @@ AIRPORTS.forEach((ap,ai)=>{
     html:`<div style="font-size:21px; line-height:26px; text-align:center; color:#bcd9f6; text-shadow:0 0 5px #06101c,0 0 5px #06101c,0 1px 2px #000; transform:rotate(${(brg-45).toFixed(0)}deg)">✈</div>`});
   const mk=L.marker(mid,{icon:ic, title:ap[0]+' ('+ap[1]+')'});
   const area=AREAS.find(x=>x.code==="AP-"+ai+"-0");
-  if(area) mk.bindPopup(popupHtml(area),{maxWidth:290});
+  if(area) mk.on('click',()=>footShowInfo(popupHtml(area)));
   mk.addTo(groups.A);
 });
 groups.P.addTo(map); groups.R.addTo(map); groups.D.addTo(map); groups.U.addTo(map); groups.A.addTo(map); groups.B.addTo(map);
@@ -776,7 +790,7 @@ function renderList(filter){
         if(!map.hasLayer(groups[a.cat])) groups[a.cat].addTo(map);
         const b=e.layer.getBounds?e.layer.getBounds():L.latLngBounds([e.layer.getLatLng()]);
         map.fitBounds(b.pad(0.6));
-        e.layer.openPopup();
+        footShowInfo(popupHtml(e.area));
         if(window.innerWidth<=760){ setPanel(true); }
       };
       wrap.appendChild(it);
@@ -1031,7 +1045,9 @@ function ntDraw(notams){
     const gS=geo.type==="circle"?`רדיוס ${Math.round(geo.radius)} מ'`:`${geo.points.length} נקודות`;
     const altM=/UP\s+TO\s+([\d,]+)\s*FT\s+AMSL/i.exec(it.raw||'');
     const altS=altM?`עד ${altM[1]} רגל מעפ"ש`:null;
-    layer.bindPopup(ntPopupHtml(it,geo,times,gS,altS),{maxWidth:310});
+    const infoHtml=ntPopupHtml(it,geo,times,gS,altS);
+    layer._infoHtml=infoHtml;
+    layer.on('click',()=>footShowInfo(infoHtml));
     layer.on('mouseover',function(){this.setStyle({weight:3,fillOpacity:0.38});});
     layer.on('mouseout',function(){this.setStyle({weight:2,fillOpacity:geo.approx?0.10:0.22});});
     layer._ntId=it.id;
@@ -1206,7 +1222,7 @@ function ntRenderList(){
       const layer=ntLayers.find(l=>l._ntId===it.id);
       if(layer){
         if(!map.hasLayer(groups[catK])) groups[catK].addTo(map);
-        try{ map.fitBounds(layer.getBounds().pad(0.5)); layer.openPopup(); }catch(e){}
+        try{ map.fitBounds(layer.getBounds().pad(0.5)); footShowInfo(layer._infoHtml); }catch(e){}
       }
     };
     body.appendChild(row);
@@ -1353,7 +1369,7 @@ function srFlyToZone(a){
   try{
     if(entry.layer.getBounds) map.fitBounds(entry.layer.getBounds().pad(0.6));
     else map.setView(entry.layer.getLatLng(),14);
-    entry.layer.openPopup();
+    footShowInfo(popupHtml(entry.area));
   }catch(e){}
 }
 function srFlyToNotam(it){
@@ -1361,7 +1377,7 @@ function srFlyToNotam(it){
   if(!layer) return;
   try{
     map.fitBounds(layer.getBounds().pad(0.6));
-    layer.openPopup();
+    footShowInfo(layer._infoHtml);
   }catch(e){}
 }
 function srFlyToPlace(loc,label){
