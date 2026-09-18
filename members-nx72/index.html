@@ -616,7 +616,7 @@ const map=L.map('map',{zoomControl:true, preferCanvas:true}).setView([31.6,35.0]
 let _popupAutoCloseTimer=null;
 map.on('popupopen',function(e){
   if(_popupAutoCloseTimer) clearTimeout(_popupAutoCloseTimer);
-  _popupAutoCloseTimer=setTimeout(()=>{ try{ map.closePopup(e.popup); }catch(err){} },15000);
+  _popupAutoCloseTimer=setTimeout(()=>{ try{ map.closePopup(e.popup); }catch(err){} },5000);
 });
 map.on('popupclose',function(){
   if(_popupAutoCloseTimer){ clearTimeout(_popupAutoCloseTimer); _popupAutoCloseTimer=null; }
@@ -1358,7 +1358,8 @@ function srFlyToNotam(it){
 }
 function srFlyToPlace(loc,label){
   if(gPlaceMarker){ try{map.removeLayer(gPlaceMarker);}catch(e){} }
-  map.setView([loc.lat(),loc.lng()],14);
+  const targetZoom=Math.min(map.getZoom(),11);
+  map.setView([loc.lat(),loc.lng()],targetZoom);
   gPlaceMarker=L.circleMarker([loc.lat(),loc.lng()],{radius:8,color:'#3b6ea5',weight:3,fillColor:'#3b6ea5',fillOpacity:.85}).addTo(map)
     .bindTooltip(label,{permanent:true,direction:'top',offset:[0,-8],className:'place-label'});
 }
