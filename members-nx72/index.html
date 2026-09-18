@@ -56,8 +56,6 @@
   #searchResults .sr-item .sr-badge, .search-results .sr-item .sr-badge{font-size:9px; padding:1px 5px; border-radius:3px; font-weight:700; flex-shrink:0}
   #searchResults .sr-item .sr-txt, .search-results .sr-item .sr-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #searchResults .sr-empty, .search-results .sr-empty{padding:10px; font-size:12px; color:var(--dim); text-align:center}
-  #mobileSearchBar{display:none}
-  #mobileBottomBar{display:none}
   .place-label{background:var(--panel); color:var(--text); border:1px solid #3b6ea5; border-radius:5px; padding:3px 8px; font-size:12px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.4)}
   .place-label::before{border-top-color:#3b6ea5}
   #groups{flex:1; overflow-y:auto; padding:4px 8px 20px}
@@ -121,21 +119,6 @@
     #resizer{display:none}
     .leaflet-popup-content-wrapper{max-width:min(88vw,320px)}
     .leaflet-popup-content{max-height:min(52vh,420px); overflow-y:auto; -webkit-overflow-scrolling:touch}
-    /* נייד: תיבת החיפוש הופכת עצמאית וצפה, נפרדת מהמקרא הניתן לקריסה */
-    #side #search{display:none}
-    #mobileSearchBar{display:block; position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); right:10px; left:10px; z-index:1700}
-    #mobileSearchBar .search-box input{box-shadow:0 6px 18px rgba(0,0,0,.45)}
-    /* נייד: מסתירים את כפתורי הפעולה המפוזרים למעלה ואת בקרת הזום — מוחלפים בשורה תחתונה אחת */
-    #decoderBtn, #nearBtn, .leaflet-control-zoom{display:none !important}
-    .leaflet-control-layers{display:none}
-    #mobileBottomBar{display:flex; position:fixed; bottom:calc(10px + env(safe-area-inset-bottom,0px)); right:10px; left:10px; z-index:1700;
-      background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.45); overflow:hidden}
-    #mobileBottomBar button{flex:1; background:none; border:none; color:var(--text); padding:9px 4px 7px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; font-family:inherit}
-    #mobileBottomBar button+button{border-right:1px solid var(--line)}
-    #mobileBottomBar button:active{background:var(--panel2)}
-    #mobileBottomBar .mbi{font-size:17px; line-height:1}
-    #mobileBottomBar span{font-size:9.5px; color:var(--dim)}
-    #togglebtn{bottom:calc(64px + env(safe-area-inset-bottom,0px)); top:auto; right:10px}
   }
 </style>
 </head>
@@ -183,17 +166,6 @@
       <img src="https://static.wixstatic.com/media/3ae480_bd1aa7403fb5415ca03a36a0b07933b3~mv2.png/v1/crop/x_230,y_546,w_6464,h_3101/fill/w_200,h_96,al_c,q_95,enc_avif,quality_auto/logo%20new22-07.png"
            onerror="this.style.display='none'" alt="ICD"></a>
     </div>
-  </div>
-
-  <!-- נייד בלבד: תיבת חיפוש עצמאית, לא תלויה בקריסת המקרא -->
-  <div id="mobileSearchBar">
-    <div class="search-box"><input type="text" id="qm" placeholder="חיפוש לפי שם, מספר LL, נוטם, כתובת או עיר…" aria-label="חיפוש אזור, נוטם או מקום" autocomplete="off"><div id="searchResultsM" class="search-results"></div></div>
-  </div>
-  <!-- נייד בלבד: שורת פעולות תחתונה מאוחדת -->
-  <div id="mobileBottomBar">
-    <button id="mBtnLayer" title="מפה / לוויין"><i class="mbi">🗺️</i><span>מפה/לוויין</span></button>
-    <button id="mBtnNear" title="בקרבתי"><i class="mbi">📍</i><span>בקרבתי</span></button>
-    <button id="mBtnDecoder" title="מפענח נוט&quot;מ"><i class="mbi">🔤</i><span>מפענח</span></button>
   </div>
 
   <aside id="side">
@@ -1483,24 +1455,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     qEl.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeResults(); });
   }
   wireSearchBox(document.getElementById('q'),document.getElementById('searchResults'));
-  wireSearchBox(document.getElementById('qm'),document.getElementById('searchResultsM'));
-
-  /* נייד: שורת פעולות תחתונה — משתמשת בכפתורים/לוגיקה הקיימים, לא כפילות */
-  function toggleBaseLayer(){
-    try{
-      if(map.hasLayer(osm)){ map.removeLayer(osm); map.addLayer(sat); }
-      else{ map.removeLayer(sat); map.addLayer(osm); }
-    }catch(e){}
-  }
-  const mLayer=document.getElementById('mBtnLayer'), mNear=document.getElementById('mBtnNear'), mDecoder=document.getElementById('mBtnDecoder');
-  if(mLayer) mLayer.addEventListener('click',toggleBaseLayer);
-  if(mNear) mNear.addEventListener('click',()=>{ const b=document.getElementById('nearBtn'); if(b) b.click(); });
-  if(mDecoder) mDecoder.addEventListener('click',()=>{ const b=document.getElementById('decoderBtn'); if(b) b.click(); });
-
-  /* נייד בלבד: המקרא מתחיל מקופל כברירת מחדל, כדי לפנות מקום למפה (שולחן העבודה לא משתנה) */
-  if(window.matchMedia && window.matchMedia('(max-width:760px)').matches){
-    try{ setPanel(true); }catch(e){}
-  }
 });
 </script>
 </body>
