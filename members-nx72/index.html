@@ -660,7 +660,7 @@ function popupHtml(a){
   <div class="pp-row"><span class="k">גובה:</span><span>${a.alt}</span></div>
   ${a.g.k==="circle"?`<div class="pp-row"><span class="k">רדיוס:</span><span class="v">${a.g.r>=1000?(a.g.r/1000).toFixed(a.g.r%1000?2:0)+" km":a.g.r+" m"}</span></div>
   <div class="pp-row"><span class="k">מרכז:</span><span class="v">${a.g.c[0].toFixed(4)}N ${a.g.c[1].toFixed(4)}E</span></div>`:""}
-  ${a.note?`<div class="pp-note">${a.note}</div>`:`<div class="pp-note">לא פורסם גורם תיאום ייעודי בפרק. בקשה לטיסה חורגת: אגף פיקוח אווירי רת"א — caai-charigot@mot.gov.il</div>`}
+  ${a.note?`<div class="pp-note">${a.cat==="U"?`<b>${a.dispCode||a.code} "${a.name}"</b>: `:""}${a.note}</div>`:`<div class="pp-note">לא פורסם גורם תיאום ייעודי בפרק. בקשה לטיסה חורגת: אגף פיקוח אווירי רת"א — caai-charigot@mot.gov.il</div>`}
   <div class="pp-note">מקור: פמ"ת א'-17, עדכון 1/26 · תיחום מקורב, לידיעה בלבד</div>`;
 }
 const layersByCode={};
