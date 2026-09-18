@@ -126,8 +126,6 @@
 <div id="app">
   <div id="mapwrap">
     <button id="togglebtn">☰ הצג מקרא</button>
-    <button id="decoderBtn" style="position:absolute;top:14px;left:14px;z-index:999;background:var(--panel);color:#a8c6e8;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)">🔤 מפענח נוט"מ</button>
-    <button id="nearBtn" style="position:absolute;top:56px;left:14px;z-index:999;background:var(--panel);color:#67d8e8;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)">📍 בקרבתי</button>
     <div id="map"></div>
     </div>
     <!-- חלונית מפענח נוטמ בודד -->
@@ -176,6 +174,10 @@
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
       <span class="stamp" id="pamatStamp" style="display:none">UPDATE 1/26 · 06 AUG 2026</span>
       <span class="stamp" id="mapStamp" style="display:none; color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.0 · 11 AUG 2026</span>
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <button id="decoderBtn" style="flex:1; background:var(--panel2); color:#a8c6e8; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer">🔤 מפענח נוט"מ</button>
+        <button id="nearBtn" style="flex:1; background:var(--panel2); color:#67d8e8; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer">📍 בקרבתי</button>
+      </div>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
@@ -1132,7 +1134,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     t.textContent=text;
     t.style.opacity='1';
     clearTimeout(t._hideT);
-    t._hideT=setTimeout(()=>{ t.style.opacity='0'; },2000);
+    t._hideT=setTimeout(()=>{ t.style.opacity='0'; },4000);
   }
   ntBtn.onclick=async()=>{
     const ok=await ntLoadAuto();
