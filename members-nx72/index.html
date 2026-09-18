@@ -705,20 +705,37 @@ function footShowInfo(bodyHtml){
 function footShowDefault(){
   const foot=document.getElementById('foot');
   if(foot) foot.innerHTML=_footDefaultHtml;
+  deselectZoneLayer();
+}
+/* הדגשת הפוליגון/אזור שנלחץ — כדי שיהיה ברור מה נבחר גם באזורים גדולים מאוד */
+let selectedZoneLayer=null;
+function selectZoneLayer(layer){
+  if(!layer || !layer.setStyle) return;
+  if(selectedZoneLayer && selectedZoneLayer!==layer){
+    try{ selectedZoneLayer.setStyle({weight:1.6, fillOpacity:0.22, dashArray:null}); }catch(e){}
+  }
+  try{ layer.setStyle({weight:5, fillOpacity:0.30, dashArray:'8 5'}); if(layer.bringToFront) layer.bringToFront(); }catch(e){}
+  selectedZoneLayer=layer;
+}
+function deselectZoneLayer(){
+  if(selectedZoneLayer){
+    try{ selectedZoneLayer.setStyle({weight:1.6, fillOpacity:0.22, dashArray:null}); }catch(e){}
+    selectedZoneLayer=null;
+  }
 }
 const layersByCode={};
 AREAS.forEach(a=>{
   const layer=buildGeom(a); if(!layer) return;
-  layer.on('click',()=>footShowInfo(popupHtml(a)));
+  layer.on('click',()=>{selectZoneLayer(layer); footShowInfo(popupHtml(a));});
   if(a.g.k!=="line"){
-    layer.on('mouseover',function(){this.setStyle({weight:3, fillOpacity:0.38});});
-    layer.on('mouseout',function(){this.setStyle({weight:1.6, fillOpacity:0.22});});
+    layer.on('mouseover',function(){ if(this!==selectedZoneLayer) this.setStyle({weight:3, fillOpacity:0.38}); });
+    layer.on('mouseout',function(){ if(this!==selectedZoneLayer) this.setStyle({weight:1.6, fillOpacity:0.22}); });
   }
   layer.addTo(groups[a.cat]);
   /* מעגלים קטנים (בתי כלא, תחנות משטרה וכד') נעלמים בזום ארצי — מוסיפים נקודת סימון קבועה */
   if(a.g.k==="circle" && a.g.r<=1000){
     const dot=L.circleMarker(a.g.c,{radius:4, color:CATS[a.cat].color, weight:1.5, fillColor:CATS[a.cat].color, fillOpacity:0.9});
-    dot.on('click',()=>footShowInfo(popupHtml(a)));
+    dot.on('click',()=>{selectZoneLayer(dot); footShowInfo(popupHtml(a));});
     dot.addTo(groups[a.cat]);
   }
   layersByCode[a.code]={layer, area:a};
@@ -786,6 +803,7 @@ function renderList(filter){
         if(!map.hasLayer(groups[a.cat])) groups[a.cat].addTo(map);
         const b=e.layer.getBounds?e.layer.getBounds():L.latLngBounds([e.layer.getLatLng()]);
         map.fitBounds(b.pad(0.6));
+        selectZoneLayer(e.layer);
         footShowInfo(popupHtml(e.area));
         if(window.innerWidth<=760){ setPanel(true); }
       };
@@ -1365,6 +1383,7 @@ function srFlyToZone(a){
   try{
     if(entry.layer.getBounds) map.fitBounds(entry.layer.getBounds().pad(0.6));
     else map.setView(entry.layer.getLatLng(),14);
+    selectZoneLayer(entry.layer);
     footShowInfo(popupHtml(entry.area));
   }catch(e){}
 }
