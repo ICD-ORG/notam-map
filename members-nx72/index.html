@@ -41,6 +41,8 @@
   #side header h1{font-size:16px; font-weight:700; letter-spacing:.2px}
   #side header .sub{font-size:11.5px; color:var(--dim); margin-top:4px; line-height:1.5}
   #side header .stamp{display:inline-block; margin-top:6px; font-family:Consolas,monospace; font-size:10.5px; color:#f5c46a; border:1px solid #6a5320; background:#211a08; padding:2px 7px; border-radius:3px; direction:ltr}
+  #mobSheetHandle{display:none}
+  #mobIconRow{display:none}
   #search{margin:10px 14px 6px; position:relative}
   .search-box{position:relative}
   #search input, .search-box input{width:100%; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--text); padding:8px 10px; font-size:13px}
@@ -115,10 +117,44 @@
   #icd-logo:hover{opacity:1}
   #icd-logo img{width:56px; height:auto; display:block; filter:drop-shadow(0 1px 4px #000a)}
 @media (max-width: 760px){
-    #side{width:min(88vw,330px); max-height:70vh}
+    #side{position:fixed; top:auto; right:0; left:0; bottom:0; width:100%; max-width:100%;
+      height:50vh; max-height:50vh; border-radius:14px 14px 0 0; display:flex; flex-direction:column;
+      transition:height .22s ease}
+    body.mob-sheet-collapsed #side{height:44px; overflow:hidden}
     #resizer{display:none}
     .leaflet-popup-content-wrapper{max-width:min(88vw,320px)}
     .leaflet-popup-content{max-height:min(52vh,420px); overflow-y:auto; -webkit-overflow-scrolling:touch}
+
+    /* ידית קיפול/פתיחה — תמיד בראש הגיליון */
+    #mobSheetHandle{display:flex; align-items:center; justify-content:center; gap:8px; padding:8px;
+      cursor:pointer; border-bottom:1px solid var(--line); flex-shrink:0; order:1}
+    #mobSheetHandle .bar{width:34px; height:3px; border-radius:2px; background:var(--line)}
+    #mobSheetHandle .lbl{font-size:11px; color:var(--dim)}
+    #mobSheetHandle .chev{font-size:10px; color:var(--dim); transition:transform .2s}
+    body.mob-sheet-collapsed #mobSheetHandle .chev{transform:rotate(180deg)}
+
+    /* שורת אייקונים — בקרבתי, תצלום/מפה, רענון נוט"מ/פמ"ת */
+    #mobIconRow{display:flex; gap:4px; padding:6px 8px; border-bottom:1px solid var(--line); flex-shrink:0; order:2}
+    #mobIconRow button{flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+      background:none; border:none; color:var(--text); padding:5px 2px; cursor:pointer; font-family:inherit}
+    #mobIconRow button i{font-style:normal; font-size:16px; line-height:1}
+    #mobIconRow button i.thumb{display:block; width:22px; height:16px; border-radius:3px; border:1px solid var(--line)}
+    #mobIconRow button i.thumb.sat{background:linear-gradient(135deg,#3a4a2e,#5c6b3f)}
+    #mobIconRow button i.thumb.osm{background:#e8e4d8}
+    #mobIconRow button.active i.thumb{border-color:#67d8e8; border-width:2px}
+    #mobIconRow button span{font-size:8.5px; color:var(--dim)}
+
+    /* מסתירים אלמנטים שכבר לא נחוצים במבנה הנייד (מוחלפים ע"י שורת האייקונים) */
+    header{display:none}
+    #search{display:none}
+    #baseLayerRow{display:none !important}
+    #refreshRow, #nt-status{display:none !important}
+
+    /* אזור תוכן גלול: הרשימה כברירת מחדל, foot מוצג רק בלחיצה על פוליגון */
+    #collapseRow{order:3}
+    #groups{order:5; flex:1; overflow-y:auto}
+    #ntListSection{order:6; flex-shrink:0}
+    #foot{order:5; display:none; flex:1; overflow-y:auto}
   }
 </style>
 </head>
@@ -167,6 +203,14 @@
   </div>
 
   <aside id="side">
+    <div id="mobSheetHandle"><span class="bar"></span><span class="lbl">הצג מידע ורשימה</span><span class="chev">▲</span></div>
+    <div id="mobIconRow">
+      <button id="mIconNear" title="בקרבתי"><i>📍</i><span>בקרבתי</span></button>
+      <button id="mIconSat" title="תצלום אוויר"><i class="thumb sat"></i><span>תצלום אוויר</span></button>
+      <button id="mIconOsm" title="מפת רחובות"><i class="thumb osm"></i><span>מפת רחובות</span></button>
+      <button id="mIconNt" title="נוט&quot;מ"><i>🔄</i><span>נוט"מ</span></button>
+      <button id="mIconA17" title="פמ&quot;ת"><i>🔄</i><span>פמ"ת</span></button>
+    </div>
     <div id="resizer" title="גרירה לשינוי רוחב המקרא"></div>
     <header>
       <button id="closeside" title="הסתר מקרא">✕</button>
@@ -187,7 +231,7 @@
       </details>
     </header>
     <div id="search" class="search-box"><input type="text" id="q" placeholder="חיפוש לפי שם, מספר LL, נוטם, כתובת או עיר…" aria-label="חיפוש אזור, נוטם או מקום" autocomplete="off"><div id="searchResults" class="search-results"></div></div>
-    <div style="display:flex; align-items:center; gap:8px; margin:6px 14px 2px">
+    <div id="baseLayerRow" style="display:flex; align-items:center; gap:8px; margin:6px 14px 2px">
       <div id="baseLayerToggle" style="display:flex; flex:1; border:1px solid var(--line); border-radius:6px; overflow:hidden">
         <button id="baseLayerOsm" style="flex:1; background:var(--panel2); border:none; color:var(--text); font-size:12px; padding:6px 4px; cursor:pointer">מפת רחובות</button>
         <button id="baseLayerSat" style="flex:1; background:none; border:none; border-right:1px solid var(--line); color:var(--dim); font-size:12px; padding:6px 4px; cursor:pointer">תצלום אוויר</button>
@@ -195,7 +239,7 @@
       <div id="layers-counter" style="border:none; margin:0; padding:6px 8px"><span>👁</span><span class="n" id="vc-n">—</span></div>
     </div>
     <!-- כפתורי קפל/פתח -->
-    <div style="display:flex; align-items:center; gap:8px; margin:6px 14px 2px; flex-wrap:wrap">
+    <div id="collapseRow" style="display:flex; align-items:center; gap:8px; margin:6px 14px 2px; flex-wrap:wrap">
       <button id="collapseall" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center">▶ קפל הכול</button>
       <button id="expandall" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center">▼ פתח הכול</button>
     </div>
@@ -697,18 +741,37 @@ function popupHtml(a){
 }
 /* ===== פאנל מידע מאוחד בתחתית (foot) — במקום חלונית שחוסמת את המסך ===== */
 const _footDefaultHtml=(document.getElementById('foot')||{}).innerHTML||"";
+function isMobileView(){ return window.matchMedia && window.matchMedia('(max-width:760px)').matches; }
+let _footAutoRevertTimer=null;
 function footShowInfo(bodyHtml){
   const foot=document.getElementById('foot');
   if(!foot) return;
   foot.innerHTML=`<div id="footClose" style="cursor:pointer;color:#8fd0a0;font-size:12px;text-align:left;margin-bottom:6px;font-weight:700">✕ סגור וחזרה למידע הכללי</div>${bodyHtml}`;
   const cb=document.getElementById('footClose');
   if(cb) cb.onclick=footShowDefault;
-  try{ foot.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  if(isMobileView()){
+    foot.style.display='block';
+    const grp=document.getElementById('groups'); if(grp) grp.style.display='none';
+    const ntSec=document.getElementById('ntListSection'); if(ntSec) ntSec.style.display='none';
+    clearTimeout(_footAutoRevertTimer);
+    _footAutoRevertTimer=setTimeout(footShowDefault,10000);
+    document.body.classList.remove('mob-sheet-collapsed');
+  }else{
+    try{ foot.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  }
 }
 function footShowDefault(){
-  const foot=document.getElementById('foot');
-  if(foot) foot.innerHTML=_footDefaultHtml;
+  clearTimeout(_footAutoRevertTimer);
   deselectZoneLayer();
+  if(isMobileView()){
+    const foot=document.getElementById('foot');
+    if(foot) foot.style.display='none';
+    const grp=document.getElementById('groups'); if(grp) grp.style.display='';
+    const ntSec=document.getElementById('ntListSection'); if(ntSec) ntSec.style.display='';
+  }else{
+    const foot=document.getElementById('foot');
+    if(foot) foot.innerHTML=_footDefaultHtml;
+  }
 }
 /* הדגשת הפוליגון/אזור שנלחץ — כדי שיהיה ברור מה נבחר גם באזורים גדולים מאוד */
 let selectedZoneLayer=null;
@@ -766,6 +829,9 @@ function syncBaseLayerBtns(){
   const isSat=map.hasLayer(sat);
   document.getElementById('baseLayerOsm').style.cssText='flex:1;border:none;color:'+(isSat?'var(--dim)':'var(--text)')+';font-size:12px;padding:6px 4px;cursor:pointer;background:'+(isSat?'none':'var(--panel2)');
   document.getElementById('baseLayerSat').style.cssText='flex:1;border:none;border-right:1px solid var(--line);color:'+(isSat?'var(--text)':'var(--dim)')+';font-size:12px;padding:6px 4px;cursor:pointer;background:'+(isSat?'var(--panel2)':'none');
+  const mSat=document.getElementById('mIconSat'), mOsm=document.getElementById('mIconOsm');
+  if(mSat) mSat.classList.toggle('active',isSat);
+  if(mOsm) mOsm.classList.toggle('active',!isSat);
 }
 document.getElementById('baseLayerOsm').onclick=()=>{ if(map.hasLayer(sat)){map.removeLayer(sat);} if(!map.hasLayer(osm)){map.addLayer(osm);} syncBaseLayerBtns(); };
 document.getElementById('baseLayerSat').onclick=()=>{ if(map.hasLayer(osm)){map.removeLayer(osm);} if(!map.hasLayer(sat)){map.addLayer(sat);} syncBaseLayerBtns(); };
@@ -1109,6 +1175,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const foot=document.getElementById('foot');
   if(!foot) return;
   const row=document.createElement('div');
+  row.id='refreshRow';
   row.style.cssText='display:flex;gap:6px;margin:0 14px 8px';
   const ntBtn=document.createElement('button');
   ntBtn.id='nt-refresh';
@@ -1519,6 +1586,24 @@ document.addEventListener('DOMContentLoaded',()=>{
     qEl.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeResults(); });
   }
   wireSearchBox(document.getElementById('q'),document.getElementById('searchResults'));
+
+  /* נייד בלבד: שורת אייקונים תחתונה — פרוקסי ללחיצות על הכפתורים המקוריים (לא כפילות לוגיקה) */
+  function proxyClick(newId,targetId){
+    const el=document.getElementById(newId);
+    const target=document.getElementById(targetId);
+    if(el && target) el.addEventListener('click',()=>target.click());
+  }
+  proxyClick('mIconNear','nearBtn');
+  proxyClick('mIconSat','baseLayerSat');
+  proxyClick('mIconOsm','baseLayerOsm');
+  proxyClick('mIconNt','nt-refresh');
+  proxyClick('mIconA17','a17-refresh');
+
+  /* נייד בלבד: קיפול/פתיחה של גיליון המידע התחתון */
+  const handle=document.getElementById('mobSheetHandle');
+  if(handle) handle.addEventListener('click',()=>{
+    document.body.classList.toggle('mob-sheet-collapsed');
+  });
 });
 </script>
 </body>
