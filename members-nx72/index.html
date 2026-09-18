@@ -717,7 +717,7 @@ function selectZoneLayer(layer){
   if(selectedZoneLayer && selectedZoneLayer!==layer){
     try{ selectedZoneLayer.setStyle({weight:1.6, fillOpacity:0.22, dashArray:null}); }catch(e){}
   }
-  try{ layer.setStyle({weight:5, fillOpacity:0.30, dashArray:'8 5'}); if(layer.bringToFront) layer.bringToFront(); }catch(e){}
+  try{ layer.setStyle({weight:5, fillOpacity:0.30, dashArray:'8 5'}); }catch(e){}
   selectedZoneLayer=layer;
 }
 function deselectZoneLayer(){
