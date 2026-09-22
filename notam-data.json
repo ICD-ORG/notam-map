@@ -1,8 +1,15 @@
 {
- "fetched_at": "21/09/2026 18:29 UTC",
- "fetched_iso": "2026-09-21T18:29:06Z",
- "count": 21,
+ "fetched_at": "22/09/2026 08:43 UTC",
+ "fetched_iso": "2026-09-22T08:43:20Z",
+ "count": 22,
  "notams": [
+  {
+   "id": "C1983/26",
+   "loc": "LLLL",
+   "name": "EMEK HEFER",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב EMEK HEFER, מהקרקע ועד 30מטר מעל הקרקע. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 950רגל מעל פני הים 32°24'07\"N 34°53'54\"E 32°24'07\"N 34°53'57\"E 32°24'05\"N 34°53'57\"E 32°24'05\"N 34°53'55\"E. מומלצת זהירות.\nבתוקף: מ-22/09/2026 07:37 UTC עד 15/10/2026 20:59 UTC",
+   "raw": "C1983/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3224N03454E001\nA) LLLL B) 2609220737 C) 2610152059\nE) UAS/UAV ACT WILL TAKE PLACE AT EMEK HEFER, FM GND UP TO 30M AGL.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 950FT AMSL\n322407N0345354E 322407N0345357E 322405N0345357E\n322405N0345355E.\nCTN ADZ.\nF) GND G) 950FT AMSL)"
+  },
   {
    "id": "C1970/26",
    "loc": "LLLL",
