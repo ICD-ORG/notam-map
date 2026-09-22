@@ -1,8 +1,15 @@
 {
- "fetched_at": "22/09/2026 08:43 UTC",
- "fetched_iso": "2026-09-22T08:43:20Z",
- "count": 22,
+ "fetched_at": "22/09/2026 17:32 UTC",
+ "fetched_iso": "2026-09-22T17:32:26Z",
+ "count": 23,
  "notams": [
+  {
+   "id": "C1985/26",
+   "loc": "LLLL",
+   "name": "ADERET",
+   "heb": "פעילות כטב\"מ תתקיים ב ADERET. אזור בין נקודות הציון הבאות מהקרקע ועד 3,500רגל מעל פני הים סגור לכל הטיסות כולל טיסות ריסוס חקלאיות 31°41'07\"N 34°59'19\"E 31°38'46\"N 34°58'57\"E 31°38'04\"N 35°01'16\"E 31°39'31\"N 35°03'42\"E 31°41'31\"N 35°01'34\"E. מומלצת זהירות.\nבתוקף: מ-23/09/2026 06:00 UTC עד 23/09/2026 11:30 UTC\nלו\"ז: 0600-0800 0900-1130",
+   "raw": "C1985/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/035/3140N03501E003\nA) LLLL B) 2609230600 C) 2609231130\nD) 0600-0800 0900-1130\nE) UAS ACT WILL TAKE PLACE AT ADERET.\nAN AREA BTN FLW PSN FM GND UP TO 3,500FT AMSL CLSD TO\nALL FLT INCLUDING AGRICULTURE FLT  314107N0345919E\n313846N0345857E 313804N0350116E 313931N0350342E\n314131N0350134E.\nCTN ADZ.\nF) GND G) 3500FT AMSL)"
+  },
   {
    "id": "C1983/26",
    "loc": "LLLL",
