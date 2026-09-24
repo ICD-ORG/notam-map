@@ -156,6 +156,14 @@
     #ntListSection{order:6; flex-shrink:0}
     #foot{order:5; display:none; flex:1; overflow-y:auto}
   }
+  /* ---- הודעת התקנה למסך הבית (מובייל, בדפדפן בלבד) ---- */
+  #a2hs{display:none; position:absolute; left:10px; right:10px; bottom:14px; z-index:3000;
+    background:var(--panel); color:var(--text); border:1px solid #4d7db3; border-radius:12px;
+    padding:12px 40px 12px 14px; font-size:13.5px; line-height:1.55; box-shadow:0 8px 24px rgba(0,0,0,.55);
+    direction:rtl; text-align:right; transition:opacity .4s}
+  #a2hs b{color:#a8d4f0}
+  #a2hs .x{position:absolute; top:6px; right:8px; width:26px; height:26px; border:1px solid var(--line);
+    border-radius:6px; background:var(--panel2); color:var(--dim); font-size:14px; cursor:pointer; line-height:1}
 </style>
 </head>
 <body>
@@ -1605,6 +1613,25 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.body.classList.toggle('mob-sheet-collapsed');
   });
 });
+</script>
+<div id="a2hs"><button class="x" id="a2hsClose" title="סגור">✕</button><div id="a2hsText"></div></div>
+<script>
+/* ---- הודעת התקנה: מוצגת רק בטלפון, רק כשנפתח בדפדפן (לא מהאייקון), נעלמת אחרי 30 שניות ---- */
+(function(){
+  var standalone = (window.navigator.standalone===true) || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  var mobile = window.matchMedia && window.matchMedia('(max-width:760px)').matches;
+  if(standalone || !mobile) return;
+  var ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var box=document.getElementById('a2hs'), txt=document.getElementById('a2hsText');
+  if(!box||!txt) return;
+  txt.innerHTML = ios
+    ? '📲 <b>כדאי להתקין את המפה כאפליקציה:</b><br>לחצו על כפתור <b>השיתוף</b> (ריבוע עם חץ, בתחתית המסך) ← <b>הוסף למסך הבית</b>'
+    : '📲 <b>כדאי להתקין את המפה כאפליקציה:</b><br>לחצו על <b>⋮</b> (למעלה) ← <b>הוסף למסך הבית</b> / <b>התקן אפליקציה</b>';
+  box.style.display='block';
+  var hide=function(){ box.style.opacity='0'; setTimeout(function(){ box.style.display='none'; },400); };
+  document.getElementById('a2hsClose').onclick=hide;
+  setTimeout(hide, 30000);
+})();
 </script>
 </body>
 </html>
