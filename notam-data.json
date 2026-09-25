@@ -1,15 +1,8 @@
 {
- "fetched_at": "25/09/2026 09:00 UTC",
- "fetched_iso": "2026-09-25T09:00:42Z",
- "count": 28,
+ "fetched_at": "25/09/2026 17:47 UTC",
+ "fetched_iso": "2026-09-25T17:47:09Z",
+ "count": 27,
  "notams": [
-  {
-   "id": "C2042/26",
-   "loc": "LLLL",
-   "name": "C2042/26",
-   "heb": "UAS ACT WILL TAKE PLACE S OF LLMG. אזור בתוך 1.5NM רדיוס שמרכזו בנ.צ. 32°32'56\"N 35°16'45\"E סגור מהקרקע ועד 3,500רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות. מומלצת זהירות.\nבתוקף: מ-25/09/2026 05:30 UTC עד 25/09/2026 13:00 UTC",
-   "raw": "C2042/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/035/3233N03517E002\nA) LLLL B) 2609250530 C) 2609251300\nE) UAS ACT WILL TAKE PLACE S OF LLMG.\nAN AREA WI 1.5NM RADIUS CENTERED ON PSN 323256N0351645E\nCLSD FM GND UP TO 3,500FT AMSL TO ALL FLT INCLUDING\nAGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 3500FT AMSL)"
-  },
   {
    "id": "C2026/26",
    "loc": "LLLL",
