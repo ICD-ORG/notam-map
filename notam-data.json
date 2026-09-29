@@ -1,8 +1,15 @@
 {
- "fetched_at": "29/09/2026 10:02 UTC",
- "fetched_iso": "2026-09-29T10:02:48Z",
- "count": 29,
+ "fetched_at": "29/09/2026 18:28 UTC",
+ "fetched_iso": "2026-09-29T18:28:56Z",
+ "count": 30,
  "notams": [
+  {
+   "id": "C2056/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב YERUHAM, מהקרקע ועד 600מטר מעל הקרקע. אזור בתוך 0.3NM רדיוס שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-04/10/2026 03:00 UTC עד 08/10/2026 14:30 UTC\nלו\"ז: DAILY 0300-1430",
+   "raw": "C2056/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2610040300 C) 2610081430\nD) DAILY 0300-1430\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
+  },
   {
    "id": "C2052/26",
    "loc": "LLLL",
