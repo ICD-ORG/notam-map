@@ -4,7 +4,7 @@
    לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=soft | trial | enforce */
 (function () {
   var CFG = {
-    MODE: 'off',                                                 // off | soft | trial | enforce
+    MODE: 'trial',                                               // off | soft | trial | enforce
     MAX_FREE: 5,                                                 // במצב trial: כמה כניסות חינם (לכל מכשיר) לפני חסימה
     FREE_KEY: 'icdGateFree',
     VERIFY_URL: 'https://www.icd.org.il/_functions/verify',      // נקודת אימות ב-Wix (http-functions.js)
@@ -90,6 +90,16 @@
   }
 
   function start() {
+    /* כרטיס בכתובת (#t=...) — למשל מכפתור "פתח במסך מלא" בעמוד החברים: נשמר ומוסר מהכתובת */
+    var hm = /[#&]t=([^&]+)/.exec(location.hash);
+    if (hm) {
+      var ht = ''; try { ht = decodeURIComponent(hm[1]); } catch (e) {}
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      if (ht) { verify(ht).then(function (ok) { if (ok) grant(ht); else startNormal(); }); return; }
+    }
+    startNormal();
+  }
+  function startNormal() {
     var t = load();
     if (t) verify(t).then(function (ok) { if (ok) { decided = true; } else { clear(); awaitFromParent(); } });
     else awaitFromParent();
