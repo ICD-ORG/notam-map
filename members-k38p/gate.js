@@ -56,8 +56,9 @@
   }
   function hideUi() { if (ui && ui.parentNode) ui.parentNode.removeChild(ui); ui = null; }
   function blockedScreen() {
-    cover('<div style="font-size:20px;font-weight:700;margin-bottom:8px">מפת א-17 — לחברי הארגון בלבד</div>' +
-      '<div style="margin-bottom:16px;opacity:.9">הגישה למפה פתוחה לחברי הארגון הישראלי לרחפנים. הכניסה דרך אתר הארגון, לאחר הרשמה ותשלום.</div>' +
+    cover('<div style="font-size:22px;font-weight:700;margin-bottom:10px;line-height:1.4">ברוכים הבאים למפת נוט"מ ולפמ"ת מתורגמים לעברית</div>' +
+      '<div style="font-size:16px;margin-bottom:14px;opacity:.9;line-height:1.5">של הארגון הישראלי לרחפנים לרב להב<br>בית הספר הארצי לרחפנים</div>' +
+      '<div style="margin-bottom:18px;opacity:.9;line-height:1.5">הכניסה דרך אתר הארגון (ICD), לאחר הרשמה ותשלום של 25 שקלים לשנה</div>' +
       '<a href="' + CFG.LOGIN_URL + '" target="_top" rel="noopener" style="display:inline-block;min-height:44px;line-height:44px;padding:0 18px;border-radius:10px;background:#ffb347;color:#1a1200;font-weight:700;text-decoration:none">כניסה לחברים / הצטרפות</a>');
   }
 
