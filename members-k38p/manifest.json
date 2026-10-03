@@ -1,17 +1,16 @@
 {
-  "name": "מפת נוט״מ — כטב״מים ורחפנים",
-  "short_name": "נוט״מ",
-  "description": "כל הנוטמים הפנים-ארציים בישראל, מפוענחים לעברית — הארגון הישראלי לרחפנים",
+  "name": "מפת אזורים אסורים א-17",
+  "short_name": "מפת א-17",
+  "description": "אזורים אסורים, מוגבלים ומסוכנים לטיסה — פמ\"ת א'-17, שמורות טבע, גנים לאומיים ונוט\"מים",
   "lang": "he",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0b1220",
-  "theme_color": "#0b1220",
+  "background_color": "#0e1b2a",
+  "theme_color": "#0e1b2a",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
