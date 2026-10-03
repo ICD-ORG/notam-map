@@ -2,8 +2,7 @@
    האפליקציה נפתחת רק עם "כרטיס כניסה" שמונפק באתר הארגון (Wix) לחבר מחובר ששילם.
    מי שנכנס בקישור ישיר בלי כרטיס מועבר אוטומטית לאתר הארגון (notam1?go=app): חבר ששילם חוזר למפה עם כרטיס,
    מי שלא שילם מועבר שם לדף ההצטרפות והתשלום. אין כניסות חינם ואין הודעות נוספות.
-   מצבים (CFG.MODE): 'off' = לא עושה כלום | 'enforce' = השער פעיל.
-   לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=enforce (נשמר ללשונית הנוכחית בלבד) */
+   מצבים (CFG.MODE): 'off' = לא עושה כלום | 'enforce' = השער פעיל. אין עקיפה דרך הכתובת. */
 (function () {
   var CFG = {
     MODE: 'enforce',                                               // off | enforce
@@ -13,17 +12,14 @@
     KEY: 'icdGateTicket',
     TRY_KEY: 'icdGateGo',                                        // מונע לולאת הפניות: ניסיון הפניה אחד לדקותיים
     TRY_MS: 120000,
-    TEST_KEY: 'icdGateTest',
     OLD_KEYS: ['icdGateFree'],                                   // שארית מהגרסה הקודמת (כניסות חינם)
     WAIT_MS: 7000
   };
   var mode = CFG.MODE;
-  var tm = /[?&]gatetest=(off|enforce)\b/.exec(location.search);
   try {
     for (var i = 0; i < CFG.OLD_KEYS.length; i++) localStorage.removeItem(CFG.OLD_KEYS[i]);
-    if (tm) sessionStorage.setItem(CFG.TEST_KEY, tm[1]); else tm = [null, sessionStorage.getItem(CFG.TEST_KEY)];
+    sessionStorage.removeItem('icdGateTest');                    // שארית מגרסת בדיקה; אין דרך לעקוף את השער מהכתובת
   } catch (e) {}
-  if (tm && tm[1]) mode = tm[1];
   if (mode !== 'enforce') return;
 
   var decided = false, ui = null;
