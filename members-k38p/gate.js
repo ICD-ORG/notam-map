@@ -4,7 +4,7 @@
    לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=soft | trial | enforce */
 (function () {
   var CFG = {
-    MODE: 'trial',                                               // off | soft | trial | enforce
+    MODE: 'soft',                                               // off | soft | trial | enforce
     MAX_FREE: 5,                                                 // במצב trial: כמה כניסות חינם (לכל מכשיר) לפני חסימה
     FREE_KEY: 'icdGateFree',
     VERIFY_URL: 'https://www.icd.org.il/_functions/verify',      // נקודת אימות ב-Wix (http-functions.js)
