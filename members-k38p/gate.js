@@ -6,7 +6,7 @@
    לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=enforce (נשמר ללשונית הנוכחית בלבד) */
 (function () {
   var CFG = {
-    MODE: 'off',                                                 // off | enforce
+    MODE: 'enforce',                                               // off | enforce
     VERIFY_URL: 'https://www.icd.org.il/_functions/verify',      // נקודת אימות ב-Wix (http-functions.js)
     LOGIN_URL: 'https://www.icd.org.il/notam1?go=app',           // עמוד באתר שמזהה חבר ששילם ומחזיר לכאן עם כרטיס
     PARENT_ORIGINS: ['https://www.icd.org.il', 'https://icd.org.il'],
