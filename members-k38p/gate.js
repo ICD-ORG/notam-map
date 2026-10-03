@@ -1,37 +1,40 @@
 /* שער כניסה לחברי הארגון הישראלי לרחפנים (ICD) — מפת א-17.
-   האפליקציה נפתחת רק עם "כרטיס כניסה" שמונפק על ידי עמוד החברים באתר הארגון (Wix) — עבור חבר מחובר בלבד.
-   מצבים (CFG.MODE): 'off' = לא עושה כלום | 'soft' = הודעה בלבד, בלי חסימה | 'trial' = 5 כניסות חינם ואז חסימה | 'enforce' = חסימה.
-   לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=soft | trial | enforce */
+   האפליקציה נפתחת רק עם "כרטיס כניסה" שמונפק באתר הארגון (Wix) לחבר מחובר ששילם.
+   מי שנכנס בקישור ישיר בלי כרטיס מועבר אוטומטית לאתר הארגון (notam1?go=app): חבר ששילם חוזר למפה עם כרטיס,
+   מי שלא שילם מועבר שם לדף ההצטרפות והתשלום. אין כניסות חינם ואין הודעות נוספות.
+   מצבים (CFG.MODE): 'off' = לא עושה כלום | 'enforce' = השער פעיל.
+   לבדיקה בלי לשנות את המצב: להוסיף לכתובת ?gatetest=enforce (נשמר ללשונית הנוכחית בלבד) */
 (function () {
   var CFG = {
-    MODE: 'soft',                                               // off | soft | trial | enforce
-    MAX_FREE: 5,                                                 // במצב trial: כמה כניסות חינם (לכל מכשיר) לפני חסימה
-    FREE_KEY: 'icdGateFree',
+    MODE: 'enforce',                                               // off | enforce
     VERIFY_URL: 'https://www.icd.org.il/_functions/verify',      // נקודת אימות ב-Wix (http-functions.js)
-    LOGIN_URL: 'https://www.icd.org.il/notam1',                  // לאן שולחים מי שאין לו כרטיס: כניסה/הרשמה/תשלום
+    LOGIN_URL: 'https://www.icd.org.il/notam1?go=app',           // עמוד באתר שמזהה חבר ששילם ומחזיר לכאן עם כרטיס
     PARENT_ORIGINS: ['https://www.icd.org.il', 'https://icd.org.il'],
     KEY: 'icdGateTicket',
+    TRY_KEY: 'icdGateGo',                                        // מונע לולאת הפניות: ניסיון הפניה אחד לדקותיים
+    TRY_MS: 120000,
+    TEST_KEY: 'icdGateTest',
+    OLD_KEYS: ['icdGateFree'],                                   // שארית מהגרסה הקודמת (כניסות חינם)
     WAIT_MS: 7000
   };
-  var tm = /[?&]gatetest=(soft|trial|enforce)\b/.exec(location.search);
-  var mode = tm ? tm[1] : CFG.MODE;
-  if (mode === 'off') return;
+  var mode = CFG.MODE;
+  var tm = /[?&]gatetest=(off|enforce)\b/.exec(location.search);
+  try {
+    for (var i = 0; i < CFG.OLD_KEYS.length; i++) localStorage.removeItem(CFG.OLD_KEYS[i]);
+    if (tm) sessionStorage.setItem(CFG.TEST_KEY, tm[1]); else tm = [null, sessionStorage.getItem(CFG.TEST_KEY)];
+  } catch (e) {}
+  if (tm && tm[1]) mode = tm[1];
+  if (mode !== 'enforce') return;
 
-  var decided = false, ui = null, freeLeft = null;
+  var decided = false, ui = null;
   function b64uJson(s) { try { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return JSON.parse(decodeURIComponent(escape(atob(s)))); } catch (e) { return null; } }
   function validLocal(t) { var p = t && t.indexOf('.') > 0 ? b64uJson(t.split('.')[0]) : null; return !!(p && p.exp > Date.now()); }
   function store(t) { try { localStorage.setItem(CFG.KEY, t); } catch (e) {} }
   function load() { try { return localStorage.getItem(CFG.KEY) || ''; } catch (e) { return ''; } }
-  /* כניסה חינם נספרת פעם אחת לכל לשונית/סשן; אם האחסון חסום — לא חוסמים (נכשלים פתוח) */
-  function freeCount() {
-    var n = 0;
-    try {
-      n = parseInt(localStorage.getItem(CFG.FREE_KEY) || '0', 10) || 0;
-      if (!sessionStorage.getItem(CFG.FREE_KEY)) { n++; localStorage.setItem(CFG.FREE_KEY, String(n)); sessionStorage.setItem(CFG.FREE_KEY, '1'); }
-    } catch (e) {}
-    return n;
-  }
   function clear() { try { localStorage.removeItem(CFG.KEY); } catch (e) {} }
+  function canRedirect() { try { return Date.now() - (parseInt(sessionStorage.getItem(CFG.TRY_KEY) || '0', 10) || 0) > CFG.TRY_MS; } catch (e) { return true; } }
+  function markTried() { try { sessionStorage.setItem(CFG.TRY_KEY, String(Date.now())); } catch (e) {} }
+  function unmarkTried() { try { sessionStorage.removeItem(CFG.TRY_KEY); } catch (e) {} }
 
   /* אימות מול Wix; אם אין רשת/CORS — סומכים על תוקף הכרטיס עצמו (כדי לא לנעול חברים בזמן תקלה) */
   function verify(t) {
@@ -46,30 +49,34 @@
     });
   }
 
+  /* מסך מלא שמכסה את המפה עד שההרשאה נבדקה (בדיקה / מעבר לאתר / חסימה) */
+  function cover(html) {
+    if (!ui) {
+      ui = document.createElement('div'); ui.id = 'icdGate'; ui.setAttribute('role', 'dialog'); ui.dir = 'rtl';
+      ui.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;background:rgba(8,16,28,.97);color:#e9eff9;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,Arial,sans-serif;text-align:center';
+      (document.body || document.documentElement).appendChild(ui);
+    }
+    ui.innerHTML = '<div style="max-width:420px">' + html + '</div>';
+  }
   function hideUi() { if (ui && ui.parentNode) ui.parentNode.removeChild(ui); ui = null; }
-  function showUi() {
-    if (ui) return;
-    ui = document.createElement('div'); ui.id = 'icdGate'; ui.setAttribute('role', 'dialog'); ui.dir = 'rtl';
-    var hard = mode === 'enforce';
-    ui.style.cssText = hard
-      ? 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;background:rgba(8,16,28,.97);color:#e9eff9;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,Arial,sans-serif;text-align:center'
-      : 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483000;background:#13223a;color:#e9eff9;border:1px solid #2b4263;border-radius:12px;padding:12px 14px;font:14px/1.5 system-ui,Arial,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center';
-    var a = '<a href="' + CFG.LOGIN_URL + '" target="_top" rel="noopener" style="display:inline-block;min-height:44px;line-height:44px;padding:0 18px;border-radius:10px;background:#ffb347;color:#1a1200;font-weight:700;text-decoration:none">כניסה לחברים / הצטרפות</a>';
-    ui.innerHTML = hard
-      ? '<div style="max-width:420px"><div style="font-size:20px;font-weight:700;margin-bottom:8px">מפת א-17 — לחברי הארגון בלבד</div><div style="margin-bottom:16px;opacity:.9">הגישה למפה פתוחה לחברי הארגון הישראלי לרחפנים. הכניסה דרך אתר הארגון, לאחר הרשמה ותשלום.</div>' + a + '</div>'
-      : '<span>' + (freeLeft === null ? 'הגישה למפה תהיה בקרוב לחברי הארגון בלבד — מומלץ להיכנס דרך אתר הארגון.' : 'כניסה חינם למפה — נותרו ' + freeLeft + ' מתוך ' + CFG.MAX_FREE + '. להמשך שימוש: כניסה לחברים או הצטרפות.') + '</span>' + a + '<button type="button" id="icdGateX" style="min-height:44px;min-width:44px;border:0;border-radius:10px;background:transparent;color:#e9eff9;font-size:18px;cursor:pointer" aria-label="סגור">✕</button>';
-    (document.body || document.documentElement).appendChild(ui);
-    var x = document.getElementById('icdGateX'); if (x) x.onclick = hideUi;
+  function blockedScreen() {
+    cover('<div style="font-size:20px;font-weight:700;margin-bottom:8px">מפת א-17 — לחברי הארגון בלבד</div>' +
+      '<div style="margin-bottom:16px;opacity:.9">הגישה למפה פתוחה לחברי הארגון הישראלי לרחפנים. הכניסה דרך אתר הארגון, לאחר הרשמה ותשלום.</div>' +
+      '<a href="' + CFG.LOGIN_URL + '" target="_top" rel="noopener" style="display:inline-block;min-height:44px;line-height:44px;padding:0 18px;border-radius:10px;background:#ffb347;color:#1a1200;font-weight:700;text-decoration:none">כניסה לחברים / הצטרפות</a>');
   }
 
-  function grant(t) { decided = true; store(t); hideUi(); }
-  function deny() {
+  function grant(t) { decided = true; store(t); unmarkTried(); hideUi(); }
+  /* אין כרטיס תקף: בקישור ישיר — הפניה אוטומטית לאתר (פעם אחת); בתוך עמוד באתר או אחרי ניסיון שכבר נעשה — מסך חסימה */
+  function deny(noRedirect) {
     if (decided) return; decided = true; clear();
-    if (mode === 'trial') {
-      var n = freeCount();
-      if (n > CFG.MAX_FREE) mode = 'enforce'; else { freeLeft = CFG.MAX_FREE - n; mode = 'soft'; }
+    var inTop = !(window.parent && window.parent !== window);
+    if (inTop && !noRedirect && canRedirect()) {
+      markTried();
+      cover('<div style="font-size:18px;font-weight:700">מעביר לאתר הארגון לזיהוי…</div>');
+      location.replace(CFG.LOGIN_URL);
+      return;
     }
-    showUi();
+    blockedScreen();
   }
 
   function awaitFromParent() {
@@ -78,7 +85,7 @@
     function onMsg(e) {
       if (CFG.PARENT_ORIGINS.indexOf(e.origin) < 0) return;
       var d = e.data; if (!d || d.type !== 'icd-ticket' || typeof d.ticket !== 'string') return;
-      verify(d.ticket).then(function (ok) { if (ok) { grant(d.ticket); window.removeEventListener('message', onMsg); } });
+      verify(d.ticket).then(function (ok) { if (ok && !decided) { grant(d.ticket); window.removeEventListener('message', onMsg); } });
     }
     window.addEventListener('message', onMsg);
     var n = 0, iv = setInterval(function () {
@@ -90,18 +97,19 @@
   }
 
   function start() {
-    /* כרטיס בכתובת (#t=...) — למשל מכפתור "פתח במסך מלא" בעמוד החברים: נשמר ומוסר מהכתובת */
+    cover('<div style="font-size:18px;font-weight:700">בודק הרשאת כניסה…</div>');
+    /* כרטיס בכתובת (#t=...) — מגיע מאתר הארגון אחרי זיהוי: נשמר ומוסר מהכתובת */
     var hm = /[#&]t=([^&]+)/.exec(location.hash);
     if (hm) {
       var ht = ''; try { ht = decodeURIComponent(hm[1]); } catch (e) {}
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-      if (ht) { verify(ht).then(function (ok) { if (ok) grant(ht); else startNormal(); }); return; }
+      if (ht) { verify(ht).then(function (ok) { if (ok) grant(ht); else deny(true); }); return; }
     }
     startNormal();
   }
   function startNormal() {
     var t = load();
-    if (t) verify(t).then(function (ok) { if (ok) { decided = true; } else { clear(); awaitFromParent(); } });
+    if (t) verify(t).then(function (ok) { if (ok) grant(t); else { clear(); awaitFromParent(); } });
     else awaitFromParent();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
