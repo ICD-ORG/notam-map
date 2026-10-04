@@ -1,8 +1,15 @@
 {
- "fetched_at": "03/10/2026 16:59 UTC",
- "fetched_iso": "2026-10-03T16:59:10Z",
- "count": 19,
+ "fetched_at": "04/10/2026 09:59 UTC",
+ "fetched_iso": "2026-10-04T09:59:55Z",
+ "count": 20,
  "notams": [
+  {
+   "id": "C2063/26",
+   "loc": "LLLL",
+   "name": "KFAR-TAVOR",
+   "heb": "פעילות כטב\"מ תתקיים ב KFAR-TAVOR. אזור בתוך LLMG אזור אימונים NR A-WEST בין נקודות הציון הבאות סגור מהקרקע ועד 4,500רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות 32°47'13\"N 35°23'45\"E 32°43'34\"N 35°25'25\"E 32°42'06\"N 35°30'46\"E 32°39'59\"N 35°30'09\"E 32°41'42\"N 35°23'28\"E 32°46'28\"N 35°21'18\"E. מומלצת זהירות.\nבתוקף: מ-04/10/2026 11:30 UTC עד 04/10/2026 13:30 UTC",
+   "raw": "C2063/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/045/3243N03526E006\nA) LLLL B) 2610041130 C) 2610041330\nE) UAS ACT WILL TAKE PLACE AT KFAR-TAVOR.\nAN AREA WI LLMG TRG AREA NR A-WEST BTN FLW\nPSN CLSD FM GND UP TO 4,500FT AMSL TO ALL FLT INCLUDING\nAGRICULTURE FLT  324713N0352345E 324334N0352525E\n324206N0353046E 323959N0353009E 324142N0352328E\n324628N0352118E.\nCTN ADZ.\nF) GND G) 4500FT AMSL)"
+  },
   {
    "id": "C2061/26",
    "loc": "LLLL",
