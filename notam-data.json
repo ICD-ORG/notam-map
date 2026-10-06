@@ -1,22 +1,8 @@
 {
- "fetched_at": "05/10/2026 10:44 UTC",
- "fetched_iso": "2026-10-05T10:44:16Z",
- "count": 22,
+ "fetched_at": "06/10/2026 10:37 UTC",
+ "fetched_iso": "2026-10-06T10:37:04Z",
+ "count": 20,
  "notams": [
-  {
-   "id": "C2083/26",
-   "loc": "LLLL",
-   "name": "C2083/26",
-   "heb": "MINI UAV BUBBLE ASHKELON סגור לכל הטיסות.\nבתוקף: מ-06/10/2026 05:00 UTC עד 06/10/2026 05:30 UTC",
-   "raw": "C2083/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/020/3137N03435E005\nA) LLLL B) 2610060500 C) 2610060530\nE) MINI UAV BUBBLE ASHKELON CLSD TO ALL FLT.)"
-  },
-  {
-   "id": "C2081/26",
-   "loc": "LLLL",
-   "name": "KFAR-TAVOR",
-   "heb": "פעילות כטב\"מ תתקיים ב KFAR-TAVOR. אזור בתוך LLMG אזור אימונים NR A-WEST בין נקודות הציון הבאות סגור מהקרקע ועד 4,500רגל מעל פני הים לכל הטיסות. טיסות ריסוס באישור מוקדם של 15 דק' מהבקרה 32°47'11\"N 35°23'45\"E 32°43'17\"N 35°25'34\"E 32°42'10\"N 35°23'22\"E 32°46'24\"N 35°21'33\"E. מומלצת זהירות.\nבתוקף: מ-05/10/2026 05:45 UTC עד 05/10/2026 12:00 UTC\nלו\"ז: 0545-0800 0930-1200",
-   "raw": "C2081/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/045/3245N03524E003\nA) LLLL B) 2610050545 C) 2610051200\nD) 0545-0800 0930-1200\nE) UAS ACT WILL TAKE PLACE AT KFAR-TAVOR.\nAN AREA WI LLMG TRG AREA NR A-WEST BTN FLW\nPSN CLSD FM GND UP TO 4,500FT AMSL TO ALL FLT.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC\n324711N0352345E 324317N0352534E 324210N0352322E\n324624N0352133E.\nCTN ADZ.\nF) GND G) 4500FT AMSL)"
-  },
   {
    "id": "C2067/26",
    "loc": "LLLL",
