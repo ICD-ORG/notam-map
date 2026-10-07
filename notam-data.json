@@ -1,8 +1,29 @@
 {
- "fetched_at": "06/10/2026 18:46 UTC",
- "fetched_iso": "2026-10-06T18:46:52Z",
- "count": 22,
+ "fetched_at": "07/10/2026 10:28 UTC",
+ "fetched_iso": "2026-10-07T10:28:45Z",
+ "count": 25,
  "notams": [
+  {
+   "id": "C2105/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב YERUHAM, מהקרקע ועד 600מטר מעל הקרקע. אזור בתוך 0.3NM רדיוס שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-11/10/2026 03:00 UTC עד 15/10/2026 14:30 UTC\nלו\"ז: DAILY 0300-1430",
+   "raw": "C2105/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2610110300 C) 2610151430\nD) DAILY 0300-1430\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
+  },
+  {
+   "id": "C2104/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 2,500רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-11/10/2026 03:20 UTC עד 15/10/2026 16:00 UTC\nלו\"ז: DAILY 0320-1600",
+   "raw": "C2104/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/025/3057N03456E002\nA) LLLL B) 2610110320 C) 2610151600\nD) DAILY 0320-1600\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 2,500FT AMSL.\nCTN ADZ.\nF) GND G) 2500FT AMSL)"
+  },
+  {
+   "id": "C2103/26",
+   "loc": "LLLL",
+   "name": "C2103/26",
+   "heb": "UAS/UAV AIR-SHOW WILL TAKE PLACE S OF LLMZ. אזור בתוך 0.3NM רדיוס שמרכזו בנ.צ. 31°18'28\"N 35°22'35\"E סגור מהקרקע ועד 50מטר מעל הקרקע, (MINUS) -920רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-10/10/2026 18:00 UTC עד 11/10/2026 20:00 UTC\nלו\"ז: DAILY 1800-2000",
+   "raw": "C2103/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/001/3118N03523E001\nA) LLLL B) 2610101800 C) 2610112000\nD) DAILY 1800-2000\nE) UAS/UAV AIR-SHOW WILL TAKE PLACE S OF LLMZ.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 311828N0352235E\nCLSD FM GND UP TO 50M AGL, (MINUS) -920FT AMSL.\nCTN ADZ.\nF) GND G) 100FT AMSL)"
+  },
   {
    "id": "C2101/26",
    "loc": "LLLL",
