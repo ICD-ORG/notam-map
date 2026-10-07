@@ -1,8 +1,15 @@
 {
- "fetched_at": "07/10/2026 10:28 UTC",
- "fetched_iso": "2026-10-07T10:28:45Z",
- "count": 25,
+ "fetched_at": "07/10/2026 19:13 UTC",
+ "fetched_iso": "2026-10-07T19:13:25Z",
+ "count": 24,
  "notams": [
+  {
+   "id": "C2108/26",
+   "loc": "LLLL",
+   "name": "BET-HASHITA",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב BET-HASHITA. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 1,700רגל מעל פני הים 32°33'26\"N 35°28'02\"E 32°34'31\"N 35°28'15\"E 32°34'41\"N 35°27'00\"E 32°33'44\"N 35°26'35\"E. טיסות ריסוס באישור מוקדם של 15 דק' מהבקרה. מומלצת זהירות.\nבתוקף: מ-13/10/2026 04:00 UTC עד 13/10/2026 10:00 UTC",
+   "raw": "C2108/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/017/3234N03527E002\nA) LLLL B) 2610130400 C) 2610131000\nE) UAS/UAV ACT WILL TAKE PLACE AT BET-HASHITA.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 1,700FT AMSL\n323326N0352802E 323431N0352815E 323441N0352700E\n323344N0352635E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 1700FT AMSL)"
+  },
   {
    "id": "C2105/26",
    "loc": "LLLL",
@@ -23,20 +30,6 @@
    "name": "C2103/26",
    "heb": "UAS/UAV AIR-SHOW WILL TAKE PLACE S OF LLMZ. אזור בתוך 0.3NM רדיוס שמרכזו בנ.צ. 31°18'28\"N 35°22'35\"E סגור מהקרקע ועד 50מטר מעל הקרקע, (MINUS) -920רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-10/10/2026 18:00 UTC עד 11/10/2026 20:00 UTC\nלו\"ז: DAILY 1800-2000",
    "raw": "C2103/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/001/3118N03523E001\nA) LLLL B) 2610101800 C) 2610112000\nD) DAILY 1800-2000\nE) UAS/UAV AIR-SHOW WILL TAKE PLACE S OF LLMZ.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 311828N0352235E\nCLSD FM GND UP TO 50M AGL, (MINUS) -920FT AMSL.\nCTN ADZ.\nF) GND G) 100FT AMSL)"
-  },
-  {
-   "id": "C2101/26",
-   "loc": "LLLL",
-   "name": "KFAR-TAVOR",
-   "heb": "פעילות כטב\"מ תתקיים ב KFAR-TAVOR. אזור בתוך LLMG אזור אימונים NR A-WEST בין נקודות הציון הבאות סגור מהקרקע ועד 4,000רגל מעל פני הים לכל הטיסות. טיסות ריסוס באישור מוקדם של 15 דק' מהבקרה 32°47'11\"N 35°23'45\"E 32°43'17\"N 35°25'34\"E 32°42'10\"N 35°23'22\"E 32°46'24\"N 35°21'33\"E. מומלצת זהירות.\nבתוקף: מ-07/10/2026 07:30 UTC עד 07/10/2026 12:30 UTC\nלו\"ז: 0730-0930 1030-1230",
-   "raw": "C2101/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/040/3245N03524E003\nA) LLLL B) 2610070730 C) 2610071230\nD) 0730-0930 1030-1230\nE) UAS ACT WILL TAKE PLACE AT KFAR-TAVOR.\nAN AREA WI LLMG TRG AREA NR A-WEST BTN FLW\nPSN CLSD FM GND UP TO 4,000FT AMSL TO ALL FLT.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC\n324711N0352345E 324317N0352534E 324210N0352322E\n324624N0352133E.\nCTN ADZ.\nF) GND G) 4000FT AMSL)"
-  },
-  {
-   "id": "C2100/26",
-   "loc": "LLLL",
-   "name": "C2100/26",
-   "heb": "UAS ACT WILL TAKE PLACE S OF LLMG. אזור בתוך 1.5NM רדיוס שמרכזו בנ.צ. 32°32'56\"N 35°16'45\"E סגור מהקרקע ועד 3,500רגל מעל פני הים לכל הטיסות. טיסות ריסוס באישור מוקדם של 15 דק' מהבקרה. מומלצת זהירות.\nבתוקף: מ-07/10/2026 06:30 UTC עד 07/10/2026 12:00 UTC\nלו\"ז: 0630-0800 1100-1200",
-   "raw": "C2100/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/035/3233N03517E002\nA) LLLL B) 2610070630 C) 2610071200\nD) 0630-0800 1100-1200\nE) UAS ACT WILL TAKE PLACE S OF LLMG.\nAN AREA WI 1.5NM RADIUS CENTERED ON PSN 323256N0351645E\nCLSD FM GND UP TO 3,500FT AMSL TO ALL FLT.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 3500FT AMSL)"
   },
   {
    "id": "C2067/26",
