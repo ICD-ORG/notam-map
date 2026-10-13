@@ -1,8 +1,15 @@
 {
- "fetched_at": "12/10/2026 21:34 UTC",
- "fetched_iso": "2026-10-12T21:34:20Z",
+ "fetched_at": "13/10/2026 10:53 UTC",
+ "fetched_iso": "2026-10-13T10:53:08Z",
  "count": 21,
  "notams": [
+  {
+   "id": "C2141/26",
+   "loc": "LLLL",
+   "name": "MODIIN",
+   "heb": "פעילות כטב\"מ תתקיים ב MODIIN. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 1,300רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות 31°55'09\"N 34°58'56\"E 31°55'07\"N 35°01'00\"E 31°53'00\"N 35°00'55\"E 31°53'00\"N 34°58'57\"E. מומלצת זהירות.\nבתוקף: מ-13/10/2026 09:00 UTC עד 13/10/2026 19:30 UTC",
+   "raw": "C2141/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/013/3154N03500E002\nA) LLLL B) 2610130900 C) 2610131930\nE) UAS ACT WILL TAKE PLACE AT MODIIN.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 1,300FT AMSL\nTO ALL FLT INCLUDING AGRICULTURE FLT\n315509N0345856E 315507N0350100E 315300N0350055E\n315300N0345857E.\nCTN ADZ.\nF) GND G) 1300FT AMSL)"
+  },
   {
    "id": "C2138/26",
    "loc": "LLLL",
@@ -16,13 +23,6 @@
    "name": "YERUHAM",
    "heb": "פעילות כטב\"מ/רחפנים תתקיים ב YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 3,000רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-18/10/2026 03:30 UTC עד 22/10/2026 15:30 UTC\nלו\"ז: DAILY 0330-1530",
    "raw": "C2133/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/030/3057N03456E002\nA) LLLL B) 2610180330 C) 2610221530\nD) DAILY 0330-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 3,000FT AMSL.\nCTN ADZ.\nF) GND G) 3000FT AMSL)"
-  },
-  {
-   "id": "C2108/26",
-   "loc": "LLLL",
-   "name": "BET-HASHITA",
-   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב BET-HASHITA. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 1,700רגל מעל פני הים 32°33'26\"N 35°28'02\"E 32°34'31\"N 35°28'15\"E 32°34'41\"N 35°27'00\"E 32°33'44\"N 35°26'35\"E. טיסות ריסוס באישור מוקדם של 15 דק' מהבקרה. מומלצת זהירות.\nבתוקף: מ-13/10/2026 04:00 UTC עד 13/10/2026 10:00 UTC",
-   "raw": "C2108/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/017/3234N03527E002\nA) LLLL B) 2610130400 C) 2610131000\nE) UAS/UAV ACT WILL TAKE PLACE AT BET-HASHITA.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 1,700FT AMSL\n323326N0352802E 323431N0352815E 323441N0352700E\n323344N0352635E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 1700FT AMSL)"
   },
   {
    "id": "C2105/26",
