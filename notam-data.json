@@ -1,15 +1,8 @@
 {
- "fetched_at": "13/10/2026 10:53 UTC",
- "fetched_iso": "2026-10-13T10:53:08Z",
- "count": 21,
+ "fetched_at": "13/10/2026 19:45 UTC",
+ "fetched_iso": "2026-10-13T19:45:36Z",
+ "count": 20,
  "notams": [
-  {
-   "id": "C2141/26",
-   "loc": "LLLL",
-   "name": "MODIIN",
-   "heb": "פעילות כטב\"מ תתקיים ב MODIIN. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 1,300רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות 31°55'09\"N 34°58'56\"E 31°55'07\"N 35°01'00\"E 31°53'00\"N 35°00'55\"E 31°53'00\"N 34°58'57\"E. מומלצת זהירות.\nבתוקף: מ-13/10/2026 09:00 UTC עד 13/10/2026 19:30 UTC",
-   "raw": "C2141/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/013/3154N03500E002\nA) LLLL B) 2610130900 C) 2610131930\nE) UAS ACT WILL TAKE PLACE AT MODIIN.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 1,300FT AMSL\nTO ALL FLT INCLUDING AGRICULTURE FLT\n315509N0345856E 315507N0350100E 315300N0350055E\n315300N0345857E.\nCTN ADZ.\nF) GND G) 1300FT AMSL)"
-  },
   {
    "id": "C2138/26",
    "loc": "LLLL",
