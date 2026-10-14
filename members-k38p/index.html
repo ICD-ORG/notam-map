@@ -195,6 +195,10 @@
 #ptabs button:focus-visible{outline:2px solid #3b6ea5; outline-offset:-3px}
 #ptabs .tcnt{font:600 11px Consolas,monospace; color:var(--dim); margin-inline-start:4px}
 #ptabs .tabinfo{flex:none; width:52px; font-size:20px; color:#a8c6e8; border-bottom-color:transparent}
+#ptabs a.tablink{flex:1 1 0; min-width:0; min-height:48px; display:flex; align-items:center; justify-content:center; padding:0 4px; color:#a8c6e8; font-weight:700; font-size:14px; line-height:1.2; font-family:inherit; text-decoration:none; border-bottom:3px solid transparent; -webkit-tap-highlight-color:transparent}
+#ptabs a.tablink:focus-visible{outline:2px solid #3b6ea5; outline-offset:-3px}
+#ptabs a.tablink .ext{font-size:11px; margin-inline-start:3px; opacity:.85}
+@media (max-width:380px){ #ptabs button, #ptabs a.tablink{font-size:12.5px; padding:0 2px} #ptabs .tabinfo{width:44px} #ptabs .tcnt{margin-inline-start:2px} }
 .pane{display:contents}
 #paneHere{display:none}
 #hereBox{position:relative}
@@ -403,10 +407,11 @@
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.1 · 03 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.2 · 14 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v1.2 · 14.10.2026</b> — נוספה לשונית "מזג אוויר" בפאנל: פותחת את התחזית הרשמית של השירות המטאורולוגי בחלון חדש.<br>
           <b style="color:var(--text)">v1.1 · 03.10.2026</b> — פריסת טלפון חדשה: חצי עליון מפה וחצי תחתון פאנל מידע (לשוניות "מה יש כאן" · "שכבות" · "נוט"מים"); הדגשת הגבול המדויק של האזור הנבחר + סיכת מיקום; קווי מתאר עם מסגרת כהה לניגודיות מול כל רקע; נוט"מים כלליים (בלי מיקום מדויק) כבויים ובראש הרשימה, שאר הנוט"מים לפי תאריך פרסום; כפתור "מידע והוראות שימוש" (ⓘ).<br>
           <b style="color:var(--text)">v1.0 · 11.08.2026</b> — גרסה ראשונה: כל אזורי פמ"ת א'-17 עדכון 1/26 (LLP/LLR/LLD/LLU/בלונים), מגבלות גבול (סעיף 4), החרגת יו"ש/יריחו לכטב"מ, 22 שדות ומנחתים עם חיץ 2 ק"מ, אנשי קשר מלאים.<br>
           <span style="color:#7a8fa5">כל עדכון עתידי יתווסף כאן עם מספר גרסה, תאריך, ופירוט השינויים — באותה כתובת.</span>
@@ -418,6 +423,7 @@
       <button type="button" role="tab" id="tabHere" data-tab="here" aria-selected="true" aria-controls="paneHere">מה יש כאן</button>
       <button type="button" role="tab" id="tabLayers" data-tab="layers" aria-selected="false" aria-controls="paneLayers" tabindex="-1">שכבות</button>
       <button type="button" role="tab" id="tabNt" data-tab="nt" aria-selected="false" aria-controls="paneNt" tabindex="-1">נוט"מים<span class="tcnt" id="tabNtCnt"></span></button>
+      <a class="tablink" id="tabWx" href="https://ims.gov.il/he/Forecasts" target="_blank" rel="noopener noreferrer" aria-label="מזג אוויר — התחזית הרשמית של השירות המטאורולוגי, נפתח בחלון חדש">מזג אוויר<span class="ext" aria-hidden="true">↗</span></a>
       <button type="button" class="tabinfo" id="infoBtnTab" aria-haspopup="dialog" aria-label="מידע והוראות שימוש" title="מידע והוראות שימוש">ⓘ</button>
     </div>
     <div id="sidebody">
@@ -457,11 +463,12 @@
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.1 · 03 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.2 · 14 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v1.1 · 03.10.2026</b> — פריסת טלפון חדשה: חצי עליון מפה וחצי תחתון פאנל מידע (לשוניות "מה יש כאן" · "שכבות" · "נוט"מים"); הדגשת הגבול המדויק של האזור הנבחר + סיכת מיקום; קווי מתאר עם מסגרת כהה לניגודיות מול כל רקע; נוט"מים כלליים (בלי מיקום מדויק) כבויים ובראש הרשימה, שאר הנוט"מים לפי תאריך פרסום; כפתור "מידע והוראות שימוש" (ⓘ).<br>
+            <b style="color:var(--text)">v1.2 · 14.10.2026</b> — נוספה לשונית "מזג אוויר" בפאנל: פותחת את התחזית הרשמית של השירות המטאורולוגי בחלון חדש.<br>
+          <b style="color:var(--text)">v1.1 · 03.10.2026</b> — פריסת טלפון חדשה: חצי עליון מפה וחצי תחתון פאנל מידע (לשוניות "מה יש כאן" · "שכבות" · "נוט"מים"); הדגשת הגבול המדויק של האזור הנבחר + סיכת מיקום; קווי מתאר עם מסגרת כהה לניגודיות מול כל רקע; נוט"מים כלליים (בלי מיקום מדויק) כבויים ובראש הרשימה, שאר הנוט"מים לפי תאריך פרסום; כפתור "מידע והוראות שימוש" (ⓘ).<br>
           <b style="color:var(--text)">v1.0 · 11.08.2026</b> — גרסה ראשונה: כל אזורי פמ"ת א'-17 עדכון 1/26 (LLP/LLR/LLD/LLU/בלונים), מגבלות גבול (סעיף 4), החרגת יו"ש/יריחו לכטב"מ, 22 שדות ומנחתים עם חיץ 2 ק"מ, אנשי קשר מלאים.<br>
             <span style="color:#7a8fa5">כל עדכון עתידי יתווסף כאן עם מספר גרסה, תאריך, ופירוט השינויים — באותה כתובת.</span>
           </div>
