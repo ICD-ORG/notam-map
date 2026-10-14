@@ -241,6 +241,25 @@
 .a17-modal .m-body a{color:#7fc0ff}
 .a17-modal .disclaim{background:#2a1215; border:1px solid #a33; color:#ffd0d0; border-radius:8px; padding:8px 12px; font-size:12.5px; font-weight:700; margin-bottom:6px}
 .a17-modal .m-stamp{font-family:Consolas,monospace; font-size:12px; color:#f5c46a; direction:ltr; unicode-bidi:isolate}
+/* רשימת בדיקות לפני טיסה (חלון חובה: כל הסעיפים מסומנים כדי להמשיך) */
+#pfModal .pf-lead{font-weight:700; font-size:14.5px; margin:0 0 10px; color:var(--text)}
+#pfModal .pf-list{list-style:none; margin:0 0 10px; padding:0}
+#pfModal .pf-list li{display:flex; align-items:center; gap:8px; margin:0 0 6px; padding:0 12px; min-height:48px; background:var(--panel2); border:1px solid var(--line); border-radius:10px}
+#pfModal .pf-list li.done{background:#0d2114; border-color:#2c5a3a}
+#pfModal .pf-list label{flex:1; display:flex; align-items:center; gap:10px; min-height:48px; cursor:pointer; font-size:14px; line-height:1.35}
+#pfModal .pf-list input{width:22px; height:22px; flex:none; accent-color:#3ea96a}
+#pfModal .pf-list a{flex:none; color:#7fc0ff; font-size:12.5px; white-space:nowrap; padding:8px 0}
+#pfModal .pf-note{font-size:12px; color:var(--dim); line-height:1.5; margin:10px 0 0}
+#pfModal .pf-foot{flex:none; padding:10px 18px 14px; border-top:1px solid var(--line); background:var(--panel)}
+@media (max-height:700px){ #pfModal .pf-list li, #pfModal .pf-list label{min-height:44px} #pfModal .pf-list li{margin-bottom:5px} #pfModal .m-body{padding-top:10px; padding-bottom:12px} }
+#pfModal .pf-go{width:100%; min-height:50px; border:0; border-radius:12px; background:#2f8f5b; color:#fff; font:700 15px inherit; font-family:inherit; cursor:pointer}
+#pfModal .pf-go:disabled{background:#2a3a4d; color:#9fb2c6; cursor:not-allowed}
+#pfModal .pf-go:focus-visible, #pfModal .pf-list input:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
+.pf-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px}
+.pf-btn{display:block; width:100%; min-height:46px; padding:0 12px; border:0; border-radius:10px; background:#2f8f5b; color:#fff; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent}
+.pf-btn:focus-visible, .pf-redo:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
+.pf-row.ok{background:#0d2114; border:1px solid #2c5a3a; border-radius:10px; padding:0 12px; min-height:46px; color:#9fe0b2; font-weight:700; font-size:13.5px; justify-content:space-between}
+.pf-redo{border:1px solid #2c5a3a; background:transparent; color:#9fe0b2; border-radius:8px; min-height:36px; padding:0 10px; font-family:inherit; font-size:12.5px; cursor:pointer}
 .a17-modal details{margin-top:10px; font-size:12.5px; color:var(--dim)}
 .a17-modal details>summary{cursor:pointer; min-height:44px; display:flex; align-items:center}
 .only-split{display:none}
@@ -407,10 +426,11 @@
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.2 · 14 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.3 · 14 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v1.3 · 14.10.2026</b> — נוספה רשימת בדיקות לפני טיסה: כפתור "אני מתכוון להטיס כאן" בכרטיס "מה יש כאן" (ובכרטיס הריק), רשימה שחובה לסמן כולה, תקפה למיקום ברדיוס 500 מ' ועד 24 שעות.<br>
           <b style="color:var(--text)">v1.2 · 14.10.2026</b> — נוספה לשונית "מזג אוויר" בפאנל: פותחת את התחזית הרשמית של השירות המטאורולוגי בחלון חדש.<br>
           <b style="color:var(--text)">v1.1 · 03.10.2026</b> — פריסת טלפון חדשה: חצי עליון מפה וחצי תחתון פאנל מידע (לשוניות "מה יש כאן" · "שכבות" · "נוט"מים"); הדגשת הגבול המדויק של האזור הנבחר + סיכת מיקום; קווי מתאר עם מסגרת כהה לניגודיות מול כל רקע; נוט"מים כלליים (בלי מיקום מדויק) כבויים ובראש הרשימה, שאר הנוט"מים לפי תאריך פרסום; כפתור "מידע והוראות שימוש" (ⓘ).<br>
           <b style="color:var(--text)">v1.0 · 11.08.2026</b> — גרסה ראשונה: כל אזורי פמ"ת א'-17 עדכון 1/26 (LLP/LLR/LLD/LLU/בלונים), מגבלות גבול (סעיף 4), החרגת יו"ש/יריחו לכטב"מ, 22 שדות ומנחתים עם חיץ 2 ק"מ, אנשי קשר מלאים.<br>
@@ -433,6 +453,7 @@
           <h2>מה יש כאן?</h2>
           <p>הקישו על נקודה במפה כדי לראות אילו אזורים אסורים, מוגבלים, שמורות, גנים ונוט"מים חלים עליה. גבול האזור הנבחר יודגש במפה ותסומן סיכת מיקום.</p>
           <p>אפשר גם לבחור אתר או נוט"ם מהרשימות בלשוניות "שכבות" ו"נוט"מים".</p>
+          <p><button type="button" class="pf-btn" id="pfOpenEmpty">🚁 בדיקות לפני טיסה</button></p>
           <div class="hstats" id="hereStats"></div>
         </div>
       </div>
@@ -463,11 +484,12 @@
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">מותאם לכטב"מ, רחפנים וטיסנים</b> — כל ההנחיות חלות גם עליהם לפי תקנה 180ז(ג), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.2 · 14 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.3 · 14 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v1.2 · 14.10.2026</b> — נוספה לשונית "מזג אוויר" בפאנל: פותחת את התחזית הרשמית של השירות המטאורולוגי בחלון חדש.<br>
+            <b style="color:var(--text)">v1.3 · 14.10.2026</b> — נוספה רשימת בדיקות לפני טיסה: כפתור "אני מתכוון להטיס כאן" בכרטיס "מה יש כאן" (ובכרטיס הריק), רשימה שחובה לסמן כולה, תקפה למיקום ברדיוס 500 מ' ועד 24 שעות.<br>
+          <b style="color:var(--text)">v1.2 · 14.10.2026</b> — נוספה לשונית "מזג אוויר" בפאנל: פותחת את התחזית הרשמית של השירות המטאורולוגי בחלון חדש.<br>
           <b style="color:var(--text)">v1.1 · 03.10.2026</b> — פריסת טלפון חדשה: חצי עליון מפה וחצי תחתון פאנל מידע (לשוניות "מה יש כאן" · "שכבות" · "נוט"מים"); הדגשת הגבול המדויק של האזור הנבחר + סיכת מיקום; קווי מתאר עם מסגרת כהה לניגודיות מול כל רקע; נוט"מים כלליים (בלי מיקום מדויק) כבויים ובראש הרשימה, שאר הנוט"מים לפי תאריך פרסום; כפתור "מידע והוראות שימוש" (ⓘ).<br>
           <b style="color:var(--text)">v1.0 · 11.08.2026</b> — גרסה ראשונה: כל אזורי פמ"ת א'-17 עדכון 1/26 (LLP/LLR/LLD/LLU/בלונים), מגבלות גבול (סעיף 4), החרגת יו"ש/יריחו לכטב"מ, 22 שדות ומנחתים עם חיץ 2 ק"מ, אנשי קשר מלאים.<br>
             <span style="color:#7a8fa5">כל עדכון עתידי יתווסף כאן עם מספר גרסה, תאריך, ופירוט השינויים — באותה כתובת.</span>
@@ -482,6 +504,26 @@
   </aside>
 </div>
 <!-- חלון "מידע והוראות שימוש" -->
+<div id="pfModal" class="a17-modal" aria-hidden="true">
+  <div class="m-sheet" role="dialog" aria-modal="true" aria-labelledby="pfTitle" tabindex="-1">
+    <div class="m-head"><h2 id="pfTitle">רשימת בדיקות לפני טיסה</h2><button type="button" class="m-x" id="pfClose" aria-label="סגור בלי לאשר">✕</button></div>
+    <div class="m-body" id="pfBody">
+      <p class="pf-lead">לפני ההטסה, סמנו שבדקתם את כל הסעיפים:</p>
+      <ul class="pf-list" id="pfList">
+        <li><label><input type="checkbox"><span>כלי הטיס תקין: גוף, מדחפים, מצלמה וגימבל</span></label></li>
+        <li><label><input type="checkbox"><span>הסוללות טעונות ותקינות, בלי נפיחות או נזק</span></label></li>
+        <li><label><input type="checkbox"><span>כמות הלוויינים (GPS) יציבה וללא קפיצות</span></label></li>
+        <li><label><input type="checkbox"><span>התקשורת הסלולרית מלאה ותקינה</span></label></li>
+        <li><label><input type="checkbox"><span>מערכת Remote ID ברחפן מופעלת</span></label></li>
+        <li><label><input type="checkbox"><span>בדקתי את מזג האוויר באזור הטיסה</span></label><a href="https://ims.gov.il/he/Forecasts" target="_blank" rel="noopener noreferrer">תחזית ↗</a></li>
+        <li><label><input type="checkbox"><span>בדקתי במפה שאין אזור אסור, מוגבל או נוט"ם פעיל באזור הטיסה</span></label></li>
+        <li><label><input type="checkbox"><span>הטיסה תתבצע בקו ראייה</span></label></li>
+      </ul>
+      <p class="pf-note">תזכורת בלבד. אינה מחליפה את נוהלי היצרן ואת הנחיות רשות התעופה האזרחית. האחריות על המטיס.</p>
+    </div>
+    <div class="pf-foot"><button type="button" class="pf-go" id="pfGo" disabled>סמנו את כל הסעיפים (0/8)</button></div>
+  </div>
+</div>
 <div id="infoModal" class="a17-modal" aria-hidden="true">
   <div class="m-sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" tabindex="-1">
     <div class="m-head"><h2 id="infoTitle">מידע והוראות שימוש</h2><button type="button" class="m-x" id="infoClose" aria-label="סגור">✕</button></div>
@@ -2430,6 +2472,65 @@ const InfoModal=(function(){
   },true);
   ['infoBtn','infoBtnTab'].forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=open; });
   return {open,close,fill,isOpen};
+})();
+
+/* ---- רשימת בדיקות לפני טיסה (מבוססת מיקום) ----
+   נפתחת רק בבחירת המטיס ("אני מתכוון להטיס כאן" בכרטיס "מה יש כאן", או "בדיקות לפני טיסה" במצב הריק). אי אפשר לאשר בלי לסמן את כל הסעיפים.
+   האישור נשמר במכשיר בלבד (מיקום + זמן, לא נשלח לשום מקום) ותקף למיקום ברדיוס 500 מ' ולעד 24 שעות; מיקום חדש רחוק יותר = רשימה חדשה עם סימונים מאופסים. */
+const PreFlight=(function(){
+  const el=document.getElementById('pfModal'); if(!el) return null;
+  const sheet=el.querySelector('.m-sheet'), boxes=[].slice.call(el.querySelectorAll('#pfList input')), go=document.getElementById('pfGo'), appEl=document.getElementById('app');
+  const KEY='icdPreflight', RADIUS=500, TTL=24*3600*1000;
+  let prev=null, target=null;
+  const isOpen=()=>el.classList.contains('on');
+  const load=()=>{ try{ const o=JSON.parse(localStorage.getItem(KEY)||'null'); return o&&isFinite(o.lat)&&isFinite(o.lng)&&isFinite(o.t)?o:null; }catch(_){ return null; } };
+  const here=ll=>ll||map.getCenter();
+  function checked(ll){ const o=load(); if(!o) return false; const age=Date.now()-o.t; if(age<0||age>TTL) return false; try{ return map.distance(L.latLng(o.lat,o.lng),L.latLng(here(ll)))<=RADIUS; }catch(_){ return false; } }
+  function upd(){
+    const n=boxes.filter(b=>b.checked).length, all=n===boxes.length;
+    boxes.forEach(b=>{ const li=b.closest('li'); if(li) li.classList.toggle('done',b.checked); });
+    go.disabled=!all; go.textContent=all?'הכול נבדק — המשך למפה':'סמנו את כל הסעיפים ('+n+'/'+boxes.length+')';
+  }
+  function open(ll){
+    if(isOpen()) return;
+    target=ll?L.latLng(ll):null; prev=document.activeElement; boxes.forEach(b=>{ b.checked=false; }); upd();
+    el.classList.add('on'); el.setAttribute('aria-hidden','false'); appEl.setAttribute('aria-hidden','true'); try{ appEl.inert=true; }catch(_){}
+    document.getElementById('pfBody').scrollTop=0; sheet.focus();
+  }
+  function close(){
+    if(!isOpen()) return;
+    el.classList.remove('on'); el.setAttribute('aria-hidden','true'); appEl.removeAttribute('aria-hidden'); try{ appEl.inert=false; }catch(_){}
+    if(prev&&prev.focus&&document.contains(prev)) try{ prev.focus(); }catch(_){} prev=null;
+  }
+  const focusables=()=>[].slice.call(sheet.querySelectorAll('input,a[href],button')).filter(n=>!n.disabled&&n.offsetWidth);
+  boxes.forEach(b=>b.addEventListener('change',upd));
+  go.onclick=function(){
+    if(go.disabled) return; const p=here(target);
+    try{ localStorage.setItem(KEY,JSON.stringify({lat:p.lat,lng:p.lng,t:Date.now()})); }catch(_){}
+    close(); refresh();
+  };
+  document.getElementById('pfClose').onclick=close;
+  document.addEventListener('keydown',ev=>{
+    if(!isOpen()) return;
+    if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); close(); return; }
+    if(ev.key==='Tab'){ const f=focusables(); if(!f.length){ ev.preventDefault(); return; } const first=f[0], last=f[f.length-1], a=document.activeElement;
+      if(ev.shiftKey&&(a===first||a===sheet||!sheet.contains(a))){ ev.preventDefault(); last.focus(); }
+      else if(!ev.shiftKey&&(a===last||!sheet.contains(a))){ ev.preventDefault(); first.focus(); } }
+  },true);
+  /* שורת "אני מתכוון להטיס כאן" / "✔ נבדק" בראש כרטיס המידע (כל כרטיס שנפתח, במחשב ובטלפון) */
+  function rowEl(){
+    const ll=InfoCard.anchor(), d=document.createElement('div');
+    if(checked(ll)){ d.className='pf-row ok'; d.innerHTML='<span>✔ נבדק למיקום הזה</span><button type="button" class="pf-redo">בדיקה מחדש</button>'; d.querySelector('button').onclick=()=>open(InfoCard.anchor()); }
+    else { d.className='pf-row'; d.innerHTML='<button type="button" class="pf-btn">🚁 אני מתכוון להטיס כאן — בדיקות לפני טיסה</button>'; d.querySelector('button').onclick=()=>open(InfoCard.anchor()); }
+    return d;
+  }
+  function refresh(){
+    try{ const c=InfoCard.el(), b=c&&InfoCard.isOpen()&&c.querySelector('.ic-body'); if(!b) return;
+      const old=b.querySelector('.pf-row'); if(old) old.remove(); b.insertBefore(rowEl(),b.firstChild); }catch(_){}
+  }
+  const eb=document.getElementById('pfOpenEmpty'); if(eb) eb.onclick=()=>open(null);
+  ['show','update'].forEach(k=>{ const orig=InfoCard[k]; InfoCard[k]=function(){ const r=orig.apply(this,arguments); refresh(); return r; }; });
+  return {open,close,isOpen,checked,refresh};
 })();
 
 refreshHereStats();
