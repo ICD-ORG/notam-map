@@ -439,10 +439,11 @@
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.7 · 15 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.8 · 15 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
           <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
           <b style="color:var(--text)">v1.6 · 15.10.2026</b> — נוספה לשונית "היום": נוט"מים שהמפה קלטה מאז חצות (שעון ישראל), עם המספר על הלשונית. סימון "היום 🆕" ברשימת הנוט"מים מבוסס כעת על מועד הקליטה ולא על תחילת התוקף.<br>
           <b style="color:var(--text)">v1.5 · 15.10.2026</b> — בדיקה מלאה מול הפמ"ת (מהדורה 1/26) ותיקון הבדלים: ניסוח שב"ס באזורי LLU כלשון הפמ"ת, הערת רמת חובב (LLD31), שעות שטחי האש וטלפון מתא"מ מרכז, אזורי LLR107/120/601 שמופיעים במפה בלבד, גבהים וסוגי אזורים בשמורות וגנים (כולל אתרים ללא גבולות), והסרת טענות שאינן מהפמ"ת.<br>
@@ -484,6 +485,11 @@
       <button id="collapseall" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center">▶ קפל הכול</button>
       <button id="expandall" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center">▼ פתח הכול</button>
     </div>
+    <!-- כיבוי / הדלקה של כל השכבות במפה -->
+    <div class="fold-row">
+      <button id="layersAllOff" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center" title="מסתיר את כל השכבות במפה">🚫 כבה את כל השכבות</button>
+      <button id="layersAllOn" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center" title="מציג את כל השכבות במפה">👁 הדלק את כל השכבות</button>
+    </div>
     <label id="apxRow" title="עיגולי נוט&quot;מים שמיקומם נלקח משורת Q בלבד (מקווקווים)"><input type="checkbox" id="apxToggle"><span>הצג מיקומים משוערים (נוט"מים)</span><span class="n" id="apxCnt"></span></label>
     <div id="groups"></div>
     </div><!-- /paneLayers -->
@@ -504,11 +510,12 @@
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.7 · 15 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v1.8 · 15 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
+            <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
+          <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
           <b style="color:var(--text)">v1.6 · 15.10.2026</b> — נוספה לשונית "היום": נוט"מים שהמפה קלטה מאז חצות (שעון ישראל), עם המספר על הלשונית. סימון "היום 🆕" ברשימת הנוט"מים מבוסס כעת על מועד הקליטה ולא על תחילת התוקף.<br>
             <b style="color:var(--text)">v1.5 · 15.10.2026</b> — בדיקה מלאה מול הפמ"ת (מהדורה 1/26) ותיקון הבדלים: ניסוח שב"ס באזורי LLU כלשון הפמ"ת, הערת רמת חובב (LLD31), שעות שטחי האש וטלפון מתא"מ מרכז, אזורי LLR107/120/601 שמופיעים במפה בלבד, גבהים וסוגי אזורים בשמורות וגנים (כולל אתרים ללא גבולות), והסרת טענות שאינן מהפמ"ת.<br>
           <b style="color:var(--text)">v1.3 · 14.10.2026</b> — נוספה רשימת בדיקות לפני טיסה: כפתור "אני מתכוון להטיס כאן" בכרטיס "מה יש כאן" (ובכרטיס הריק), רשימה שחובה לסמן כולה, תקפה למיקום ברדיוס 500 מ' ועד 24 שעות.<br>
@@ -2073,6 +2080,16 @@ document.getElementById('collapseall').onclick=()=>{
   ORDER.forEach(k=>openState[k]=false);
   document.querySelectorAll('#groups .grp').forEach(g=>g.classList.remove('open'));
 };
+/* ---- כיבוי / הדלקה של כל השכבות ---- */
+function setAllLayers(on){
+  ORDER.forEach(k=>{ const g=groups[k]; if(!g) return; if(on){ if(!map.hasLayer(g)) g.addTo(map); } else if(map.hasLayer(g)) map.removeLayer(g); });
+  try{ restack(); }catch(_){}
+  renderList(document.getElementById('q').value.trim().toLowerCase()||null);   // מרענן את סמלי העין בכל קבוצה
+  try{ refreshHereStats(); }catch(_){}
+  try{ InfoCard.place(); }catch(_){}
+}
+document.getElementById('layersAllOff').onclick=()=>setAllLayers(false);
+document.getElementById('layersAllOn').onclick=()=>setAllLayers(true);
 document.getElementById('expandall').onclick=()=>{
   ORDER.forEach(k=>openState[k]=true);
   document.querySelectorAll('#groups .grp').forEach(g=>g.classList.add('open'));
