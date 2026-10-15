@@ -103,6 +103,47 @@ def translate(raw, e_text):
     if d: t += '\nלו"ז: ' + d.group(1).strip()
     return t
 
+SEEN_KEEP_DAYS = 60   # כמה זמן זוכרים נוט"ם שנעלם מהרשימה (כדי שחזרה אחרי כשל משיכה לא תיחשב "חדש")
+
+def merge_first_seen(prev, notams, now_iso):
+    """מוסיף לכל נוט"ם first_seen = מתי המפה קלטה אותו לראשונה, ושומר זאת בין ריצות.
+    prev: תוכן notam-data.json הקודם (dict) או None. המילון 'seen' נשמר גם לנוט"מים שנעלמו זמנית.
+    כלל: נוט"ם שלא הופיע בקובץ הקודם ובמילון seen = חדש => first_seen = עכשיו.
+    אם אין קובץ קודם תקין — הזמן לא ידוע (None) ולא מסומן "חדש"; ההיסטוריה לא מומצאת."""
+    old = {}                                    # id -> {'f': first_seen|None, 'l': last_seen|None}
+    seen = prev.get('seen') if isinstance(prev, dict) else None
+    notams_prev = prev.get('notams') if isinstance(prev, dict) else None
+    if isinstance(notams_prev, list):
+        for n in notams_prev:
+            if isinstance(n, dict) and n.get('id'):
+                old[n['id']] = {'f': n.get('first_seen') or None, 'l': prev.get('fetched_iso')}
+    if isinstance(seen, dict):
+        for k, v in seen.items():
+            if isinstance(v, dict):
+                cur = old.get(k, {})
+                old[k] = {'f': v.get('f') or cur.get('f'), 'l': v.get('l') or cur.get('l')}
+    # בסיס השוואה תקף רק אם יש בו נוט"מים מוכרים או מילון seen; קובץ ריק בפורמט ישן (ריצה שכשלה) = לא ידוע, לא "הכול חדש"
+    valid = bool(old) or isinstance(seen, dict)
+    new_seen = {}
+    for n in notams:
+        rec = old.get(n['id'])
+        f = rec['f'] if rec else (now_iso if valid else None)
+        if f: n['first_seen'] = f
+        else: n.pop('first_seen', None)
+        new_seen[n['id']] = {'f': f, 'l': now_iso}
+    cutoff = (datetime.datetime.strptime(now_iso, '%Y-%m-%dT%H:%M:%SZ') -
+              datetime.timedelta(days=SEEN_KEEP_DAYS)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    for k, rec in old.items():                  # נוט"מים שנעלמו הפעם: נשמרים עד SEEN_KEEP_DAYS
+        if k not in new_seen and rec.get('l') and rec['l'] >= cutoff:
+            new_seen[k] = {'f': rec['f'], 'l': rec['l']}
+    return new_seen
+
+def load_previous(path='notam-data.json'):
+    try:
+        with open(path, encoding='utf-8') as f: return json.load(f)
+    except Exception:
+        return None
+
 def main():
     print('מושך רשימת נוטמים...')
     page = http_get(LIST_URL)
@@ -149,9 +190,11 @@ def main():
             print(f'[{k}/{len(uas)}] {nid} — שגיאה: {e}')
 
     now = datetime.datetime.now(datetime.timezone.utc)
+    now_iso = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    seen = merge_first_seen(load_previous(), notams, now_iso)
     out = {'fetched_at': now.strftime('%d/%m/%Y %H:%M UTC'),
-           'fetched_iso': now.strftime('%Y-%m-%dT%H:%M:%SZ'),
-           'count': len(notams), 'notams': notams}
+           'fetched_iso': now_iso,
+           'count': len(notams), 'notams': notams, 'seen': seen}
     with open('notam-data.json', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print(f'נשמר notam-data.json עם {len(notams)} נוטמים. העלו את הקובץ לאתר.')
