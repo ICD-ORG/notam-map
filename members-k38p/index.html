@@ -1919,7 +1919,7 @@ function loadInpa(){
  if(inpaLoaded||inpaBusy) return;
  inpaBusy=true;
  setLoad('inpa','loading');
- return fetchJSON('./data/inpa-zones.json?v=20261016',null,60000).then(d=>{
+ return fetchJSON('./data/inpa-zones.json?v=20261017',null,60000).then(d=>{
   inpaLoaded=true;
   INPA_UNMAPPED=d.unmapped||[]; INPA_EDITION=d.edition||'';
   const built=d.sites.map(site=>{
