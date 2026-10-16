@@ -215,6 +215,9 @@
 details.xl{margin:4px 0 2px}
 details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
 .xlb{direction:ltr; text-align:left; font:11px/1.55 Consolas,monospace; color:var(--dim); max-height:180px; overflow:auto; padding:4px 0}
+.llu-lbl{display:none; background:rgba(26,6,18,.92); border:1px solid #ff2d95; color:#fff; font-weight:700; font-size:11px; padding:1px 6px; box-shadow:none}
+.zoom-llu .llu-lbl{display:block}
+.llu-lbl:before{display:none}
 .mapnote{display:inline-block; font-size:11.5px; color:#c9d4e3; border-inline-start:3px solid #46607f; padding-inline-start:7px; margin:2px 0}
 .rtgact{display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px}
 .rtgbtn,.extbtn{display:inline-flex; align-items:center; gap:4px; min-height:40px; padding:6px 12px; border-radius:10px; font:inherit; font-size:13px; font-weight:700; line-height:1.3; cursor:pointer; text-decoration:none; border:1px solid #3b6ea5; background:#14304f; color:#cfe6ff}
@@ -463,10 +466,11 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.0 · 16 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.1 · 16 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
           <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
           <b style="color:var(--text)">v1.9 · 15.10.2026</b> — בחיפוש, תוצאות המפה מוצגות ראשונות עם שורת ספירה (מעל הצעות המקומות); מספר הגרסה מוצג גם בחלון ⓘ (בטלפון).<br>
           <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
@@ -536,11 +540,12 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.0 · 16 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.1 · 16 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
+            <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
+          <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
           <b style="color:var(--text)">v1.9 · 15.10.2026</b> — בחיפוש, תוצאות המפה מוצגות ראשונות עם שורת ספירה (מעל הצעות המקומות); מספר הגרסה מוצג גם בחלון ⓘ (בטלפון).<br>
           <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
           <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
@@ -586,7 +591,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
   <div class="m-sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" tabindex="-1">
     <div class="m-head"><h2 id="infoTitle">מידע והוראות שימוש</h2><button type="button" class="m-x" id="infoClose" aria-label="סגור">✕</button></div>
     <div class="m-body" id="infoBody">
-      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.0 · 16 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
+      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.1 · 16 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
       <div class="disclaim">⚠ השימוש בערכה זו באחריות המשתמש בלבד · המפה אינה מחליפה את הנוטמ הרשמי ומיועדת לעזרה בלבד · כלל אחריות ההטסה חלה על המטיס עצמו</div>
 
       <h3>מה זו המפה</h3>
@@ -972,6 +977,13 @@ const S5_FOR_B='סעיף 5 בפמ"ת ('+pgLbl(12)+'): <i>'+s5Html([0,4])+'</i>';
 const itemQuote=code=>{ const it=PMT_ITEMS[code]||PMT_ITEMS_X[code]; return it?('לשון הפמ"ת ('+pgLbl(it.p,it.pe)+'): <i>'+it.t.replace(/\n/g,'<br>')+'</i>'):""; };
 const LLU_IPS = "סעיף 1א בפמ\"ת ("+pgLbl(5)+"): <i>\"1א. אזורים אסורים לטיסה (LLU) לכטב\"ם וטיסן שמשקל ההמראה המרבי שלהם (MTOW) נמוך מ-25 ק\"ג, המוטס בקשר-עין (VLOS) ולתעופה ספורטיבית ומסוקים הטסים מחוץ לנתיבי הטיסה המפורסמים: א. האזורים אסורים לטיסה ברדיוס 500 מטר ובגובה 1 000 רגל מעל פני השטח, למעט אם צוין אחרת. בנוסף, בכל מקום שתשתית הנתיבים המפורסמת נמצאת בסתירה לסגירה זו – תשתית הנתיבים גוברת. גורם המעוניין להגיש בקשה לטיסה בתוך מרחבים אלו מחויב ליצור קשר עם שירות בתי הסוהר (מטה ארצי- 074-7833333 ; מחוז צפון – 074-7834080 ; מחוז מרכז – 074-7836000 ; מחוז דרום – 074-7839000) ולקבל אישור בכתב לגבי ביצוע הפעילות (לאזור LLU21 לטלפון 03-5038875). ב. אזורים שאינם תחת אחריות שירות בתי הסוהר, יש לתאם מול הגורם המצוין תחת האזור האסור הרלוונטי. ג. אזורים LLU59-LLU72 הינם בגובה מירבי 300 רגל מעפ\"ש.\"</i>";
 
+/* סיווג אזורי LLU לשכבות לפי סוג המתקן — לפי שם האזור כפי שהוא מודפס בפמ"ת (הפמ"ת עצמו אינו מסווג את האזורים לפי סוג; מה שלא ברור מהשם נכנס ל"מתקנים ביטחוניים, ממשלתיים ותשתיות") */
+const LLU_PRISON=[1,2,3,4,5,6,7,9,10,11,12,13,14,15,16,17,18,19,20,56,58];
+const LLU_POLICE=[8,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,42,43];
+const LLU_BASE=[51,54];
+const isU=c=>c==='UP'||c==='UC'||c==='UM'||c==='US';
+const lluCat=code=>{ const n=parseInt(String(code).replace(/\D/g,''),10); return LLU_PRISON.includes(n)?'UP':LLU_POLICE.includes(n)?'UC':LLU_BASE.includes(n)?'UM':'US'; };
+const LLU_SUBLABEL={UP:'בית כלא / מתקן של שירות בתי הסוהר',UC:'משטרה / מג"ב',UM:'בסיס / מחנה צבאי',US:'מתקן ביטחוני, ממשלתי, תשתית או אחר'};
 /* כרטיס LLU: שורת הפמ"ת + שורת נספח ג' + (אם בשורה אין גובה) הכלל הכללי של סעיף 1א כלשונו + סעיף 1א כולו */
 const LLU_A_SENT='האזורים אסורים לטיסה ברדיוס 500 מטר ובגובה 1 000 רגל מעל פני השטח, למעט אם צוין אחרת.';
 const LLU_C_SENT='אזורים LLU59-LLU72 הינם בגובה מירבי 300 רגל מעפ"ש.';
@@ -991,6 +1003,7 @@ function luNote(code){
   }
   if(it&&!itemHasExtra(it.t)&&base!=='LLU21'&&!/^LLU(59|6\d|7[0-2])$/.test(base)) parts.push(NO_MORE_MSG);   /* LLU21 ו-LLU59–72 נקובים בשמם בסעיף 1א — אין לומר עליהם שאין מידע נוסף */
   parts.push(luIps(base));
+  parts.push('<span class="mapnote">הערת המפה (אינה מהפמ"ת): סוג האזור בשכבות המפה: '+LLU_SUBLABEL[lluCat(base)]+' — לפי שם האזור בפמ"ת. הפמ"ת עצמו אינו מסווג את אזורי ה-LLU לפי סוג.</span>');
   return parts.filter(Boolean).join('<br>');
 }
 const LLU=[ // [code, name, radius m, latD,latM,latS, lngD,lngM,lngS, altOverride?, note?]
@@ -1067,15 +1080,15 @@ const LLU=[ // [code, name, radius m, latD,latM,latS, lngD,lngM,lngS, altOverrid
 ["LLU73","תחנת אגירה כוכב הירדן",200, 32,35,53, 35,32,28, "GND – 1,000 ft AGL", "תיאום: ביטחון תחנה 04-9096525 (24/7), יריב שלם 052-5222789"]
 ];
 LLU.forEach(u=>{
-  AREAS.push({code:u[0], name:u[1], cat:"U", alt:(u[9]||LLU_DEFAULT_ALT), note:luNote(u[0]), g:{k:"circle", c:[D(u[3],u[4],u[5]),D(u[6],u[7],u[8])], r:u[2]}});
+  AREAS.push({code:u[0], name:u[1], cat:lluCat(u[0]), alt:(u[9]||LLU_DEFAULT_ALT), note:luNote(u[0]), g:{k:"circle", c:[D(u[3],u[4],u[5]),D(u[6],u[7],u[8])], r:u[2]}});
 });
 /* LLU22 ירוחם — שני מרחבים (פוליגונים) */
-AREAS.push({code:"LLU22", name:"ירוחם — מרחב אווירי 1", cat:"U", alt:LLU_DEFAULT_ALT, note:luNote("LLU22"), g:{k:"poly", pts:[
+AREAS.push({code:"LLU22", name:"ירוחם — מרחב אווירי 1", cat:lluCat("LLU22"), alt:LLU_DEFAULT_ALT, note:luNote("LLU22"), g:{k:"poly", pts:[
  [D(30,58,30),D(34,55,51)],[D(30,58,23),D(34,56,44)],[D(30,58,3),D(34,57,8)],[D(30,57,9),D(34,56,49)],
  [D(30,56,36),D(34,56,24)],[D(30,56,59),D(34,54,56)]]}});
-AREAS.push({code:"LLU22b", dispCode:"LLU22", name:"ירוחם — מרחב אווירי מס' 2", cat:"U", alt:LLU_DEFAULT_ALT, note:luNote("LLU22b"), g:{k:"poly", pts:[
+AREAS.push({code:"LLU22b", dispCode:"LLU22", name:"ירוחם — מרחב אווירי מס' 2", cat:lluCat("LLU22b"), alt:LLU_DEFAULT_ALT, note:luNote("LLU22b"), g:{k:"poly", pts:[
  [D(30,58,30),D(34,55,51)],[D(30,56,59),D(34,54,56)],[D(30,57,16),D(34,53,46)],[D(30,58,43),D(34,54,25)]]}});
-AREAS.push({code:"LLU55", name:"דור", cat:"U", alt:LLU_DEFAULT_ALT, note:luNote("LLU55"), g:{k:"poly", pts:[
+AREAS.push({code:"LLU55", name:"דור", cat:lluCat("LLU55"), alt:LLU_DEFAULT_ALT, note:luNote("LLU55"), g:{k:"poly", pts:[
  [D(32,35,45),D(34,55,36)],[D(32,36,17),D(34,55,36)],[D(32,36,17),D(34,55,49)],[D(32,35,45),D(34,55,49)]]}});
  
 /* -------- סעיף 4 — מגבלות קרבה לגבול (תוואי מקורב, חל גם על כטב"מ וטיסן) -------- */
@@ -1128,10 +1141,10 @@ AREAS.forEach(a=>{ if(a.cat==='O'){ a.note=[annexQuote(a.code),NO_MORE_MSG].filt
 
 /* שם האזור בכותרת הכרטיס: כפי שהוא מודפס בעמודת "שם האזור" בטבלת הנספח (בלי שמות שהמצאנו) */
 AREAS.forEach(a=>{
-  if(!(['P','X','R','D','U','O'].includes(a.cat))) return;
+  if(!(['P','X','R','D','O'].includes(a.cat)||isU(a.cat))) return;
   const r=PMT_ANNEX[annexKey(a.code)]; if(!r) return;
   const c=r[0].c;
-  if(a.cat==='O') a.name=(c[1]||'')+' — '+(c[2]||''); else if(c[1]) a.name=c[1]+((a.cat==='U'&&c[2]&&!/מטר/.test(c[2]))?' — '+c[2]:'');
+  if(a.cat==='O') a.name=(c[1]||'')+' — '+(c[2]||''); else if(c[1]) a.name=c[1]+((isU(a.cat)&&c[2]&&!/מטר/.test(c[2]))?' — '+c[2]:'');
 });
  
 
@@ -1207,6 +1220,15 @@ const NO_COORDS=[
  ["LLR921","שטחי אש 921","GND – 5,000 ft AMSL"]
 ];
  
+/* 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (בנספח כתוב "קואורדינטות מפורטות בפרק ENR5.1 ב-AIP", או שאין קואורדינטות כלל) —
+   משורטטים בקירוב מתוך מפת נספח א' (עמ' 51) בפמ"ת: הקווים נקראו מהמפה המשורטטת והותאמו לרשת קווי האורך והרוחב שבה (סטייה טיפוסית של 100–400 מ' מהקו המשורטט). זהו שרטוט משוער ואינו הגבול הרשמי */
+const LLR_APPROX={"LLR107":[[32.5188,35.0491],[32.5347,35.0454],[32.5872,35.1561],[32.5642,35.1718],[32.5564,35.1432],[32.5413,35.1413],[32.542,35.1007],[32.5201,35.0937]],"LLR120":[[33.0946,35.779],[33.1067,35.8227],[33.0286,35.8398],[32.9869,35.8286],[32.9847,35.8041],[32.9596,35.7903],[32.928,35.7909],[32.9123,35.8141],[32.8932,35.7784],[32.871,35.7867],[32.8699,35.7101],[32.8848,35.691],[32.8948,35.7051],[32.8968,35.6759],[32.9341,35.6688],[32.9347,35.6379],[32.9841,35.6442],[32.9903,35.6738],[33.0181,35.6942],[33.0452,35.6787],[33.0526,35.6544],[33.1057,35.6511],[33.1282,35.66],[33.1228,35.6843],[33.1403,35.6718],[33.2198,35.6807],[33.2261,35.7112],[33.2227,35.7364],[33.1994,35.7373],[33.1919,35.7649],[33.172,35.7594],[33.1455,35.7781],[33.1295,35.7548]],"LLR24":[[31.9688,34.5645],[31.9783,34.7387],[31.9318,34.7209],[31.9149,34.5297]],"LLR309":[[31.5,34.8742],[31.5215,34.9051],[31.5045,34.9385],[31.4853,34.9381],[31.4365,34.8938],[31.4342,34.8633],[31.4095,34.8596],[31.4269,34.7958],[31.5259,34.7945],[31.5263,34.8635]],"LLR36":[[31.0148,34.7674],[31.0973,34.6698],[31.0693,34.6558],[31.0483,34.6825],[30.9924,34.7007],[30.9577,34.6706],[30.9546,34.6969],[30.8988,34.7071],[30.8851,34.7036],[30.8144,34.6912],[30.7935,34.7148],[30.7516,34.7093],[30.7663,34.7437],[30.7136,34.7802],[30.6754,34.7572],[30.6191,34.7499],[30.5928,34.7121],[30.6034,34.69],[30.6191,34.6998],[30.624,34.5274],[30.7815,34.4645],[30.7934,34.5037],[30.8648,34.4466],[30.9144,34.4394],[31.1438,34.3277],[31.1843,34.3363],[31.1948,34.3868],[31.1965,34.478],[31.1792,34.5489],[31.1648,34.5471],[31.1755,34.5704],[31.1979,34.5396],[31.219,34.5528],[31.2187,34.5824],[31.2092,34.6758],[31.152,34.7387],[31.13,34.7383],[31.1075,34.781],[31.0417,34.8102]],"LLR500":[[31.0297,34.972],[30.9979,34.9418],[30.9955,34.9154],[31.0583,34.8544],[31.0874,34.9756],[31.0703,34.9736],[31.0631,34.9918]],"LLR502":[[31.0297,34.972],[31.048,35.037],[31.0211,35.0428],[31.0193,35.0659],[30.9626,35.0432],[30.99,35.0079],[30.9693,34.9699]],"LLR504":[[30.9164,34.9234],[30.9361,34.8871],[30.9763,34.9174],[30.979,34.9606],[30.9624,34.9666]],"LLR520":[[30.6564,34.8388],[30.7649,34.7986],[30.8136,34.8505],[30.7792,34.8546],[30.6964,34.9223]],"LLR589":[[30.8905,34.8081],[30.9947,34.7837],[30.9958,34.7997],[31.0185,34.8017],[31.0155,34.8639],[30.9676,34.8965]],"LLR601":[[32.9474,34.9889],[32.9543,35.0737],[32.9721,35.0774],[32.9938,35.0111]],"LLR618":[[30.9539,34.6961],[30.9902,34.7621],[30.9493,34.7861],[30.9013,34.7741],[30.8961,34.7532],[30.8599,34.7359],[30.8988,34.7055]],"LLR804":[[29.9446,34.8463],[29.945,34.821],[29.8689,34.8489],[29.8416,34.8358],[29.8419,34.8153],[30.0472,34.7367],[30.101,34.7266],[30.1654,34.6889],[30.2048,34.7822],[30.1867,34.7914],[30.1901,34.846],[30.2053,34.8859],[30.1712,34.8718],[30.1233,34.9468],[30.0578,34.9139],[30.0582,34.8871],[29.9962,34.8922],[29.9652,34.898]],"LLR805":[[30.2342,34.8896],[30.2657,34.9884],[30.1213,34.9919],[30.0663,34.986],[30.0063,34.9564],[29.9659,34.8972],[29.9962,34.8915],[30.0596,34.8863],[30.0592,34.9132],[30.1233,34.946],[30.1712,34.871],[30.204,34.8843]],"LLR82":[[31.9325,34.7202],[31.9288,34.7402],[31.902,34.7381],[31.8727,34.7198],[31.8636,34.6794],[31.8472,34.6743],[31.8505,34.6269],[31.8759,34.5717],[31.9186,34.5725]],"LLR921":[[31.5932,35.3867],[31.5998,35.3644],[31.5869,35.352],[31.5343,35.3716],[31.517,35.3455],[31.4685,35.3667],[31.4203,35.2934],[31.3777,35.294],[31.3101,35.2683],[31.2841,35.1805],[31.2903,35.143],[31.3189,35.1148],[31.3456,35.1202],[31.3808,35.2348],[31.4458,35.2098],[31.4495,35.238],[31.4967,35.2856],[31.5627,35.3257],[31.6523,35.3103],[31.6795,35.3254],[31.6997,35.3131],[31.6932,35.329],[31.7096,35.3374],[31.7638,35.305],[31.7753,35.3117],[31.7844,35.3417],[31.8025,35.3309],[31.8127,35.373],[31.7815,35.4237],[31.7796,35.4502],[31.7608,35.461],[31.6962,35.4287],[31.691,35.4101],[31.6737,35.4169]]};
+const LLR_APPROX_MSG="האזור משורטט בקירוב לפי מפת נספח א' בפמ\"ת ("+pgLbl(51)+"), בקו מקווקו. זה אינו הגבול הרשמי ואין להשתמש בו לניווט או לתכנון טיסה.";
+noCoordBlocks().forEach(b=>{
+  const p=LLR_APPROX[b.code]; if(!p) return;
+  AREAS.push({code:b.code, name:b.name, cat:'R', alt:'', approx:true, note:b.html+'<br>'+MAPNOTE(LLR_APPROX_MSG), g:{k:'poly', pts:p}});
+});
+
 /* ===== map ===== */
 /* לחיצה על המפה רק פותחת כרטיס "מה יש כאן" — בלי מרכוז, בלי זום, בלי fitBounds ובלי autoPan.
    גם זום בלחיצה כפולה כבוי כדי שאף לחיצה על המפה לא תשנה את הזום. */
@@ -1248,7 +1270,10 @@ const CATS={
  P:{label:"אזורים אסורים (LLP)", color:"#e0452f", badge:"אסור"},
  R:{label:"אזורים מוגבלים (LLR)", color:"#e8930c", badge:"מוגבל"},
  D:{label:"אזורים מסוכנים (LLD)", color:"#d8c024", badge:"מסוכן"},
- U:{label:"סגירות כטב\"מ/טיסן (LLU)", color:"#8f6fe8", badge:"LLU"},
+ UP:{label:"בתי כלא — סגירות כטב\"מ/טיסן (LLU)", color:"#ff2d95", badge:"בית כלא"},
+ UC:{label:"משטרה ומג\"ב — סגירות כטב\"מ/טיסן (LLU)", color:"#ff73c0", badge:"משטרה"},
+ UM:{label:"בסיסים צבאיים — סגירות כטב\"מ/טיסן (LLU)", color:"#d4146e", badge:"בסיס"},
+ US:{label:"מתקנים ביטחוניים, ממשלתיים ותשתיות — סגירות כטב\"מ/טיסן (LLU)", color:"#f04ca4", badge:"מתקן"},
  A:{label:"שדות תעופה ומנחתים (שכבת עזר)", color:"#3e8fe0", badge:"שדה"},
  B:{label:"מגבלות קרבה לגבול (סעיף 4)", color:"#cf5fa6", badge:"גבול"},
  X:{label:"מוחרג לכטב\"מ בתיאום צבאי — יו\"ש ויריחו", color:"#5f8291", badge:"מוחרג"},
@@ -1625,11 +1650,11 @@ const GEN_S5='<br><b>סעיף 5 בפמ"ת ('+pgLbl(12)+'):</b><br><i>'+s5Html([0
 const GEN_FN='<br><b>הערת שוליים בפמ"ת ('+pgLbl(12)+'):</b><br><i>'+esc(PMT_P12.fn)+'</i>';
 /* כללי הפמ"ת הכלליים: פתיח הפרק (עמ' 1) כולו, ללא קיצורים; סעיף 5 רק לסעיפים 1/1א/4 (LLP, LLU, LLP171-173/18, גבול); הערת השוליים רק למי ששורתו בנספח ב'/ג'/ד' (המסומנים בכוכבית) */
 const genRules=(cat,star)=>{
-  const s5=(cat==='P'||cat==='X'||cat==='U'||cat==='B');
+  const s5=(cat==='P'||cat==='X'||cat==='U'||isU(cat)||cat==='B');
   return '<details class="gen"><summary>כללי הפמ"ת הכלליים (פתיח הפרק, '+pgLbl(1)+(s5?' · סעיף 5, '+pgLbl(12):'')+(star?' · הערת שוליים':'')+')</summary><div>'+genIntro(cat==='NR'||cat==='NP')+(s5?GEN_S5:'')+(star?GEN_FN:'')+'</div></details>';
 };
 const GEN_RULES=genRules('P',true);
-const GEN_CATS=new Set(['P','R','D','U','X','B','O','NR','NP']);
+const GEN_CATS=new Set(['P','R','D','U','UP','UC','UM','US','X','B','O','NR','NP']);
 /* ---- תוכן הכרטיס ---- */
 function areaHead(a){
   const c=CATS[a.cat];
@@ -1639,7 +1664,7 @@ function areaHead(a){
 }
 /* אזורי פמ"ת (P,X,R,D,U,O,B): הכרטיס מציג רק לשון הפמ"ת — שורת האזור, שורת הטבלה, תווית המפה, והסעיפים שהפמ"ת עצמו מייחס לאזור.
    בלי שורת גובה/רדיוס/מרכז שנגזרה על ידינו. שורת גובה נשארת רק לשכבות שאינן פמ"ת (שדות תעופה ממפת ICD) ולשמורות/גנים (התא המודפס בנספח ה') */
-const PMT_CARD_CATS=new Set(['P','X','R','D','U','O','B']);
+const PMT_CARD_CATS=new Set(['P','X','R','D','UP','UC','UM','US','O','B']);
 function areaBody(a){
   const pc=PMT_CARD_CATS.has(a.cat), base=String(a.code).replace(/b$/,'');
   const ak=PMT_ANNEX[annexKey(a.code)], star=!!(ak&&/^[BCD]$/.test(ak[0].a));
@@ -1753,7 +1778,8 @@ if(CAN_HOVER){
 function buildGeom(a,key){
   key=key||'fix';
   const nat=a.cat==='NR'||a.cat==='NP';     // שמורות/גנים: מילוי כבד יותר (לא נבלע ברקע ירוק/תצלום)
-  const st={color:LINE[a.cat], weight:2.4, fillColor:CATS[a.cat].color, fillOpacity:nat?0.32:0.24, ...RO};
+  const uu=isU(a.cat);     // סגירות LLU (בתי כלא, משטרה, בסיסים, מתקנים): קו בצבע הקטגוריה עצמו (ורוד/מגנטה), עבה, ומילוי חזק
+  const st={color:uu?CATS[a.cat].color:LINE[a.cat], weight:uu?3.2:2.4, fillColor:CATS[a.cat].color, fillOpacity:nat?0.32:(uu?0.42:0.24), dashArray:a.approx?'7 5':null, ...RO};
   if(key==='nat') st.smoothFactor=2;       // שמורות/גנים גדולים; לאתרים קטנים/צרים מורידים אחרי חישוב השטח (כדי שלא ייעלמו בפישוט)
   let layer=null;
   if(a.g.k==="circle"){ layer=L.circle(a.g.c,{radius:a.g.r,...st}); }
@@ -1789,7 +1815,12 @@ AREAS.forEach(a=>{
   layer.addTo(groups[a.cat]);
   const e=regArea(a,layer,'fix');
   /* מעגלים קטנים (בתי כלא, תחנות משטרה וכד') נעלמים בזום ארצי — מוסיפים נקודת סימון קבועה */
-  if(a.g.k==="circle" && a.g.r<=1000){
+  if(isU(a.cat)){     /* LLU: נקודה בולטת קבועה (בכל רדיוס) + שם האזור כפי שמופיע בפמ"ת מזום 10 — כדי שלא ייבלעו בין השמורות */
+    const c=a.g.k==="circle"?a.g.c:layerBounds(layer).getCenter();
+    e.dot=L.circleMarker(c,{radius:7, color:'#2a0016', weight:2.4, fillColor:CATS[a.cat].color, fillOpacity:1, ...RO});
+    e.dot.bindTooltip(a.name,{permanent:true,direction:'top',offset:[0,-8],className:'llu-lbl',opacity:1,interactive:false});
+    e.dot.addTo(groups[a.cat]);
+  }else if(a.g.k==="circle" && a.g.r<=1000){
     e.dot=L.circleMarker(a.g.c,{radius:4, color:LINE[a.cat], weight:1.5, fillColor:CATS[a.cat].color, fillOpacity:0.9, ...RO});
     e.dot.addTo(groups[a.cat]);
   }
@@ -1813,7 +1844,7 @@ let userMarker=null;     // סמן "בקרבתי"
 function restack(){
   const order=arr=>arr.sort((x,y)=>y.size-x.size).forEach(e=>{ [e.layer,e.buf,e.dot].forEach(l=>{ if(l&&map.hasLayer(l)) l.bringToFront(); }); });
   const nt=[], apx=[]; ntEntries.forEach(n=>{ if(n.layer) (n.approx?apx:nt).push(n); });
-  order(apx); order(HERE.filter(e=>e.pane==='fix')); order(HERE.filter(e=>e.pane==='nat')); order(nt);
+  order(apx); order(HERE.filter(e=>e.pane==='nat')); order(HERE.filter(e=>e.pane==='fix')); order(nt);
   if(userMarker&&map.hasLayer(userMarker)) userMarker.bringToFront();
 }
 /* קווי חיץ 150 מ' של שמורות/גנים: נוצרים ונוספים פעם אחת בטעינת רט"ג ומצוירים רק מזום 11 (minZoom בכלי הציור). בלי הוספה/הסרה בכל חציית זום:
@@ -1822,11 +1853,12 @@ const BUF_MINZ=11;
 const bufOn=e=>!!(e.buf&&map.getZoom()>=BUF_MINZ&&map.hasLayer(e.buf));
 map.on('overlayadd',()=>{ restack(); });
 
-groups.P.addTo(map); groups.R.addTo(map); groups.D.addTo(map); groups.U.addTo(map); groups.A.addTo(map); groups.B.addTo(map);
+groups.P.addTo(map); groups.R.addTo(map); groups.D.addTo(map); groups.UP.addTo(map); groups.UC.addTo(map); groups.UM.addTo(map); groups.US.addTo(map); groups.A.addTo(map); groups.B.addTo(map);
 groups.NR.addTo(map); groups.NP.addTo(map);
 groups.NT_uas.addTo(map); groups.NT_pje.addTo(map); groups.NT_frng.addTo(map); groups.NT_act.addTo(map); groups.NT_obst.addTo(map); groups.NT_ad.addTo(map); groups.NT_other.addTo(map);
 restack();
-// שכבת המוחרגים (X) והבלונים (O) כבויות כברירת מחדל
+(function(){ const c=map.getContainer(), f=()=>c.classList.toggle('zoom-llu',map.getZoom()>=10); map.on('zoomend',f); f(); })();     // שמות LLU מזום 10
+groups.X.addTo(map); groups.O.addTo(map);     // כל שכבות הפמ"ת דלוקות כברירת מחדל (כולל המוחרגים והבלונים)
  
 const overlays={};
 Object.keys(CATS).forEach(k=>overlays[`<span style="color:${CATS[k].color};font-weight:700">${CATS[k].label}</span>`]=groups[k]);
@@ -1872,10 +1904,10 @@ function restoreLayers(){
 }
  
 /* ===== sidebar ===== */
-const ORDER=["P","R","D","U","A","B","X","O","NR","NP","NT_uas","NT_pje","NT_frng","NT_act","NT_obst","NT_ad","NT_other"];
+const ORDER=["P","R","D","UP","UC","UM","US","A","B","X","O","NR","NP","NT_uas","NT_pje","NT_frng","NT_act","NT_obst","NT_ad","NT_other"];
 /* מקרא קומפקטי (טלפון): שמורות וגנים (רט"ג) מיד אחרי האזורים האסורים — לא קבורות בסוף הרשימה; תוויות קצרות כדי שכל שורה תישאר שורה אחת */
-const ORDER_C=["P","NR","NP","R","D","U","A","B","X","O","NT_uas","NT_pje","NT_frng","NT_act","NT_obst","NT_ad","NT_other"];
-const SHORT={P:'אזורים אסורים (LLP)', R:'אזורים מוגבלים (LLR)', D:'אזורים מסוכנים (LLD)', U:'סגירות כטב"מ (LLU)', A:'שדות תעופה ומנחתים', B:'קרבה לגבול (סעיף 4)', X:'מוחרג בתיאום — יו"ש ויריחו', O:'בלונים מעוגנים — מכשולים',
+const ORDER_C=["P","NR","NP","R","D","UP","UC","UM","US","A","B","X","O","NT_uas","NT_pje","NT_frng","NT_act","NT_obst","NT_ad","NT_other"];
+const SHORT={P:'אזורים אסורים (LLP)', R:'אזורים מוגבלים (LLR)', D:'אזורים מסוכנים (LLD)', UP:'בתי כלא (LLU)', UC:'משטרה ומג"ב (LLU)', UM:'בסיסים צבאיים (LLU)', US:'מתקנים ביטחוניים ותשתיות (LLU)', A:'שדות תעופה ומנחתים', B:'קרבה לגבול (סעיף 4)', X:'מוחרג בתיאום — יו"ש ויריחו', O:'בלונים מעוגנים — מכשולים',
   NR:'שמורות טבע — רט"ג', NP:'גנים לאומיים — רט"ג', NT_uas:'נוט"מ — כטב"מ ורחפנים', NT_pje:'נוט"מ — הצנחות', NT_frng:'נוט"מ — ירי ואימונים', NT_act:'נוט"מ — פעילות אווירית', NT_obst:'נוט"מ — מנופים', NT_ad:'נוט"מ — שדות תעופה', NT_other:'נוט"מ — כללי'};
 let INPA_UNMAPPED=[], INPA_EDITION=''; /* נטען בהמשך מ-data/inpa-zones.json */
 const groupsEl=document.getElementById('groups');
@@ -2066,7 +2098,7 @@ function renderListCore(filter){
     const isNt=k.indexOf('NT_')===0;
     let items=isNt?ntGroupItems(k,filter):AREAS.filter(a=>a.cat===k && (!filter || (a.code+" "+(a.dispCode||"")+" "+a.name).toLowerCase().includes(filter)));
     /* אתרים ללא מיקום (שמורות/אתרי קינון בפמ"ת וללא גבול) ושטחי אש ללא שרטוט — גם הם נכללים בחיפוש */
-    const extraN=!filter?0:k==='NR'?INPA_UNMAPPED.filter(u=>((u.id+' '+u.name+' '+(u.note||(u.kind==='P'?'גן לאומי':u.kind==='R'?'שמורת טבע':''))).toLowerCase().includes(filter))).length:k==='R'?NO_COORDS.filter(n=>((n[0]+' '+n[1]).toLowerCase().includes(filter))).length:0;
+    const extraN=!filter?0:k==='NR'?INPA_UNMAPPED.filter(u=>((u.id+' '+u.name+' '+(u.note||(u.kind==='P'?'גן לאומי':u.kind==='R'?'שמורת טבע':''))).toLowerCase().includes(filter))).length:0;
     if(!items.length && !extraN && filter) return;
     if(k==='NR'||k==='NP') items=items.slice().sort((a,b)=>HE_COLLATOR.compare(a.name,b.name));   // שמורות וגנים: אלפביתי
     const g=document.createElement('div'); g.className='grp'+((filter||openState[k])?' open':'');
@@ -2084,21 +2116,16 @@ function renderListCore(filter){
         it.onclick=()=>ntFocus(a.it.id);
         it.onmouseenter=()=>{ if(CAN_HOVER&&a.layer) HL.hover(a,'list'); }; it.onmouseleave=()=>HL.hover(null,'list');
       }else{
-        it.innerHTML=`<span class="code" style="color:${CATS[k].color}">${esc(a.dispCode||a.code)}</span><span>${esc(a.name)}</span>`;
+        it.innerHTML=`<span class="code" style="color:${CATS[k].color}">${esc(a.dispCode||a.code)}</span><span>${esc(a.name)}</span>`+(a.approx?'<span class="cnt" style="margin-inline-start:auto">משוער</span>':'');
         it.onclick=()=>focusArea(a.code);
         it.onmouseenter=()=>{ if(CAN_HOVER){ const en=layersByCode[a.code]; if(en&&en.layer) HL.hover(en,'list'); } }; it.onmouseleave=()=>HL.hover(null,'list');
       }
       wrap.appendChild(it);
     });
-    if(k==='R'){
+    if(k==='R'&&!filter){
       const nb=document.createElement('div'); nb.className='noteblock';
-      nb.innerHTML='<b>אזורי LLR שאינם משורטטים במפה</b>';
+      nb.innerHTML=MAPNOTE('אזורים המסומנים "משוער" משורטטים בקו מקווקו, בקירוב לפי מפת נספח א\' בפמ"ת ('+pgLbl(51)+'); אינם הגבול הרשמי.');
       wrap.appendChild(nb);
-      noCoordBlocks().filter(b=>!filter||(b.code+' '+b.name).toLowerCase().includes(filter)).forEach(b=>{
-        const d=document.createElement('details'); d.className='un';
-        const sm=document.createElement('summary'); sm.innerHTML='<span style="direction:ltr;font-family:Consolas,monospace">'+esc(b.code)+'</span> · '+esc(b.name); d.appendChild(sm);
-        const bd=document.createElement('div'); bd.className='pp-note'; bd.innerHTML=b.html; d.appendChild(bd); wrap.appendChild(d);
-      });
     }
     if(k==='NR'&&INPA_UNMAPPED.length){
       /* אתרים שבפמ"ת (נספח ה') ואין להם מיקום או גבול בפמ"ת ובקבצי רט"ג: שורה לכל אתר, נפתחת למידע המדויק מהפמ"ת */
@@ -2118,7 +2145,7 @@ function renderListCore(filter){
         d.appendChild(b); wrap.appendChild(d);
       });
     }
-    if(k==='U'){
+    if(k==='UP'){
       const nb=document.createElement('div'); nb.className='noteblock';
       nb.innerHTML=LLU_IPS;
       wrap.appendChild(nb);
