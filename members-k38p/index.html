@@ -52,6 +52,50 @@
   .cnt{margin-inline-start:auto; color:var(--dim); font-size:11px; font-family:Consolas,monospace}
   .items{display:none}
   .grp.open .items{display:block}
+  /* ---- סידור אישי של רשימת השכבות (קבוצות משלי) ---- */
+  .ugrp{margin:8px 6px}
+  .ugrp>button{width:100%; display:flex; align-items:center; gap:8px; background:var(--panel2); border:1px solid #4a5f80; border-radius:8px; color:var(--text); font-size:13px; font-weight:700; padding:7px 8px; min-height:40px; cursor:pointer; text-align:right}
+  .ugrp>button:hover{background:#18304a}
+  .ugrp>button .chev{flex:none; width:14px; color:var(--dim)}
+  .ugrp>button .chev::before{content:'◂'}
+  .ugrp.open>button .chev::before{content:'▾'}
+  .ugbody{display:none; margin:2px 4px 6px 0; padding-inline-start:6px; border-inline-start:2px solid #4a5f80}
+  .ugrp.open>.ugbody{display:block}
+  .ugbody .grp{margin-inline:0}
+  #layEdit{width:100%; background:var(--panel2); border:1px solid #4a5f80; border-radius:6px; color:var(--text); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center}
+  .laying .fold-row, .laying #search, .laying #apxRow, .laying #placeBox, .laying #placeLive{display:none!important}
+  .sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+  .org{padding:0 4px 18px}
+  .org-bar{position:sticky; top:0; z-index:4; display:flex; gap:6px; flex-wrap:wrap; padding:8px 6px; background:var(--panel); border-bottom:1px solid var(--line)}
+  .org-bar button{flex:1 1 auto; min-height:40px; padding:0 10px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer}
+  .org-bar button.done{background:#a8c6e8; color:#0e1b2a; font-weight:700; border-color:#a8c6e8}
+  .org-bar button.armed{background:#5a1f1a; border-color:#e0452f; color:#ffd6d0; font-weight:700}
+  .org-help{font-size:11.5px; color:var(--dim); line-height:1.6; margin:8px 8px 4px}
+  .org-warn{margin:6px 8px; padding:7px 10px; border:1px solid #6a5320; background:#211a08; color:#f5c46a; border-radius:8px; font-size:12px; line-height:1.5}
+  .org-warn[hidden]{display:none}
+  .org-row{display:flex; align-items:center; gap:6px; min-height:46px; padding:0 4px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); margin:4px 0}
+  .org-h{flex:none; width:40px; height:40px; background:none; border:0; color:var(--dim); font-size:19px; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none}
+  .org-n{flex:1 1 auto; min-width:0; font-size:13px; font-weight:700; line-height:1.3}
+  .org-mv{flex:none; display:inline-flex; gap:2px}
+  .org-mv button, .org-del{width:38px; height:40px; background:none; border:1px solid var(--line); border-radius:6px; color:var(--text); font-size:14px; cursor:pointer}
+  .org-mv button:disabled{opacity:.25; cursor:default}
+  .org-del.armed{width:auto; padding:0 8px; background:#5a1f1a; border-color:#e0452f; color:#ffd6d0; font-size:12px; font-weight:700}
+  .org-sel{position:relative; flex:none; width:38px; height:40px; display:inline-flex; align-items:center; justify-content:center; font-size:16px; border:1px solid var(--line); border-radius:6px}
+  .org-sel select{position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; font-size:16px}
+  .org:not(:has(.org-grp)) .org-sel{display:none}
+  .org-grp{margin:8px 0; padding:4px; border:1px solid #4a5f80; border-radius:10px; background:rgba(120,150,200,.07)}
+  .org-grp>.org-grow{margin-top:0; background:var(--panel); border-color:#4a5f80}
+  .org-name{flex:1 1 auto; min-width:0; background:var(--ink); border:1px solid var(--line); border-radius:6px; color:var(--text); padding:6px 8px; font-size:16px; font-family:inherit}
+  .org-name:focus{outline:2px solid #3b6ea5; outline-offset:1px}
+  .org-body{margin:4px 6px 2px 0; padding-inline-start:8px; border-inline-start:2px solid #4a5f80; min-height:30px}
+  .org-empty{padding:10px 8px; border:1px dashed var(--line); border-radius:8px; color:var(--dim); font-size:12px; text-align:center}
+  .org-empty[hidden]{display:none}
+  .org-drag{outline:2px solid #7fc0ff; box-shadow:0 8px 22px rgba(0,0,0,.55); opacity:.92}
+  .org-dragging{-webkit-user-select:none; user-select:none; cursor:grabbing}
+  .leaflet-control-layers .lc-grp{font-size:11px; font-weight:700; color:var(--dim); padding:6px 2px 2px; margin-top:4px; border-top:1px solid var(--line)}
+  .leaflet-control-layers label.lc-in{padding-inline-start:10px}
+  @media (max-width:760px), (max-height:520px){ .ugrp{margin:1px 6px} }
+  @media (max-width:760px), (pointer:coarse){ .ugrp>button{min-height:44px} #layEdit{min-height:44px} .org-bar button{min-height:44px} }
   .item{display:flex; align-items:baseline; gap:8px; padding:5px 10px 5px 6px; border-radius:5px; cursor:pointer; font-size:12.5px}
   .item:hover{background:var(--panel2)}
   .item .code{font-family:Consolas,monospace; font-size:11px; color:var(--dim); direction:ltr; flex:none; min-width:56px}
@@ -466,10 +510,11 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.2 · 16 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v2.3 · 16.10.2026</b> — סידור אישי של רשימת השכבות: כפתור "סדר את השכבות" בלשונית "שכבות" — הזזה בחצים או בגרירה, וקבוצות משלכם (שם, הכנסת שכבות, הצגה/הסתרה של קבוצה שלמה). הסידור נשמר במכשיר שלכם בלבד ויש כפתור חזרה לסדר המקורי.<br>
           <b style="color:var(--text)">v2.2 · 16.10.2026</b> — עודכנו קבצי הפמ"ת (פרקים א-17, א-11, ב-09). נוספה שכבת "אזורי טיסה לכטב\"ם" לפי פרק ב-09: כל האזורים שבנספחים ב'-1, ב'-2 וב'-3 (42 אזורים, כולל אזורי בראשית), כל אחד עם שורת הטבלה כלשונה, התוויות וההערות שבמפת נספח א'. ציטוטי פרק א-11 (טלפוני המתא\"מים) ופרק ב-09 (סעיפים 2, 4, 5, 7 במרחב שדות התעופה) הותאמו לנוסח ולחותמות המעודכנים.<br>
           <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
           <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
@@ -521,6 +566,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <button id="layersAllOff" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center" title="מסתיר את כל השכבות במפה">🚫 כבה את כל השכבות</button>
       <button id="layersAllOn" style="flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--dim); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center" title="מציג את כל השכבות במפה">👁 הדלק את כל השכבות</button>
     </div>
+    <div class="fold-row" id="layEditRow"><button type="button" id="layEdit" title="סידור הרשימה לפי הצורך: הזזה, גרירה וקבוצות משלכם">⇅ סדר את השכבות · קבוצות משלי</button></div>
     <label id="apxRow" title="עיגולי נוט&quot;מים שמיקומם נלקח משורת Q בלבד (מקווקווים)"><input type="checkbox" id="apxToggle"><span>הצג מיקומים משוערים (נוט"מים)</span><span class="n" id="apxCnt"></span></label>
     <div id="groups"></div>
     </div><!-- /paneLayers -->
@@ -541,11 +587,12 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.2 · 16 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v2.2 · 16.10.2026</b> — עודכנו קבצי הפמ"ת (פרקים א-17, א-11, ב-09). נוספה שכבת "אזורי טיסה לכטב\"ם" לפי פרק ב-09: כל האזורים שבנספחים ב'-1, ב'-2 וב'-3 (42 אזורים, כולל אזורי בראשית), כל אחד עם שורת הטבלה כלשונה, התוויות וההערות שבמפת נספח א'. ציטוטי פרק א-11 (טלפוני המתא\"מים) ופרק ב-09 (סעיפים 2, 4, 5, 7 במרחב שדות התעופה) הותאמו לנוסח ולחותמות המעודכנים.<br>
+            <b style="color:var(--text)">v2.3 · 16.10.2026</b> — סידור אישי של רשימת השכבות: כפתור "סדר את השכבות" בלשונית "שכבות" — הזזה בחצים או בגרירה, וקבוצות משלכם (שם, הכנסת שכבות, הצגה/הסתרה של קבוצה שלמה). הסידור נשמר במכשיר שלכם בלבד ויש כפתור חזרה לסדר המקורי.<br>
+          <b style="color:var(--text)">v2.2 · 16.10.2026</b> — עודכנו קבצי הפמ"ת (פרקים א-17, א-11, ב-09). נוספה שכבת "אזורי טיסה לכטב\"ם" לפי פרק ב-09: כל האזורים שבנספחים ב'-1, ב'-2 וב'-3 (42 אזורים, כולל אזורי בראשית), כל אחד עם שורת הטבלה כלשונה, התוויות וההערות שבמפת נספח א'. ציטוטי פרק א-11 (טלפוני המתא\"מים) ופרק ב-09 (סעיפים 2, 4, 5, 7 במרחב שדות התעופה) הותאמו לנוסח ולחותמות המעודכנים.<br>
           <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
           <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
           <b style="color:var(--text)">v1.9 · 15.10.2026</b> — בחיפוש, תוצאות המפה מוצגות ראשונות עם שורת ספירה (מעל הצעות המקומות); מספר הגרסה מוצג גם בחלון ⓘ (בטלפון).<br>
@@ -593,7 +640,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
   <div class="m-sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" tabindex="-1">
     <div class="m-head"><h2 id="infoTitle">מידע והוראות שימוש</h2><button type="button" class="m-x" id="infoClose" aria-label="סגור">✕</button></div>
     <div class="m-body" id="infoBody">
-      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.2 · 16 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
+      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
       <div class="disclaim">⚠ השימוש בערכה זו באחריות המשתמש בלבד · המפה אינה מחליפה את הנוטמ הרשמי ומיועדת לעזרה בלבד · כלל אחריות ההטסה חלה על המטיס עצמו</div>
 
       <h3>מה זו המפה</h3>
@@ -1964,6 +2011,305 @@ const SHORT={K:'אזורי כטב"ם (ב-09)', KB:'אזורי בראשית (ב-0
   NR:'שמורות טבע — רט"ג', NP:'גנים לאומיים — רט"ג', NT_uas:'נוט"מ — כטב"מ ורחפנים', NT_pje:'נוט"מ — הצנחות', NT_frng:'נוט"מ — ירי ואימונים', NT_act:'נוט"מ — פעילות אווירית', NT_obst:'נוט"מ — מנופים', NT_ad:'נוט"מ — שדות תעופה', NT_other:'נוט"מ — כללי'};
 let INPA_UNMAPPED=[], INPA_EDITION=''; /* נטען בהמשך מ-data/inpa-zones.json */
 const groupsEl=document.getElementById('groups');
+/* ===== סידור אישי של רשימת השכבות — סדר וקבוצות משלי (נשמר במכשיר הזה בלבד) ===== */
+const LAY_KEY='icd-layers-layout-v1', LAY_MAXG=20, LAY_NAME=40;
+const LAY={editing:false, warn:false, gid:0};
+let layModel=null;     /* null = הסדר המקורי של המפה; אחרת {v:1, items:[מפתח שכבה | {id,n,o,c:[מפתחות]}]} — קבוצות בעומק אחד בלבד */
+const layDefault=()=>(compactMQ.matches?ORDER_C:ORDER).slice();
+const layName=s=>String(s==null?'':s).replace(/\s+/g,' ').trim().slice(0,LAY_NAME);
+const layIsG=x=>!!x&&typeof x==='object';
+const layNewId=()=>'g'+(++LAY.gid);
+function layNorm(m){          /* מנקה שמירה ישנה/פגומה: מפתחות לא מוכרים וכפילויות נזרקים; שכבות חדשות שאינן בשמירה מתווספות בסוף */
+  if(!m||m.v!==1||!Array.isArray(m.items)) return null;
+  const known=new Set(ORDER), seen=new Set(), items=[];
+  const take=k=>typeof k==='string'&&known.has(k)&&!seen.has(k)&&(seen.add(k),true);
+  m.items.forEach(it=>{
+    if(typeof it==='string'){ if(take(it)) items.push(it); }
+    else if(layIsG(it)&&Array.isArray(it.c)&&items.filter(layIsG).length<LAY_MAXG){
+      const c=it.c.filter(take);
+      items.push({id:layNewId(), n:layName(it.n)||'קבוצה', o:it.o!==false, c});
+    }
+  });
+  layDefault().forEach(k=>{ if(!seen.has(k)){ seen.add(k); items.push(k); } });
+  return {v:1,items};
+}
+function layLoad(){ try{ const raw=localStorage.getItem(LAY_KEY); return raw?layNorm(JSON.parse(raw)):null; }catch(_){ return null; } }
+function laySave(){
+  if(!layModel) return;
+  LAY.warn=false;
+  try{ localStorage.setItem(LAY_KEY,JSON.stringify({v:1,items:layModel.items.map(it=>layIsG(it)?{n:it.n,o:it.o,c:it.c}:it)})); }catch(_){ LAY.warn=true; }
+  try{ layersCtrl._update(); }catch(_){}
+}
+function layReset(){ layModel=null; try{ localStorage.removeItem(LAY_KEY); }catch(_){} LAY.warn=false; try{ layersCtrl._update(); }catch(_){} }
+const layEnsure=()=>layModel||(layModel={v:1,items:layDefault()});
+layModel=layLoad();
+const layItems=()=>layModel?layModel.items:layDefault();
+const layGroupsOf=()=>layModel.items.filter(layIsG);
+const layFindG=id=>layModel&&layModel.items.find(x=>layIsG(x)&&x.id===id);
+function layLoc(k){
+  const t=layModel.items.indexOf(k); if(t>=0) return {arr:layModel.items,i:t,g:null};
+  for(const g of layGroupsOf()){ const i=g.c.indexOf(k); if(i>=0) return {arr:g.c,i,g}; }
+  return null;
+}
+function layStep(ref,dir){          /* ref: מפתח שכבה או אובייקט קבוצה; מחליף עם השכן באותו מכל */
+  let arr,i;
+  if(typeof ref==='string'){ const l=layLoc(ref); if(!l) return; arr=l.arr; i=l.i; } else { arr=layModel.items; i=arr.indexOf(ref); }
+  const j=i+dir; if(i<0||j<0||j>=arr.length) return;
+  const t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+}
+function layToGroup(k,gid){
+  const l=layLoc(k); if(!l) return;
+  l.arr.splice(l.i,1);
+  const g=gid?layFindG(gid):null;
+  if(g) g.c.push(k);
+  else layModel.items.splice(l.g?layModel.items.indexOf(l.g)+1:layModel.items.length,0,k);
+}
+const layCatLabel=k=>SHORT[k]||CATS[k].label;
+
+/* ---- הרשימה הרגילה: מניחים את שורות הקטגוריות לפי הסדר והקבוצות של המשתמש ---- */
+function layPlace(els,cnt,filter){
+  const frag=document.createDocumentFragment();
+  layItems().forEach(it=>{
+    if(!layIsG(it)){ if(els[it]) frag.appendChild(els[it]); return; }
+    const kids=it.c.filter(k=>els[k]);
+    if(filter&&!kids.length) return;           /* בחיפוש: קבוצה בלי תוצאות מוסתרת */
+    frag.appendChild(layGroupEl(it,kids,els,cnt,filter));
+  });
+  groupsEl.appendChild(frag);
+  const eb=document.getElementById('layEdit'); if(eb) eb.textContent=layModel?'⇅ סדר את השכבות (הסדר שלי)':'⇅ סדר את השכבות · קבוצות משלי';
+}
+function layGroupEl(g,kids,els,cnt,filter){
+  const d=document.createElement('div'); d.className='ugrp'+((filter||g.o)?' open':''); d.dataset.gid=g.id;
+  const total=kids.reduce((s,k)=>s+(cnt[k]||0),0);
+  const b=document.createElement('button'); b.type='button';
+  b.innerHTML='<span class="chev" aria-hidden="true"></span><span class="lbl">📁 '+esc(g.n)+'</span><span class="cnt">'+total+'</span><span class="vis" data-g="'+esc(g.id)+'" title="הצג / הסתר את כל שכבות הקבוצה" style="opacity:1">👁</span>';
+  b.querySelector('.vis').onclick=ev=>{
+    ev.stopPropagation();
+    const on=g.c.filter(k=>groups[k]&&map.hasLayer(groups[k])).length===g.c.length&&g.c.length>0;
+    g.c.forEach(k=>{ const L0=groups[k]; if(!L0) return; if(on){ if(map.hasLayer(L0)) map.removeLayer(L0); } else if(!map.hasLayer(L0)) L0.addTo(map); });
+    syncVis();
+  };
+  b.onclick=()=>{ d.classList.toggle('open'); if(!filter){ g.o=d.classList.contains('open'); laySave(); } };
+  d.appendChild(b);
+  const body=document.createElement('div'); body.className='ugbody';
+  kids.forEach(k=>body.appendChild(els[k]));
+  if(!kids.length&&!filter){ const e=document.createElement('div'); e.className='noteblock'; e.textContent='הקבוצה ריקה. לחצו על "סדר את השכבות" כדי להכניס אליה שכבות.'; body.appendChild(e); }
+  d.appendChild(body);
+  setTimeout(syncVis,0);
+  return d;
+}
+function syncVis(){      /* סנכרון עינית ההצגה במקרא עם בורר השכבות (גם עיניות הקבוצות) */
+  document.querySelectorAll('#groups .vis[data-k]').forEach(el=>{ const k=el.dataset.k; if(groups[k]) el.style.opacity=map.hasLayer(groups[k])?1:.3; });
+  document.querySelectorAll('#groups .vis[data-g]').forEach(el=>{
+    const g=layFindG(el.dataset.g); if(!g) return;
+    const n=g.c.filter(k=>groups[k]&&map.hasLayer(groups[k])).length;
+    el.style.opacity=!n?.3:(n===g.c.length?1:.65);
+  });
+}
+
+/* ---- מצב סידור ---- */
+function laySay(t){ const l=document.getElementById('orgLive'); if(l) l.textContent=t; }
+function layWarnSync(){ const w=document.getElementById('orgWarn'); if(w) w.hidden=!LAY.warn; }
+function layRowCat(k,pos){
+  const lab=layCatLabel(k), c=CATS[k].color;
+  const r=document.createElement('div'); r.className='org-row'; r.dataset.k=k; r.setAttribute('role','listitem');
+  r.innerHTML='<button type="button" class="org-h" aria-label="גרירה להזזה: '+esc(lab)+'" title="גרור להזזה">☰</button><span class="swatch" style="background:'+c+'"></span><span class="org-n" style="color:'+c+'">'+esc(lab)+'</span>'+
+    '<span class="org-mv"><button type="button" class="org-up" data-a="up" aria-label="הזז למעלה: '+esc(lab)+'"'+(pos.first?' disabled':'')+'>▲</button><button type="button" class="org-dn" data-a="dn" aria-label="הזז למטה: '+esc(lab)+'"'+(pos.last?' disabled':'')+'>▼</button></span>'+
+    '<span class="org-sel" title="העבר לקבוצה"><span aria-hidden="true">📁</span><select aria-label="העבר לקבוצה: '+esc(lab)+'"></select></span>';
+  const sel=r.querySelector('select');
+  const add=(v,t,s)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; if(s) o.selected=true; sel.appendChild(o); };
+  add('','ללא קבוצה',!pos.gid);
+  layGroupsOf().forEach(g=>add(g.id,g.n,g.id===pos.gid));
+  return r;
+}
+function layRowGroup(g,pos){
+  const w=document.createElement('div'); w.className='org-grp'; w.dataset.gid=g.id; w.setAttribute('role','listitem');
+  w.innerHTML='<div class="org-row org-grow"><button type="button" class="org-h" aria-label="גרירה להזזה: קבוצה '+esc(g.n)+'" title="גרור להזזה">☰</button><span aria-hidden="true">📁</span>'+
+    '<input type="text" class="org-name" maxlength="'+LAY_NAME+'" value="'+esc(g.n)+'" aria-label="שם הקבוצה" autocomplete="off" enterkeyhint="done">'+
+    '<span class="org-mv"><button type="button" class="org-up" data-a="up" aria-label="הזז את הקבוצה למעלה: '+esc(g.n)+'"'+(pos.first?' disabled':'')+'>▲</button><button type="button" class="org-dn" data-a="dn" aria-label="הזז את הקבוצה למטה: '+esc(g.n)+'"'+(pos.last?' disabled':'')+'>▼</button></span>'+
+    '<button type="button" class="org-del" aria-label="מחיקת הקבוצה: '+esc(g.n)+'" title="מחק קבוצה (השכבות נשארות ברשימה)">🗑</button></div>';
+  const body=document.createElement('div'); body.className='org-body'; body.setAttribute('role','list');
+  g.c.forEach((k,i)=>body.appendChild(layRowCat(k,{first:i===0,last:i===g.c.length-1,gid:g.id})));
+  const e=document.createElement('div'); e.className='org-empty'; e.textContent='גררו לכאן שכבות, או בחרו קבוצה בכפתור 📁 שבשורת השכבה'; e.hidden=g.c.length>0;
+  body.appendChild(e); w.appendChild(body);
+  return w;
+}
+function layRenderEdit(focusSel){
+  const M=layEnsure(); groupsEl.innerHTML='';
+  const root=document.createElement('div'); root.className='org';
+  root.innerHTML='<div class="org-bar"><button type="button" id="orgNew">➕ קבוצה חדשה</button><button type="button" id="orgReset">↺ חזרה לסדר המקורי</button><button type="button" id="orgDone" class="done">✔ סיום</button></div>'+
+    '<div class="org-help">לחצו על ▲ ▼ או גררו את ☰ כדי לסדר. כפתור 📁 מעביר שכבה לקבוצה. השינויים נשמרים אוטומטית <b>במכשיר הזה בלבד</b>. הסדר משפיע על הרשימה, לא על מה שמצויר מעל מה במפה.</div>'+
+    '<div class="org-warn" id="orgWarn" hidden>⚠ הדפדפן חוסם שמירה במכשיר הזה — הסדר יחזור לברירת המחדל כשסוגרים את המפה.</div>';
+  const list=document.createElement('div'); list.id='orgList'; list.setAttribute('role','list');
+  M.items.forEach((it,i)=>{ const pos={first:i===0,last:i===M.items.length-1,gid:''}; list.appendChild(layIsG(it)?layRowGroup(it,pos):layRowCat(it,pos)); });
+  root.appendChild(list);
+  const live=document.createElement('div'); live.id='orgLive'; live.className='sr-only'; live.setAttribute('role','status'); live.setAttribute('aria-live','polite'); root.appendChild(live);
+  groupsEl.appendChild(root); layWarnSync();
+  layWire(root,list);
+  if(focusSel){ const t=root.querySelector(focusSel); if(t){ try{ t.focus({preventScroll:true}); t.scrollIntoView({block:'nearest'}); }catch(_){} } }
+}
+function layRefocus(ref,dir){      /* אחרי הזזה: ממשיכים מאותו כפתור כדי שאפשר ללחוץ שוב ושוב */
+  const sel=typeof ref==='string'?'.org-row[data-k="'+ref+'"] ':'.org-grp[data-gid="'+ref.id+'"]>.org-row ';
+  const root=document.getElementById('orgList'); if(!root) return;
+  const a=root.querySelector(sel+(dir<0?'.org-up':'.org-dn')), b=root.querySelector(sel+(dir<0?'.org-dn':'.org-up'));
+  const t=(a&&!a.disabled)?a:b; if(t){ try{ t.focus({preventScroll:true}); t.scrollIntoView({block:'nearest'}); }catch(_){} }
+}
+function layCommitDom(list){        /* קורא את הסדר מה-DOM אחרי גרירה; אם משהו לא מסתדר — לא נוגעים במודל */
+  const items=[], flat=[];
+  [...list.children].forEach(ch=>{
+    if(ch.classList.contains('org-row')){ items.push(ch.dataset.k); flat.push(ch.dataset.k); }
+    else if(ch.classList.contains('org-grp')){
+      const g=layFindG(ch.dataset.gid); if(!g) return;
+      const c=[...ch.querySelector('.org-body').children].filter(x=>x.classList.contains('org-row')).map(x=>x.dataset.k);
+      items.push({id:g.id,n:g.n,o:g.o,c}); flat.push(...c);
+    }
+  });
+  if(flat.length!==ORDER.length||new Set(flat).size!==ORDER.length||flat.some(k=>!CATS[k])) return false;
+  layModel.items=items; laySave(); return true;
+}
+function layWire(root,list){
+  let armed=null, armT=0;
+  const disarm=()=>{ if(armed){ armed.classList.remove('armed'); armed.textContent=armed.dataset.t0; armed=null; } clearTimeout(armT); };
+  const arm=(b,txt)=>{ disarm(); armed=b; b.dataset.t0=b.textContent; b.textContent=txt; b.classList.add('armed'); armT=setTimeout(disarm,4000); };
+  root.addEventListener('click',ev=>{
+    const t=ev.target.closest&&ev.target.closest('button'); if(!t) return;
+    if(t.id==='orgNew'){
+      disarm();
+      if(layGroupsOf().length>=LAY_MAXG){ laySay('אפשר עד '+LAY_MAXG+' קבוצות.'); const w=document.getElementById('orgWarn'); if(w){ w.textContent='אפשר ליצור עד '+LAY_MAXG+' קבוצות. מחקו קבוצה כדי להוסיף אחרת.'; w.hidden=false; } return; }
+      const g={id:layNewId(),n:'קבוצה חדשה',o:true,c:[]}; layModel.items.unshift(g); laySave();
+      document.getElementById('sidebody').scrollTop=0; layRenderEdit();
+      const inp=document.querySelector('.org-grp[data-gid="'+g.id+'"] .org-name'); if(inp){ inp.focus(); inp.select(); }
+      laySay('נוספה קבוצה חדשה. כתבו לה שם.'); return;
+    }
+    if(t.id==='orgDone'){ disarm(); layExit(); return; }
+    if(t.id==='orgReset'){
+      if(armed!==t){ arm(t,'לאפס? לחצו שוב'); return; }
+      disarm(); layReset(); layRenderEdit(); laySay('הסדר חזר לברירת המחדל.'); return;
+    }
+    if(t.classList.contains('org-del')){
+      if(armed!==t){ arm(t,'למחוק? שוב'); return; }
+      disarm();
+      const w=t.closest('.org-grp'), g=layFindG(w.dataset.gid); if(!g) return;
+      const at=layModel.items.indexOf(g); layModel.items.splice(at,1,...g.c); laySave(); layRenderEdit(); laySay('הקבוצה נמחקה. השכבות שלה נשארו ברשימה.'); return;
+    }
+    if(t.dataset.a==='up'||t.dataset.a==='dn'){
+      if(t.disabled) return;
+      const dir=t.dataset.a==='up'?-1:1, row=t.closest('.org-row'), ref=row.classList.contains('org-grow')?layFindG(row.parentNode.dataset.gid):row.dataset.k;
+      if(!ref) return;
+      layStep(ref,dir); laySave(); layRenderEdit(); layRefocus(ref,dir);
+      laySay(dir<0?'הוזז למעלה':'הוזז למטה');
+    }
+  });
+  list.addEventListener('change',ev=>{
+    const s=ev.target; if(!(s&&s.tagName==='SELECT')) return;
+    const k=s.closest('.org-row').dataset.k; layToGroup(k,s.value); laySave(); layRenderEdit();
+    const r=document.querySelector('.org-row[data-k="'+k+'"] select'); if(r){ try{ r.focus({preventScroll:true}); r.scrollIntoView({block:'nearest'}); }catch(_){} }
+    laySay(s.value?'השכבה הועברה לקבוצה':'השכבה הוצאה מהקבוצה');
+  });
+  list.addEventListener('input',ev=>{
+    const i=ev.target; if(!(i&&i.classList&&i.classList.contains('org-name'))) return;
+    const g=layFindG(i.closest('.org-grp').dataset.gid); if(!g) return;
+    g.n=layName(i.value)||'קבוצה'; laySave(); layWarnSync();
+  });
+  list.addEventListener('focusout',ev=>{        /* שם ריק/עם רווחים בלבד מתוקן ל"קבוצה" רק ביציאה מהשדה — כדי לא לקפוץ באמצע הקלדה */
+    const i=ev.target; if(!(i&&i.classList&&i.classList.contains('org-name'))) return;
+    const g=layFindG(i.closest('.org-grp').dataset.gid); if(!g) return;
+    const n=layName(i.value)||'קבוצה'; if(i.value!==n) i.value=n; g.n=n; laySave(); layWarnSync();
+    list.querySelectorAll('select').forEach(s=>{ [...s.options].forEach(o=>{ if(o.value===g.id) o.textContent=g.n; }); });
+  });
+  list.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.classList&&ev.target.classList.contains('org-name')){ ev.preventDefault(); ev.target.blur(); } });
+  /* ---- גרירה (עכבר / מגע): ה-DOM מסודר תוך כדי גרירה, והמודל נקבע בעזיבה ---- */
+  let d=null; const sb=document.getElementById('sidebody');
+  const over=()=>{
+    if(!d) return;
+    const {x,y,unit,grp}=d, t=document.elementFromPoint(x,y); if(!t||unit.contains(t)) return;
+    const row=t.closest('.org-row'), body=t.closest('.org-body');
+    const mid=el=>{ const r=el.getBoundingClientRect(); return r.top+r.height/2; };
+    let ref=null, after=false, into=null, first=false;
+    if(row&&row.dataset.k){
+      const par=row.parentNode;
+      ref=(grp&&par.classList.contains('org-body'))?par.parentNode:row; after=y>mid(ref);
+    }else if(row&&row.classList.contains('org-grow')){
+      const W=row.parentNode; if(W===unit) return;
+      const lower=y>mid(row);
+      if(grp){ ref=W; after=lower; } else if(lower){ into=W.querySelector('.org-body'); first=true; } else { ref=W; after=false; }
+    }else if(body&&!grp){ into=body; }
+    else if(!row&&!body){
+      const lr=list.lastElementChild, lb=list.getBoundingClientRect();
+      if(lr&&lr!==unit&&y>lr.getBoundingClientRect().bottom&&x>=lb.left&&x<=lb.right){ list.appendChild(unit); fix(); }
+      return;
+    }
+    if(into){ const e=into.querySelector('.org-empty'); into.insertBefore(unit,first?into.firstChild:e); fix(); return; }
+    if(ref){
+      const par=ref.parentNode, nxt=after?ref.nextSibling:ref;
+      if(nxt===unit||(after?ref.nextSibling===unit:ref.previousSibling===unit)) return;
+      par.insertBefore(unit,nxt); fix();
+    }
+  };
+  const fix=()=>{ list.querySelectorAll('.org-body').forEach(b=>{ const e=b.querySelector('.org-empty'); if(e) e.hidden=!!b.querySelector('.org-row'); }); };
+  const loop=()=>{
+    if(!d) return;
+    const r=sb.getBoundingClientRect(), edge=60; let dy=0;
+    if(d.y<r.top+edge) dy=-Math.ceil((r.top+edge-d.y)/4); else if(d.y>r.bottom-edge) dy=Math.ceil((d.y-(r.bottom-edge))/4);
+    if(dy){ sb.scrollTop+=Math.max(-18,Math.min(18,dy)); over(); }
+    d.raf=requestAnimationFrame(loop);
+  };
+  list.addEventListener('pointerdown',ev=>{
+    const h=ev.target.closest&&ev.target.closest('.org-h'); if(!h||(ev.pointerType==='mouse'&&ev.button>0)) return;
+    ev.preventDefault();
+    const row=h.closest('.org-row'), unit=row.classList.contains('org-grow')?row.parentNode:row;
+    d={unit,grp:unit.classList.contains('org-grp'),pid:ev.pointerId,x:ev.clientX,y:ev.clientY,raf:0};
+    try{ list.setPointerCapture(ev.pointerId); }catch(_){}
+    unit.classList.add('org-drag'); list.classList.add('org-dragging'); d.raf=requestAnimationFrame(loop);
+  });
+  list.addEventListener('pointermove',ev=>{ if(!d||ev.pointerId!==d.pid) return; d.x=ev.clientX; d.y=ev.clientY; over(); });
+  const end=ev=>{
+    if(!d||ev.pointerId!==d.pid) return;
+    cancelAnimationFrame(d.raf); d.unit.classList.remove('org-drag'); list.classList.remove('org-dragging');
+    try{ list.releasePointerCapture(d.pid); }catch(_){}
+    d=null; const ok=layCommitDom(list); layRenderEdit(); laySay(ok?'הסדר עודכן':'');
+  };
+  list.addEventListener('pointerup',end); list.addEventListener('pointercancel',end);
+  list.addEventListener('dragstart',ev=>ev.preventDefault());
+}
+function layEnter(){
+  LAY.editing=true; layEnsure(); document.getElementById('paneLayers').classList.add('laying');
+  groupsEl.innerHTML=''; renderList(null); document.getElementById('sidebody').scrollTop=0;
+  try{ document.getElementById('orgDone').focus({preventScroll:true}); }catch(_){}
+}
+function layExit(){
+  /* אם בסוף הסידור הכול זהה לסדר המקורי ובלי קבוצות — חוזרים למצב ברירת המחדל (בלי שמירה) */
+  if(layModel&&!layModel.items.some(layIsG)){ const dflt=layDefault(); if(layModel.items.length===dflt.length&&layModel.items.every((k,i)=>k===dflt[i])) layReset(); }
+  LAY.editing=false; document.getElementById('paneLayers').classList.remove('laying');
+  renderList(curFilter()); document.getElementById('sidebody').scrollTop=0;
+  try{ const b=document.getElementById('layEdit'); if(b) b.focus({preventScroll:true}); }catch(_){}
+}
+document.getElementById('layEdit').onclick=layEnter;
+/* ---- גם בורר השכבות שעל המפה (מחשב) מציג את הסדר והקבוצות של המשתמש ---- */
+(function(){
+  const ctl=layersCtrl, orig=ctl._update; if(typeof orig!=='function') return;
+  const keyOf=new Map(); Object.keys(groups).forEach(k=>keyOf.set(L.stamp(groups[k]),k));
+  function arrange(){
+    if(!layModel) return;
+    try{
+      const list=ctl._overlaysList; if(!list) return;
+      const lab=new Map();
+      [...list.children].forEach(lb=>{ const inp=lb.querySelector&&lb.querySelector('input'); if(inp&&inp.layerId!=null){ const k=keyOf.get(inp.layerId); if(k) lab.set(k,lb); } });
+      if(lab.size<2) return;
+      const frag=document.createDocumentFragment();
+      layModel.items.forEach(it=>{
+        if(!layIsG(it)){ if(lab.has(it)) frag.appendChild(lab.get(it)); return; }
+        const ks=it.c.filter(k=>lab.has(k)); if(!ks.length) return;
+        const h=document.createElement('div'); h.className='lc-grp'; h.textContent='📁 '+it.n; frag.appendChild(h);
+        ks.forEach(k=>{ const lb=lab.get(k); lb.classList.add('lc-in'); frag.appendChild(lb); });
+      });
+      list.appendChild(frag);
+    }catch(_){}
+  }
+  ctl._update=function(){ const r=orig.apply(this,arguments); arrange(); return r; };
+  ctl._update();
+})();
+
 const HE_COLLATOR=new Intl.Collator('he');
 const loadSt={nt:'idle', inpa:'idle'};   // מצב טעינה: נוט"מים / שכבות רט"ג (idle · loading · ok · err)
 let swDone=false;                         // ה-Service Worker נרשם פעם אחת, אחרי שטעינת הנתונים הראשונית הסתיימה
@@ -2145,8 +2491,9 @@ groupsEl.addEventListener('click',async ev=>{
   finally{ RTG_BUSY=false; b.disabled=false; if(st){ st.setAttribute('aria-live','polite'); st.textContent=msg; } }
 });
 function renderListCore(filter){
+  if(LAY.editing){ if(!groupsEl.querySelector('.org')) layRenderEdit(); return; }
   groupsEl.innerHTML="";
-  const compact=compactMQ.matches;
+  const compact=compactMQ.matches, CATEL={}, CATN={};
   (compact?ORDER_C:ORDER).forEach(k=>{
     const isNt=k.indexOf('NT_')===0;
     let items=isNt?ntGroupItems(k,filter):AREAS.filter(a=>a.cat===k && (!filter || (a.code+" "+(a.dispCode||"")+" "+a.name).toLowerCase().includes(filter)));
@@ -2234,8 +2581,9 @@ function renderListCore(filter){
       wrap.appendChild(nb);
     }
     g.appendChild(wrap);
-    groupsEl.appendChild(g);
+    CATEL[k]=g; CATN[k]=items.length;
   });
+  layPlace(CATEL,CATN,filter);
   if(filter&&!groupsEl.children.length){ const m=document.createElement('div'); m.className='noteblock'; m.id='noMatch'; m.textContent='לא נמצאו אתרים תואמים'; groupsEl.appendChild(m); }
   syncInpaErr();
 }
@@ -2252,7 +2600,6 @@ function refreshNtGroups(){
   ntGroupsSig=sig; renderList(f);
 }
 /* סנכרון עינית ההצגה במקרא עם בורר השכבות */
-function syncVis(){ document.querySelectorAll('#groups .vis').forEach(el=>{ const k=el.dataset.k; if(groups[k]) el.style.opacity=map.hasLayer(groups[k])?1:.3; }); }
 map.on('overlayadd overlayremove',syncVis);
 map.on('overlayremove',()=>{ HL.validate(); refreshCard(); });     // קטגוריה כובתה — פריטים שלה יוצאים מכרטיס פתוח (נסגר אם לא נשאר דבר)
 /* ---- שמורות טבע וגנים לאומיים (נספח ה' + גבולות רט"ג) — נטענות בנפרד כי הקובץ גדול ---- */
