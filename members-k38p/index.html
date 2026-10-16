@@ -221,7 +221,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
 .rtgbtn:disabled{opacity:.6; cursor:default}
 .rtgbtn:focus-visible,.extbtn:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
 .extbtn .ext{font-size:11px; opacity:.85}
-.rtgdot{display:block; width:16px; height:16px; border-radius:50%; background:rgba(255,179,71,.55); border:2px dashed #fff; box-sizing:border-box}
+.rtgdot{display:block; width:16px; height:16px; margin:6px; border-radius:50%; background:rgba(255,179,71,.55); border:2px dashed #fff; box-sizing:border-box}
 .rtgst{font-size:12px; color:var(--dim); min-height:16px; margin-top:2px}
 #paneToday .td-note{margin-top:8px; padding:10px 14px 16px; border-top:1px solid var(--line); font-size:10.5px; line-height:1.65; color:var(--dim)}
 #paneToday .ntx{border-bottom:1px solid var(--line)}
@@ -1948,82 +1948,116 @@ function ntGroupItems(k,filter){
   return out.sort((x,y)=>HE_COLLATOR.compare(x.it.name||'',y.it.name||''));
 }
 /* ===== אתרי רט"ג ללא מיקום וגבול בפמ"ת ובקבצי רט"ג (נספח ה'): נקודה משוערת לפי שם האתר בלבד =====
-   הנקודה מחיפוש Google לפי השם (אותו שירות של חיפוש הכתובות), נבדקת (בתוך ישראל + התאמה של מילה מהשם), ומסומנת במפה כ"משוערת — אינה גבול".
-   את גודל הפוליגון המדויק יש לבדוק באתר רט"ג: קישור בלשונית חדשה (כמו מזג האוויר — המפה נשארת פתוחה). שום מיקום אינו נשמר בקוד — רק במטמון של הדפדפן. */
+   הנקודה מחיפוש Google לפי השם (אותו שירות של חיפוש הכתובות); התוצאה נבדקת (כתובת בישראל + התאמה של מילים שלמות מהשם לשם שחזר)
+   ומסומנת כ"משוערת — אינה גבול". את הגבול המדויק יש לבדוק באתר רט"ג: קישור בלשונית חדשה (כמו מזג האוויר — המפה נשארת פתוחה).
+   בקוד אין שום מיקום; במטמון של הדפדפן נשמרים רק קואורדינטות וזמן (30 יום). */
 const RTG_SITE_URL='https://www.parks.org.il/';
-const RTG_LINK='<a class="extbtn" href="'+RTG_SITE_URL+'" target="_blank" rel="noopener noreferrer" aria-label="אתר רט&quot;ג — נפתח בלשונית חדשה, המפה נשארת פתוחה">אתר רט"ג — בדיקת הגבולות המדויקים <span class="ext" aria-hidden="true">↗</span></a>';
-const RTG_NO_POS=MAPNOTE('אין לאתר זה מיקום או גבול בפמ"ת ובקבצי רט"ג.');
-const RTG_APPROX_NOTE=MAPNOTE('נקודה במפה (אם סומנה) היא משוערת לפי שם האתר בלבד (חיפוש Google) — היא אינה גבול. את גודל הפוליגון המדויק של סגירת רט"ג יש לבדוק באתר רט"ג.');
-const RTG_ERR={nogoogle:'חיפוש Google אינו זמין כרגע — אפשר לבדוק את האתר באתר רט"ג.', nomatch:'לא נמצא מיקום מתאים לפי השם — יש לבדוק באתר רט"ג.', fail:'החיפוש נכשל כרגע — נסו שוב מאוחר יותר, או בדקו באתר רט"ג.'};
+const RTG_LINK='<a class="extbtn" href="'+RTG_SITE_URL+'" target="_blank" rel="noopener noreferrer" aria-label="אתר רט&quot;ג — נפתח בלשונית חדשה, המפה נשארת פתוחה">אתר רט"ג <span class="ext" aria-hidden="true">↗</span></a>';
+const RTG_NO_POS=MAPNOTE('בטבלת נספח ה\' בפמ"ת אין מיקום או גבול לאתר זה, ובקובץ רט"ג שבמפה אין לו גבול — לכן הוא אינו משורטט.');
+const RTG_APPROX_NOTE=MAPNOTE('נקודה במפה (אם סומנה) היא משוערת לפי שם האתר בלבד (חיפוש Google) — היא אינה גבול. את הגבול המדויק של סגירת רט"ג יש לבדוק באתר רט"ג.');
+const RTG_ERR={nogoogle:'חיפוש Google אינו זמין כרגע — את הגבול המדויק אפשר לבדוק באתר רט"ג.', nomatch:'לא נמצא מיקום מתאים לפי השם — יש לבדוק באתר רט"ג.', fail:'החיפוש נכשל כרגע — נסו שוב מאוחר יותר, או בדקו באתר רט"ג.', busy:'חיפוש אחר מתבצע — נא להמתין.'};
 const RTG_ISR={s:29.3,w:34.1,n:33.5,e:36.0};
-const RTG_STOP=new Set(['שמורת','שמורה','נחל','נחלי','הר','ואדי','אזור','איי','חוף','אתר','ים','מאגר','גן','לאומי','עין','בריכת','סובב','חולות','בית','תל','כפר','מעיין','אל','אום','אבו','בר','חי','רכס','מצוק','גבעת','מכתש','ושמורת','ו']);
+const RTG_STOP=new Set(['שמורת','שמורה','נחל','נחלי','אזור','איי','חוף','אתר','מאגר','לאומי','עין','בריכת','סובב','חולות','בית','תל','כפר','מעיין','אום','אבו','רכס','מצוק','גבעת','מכתש','טבע','על','ים','הר','גן','אל','בר','חי']);
 const rtgNorm=t=>String(t||'').replace(/[֑-ׇ]/g,'').replace(/["'`״׳’‘“”]/g,'').replace(/[-–—־,.()\/]/g,' ').replace(/\s+/g,' ').trim();
-const rtgTokens=n=>{ const t=rtgNorm(n).split(' ').filter(x=>x.length>=2), k=t.filter(x=>!RTG_STOP.has(x)); return k.length?k:t; };
-const rtgMatches=(name,found)=>{ const f=rtgNorm(found); return rtgTokens(name).some(t=>f.includes(t)); };
-const RTG_KEY='icdRtgPts1';
+const rtgPre=w=>w.replace(/^[והבלמש](?=.{3,})/,'');     /* אות שימוש אחת בתחילת מילה (ה/ו/ב/ל/מ/ש) */
+const RTG_TYPE={'נחל':1,'נחלי':1,'ואדי':1,'הר':2,'רכס':2,'גבעת':2,'מצוק':2,'מכתש':2,'שמורת':3,'שמורה':3,'מאגר':4,'בריכת':4,'מעיין':5,'עין':5,'חוף':6,'איי':6,'ים':6};
+const rtgTypeOf=w=>RTG_TYPE[w]||RTG_TYPE[w.slice(1)]||0;
+const rtgTypes=n=>{ const t=new Set(); rtgNorm(n).split(' ').forEach(w=>{ const k=rtgTypeOf(w); if(k) t.add(k); }); return t; };     /* סוג המקום (נחל/ואדי, הר, שמורה, מאגר...) */
+const rtgTokens=n=>rtgNorm(n).split(' ').filter(w=>w.length>=3&&!RTG_STOP.has(w)).map(rtgPre).filter(x=>x.length>=3&&!RTG_STOP.has(x));
+const rtgMatches=(name,found)=>{
+  const T=rtgTokens(name), W=rtgNorm(found).split(' ').filter(Boolean);
+  const TY=rtgTypes(name); if(TY.size){ const FT=rtgTypes(found); if(![...TY].some(t=>FT.has(t))) return false; }     /* אם בשם יש סוג מקום (נחל/הר/מאגר...) — גם השם שחזר חייב להיות מאותו סוג */
+  if(!T.length) return rtgNorm(name)===rtgNorm(found);     /* שם בלי מילה ייחודית (למשל "נחל אל-על"): רק שם זהה */
+  const Wp=new Set(W.concat(W.map(rtgPre))), hit=T.filter(t=>Wp.has(t)), top=Math.max.apply(null,T.map(t=>t.length));
+  return hit.length>=Math.ceil(T.length/2)&&T.some(t=>t.length===top&&Wp.has(t));     /* לפחות חצי מהמילים, כולל המילה הארוכה ביותר — מילים שלמות בלבד */
+};
+const RTG_KEY='icdRtgPts2', RTG_TTL=30*864e5;
 let RTG_CACHE={}; try{ RTG_CACHE=JSON.parse(localStorage.getItem(RTG_KEY)||'{}')||{}; }catch(e){ RTG_CACHE={}; }
 const rtgSave=()=>{ try{ localStorage.setItem(RTG_KEY,JSON.stringify(RTG_CACHE)); }catch(e){} };
-const RTG_MK={};
+const rtgFresh=c=>Array.isArray(c)&&isFinite(c[1])&&Date.now()-c[1]<RTG_TTL;
+const rtgCached=k=>{ const c=RTG_CACHE[k]; return (Array.isArray(c)&&c[0]!=='x'&&isFinite(c[0])&&isFinite(c[1])&&isFinite(c[2])&&Date.now()-c[2]<RTG_TTL)?c:null; };
+const rtgRejected=k=>{ const c=RTG_CACHE[k]; return Array.isArray(c)&&c[0]==='x'&&rtgFresh(c); };     /* ["x",זמן] = המשתמש הסיר נקודה שגויה */
+const RTG_MK={}, RTG_V={}, RTG_SESS={}; let RTG_BUSY=false;
 const rtgName=u=>u.ax?u.ax[1][1]:u.name;
+const rtgKey=u=>rtgNorm(rtgName(u));
+const rtgSites=k=>INPA_UNMAPPED.filter(x=>rtgKey(x)===k);
+const rtgFiltered=f=>INPA_UNMAPPED.filter(u=>!f||((u.id+' '+u.name+' '+(u.ax?u.ax[1][2]:(u.note||''))).toLowerCase().includes(f)));
 function rtgPlaceLib(){
-  return new Promise(res=>{ let n=0; (function w(){
-    if(window.google&&google.maps&&google.maps.importLibrary){ google.maps.importLibrary('places').then(p=>res(p&&p.Place&&p.Place.searchByText?p.Place:null)).catch(()=>res(null)); }
-    else if(++n>40) res(null); else setTimeout(w,250);   /* עד ~10 שניות: Google נטען אוטומטית אחרי טעינת הנתונים */
+  return new Promise(res=>{ let n=0, kicked=false; (function w(){
+    if(window.google&&google.maps&&google.maps.importLibrary){ google.maps.importLibrary('places').then(p=>res(p&&p.Place&&p.Place.searchByText?p.Place:null)).catch(()=>res(null)); return; }
+    if(!kicked){ kicked=true; try{ document.getElementById('q').dispatchEvent(new Event('focus')); }catch(e){} }     /* מפעיל את טעינת Google של חיפוש הכתובות אם טרם נטען */
+    if(++n>80) res(null); else setTimeout(w,250);     /* עד ~20 שניות */
   })(); });
 }
 async function rtgFind(u){
-  const id=u.id, name=rtgName(u);
-  if(RTG_CACHE[id]) return RTG_CACHE[id];
+  const k=rtgKey(u), name=rtgName(u);
+  const c=rtgCached(k); if(c) return {la:c[0],lo:c[1]};
+  if(rtgRejected(k)||RTG_SESS[k]) return {err:'nomatch'};
   const Place=await rtgPlaceLib(); if(!Place) return {err:'nogoogle'};
   try{
     const r=await Place.searchByText({textQuery:name+', ישראל', fields:['displayName','location','formattedAddress'], region:'il', language:'he', maxResultCount:3, locationBias:{south:RTG_ISR.s,west:RTG_ISR.w,north:RTG_ISR.n,east:RTG_ISR.e}});
-    const ps=(r&&r.places)||[];
-    for(const p of ps){
+    for(const p of ((r&&r.places)||[])){
       const loc=p.location, la=loc&&(typeof loc.lat==='function'?loc.lat():loc.lat), lo=loc&&(typeof loc.lng==='function'?loc.lng():loc.lng);
       if(!isFinite(la)||!isFinite(lo)||la<RTG_ISR.s||la>RTG_ISR.n||lo<RTG_ISR.w||lo>RTG_ISR.e) continue;
       const gn=String(p.displayName||''), ga=String(p.formattedAddress||'');
-      if(!rtgMatches(name,gn+' '+ga)) continue;
-      const v=[+(+la).toFixed(5),+(+lo).toFixed(5),gn,ga]; RTG_CACHE[id]=v; rtgSave(); return v;
+      if(ga&&!/ישראל|Israel/.test(ga)) continue;     /* מסגרת הקואורדינטות כוללת גם שטחי מדינות שכנות */
+      if(!rtgMatches(name,gn)) continue;
+      RTG_CACHE[k]=[+(+la).toFixed(5),+(+lo).toFixed(5),Date.now()]; rtgSave();
+      return {la:+(+la).toFixed(5),lo:+(+lo).toFixed(5),gn,ga};
     }
-    return {err:'nomatch'};
+    RTG_SESS[k]=1; return {err:'nomatch'};
   }catch(e){ return {err:'fail'}; }
 }
-const rtgHtml=(u,v)=>'<div class="pp-note" style="border:0;margin:0;padding:0">'+inpaQuote(u)+'<br>'+RTG_APPROX_NOTE+'<br>'+MAPNOTE('Google מצא: '+esc(v[2])+(v[3]?' · '+esc(v[3]):''))+'<div class="rtgact">'+RTG_LINK+'</div></div><div class="pp-note">'+genRules('NR',false)+'</div>';
-function rtgOpen(u,v){
-  const ll=L.latLng(v[0],v[1]);
-  map.setView(ll,Math.max(map.getZoom(),12),{animate:false});
-  whenSettled(()=>{ InfoCard.show(ll,rtgName(u),rtgHtml(u,v),{forbid:cardForbid}); });
+const rtgHtml=(k,v)=>'<div class="pp-note" style="border:0;margin:0;padding:0">'+rtgSites(k).map(inpaQuote).join('<br>')+'<br>'+RTG_APPROX_NOTE+(v.gn?'<br>'+MAPNOTE('Google מצא: '+esc(v.gn)+(v.ga?' · '+esc(v.ga):'')):'')+'<div class="rtgact">'+RTG_LINK+'<button type="button" class="rtgbtn" data-rtg="drop" data-key="'+esc(k)+'">הנקודה שגויה? הסרה</button></div></div><div class="pp-note">'+genRules('NR',false)+'</div>';
+function rtgOpen(k,v,move){
+  const ll=L.latLng(v.la,v.lo), us=rtgSites(k);
+  const show=()=>InfoCard.show(ll,rtgName(us[0]),rtgHtml(k,v),{forbid:cardForbid});
+  if(move){ const fp=fitPads(); map.fitBounds(L.latLngBounds([ll,ll]),{paddingTopLeft:fp.tl,paddingBottomRight:fp.br,maxZoom:Math.max(map.getZoom(),12),animate:false}); whenSettled(show); }
+  else show();     /* לחיצה על נקודה במפה לא מזיזה את המפה */
 }
-function rtgMarker(u,v){
-  if(RTG_MK[u.id]) return RTG_MK[u.id];
-  const m=L.marker(L.latLng(v[0],v[1]),{icon:L.divIcon({className:'',iconSize:[16,16],iconAnchor:[8,8],html:'<span class="rtgdot"></span>'}),title:rtgName(u)+' — מיקום משוער לפי שם',alt:rtgName(u),keyboard:true,riseOnHover:true}).addTo(groups.NR);
-  m.on('click',()=>rtgOpen(u,v)); RTG_MK[u.id]=m; return m;
+function rtgMarker(k,v){
+  RTG_V[k]=v; if(RTG_MK[k]) return RTG_MK[k];
+  const us=rtgSites(k);
+  const m=L.marker(L.latLng(v.la,v.lo),{icon:L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<span class="rtgdot"></span>'}),title:'הערת המפה (אינה מהפמ"ת): מיקום משוער לפי שם — '+rtgName(us[0])+' ('+us.map(x=>x.id).join(', ')+')',keyboard:true,autoPanOnFocus:false,riseOnHover:true}).addTo(groups.NR);
+  m.on('click',()=>rtgOpen(k,RTG_V[k],false)); RTG_MK[k]=m; return m;
 }
+document.addEventListener('click',ev=>{
+  const b=ev.target&&ev.target.closest&&ev.target.closest('button[data-rtg=drop]'); if(!b) return;
+  const k=b.dataset.key; if(RTG_MK[k]){ try{ groups.NR.removeLayer(RTG_MK[k]); }catch(e){} delete RTG_MK[k]; }
+  delete RTG_V[k]; RTG_CACHE[k]=['x',Date.now()]; rtgSave(); InfoCard.hide();
+});
 groupsEl.addEventListener('click',async ev=>{
-  const b=ev.target&&ev.target.closest&&ev.target.closest('button[data-rtg]'); if(!b) return;
+  const b=ev.target&&ev.target.closest&&ev.target.closest('button[data-rtg=one],button[data-rtg=all]'); if(!b) return;
   ev.preventDefault();
   const act=b.dataset.rtg, st=(b.closest('.pp-note,.noteblock')||b.parentElement).querySelector('.rtgst');
-  if(act==='one'){
-    const u=INPA_UNMAPPED.find(x=>x.id===b.dataset.id); if(!u) return;
-    b.disabled=true; if(st) st.textContent='מחפש לפי השם…';
-    const v=await rtgFind(u); b.disabled=false;
-    if(v.err){ if(st) st.textContent=RTG_ERR[v.err]; return; }
-    if(st) st.textContent='';
-    if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
-    rtgMarker(u,v); rtgOpen(u,v);
-  }else if(act==='all'){
-    b.disabled=true; if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
-    const all=INPA_UNMAPPED.slice(); let ok=0, miss=0, i=0;
-    for(const u of all){
-      i++; if(st) st.textContent='מחפש… '+i+' מתוך '+all.length+' · נמצאו '+ok;
-      const was=!!RTG_CACHE[u.id], v=await rtgFind(u);
-      if(v.err==='nogoogle'){ if(st) st.textContent=RTG_ERR.nogoogle; b.disabled=false; return; }
-      if(v.err) miss++; else { ok++; rtgMarker(u,v); }
-      if(!was) await new Promise(r=>setTimeout(r,120));
+  if(RTG_BUSY){ if(st) st.textContent=RTG_ERR.busy; return; }
+  RTG_BUSY=true; b.disabled=true; let msg='';
+  try{
+    if(act==='one'){
+      const u=INPA_UNMAPPED.find(x=>x.id===b.dataset.id); if(!u) return;
+      if(st) st.textContent='מחפש לפי השם…';
+      const k=rtgKey(u), v=await rtgFind(u);
+      if(v.err){ msg=RTG_ERR[v.err]; return; }
+      if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
+      rtgMarker(k,v); rtgOpen(k,v,true);
+    }else{
+      if(st) st.setAttribute('aria-live','off');
+      const keys=[...new Set(rtgFiltered(curFilter()).map(rtgKey))];
+      if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
+      let ok=0, miss=0, fails=0, i=0, stop='';
+      for(const k of keys){
+        i++; if(st) st.textContent='מחפש… '+i+' מתוך '+keys.length+' · נמצאו '+ok;
+        const was=!!rtgCached(k)||rtgRejected(k)||!!RTG_SESS[k], v=await rtgFind(rtgSites(k)[0]);
+        if(v.err==='nogoogle'){ stop='nogoogle'; break; }
+        if(v.err==='fail'){ if(++fails>=3){ stop='fail'; break; } continue; }
+        fails=0;
+        if(v.err) miss++; else { ok++; rtgMarker(k,v); }
+        if(!was) await new Promise(r=>setTimeout(r,120));
+      }
+      msg=stop?RTG_ERR[stop]+(ok?' סומנו '+ok+' נקודות לפני כן.':''):'סומנו '+ok+' נקודות משוערות מתוך '+keys.length+' שמות'+(miss?' · '+miss+' ללא התאמה לפי השם — אין להם נקודה':'')+'.';
     }
-    if(st) st.textContent='סומנו '+ok+' נקודות משוערות מתוך '+all.length+(miss?' · '+miss+' אתרים ללא התאמה לפי השם — אין להם נקודה':'')+'.';
-    b.disabled=false;
-  }
+  }catch(e){ msg=RTG_ERR.fail; }
+  finally{ RTG_BUSY=false; b.disabled=false; if(st){ st.setAttribute('aria-live','polite'); st.textContent=msg; } }
 });
 function renderListCore(filter){
   groupsEl.innerHTML="";
@@ -2071,7 +2105,7 @@ function renderListCore(filter){
       const typ=u=>u.ax?u.ax[1][2]:(u.note||'');
       const lst=INPA_UNMAPPED.filter(u=>!filter||((u.id+' '+u.name+' '+typ(u)).toLowerCase().includes(filter)));
       const nb=document.createElement('div'); nb.className='noteblock';
-      nb.innerHTML='<b>ללא גבולות במפה</b> ('+INPA_UNMAPPED.length+' אתרים ברשימת נספח ה\' בפמ"ת). <b>לאתרים אלה אין מיקום או גבול בפמ"ת ובקבצי רט"ג, ולכן אין להם גבול במפה.</b> הקשה על שורה פותחת את הנתונים כלשונם בפמ"ת, ומאפשרת לסמן נקודה משוערת לפי השם בלבד (אינה גבול — את הפוליגון המדויק יש לבדוק באתר רט"ג).'+(filter?' (מוצגים '+lst.length+' תואמים לחיפוש)':'')+'<div class="rtgact"><button type="button" class="rtgbtn" data-rtg="all">📍 סמן את כל האתרים כנקודות משוערות לפי השם</button>'+RTG_LINK+'</div><div class="rtgst" role="status" aria-live="polite"></div>';
+      nb.innerHTML='<b>ללא גבולות במפה</b> ('+INPA_UNMAPPED.length+' אתרים ברשימת נספח ה\' בפמ"ת). '+MAPNOTE('לאתרים אלה אין גבול במפה: בטבלת נספח ה\' בפמ"ת אין להם מיקום או גבול, ובקובץ רט"ג שבמפה אין להם גבול. אפשר לסמן כל אתר כנקודה משוערת לפי שמו בלבד — היא אינה גבול, ואת הגבול המדויק יש לבדוק באתר רט"ג.')+' הקשה על שורה פותחת את הנתונים כלשונם בפמ"ת.'+(filter?' (מוצגים '+lst.length+' תואמים לחיפוש)':'')+'<div class="rtgact"><button type="button" class="rtgbtn" data-rtg="all">📍 '+(filter?'סמן את '+lst.length+' האתרים המוצגים':'סמן את כל האתרים')+' כנקודות משוערות לפי השם</button>'+RTG_LINK+'</div><div class="rtgst" role="status" aria-live="polite"></div>';
       wrap.appendChild(nb);
       lst.sort((a,b)=>String(a.id).localeCompare(String(b.id))).forEach(u=>{
         const d=document.createElement('details'); d.className='un';
