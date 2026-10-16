@@ -949,7 +949,7 @@ function mapQuote(code){
 }
 const SEC4_HTML='סעיף 4 בפמ"ת ('+pgLbl(PMT_SEC4.p,PMT_SEC4.pe)+'): <i>'+PMT_SEC4.lines.map(esc).join('<br>')+'</i>';
 /* סעיף 4 לפי מה שהפמ"ת עצמו מייחס לכל אזור: הכותרת וראש סעיף ב, השורה של אותו גבול, והערות סעיף ג הכלליות; מקום ההשמטה מסומן ב-[…] */
-const SEC4_FOR={LLP19:[0,3,4,12,13,14,15],'GVUL-EGY':[0,3,5,12,13,14,15],'GVUL-JOR':[0,3,6,12,13,14,15],'GVUL-SYR':[0,3,7,12,13,14,15,16],'GVUL-LBN':[0,1,2,3,8,9,10,11,12,13,14,15]};
+const SEC4_FOR={LLP19:[0,3,4,9,11,12,13,14,15],'GVUL-EGY':[0,3,5,9,11,12,13,14,15],'GVUL-JOR':[0,3,6,9,11,12,13,14,15],'GVUL-SYR':[0,3,7,9,11,12,13,14,15,16],'GVUL-LBN':[0,1,2,3,8,9,10,11,12,13,14,15]};
 const sec4Pick=idx=>{ const L=PMT_SEC4.lines, out=[]; let prev=-1; idx.forEach(i=>{ if(prev>=0&&i>prev+1) out.push('[…]'); out.push(L[i]); prev=i; }); if(prev<L.length-1) out.push('[…]'); return 'סעיף 4 בפמ"ת ('+pgLbl(PMT_SEC4.p,PMT_SEC4.pe)+'): <i>'+out.map(esc).join('<br>')+'</i>'; };
 /* הודעות קבועות — כשהפמ"ת אינו מוסר מידע */
 const FIXED=t=>'<span class="mapnote">הודעה קבועה של המפה (אינה מהפמ"ת): '+t+'</span>';
@@ -973,6 +973,7 @@ function luIps(code){
   let t=LLU_IPS;
   if(code!=='LLU21') t=t.replace(' (לאזור LLU21 לטלפון 03-5038875)',' […]');
   if(!/^LLU(59|6\d|7[0-2])$/.test(code)) t=t.replace(/ ג\. אזורים LLU59-LLU72 הינם בגובה מירבי 300 רגל מעפ\"ש\./,' […]');
+  else t=t.replace(/(300 רגל מעפ\"ש\.)\"<\/i>$/,'$1 […]"</i>');   /* אחרי פסקה ג בא ברשימה של כל אזורי ה-LLU — מושמטת */
   return t;
 }
 function luNote(code){
@@ -1088,7 +1089,7 @@ const LLR_FIRE="אין לבצע טיסה בשטחי אש המיועדים ליר
 /* סעיף 2: פסקה א + אנשי הקשר — רק לשטחי אש; פסקה ב — רק לחמשת האזורים שהיא מונה. אזורי LLR אחרים (LLR20, LLR27) מקבלים רק את שורת הפמ"ת שלהם */
 /* סעיף 2 (עמ' 8): כותרת הסעיף כלשונה + פסקה א וגורמי התיאום (שטחי אש) ו/או פסקה ב (LLR90/801/802/803/83); מקום ההשמטה מסומן ב-[…] */
 const SEC2_HEAD='2. אזורים מוגבלים לטיסה (LLR)';
-const sec2Html=(a,b)=>{ const L=SEC2_LINES, out=[SEC2_HEAD]; if(a) out.push(L[0],L[1]); else out.push('[…]'); if(b) out.push(L[2]); else if(a) out.push('[…]'); return 'סעיף 2 בפמ"ת ('+pgLbl(8)+'): <i>'+out.map(esc).join('<br>')+'</i>'; };
+const sec2Html=(a,b)=>{ const L=SEC2_LINES, out=[SEC2_HEAD]; if(a) out.push(L[0],L[1]); else out.push('[…]'); if(b) out.push(L[2]); out.push('[…]'); return 'סעיף 2 בפמ"ת ('+pgLbl(8)+'): <i>'+out.map(esc).join('<br>')+'</i>'; };
 const SEC2_A_HTML=sec2Html(true,false), SEC2_B_HTML=sec2Html(false,true);
 /* פסקה א חלה על אזור שהפמ"ת עצמו קורא לו "שטח אש"/"שטחי אש" (בשם הפריט או בעמודת השם בנספח ב'); פסקה ב — על האזורים שהיא מונה בשמם */
 const sec2For=code=>{ const r=PMT_ANNEX[code], it=PMT_ITEMS_X[code]||PMT_ITEMS[code]; const nm=(r?r[0].c[1]:'')+' '+(it?it.t:''); const fire=/שטח(י)? אש/.test(nm), b=SEC2_B_RE.test(code); return (fire||b)?sec2Html(fire,b):''; };
