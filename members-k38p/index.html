@@ -216,6 +216,13 @@ details.xl{margin:4px 0 2px}
 details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
 .xlb{direction:ltr; text-align:left; font:11px/1.55 Consolas,monospace; color:var(--dim); max-height:180px; overflow:auto; padding:4px 0}
 .mapnote{display:inline-block; font-size:11.5px; color:#c9d4e3; border-inline-start:3px solid #46607f; padding-inline-start:7px; margin:2px 0}
+.rtgact{display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px}
+.rtgbtn,.extbtn{display:inline-flex; align-items:center; gap:4px; min-height:40px; padding:6px 12px; border-radius:10px; font:inherit; font-size:13px; font-weight:700; line-height:1.3; cursor:pointer; text-decoration:none; border:1px solid #3b6ea5; background:#14304f; color:#cfe6ff}
+.rtgbtn:disabled{opacity:.6; cursor:default}
+.rtgbtn:focus-visible,.extbtn:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
+.extbtn .ext{font-size:11px; opacity:.85}
+.rtgdot{display:block; width:16px; height:16px; border-radius:50%; background:rgba(255,179,71,.55); border:2px dashed #fff; box-sizing:border-box}
+.rtgst{font-size:12px; color:var(--dim); min-height:16px; margin-top:2px}
 #paneToday .td-note{margin-top:8px; padding:10px 14px 16px; border-top:1px solid var(--line); font-size:10.5px; line-height:1.65; color:var(--dim)}
 #paneToday .ntx{border-bottom:1px solid var(--line)}
 #paneToday .ntx>summary{list-style:none; cursor:pointer; padding:8px 14px; font-size:12.5px; min-height:40px}
@@ -460,7 +467,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-          <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו, שורות גובה שנגזרו והקישור לאתר רט"ג; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל.<br>
+          <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
           <b style="color:var(--text)">v1.9 · 15.10.2026</b> — בחיפוש, תוצאות המפה מוצגות ראשונות עם שורת ספירה (מעל הצעות המקומות); מספר הגרסה מוצג גם בחלון ⓘ (בטלפון).<br>
           <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
           <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
@@ -533,7 +540,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו, שורות גובה שנגזרו והקישור לאתר רט"ג; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל.<br>
+            <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
           <b style="color:var(--text)">v1.9 · 15.10.2026</b> — בחיפוש, תוצאות המפה מוצגות ראשונות עם שורת ספירה (מעל הצעות המקומות); מספר הגרסה מוצג גם בחלון ⓘ (בטלפון).<br>
           <b style="color:var(--text)">v1.8 · 15.10.2026</b> — נוספו כפתורי "כבה את כל השכבות" ו"הדלק את כל השכבות" בלשונית השכבות.<br>
           <b style="color:var(--text)">v1.7 · 15.10.2026</b> — בדיקה חוזרת מלאה מול הפמ"ת ותיקונים: בכל כרטיס LLU ו-LLD מוצגת שורת הפמ"ת מילה במילה; כללי הפמ"ת הכלליים (עמ' 1 ו-12, כולל סעיף 5) מופיעים בכל כרטיס; הערות סעיף 4 נוספו ל-LLP19; סתירות בגובה התחתון ב-LLP03, LLP24, LLP27 ו-LLD47 מצוינות; הערת LLP13 מופיעה גם ב-LLP11; נוסח שדות התעופה לפי פמ"ת ב-09; נוספו 17 שדות ומנחתים ממפת ארגון ICD; 122 אתרי רט"ג שאין להם מיקום בפמ"ת מוצגים כשורות מידע; תוקנו רצועות הגבול (לבנון–סוריה).<br>
@@ -1940,6 +1947,84 @@ function ntGroupItems(k,filter){
   });
   return out.sort((x,y)=>HE_COLLATOR.compare(x.it.name||'',y.it.name||''));
 }
+/* ===== אתרי רט"ג ללא מיקום וגבול בפמ"ת ובקבצי רט"ג (נספח ה'): נקודה משוערת לפי שם האתר בלבד =====
+   הנקודה מחיפוש Google לפי השם (אותו שירות של חיפוש הכתובות), נבדקת (בתוך ישראל + התאמה של מילה מהשם), ומסומנת במפה כ"משוערת — אינה גבול".
+   את גודל הפוליגון המדויק יש לבדוק באתר רט"ג: קישור בלשונית חדשה (כמו מזג האוויר — המפה נשארת פתוחה). שום מיקום אינו נשמר בקוד — רק במטמון של הדפדפן. */
+const RTG_SITE_URL='https://www.parks.org.il/';
+const RTG_LINK='<a class="extbtn" href="'+RTG_SITE_URL+'" target="_blank" rel="noopener noreferrer" aria-label="אתר רט&quot;ג — נפתח בלשונית חדשה, המפה נשארת פתוחה">אתר רט"ג — בדיקת הגבולות המדויקים <span class="ext" aria-hidden="true">↗</span></a>';
+const RTG_NO_POS=MAPNOTE('אין לאתר זה מיקום או גבול בפמ"ת ובקבצי רט"ג.');
+const RTG_APPROX_NOTE=MAPNOTE('נקודה במפה (אם סומנה) היא משוערת לפי שם האתר בלבד (חיפוש Google) — היא אינה גבול. את גודל הפוליגון המדויק של סגירת רט"ג יש לבדוק באתר רט"ג.');
+const RTG_ERR={nogoogle:'חיפוש Google אינו זמין כרגע — אפשר לבדוק את האתר באתר רט"ג.', nomatch:'לא נמצא מיקום מתאים לפי השם — יש לבדוק באתר רט"ג.', fail:'החיפוש נכשל כרגע — נסו שוב מאוחר יותר, או בדקו באתר רט"ג.'};
+const RTG_ISR={s:29.3,w:34.1,n:33.5,e:36.0};
+const RTG_STOP=new Set(['שמורת','שמורה','נחל','נחלי','הר','ואדי','אזור','איי','חוף','אתר','ים','מאגר','גן','לאומי','עין','בריכת','סובב','חולות','בית','תל','כפר','מעיין','אל','אום','אבו','בר','חי','רכס','מצוק','גבעת','מכתש','ושמורת','ו']);
+const rtgNorm=t=>String(t||'').replace(/[֑-ׇ]/g,'').replace(/["'`״׳’‘“”]/g,'').replace(/[-–—־,.()\/]/g,' ').replace(/\s+/g,' ').trim();
+const rtgTokens=n=>{ const t=rtgNorm(n).split(' ').filter(x=>x.length>=2), k=t.filter(x=>!RTG_STOP.has(x)); return k.length?k:t; };
+const rtgMatches=(name,found)=>{ const f=rtgNorm(found); return rtgTokens(name).some(t=>f.includes(t)); };
+const RTG_KEY='icdRtgPts1';
+let RTG_CACHE={}; try{ RTG_CACHE=JSON.parse(localStorage.getItem(RTG_KEY)||'{}')||{}; }catch(e){ RTG_CACHE={}; }
+const rtgSave=()=>{ try{ localStorage.setItem(RTG_KEY,JSON.stringify(RTG_CACHE)); }catch(e){} };
+const RTG_MK={};
+const rtgName=u=>u.ax?u.ax[1][1]:u.name;
+function rtgPlaceLib(){
+  return new Promise(res=>{ let n=0; (function w(){
+    if(window.google&&google.maps&&google.maps.importLibrary){ google.maps.importLibrary('places').then(p=>res(p&&p.Place&&p.Place.searchByText?p.Place:null)).catch(()=>res(null)); }
+    else if(++n>40) res(null); else setTimeout(w,250);   /* עד ~10 שניות: Google נטען אוטומטית אחרי טעינת הנתונים */
+  })(); });
+}
+async function rtgFind(u){
+  const id=u.id, name=rtgName(u);
+  if(RTG_CACHE[id]) return RTG_CACHE[id];
+  const Place=await rtgPlaceLib(); if(!Place) return {err:'nogoogle'};
+  try{
+    const r=await Place.searchByText({textQuery:name+', ישראל', fields:['displayName','location','formattedAddress'], region:'il', language:'he', maxResultCount:3, locationBias:{south:RTG_ISR.s,west:RTG_ISR.w,north:RTG_ISR.n,east:RTG_ISR.e}});
+    const ps=(r&&r.places)||[];
+    for(const p of ps){
+      const loc=p.location, la=loc&&(typeof loc.lat==='function'?loc.lat():loc.lat), lo=loc&&(typeof loc.lng==='function'?loc.lng():loc.lng);
+      if(!isFinite(la)||!isFinite(lo)||la<RTG_ISR.s||la>RTG_ISR.n||lo<RTG_ISR.w||lo>RTG_ISR.e) continue;
+      const gn=String(p.displayName||''), ga=String(p.formattedAddress||'');
+      if(!rtgMatches(name,gn+' '+ga)) continue;
+      const v=[+(+la).toFixed(5),+(+lo).toFixed(5),gn,ga]; RTG_CACHE[id]=v; rtgSave(); return v;
+    }
+    return {err:'nomatch'};
+  }catch(e){ return {err:'fail'}; }
+}
+const rtgHtml=(u,v)=>'<div class="pp-note" style="border:0;margin:0;padding:0">'+inpaQuote(u)+'<br>'+RTG_APPROX_NOTE+'<br>'+MAPNOTE('Google מצא: '+esc(v[2])+(v[3]?' · '+esc(v[3]):''))+'<div class="rtgact">'+RTG_LINK+'</div></div><div class="pp-note">'+genRules('NR',false)+'</div>';
+function rtgOpen(u,v){
+  const ll=L.latLng(v[0],v[1]);
+  map.setView(ll,Math.max(map.getZoom(),12),{animate:false});
+  whenSettled(()=>{ InfoCard.show(ll,rtgName(u),rtgHtml(u,v),{forbid:cardForbid}); });
+}
+function rtgMarker(u,v){
+  if(RTG_MK[u.id]) return RTG_MK[u.id];
+  const m=L.marker(L.latLng(v[0],v[1]),{icon:L.divIcon({className:'',iconSize:[16,16],iconAnchor:[8,8],html:'<span class="rtgdot"></span>'}),title:rtgName(u)+' — מיקום משוער לפי שם',alt:rtgName(u),keyboard:true,riseOnHover:true}).addTo(groups.NR);
+  m.on('click',()=>rtgOpen(u,v)); RTG_MK[u.id]=m; return m;
+}
+groupsEl.addEventListener('click',async ev=>{
+  const b=ev.target&&ev.target.closest&&ev.target.closest('button[data-rtg]'); if(!b) return;
+  ev.preventDefault();
+  const act=b.dataset.rtg, st=(b.closest('.pp-note,.noteblock')||b.parentElement).querySelector('.rtgst');
+  if(act==='one'){
+    const u=INPA_UNMAPPED.find(x=>x.id===b.dataset.id); if(!u) return;
+    b.disabled=true; if(st) st.textContent='מחפש לפי השם…';
+    const v=await rtgFind(u); b.disabled=false;
+    if(v.err){ if(st) st.textContent=RTG_ERR[v.err]; return; }
+    if(st) st.textContent='';
+    if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
+    rtgMarker(u,v); rtgOpen(u,v);
+  }else if(act==='all'){
+    b.disabled=true; if(!map.hasLayer(groups.NR)) groups.NR.addTo(map);
+    const all=INPA_UNMAPPED.slice(); let ok=0, miss=0, i=0;
+    for(const u of all){
+      i++; if(st) st.textContent='מחפש… '+i+' מתוך '+all.length+' · נמצאו '+ok;
+      const was=!!RTG_CACHE[u.id], v=await rtgFind(u);
+      if(v.err==='nogoogle'){ if(st) st.textContent=RTG_ERR.nogoogle; b.disabled=false; return; }
+      if(v.err) miss++; else { ok++; rtgMarker(u,v); }
+      if(!was) await new Promise(r=>setTimeout(r,120));
+    }
+    if(st) st.textContent='סומנו '+ok+' נקודות משוערות מתוך '+all.length+(miss?' · '+miss+' אתרים ללא התאמה לפי השם — אין להם נקודה':'')+'.';
+    b.disabled=false;
+  }
+});
 function renderListCore(filter){
   groupsEl.innerHTML="";
   const compact=compactMQ.matches;
@@ -1986,7 +2071,7 @@ function renderListCore(filter){
       const typ=u=>u.ax?u.ax[1][2]:(u.note||'');
       const lst=INPA_UNMAPPED.filter(u=>!filter||((u.id+' '+u.name+' '+typ(u)).toLowerCase().includes(filter)));
       const nb=document.createElement('div'); nb.className='noteblock';
-      nb.innerHTML='<b>ללא גבולות במפה</b> ('+INPA_UNMAPPED.length+' אתרים ברשימת נספח ה\' בפמ"ת). <b>לאתרים אלה אין מיקום או גבול בפמ"ת ובקבצי רט"ג, ולכן הם אינם מסומנים במפה.</b> הקשה על שורה פותחת את הנתונים כלשונם בפמ"ת.'+(filter?' (מוצגים '+lst.length+' תואמים לחיפוש)':'');
+      nb.innerHTML='<b>ללא גבולות במפה</b> ('+INPA_UNMAPPED.length+' אתרים ברשימת נספח ה\' בפמ"ת). <b>לאתרים אלה אין מיקום או גבול בפמ"ת ובקבצי רט"ג, ולכן אין להם גבול במפה.</b> הקשה על שורה פותחת את הנתונים כלשונם בפמ"ת, ומאפשרת לסמן נקודה משוערת לפי השם בלבד (אינה גבול — את הפוליגון המדויק יש לבדוק באתר רט"ג).'+(filter?' (מוצגים '+lst.length+' תואמים לחיפוש)':'')+'<div class="rtgact"><button type="button" class="rtgbtn" data-rtg="all">📍 סמן את כל האתרים כנקודות משוערות לפי השם</button>'+RTG_LINK+'</div><div class="rtgst" role="status" aria-live="polite"></div>';
       wrap.appendChild(nb);
       lst.sort((a,b)=>String(a.id).localeCompare(String(b.id))).forEach(u=>{
         const d=document.createElement('details'); d.className='un';
@@ -1994,7 +2079,7 @@ function renderListCore(filter){
         sm.innerHTML='<span style="direction:ltr;font-family:Consolas,monospace">'+esc(u.id)+'</span> · '+esc(u.ax?u.ax[1][1]:u.name)+' · '+esc(typ(u))+' · '+esc(u.ax?u.ax[1][3]:u.max);
         d.appendChild(sm);
         const b=document.createElement('div'); b.className='pp-note';
-        const fill=()=>{ b.innerHTML=inpaQuote(u)+'<br><span class="mapnote">הערת המפה (אינה מהפמ"ת): אין לאתר זה מיקום או גבול בפמ"ת ובקבצי רט"ג — הוא אינו מסומן במפה.</span><br>'+genRules('NR',false); };
+        const fill=()=>{ b.innerHTML=inpaQuote(u)+'<br>'+RTG_NO_POS+'<br>'+RTG_APPROX_NOTE+'<div class="rtgact"><button type="button" class="rtgbtn" data-rtg="one" data-id="'+esc(u.id)+'">📍 סמן נקודה לפי השם</button>'+RTG_LINK+'</div><div class="rtgst" role="status" aria-live="polite"></div>'+genRules('NR',false); };
         d.addEventListener('toggle',()=>{ if(d.open&&!b.firstChild) fill(); });   /* גוף השורה נבנה רק בפתיחה — 121 שורות לא טוענות 121 עותקים של הפתיח */
         d.appendChild(b); wrap.appendChild(d);
       });
