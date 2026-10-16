@@ -18,7 +18,7 @@ const LEAFLET_CDN = /^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/1\.
 const LEAFLET_BASE = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/";
 // layers.png / layers-2x.png: אייקון כפתור בורר השכבות (נטען מה-CSS לפני שה-SW שולט) — בלעדיהם הכפתור ריק אופליין
 const LEAFLET_FILES = ["leaflet.min.css", "leaflet.min.js", "images/layers.png", "images/layers-2x.png"].map(f => LEAFLET_BASE + f);
-const DATA_V = "20261017";   // חייב להתאים ל-?v= של data/inpa-zones.json ב-index.html
+const DATA_V = "20261021";   // חייב להתאים ל-?v= של data/inpa-zones.json ב-index.html
 const PRECACHE = ["./", "./manifest.json", "./icon-192.png", "../notam-data.json", "./data/inpa-zones.json?v=" + DATA_V];
 const NET_TIMEOUT = 4000;
 const SCOPE = new URL("./", self.registration.scope).href;       // שורש האפליקציה
