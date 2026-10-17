@@ -50,8 +50,8 @@
     let boot = false;
     try { const r = await fetch(A.cfg.api_url, { redirect: "follow" }); const j = await r.json(); boot = !!j.needsBootstrap; } catch (e) { note = note || "אין חיבור לשרת ההתחברות. בדקו את האינטרנט ונסו שוב."; }
     c.innerHTML = '<form class="authBox" id="authForm" autocomplete="on"><h2>בקשות טיסה — כניסה</h2>' +
-      (boot ? '<p class="small">הקמה ראשונה: הקלידו את קוד ההקמה שהוצג בהרצת <code>initialize()</code> ובחרו שם משתמש וסיסמה למנהל.</p><label class="f"><b>קוד הקמה</b><input id="auCode" autocomplete="off" dir="ltr"></label>' : '') +
-      '<label class="f"><b>שם משתמש</b><input id="auUser" autocomplete="username" dir="ltr"></label>' +
+      (boot ? '<p class="small">הקמה ראשונה: הקלידו את קוד ההקמה שהוצג בהרצת <code>initialize()</code> ובחרו שם משתמש וסיסמה למנהל.</p><label class="f"><b>קוד הקמה</b><input id="auCode" type="text" autocomplete="off" dir="ltr"></label>' : '') +
+      '<label class="f"><b>שם משתמש</b><input id="auUser" type="text" autocomplete="username" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה' + (boot ? ' (לפחות 10 תווים)' : '') + '</b><input id="auPass" type="password" autocomplete="' + (boot ? "new-password" : "current-password") + '" dir="ltr"></label>' +
       '<div class="err" id="auErr">' + esc(note || "") + '</div><button class="primary" id="auGo" type="submit">' + (boot ? "הקם מנהל והיכנס" : "כניסה") + '</button></form>';
     $("authForm").onsubmit = async ev => {
@@ -113,8 +113,8 @@
       body.innerHTML = '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
         r.users.map(u => '<tr><td dir="ltr">' + esc(u.user) + '</td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td><td>' + (u.blocked ? '<b class="err">חסום</b>' : "פעיל") + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td>' +
           (u.user === A.user ? "—" : '<button type="button" data-blk="' + esc(u.user) + '" data-to="' + (u.blocked ? 0 : 1) + '">' + (u.blocked ? "בטל חסימה" : "חסום") + '</button> <button type="button" data-rst="' + esc(u.user) + '">איפוס סיסמה</button> <button type="button" data-del="' + esc(u.user) + '">מחק</button>') + '</td></tr>').join("") + "</table>" +
-        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" placeholder="שם משתמש" dir="ltr" autocomplete="off"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password"><label class="small"><input type="checkbox" id="adA"> מנהל</label><button class="primary" type="submit">הוסף</button></form>' +
-        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" placeholder="שם משתמש" dir="ltr" autocomplete="off"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password"><button type="submit">אפס</button></form><div class="err" id="admErr"></div>';
+        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label><button class="primary" type="submit">הוסף</button></form>' +
+        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><button type="submit">אפס</button></form><div class="err" id="admErr"></div>';
       const fail = rr => { $("admErr").textContent = msg(rr); };
       body.querySelectorAll("[data-blk]").forEach(b => b.onclick = async () => { const rr = await call("setBlocked", { target: b.dataset.blk, blocked: b.dataset.to === "1" }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!confirm("למחוק את המשתמש " + b.dataset.del + "?")) return; const rr = await call("deleteUser", { target: b.dataset.del }); rr.ok ? draw() : fail(rr); });

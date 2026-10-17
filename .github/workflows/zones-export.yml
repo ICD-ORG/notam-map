@@ -44,5 +44,6 @@ jobs:
             echo "הקובץ מעודכן"
           else
             git commit -m "ייצוא אוטומטי של אזורי א-17 מהמפה"
+            git pull --rebase origin "${{ github.ref_name }}"
             git push
           fi
