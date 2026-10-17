@@ -11,7 +11,9 @@ export const ROOT_ID = "ROOT";
 
 export function makeEnv() {
   const props = {}, cache = {}, logs = [];
-  let clock = 1_800_000_000_000;
+  // השעון המדומה מתחיל בזמן אמיתי: הדפדפן בבדיקות e2e משווה אותו (פקיעת אסימון) לשעון שלו
+  let clock = Date.now();
+  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false };
   const toBuf = v => Array.isArray(v) ? Buffer.from(v.map(x => x & 0xff)) : Buffer.from(String(v), "utf8");
   const signed = b => [...b].map(x => (x > 127 ? x - 256 : x));
   // Drive מדומה: תיקיות וקבצים בזיכרון
@@ -24,7 +26,7 @@ export function makeEnv() {
     getBlob: () => ({ bytes: file.bytes, mime: file.mime, name: file.name, getDataAsString: () => file.bytes.toString("utf8") }),
   });
   const mkFolder = f => ({
-    getId: () => f.id, getUrl: () => "https://drive/" + f.id, getName: () => f.name,
+    getId: () => f.id, getUrl: () => "https://drive/" + f.id, getName: () => f.name, setName: n => { f.name = n; }, isTrashed: () => !!f.trashed,
     getParents() { const p = f.parent && folders[f.parent]; let used = !p; return { hasNext: () => !used, next: () => { used = true; return mkFolder(p); } }; },
     getFoldersByName(n) { const hit = Object.values(folders).filter(x => x.parent === f.id && x.name === n); let i = 0; return { hasNext: () => i < hit.length, next: () => mkFolder(hit[i++]) }; },
     createFolder(n) { const id = "F" + ++seq; folders[id] = { id, name: n, parent: f.id, files: [] }; return mkFolder(folders[id]); },
@@ -40,10 +42,10 @@ export function makeEnv() {
   const sandbox = {
     Logger: { log: m => logs.push(String(m)) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; }, getProperties: () => ({ ...props }) }) },
-    MailApp: { sendEmail: m => { mails.push(m); } },
+    MailApp: { sendEmail: m => { if (hooks.beforeMail) hooks.beforeMail(m); if (fail.mail) throw new Error("mail down"); mails.push(m); } },
     Session: { getEffectiveUser: () => ({ getEmail: () => "owner@icd.test" }) },
     CacheService: { getScriptCache: () => ({ get: k => (cache[k] && cache[k].exp > clock ? cache[k].v : null), put: (k, v, s) => { cache[k] = { v, exp: clock + s * 1000 }; }, remove: k => { delete cache[k]; } }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({ tryLock: () => !fail.lockBusy, releaseLock() {} }) },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
@@ -56,7 +58,7 @@ export function makeEnv() {
       formatDate: tzFmt,
       newBlob: (bytes, mime, name) => ({ bytes: toBuf(bytes), mime, name, getDataAsString: () => toBuf(bytes).toString("utf8") }),
     },
-    DriveApp: { getFolderById: id => { if (!folders[id]) throw new Error("no folder"); return mkFolder(folders[id]); } },
+    DriveApp: { getFolderById: id => { if (fail.drive) throw new Error("drive down"); if (!folders[id]) throw new Error("no folder"); return mkFolder(folders[id]); } },
     Date: Object.assign(function (...a) { return new Date(...a); }, { now: () => clock }),
     Math, JSON, String, Number, Object, Array, Error, RegExp, parseInt,
   };
@@ -65,7 +67,7 @@ export function makeEnv() {
   vm.runInContext(SRC, sandbox, { filename: "Code.gs" });
   vm.runInContext("CFG.ROOT_FOLDER_ID = '" + ROOT_ID + "'", sandbox);   // בבדיקות התיקייה הראשית היא ההדמיה
   const call = (obj) => JSON.parse(vm.runInContext("doPost", sandbox)({ postData: { contents: JSON.stringify(obj) } }).text);
-  return { sandbox, call, props, logs, folders, mails, advance: ms => { clock += ms; },
+  return { sandbox, call, props, logs, folders, mails, hooks, fail, now: () => clock, advance: ms => { clock += ms; },
     run: name => vm.runInContext(name + "()", sandbox), doGet: () => JSON.parse(vm.runInContext("doGet", sandbox)().text) };
 }
 

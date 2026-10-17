@@ -37,6 +37,8 @@
   }
   // קו שבור: מרחק + הנקודה הקרובה. סגור=true מוסיף בדיקת "בתוך"
   function polyNearest(pts, closed) {
+    // closed=true: הטבעת נסגרת אוטומטית (אם הנקודה האחרונה אינה הראשונה) — אחרת הקטע האחרון נעדר, והנקודה בתוך הצורה נחשבת "מחוץ" לה
+    if (closed && pts.length >= 3 && (pts[0][0] !== pts[pts.length - 1][0] || pts[0][1] !== pts[pts.length - 1][1])) pts = pts.concat([pts[0]]);
     if (pts.length === 1) return { d: Math.hypot(pts[0][0], pts[0][1]), p: pts[0], inside: false };
     let best = { d: Infinity, p: pts[0] };
     for (let i = 0; i < pts.length - 1; i++) {
@@ -135,7 +137,7 @@
       'nwr[aeroway~"^(aerodrome|heliport|helipad)$"](' + box(farR) + ");out center tags;" +
       "is_in(" + c + ");out tags;" +
       "node[place](" + box(placeR) + ");out body;";
-    const bR = th.border_scan_m || 7000, pR = Math.ceil(2 * R + (th.near_zone_m || 1000));
+    const bR = Math.max(th.border_scan_m || 7000, R + 7000), pR = Math.ceil(2 * R + (th.near_zone_m || 1000));
     const dLat = bR / 111000, dLon = bR / (111000 * Math.cos((lat * Math.PI) / 180));
     const bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(v => v.toFixed(5)).join(",");
     const ext =
@@ -372,19 +374,21 @@
     return best;
   }
   // מחזיר {inside:[...], near:[...]} — לפי קצה הסגירה המבוקשת (R) ועוד near_zone_m
-  function analyzeZones(P, R, data, nearM, topFt) {
+  // approxM: שוליים נוספים לאזורים שנשרטטו בקירוב (approx) — הגבול שלהם אינו הרשמי, ולכן מתייחסים אליהם בזהירות גם כשהם מעט רחוקים יותר
+  function analyzeZones(P, R, data, nearM, topFt, approxM) {
     const out = { inside: [], near: [], excluded: [] };
     const push = (z, src, kindLabel, altTxt) => {
       const r = zoneDistance(P, z); if (!r) return;
       // אזור ב-09 שגובהו המזערי (מעפ"י) גבוה מהסגירה בלי תלות בגובה הקרקע בישראל — אין חפיפה אנכית (אותו כלל כמו בנוטמים)
-      if (src === "b09" && topFt != null && z.minFt >= topFt + TERRAIN_MAX_FT && r.d <= R + nearM) { out.excluded.push({ id: z.id, minFt: z.minFt, d: r.d }); return; }
-      if (r.d > R + nearM) return;
+      const reach = R + nearM + (z.approx ? approxM || 0 : 0);
+      if (src === "b09" && topFt != null && z.minFt >= topFt + TERRAIN_MAX_FT && r.d <= reach) { out.excluded.push({ id: z.id, minFt: z.minFt, d: r.d }); return; }
+      if (r.d > reach) return;
       const rec = { id: z.id, name: z.name, cat: z.cat || src, src, kind: kindLabel, d: r.d, edge: Math.max(0, r.d - R), p: r.p, ll: P.ll(r.p[0], r.p[1]), alt: altTxt, note: z.note || "", approx: !!z.approx, pmt: z.pmt || "", pmtRef: z.pmtRef || "", coord: z.coord || "", needGroundFt: (src === "b09" && z.minFt > 0 && topFt != null) ? Math.max(0, Math.round(z.minFt - topFt)) : 0, label: (z.cat === "B09" || z.cat === "B09B") ? z.id : z.id + " ״" + z.name + "״", z };
       (r.d <= R ? out.inside : out.near).push(rec);
     };
     (data.zones || []).forEach(z => {
       const b09 = z.cat === "B09" || z.cat === "B09B";   // אזורי טיסה לכטב״ם מפרק ב-09 — אינם איסור, ומוצגים בנפרד מא-17
-      push(z, b09 ? "b09" : "a17", b09 ? ZONE_KIND[z.cat].replace("(פרק ב-09)", "(פרק ב-09, " + (z.appendix || "") + ")").replace(", )", ")") : (ZONE_KIND[z.cat] || z.cat), z.alt || altRange(z));
+      push(z, b09 ? "b09" : "a17", b09 ? ZONE_KIND[z.cat].replace("(פרק ב-09)", "(פרק ב-09, " + (z.appendix || "") + ")").replace(", )", ")") : (ZONE_KIND[z.cat] || z.cat), z.alt || (z.min != null ? altRange(z) : ""));
     });
     ((data.inpa && data.inpa.sites) || []).forEach(s =>
       push({ id: s.id, name: s.name, cat: s.kind === "P" ? "NP" : "NR", rings: s.rings, note: s.note, max: s.max }, "inpa", s.kind === "P" ? "גן לאומי (רט״ג)" : "שמורת טבע (רט״ג)",
@@ -652,9 +656,14 @@
     if (!inp.aircraft || !inp.aircraft.length) push("aircraft", "יש לבחור כלי טיס");
     if (!(inp.siteName || "").trim()) push("siteName", "חסר שם ישוב/אתר");
     if (!(inp.requesterName || "").trim() || !/\d{7,}/.test((inp.requesterPhone || "").replace(/\D/g, ""))) push("requester", "חסרים שם וטלפון של המבקש");
-    if (!(inp.contactNames || "").trim() || !/\d{7,}/.test((inp.contactPhone || "").replace(/\D/g, ""))) push("contacts", "חסרים אנשי הקשר בשטח וטלפון");
+    // נספח ג׳ שדה 12: "2 אנשי קשר + טלפונים" — נדרשים לפחות שני שמות; מספר טלפון אחד בלבד מוצג כאזהרה (ראו ui.js)
+    if (splitList(inp.contactNames).length < 2) push("contacts", "יש להזין שני אנשי קשר בשטח (שני שמות, מופרדים בפסיק או בנקודה-פסיק)");
+    else if (!splitList(inp.contactPhone).some(x => /\d{7,}/.test(x.replace(/\D/g, "")))) push("contacts", "חסר טלפון של אנשי הקשר בשטח");
     return errs;
   }
+
+  // רשימה שהוזנה בשדה טקסט: מופרדת בפסיק, נקודה-פסיק, קו נטוי או שורה חדשה
+  const splitList = t => String(t || "").split(/[;,\n\/|]+/).map(x => x.trim()).filter(Boolean);
 
   /* ================= הרכבת התוצאה המלאה ================= */
   // inp: קלט המשתמש. data: {zones, inpa, agri, notams, notamFetchedIso, near, far, ext, reverse}. now: Date
@@ -662,12 +671,16 @@
     const P = new Proj(inp.lat, inp.lon), R = inp.radius, th = cfg.thresholds;
     const res = { P, R, inp };
     res.nearScan = analyzeNear(P, R, { elements: ((data.near && data.near.elements) || []).concat(manualElements(inp.manualItems)) }, th);
-    res.zones = analyzeZones(P, R, { zones: data.zones && data.zones.zones, inpa: data.inpa }, th.near_zone_m, inp.heightM * M2FT);
+    res.zones = analyzeZones(P, R, { zones: data.zones && data.zones.zones, inpa: data.inpa }, th.near_zone_m, inp.heightM * M2FT, th.approx_margin_m);
+    // הערת השוליים ¹ של נספח ב׳-1 (גובה מרבי; הפרדת 1,500/1,000 רגל מכלי טיס מאויש) — מצוטטת במלואה בכל פלט שמציג אזור כזה
+    { const fn = data.zones && data.zones.general && data.zones.general.B09 && data.zones.general.B09.footnote;
+      res.b09Footnote = fn && [...res.zones.inside, ...res.zones.near].some(z => z.src === "b09" && /¹/.test((z.alt || "") + (z.pmt || ""))) ? fn : null; }
     res.agri = analyzeAgri(P, data.agri && data.agri.airstrips);
     res.airfields = analyzeAirfields(P, data.far, th.airfield_scan_m);
     res.places = nearestPlaces(P, data.far, 5);
     res.siteSuggestion = suggestSiteName(data.far, data.reverse);
     res.borders = analyzeBorders(P, data.ext, cfg, R);
+    res.borderScanM = Math.max(th.border_scan_m || 7000, R + 7000);
     const prot = ((data.ext && data.ext.elements) || []).filter(e => e.tags && (e.tags.leisure === "nature_reserve" || e.tags.boundary === "national_park" || e.tags.boundary === "protected_area"))
       .map(e => { const r = elemDist(P, e); return r ? { name: nameOf(e.tags), d: r.d, id: e.type + "/" + e.id } : null; }).filter(Boolean);
     res.osmProtected = prot.sort((a, b) => a.d - b.d);
@@ -708,6 +721,6 @@
     Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, altText, fmtHM,
     altRange, notamQ, manualElements, groupOf, COVERAGE_GROUPS, buildQueries, overpass, elemGeoms, elemDist, heLabel, classify, analyzeNear, analyzeZones, analyzeAgri, analyzeAirfields,
     suggestSiteName, nearestPlaces, analyzeBorders, sunTimes, localToUtc, dayNightTable, workingDaysBefore, dayName, ddmmyyyy, parseDate, parseTime, hhmm,
-    ilToday, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate
+    ilToday, splitList, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate
   };
 });

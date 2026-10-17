@@ -28,6 +28,8 @@
   // גובה האזור כפי שהוא במפה; לאזור משורטט בקירוב (LLR) אין גובה מובנה — מציגים את לשון הפמ״ת. באזור ב-09 עם גובה מזערי מעפ״י — מציינים מתי יש חפיפה אנכית
   const zoneAlt = z => (z.alt || (z.pmt ? "לפי הפמ״ת: " + z.pmt : "הגובה לפי הפמ״ת")) + (isB09(z) && z.needGroundFt > 0 ? " — אין חפיפה אנכית אלא אם גובה הקרקע באתר מעל " + C.fmtInt(z.needGroundFt) + " רגל מעפ״י" : "");
   const approxMark = z => !z.approx ? "" : isB09(z) ? " (שרטוט בקירוב לפי מפת נספח א׳ של פרק ב-09 — אינו הגבול הרשמי; הקואורדינטות והתיאור בשורת האזור בנספח)" : " (שרטוט בקירוב לפי מפת נספח א׳ בפמ״ת — אינו הגבול הרשמי; הקואורדינטות ב-ENR 5.1)";
+  // נוסח הערת השוליים ¹ כפי שבפמ״ת (נספח ב׳-1), כשמוצג אזור שמציין "גובה מרבי¹"
+  const footnoteText = res => res.b09Footnote ? "¹ " + String(res.b09Footnote.text).replace(/^1\s*/, "") + " (" + res.b09Footnote.ref + ")" : "";
   function airInfraLines(res, data, cfg) {
     const th = cfg.thresholds, lines = [], R = res.R;
     res.zones.inside.forEach(z => lines.push("חופף לאזור " + z.label + " — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
@@ -73,6 +75,7 @@
     const ins = res.nearScan.inside, ring = res.nearScan.ring;
     let f8 = "<b>מעגל</b> — נ.צ. מרכזי:<br><span dir='ltr'>" + E(C.dmsLat(inp.lat)) + " &nbsp; " + E(C.dmsLon(inp.lon)) + "</span> <span class='muted'>(עשרוני: " + inp.lat + ", " + inp.lon + ")</span>";
     if (air.length) f8 += "<br>תשתית אווירית מושפעת: " + air.map(E).join(" ");
+    if (res.b09Footnote) f8 += "<br><span class='muted'>" + E(footnoteText(res)) + "</span>";
     if (ins.length) f8 += "<br>מכשולים ותשתיות בתוך האזור (עד " + R + " מ׳): " + E(listCapped(ins, 25)) + ".";
     if (ring.length) f8 += "<br>בקרבת האזור (עד " + 2 * R + " מ׳): " + E(listCapped(ring, 25)) + ".";
     const sites = res.nearScan.near;
@@ -121,6 +124,11 @@
     rows.push(["אזורים אסורים, מוגבלים ומסוכנים (LLP, LLR, LLD, LLU) ובלונים מעוגנים", a17edition,
       (a_in.length ? "<b>חפיפה לסגירה המבוקשת:</b> " + a_in.map(zl).map(E).join("; ") + ". " : "בתוך הסגירה (" + R + " מ׳): אין. ") +
       (a_near.length ? "<b>בקרבת הסגירה (עד " + C.fmtDist(R + th.near_zone_m) + " מהנקודה):</b> " + a_near.map(zl).map(E).join("; ") + "." : "בטווח " + C.fmtDist(R + th.near_zone_m) + " מהנקודה: אין אזור נוסף.")]);
+    // חפיפה/קרבה לאזור א-17: מסלול הבקשה לחריגה (בלי להחליט עבור המבקש אם נדרש פטור)
+    if (a_in.length || a_near.length) {
+      const q = ["A11-3ג", "A17-5"].map(id => rule09(data, id)).filter(Boolean);
+      if (q.length) rows.push(["בקשת חריגה מאזור אסור/מוגבל/מסוכן (א-11 סעיף 3(ג); א-17 סעיף 5)", a17edition, E(q.map(r => "לשון " + r.ref + ": ״" + r.text + "״").join(" · ") + " · המערכת אינה קובעת אם נדרשת חריגה — ההחלטה והפנייה לרת״א הן של המבקש.")]);
+    }
     // פרק ב-09 — אזורי טיסה לכטב״ם (חובה: מוצג תמיד, גם כשאין אזור בקרבה)
     {
       const b_in = zin.filter(isB09), b_near = znear.filter(isB09), ex09 = (res.zones.excluded || []);
@@ -130,9 +138,18 @@
       rows.push(["אזורי טיסה לכטב״ם (פרק ב-09: נספחים ב׳-1, ב׳-2, ב׳-3 ומפת נספח א׳)", (data.zones && data.zones.rules09 && data.zones.rules09.edition) || "פמ״ת פנים ארצי ב-09",
         (b_in.length ? "<b>הסגירה בתוך אזור טיסה לכטב״ם:</b> " + b_in.map(bz).map(E).join("; ") + ". " : "בתוך הסגירה (" + R + " מ׳): אין אזור טיסה לכטב״ם. ") +
         (b_near.length ? "<b>בקרבת הסגירה (עד " + C.fmtDist(R + th.near_zone_m) + " מהנקודה):</b> " + b_near.map(bz).map(E).join("; ") + ". " : "בטווח " + C.fmtDist(R + th.near_zone_m) + " מהנקודה: אין אזור נוסף. ") +
-        ((b_in.length || b_near.length) ? E((intro ? "לשון הפמ״ת (" + intro.ref + "): ״" + intro.text + "״ · " : "") + quotes) : "") +
+        ((b_in.length || b_near.length) ? E((intro ? "לשון הפמ״ת (" + intro.ref + "): ״" + intro.text + "״ · " : "") + quotes + (res.b09Footnote ? " · " + footnoteText(res) : "")) : "") +
         (ex09.length ? " <span class='muted'>נשללו לפי גובה (גובה מזערי מעפ״י גבוה מגובה הסגירה בכל קרקע בישראל): " + E(ex09.map(x => x.id).join(", ")) + ".</span>" : "")]);
     }
+    // קשר עין: בסגירה ייעודית הוא חובה (ב-09 סעיף 3(ג)); בקשה "ללא קשר עין" מחייבת הסדר מיוחד שהמערכת אינה יכולה לאמת
+    { const r3 = rule09(data, "3ג");
+      rows.push(["קשר עין בסגירה ייעודית (פרק ב-09 סעיף 3(ג))", (r3 && r3.ref) || "פרק ב-09",
+        inp.vlos ? "הבקשה מציינת: קיים קשר עין." : "<b>הבקשה מציינת: ללא קשר עין.</b> " + (r3 ? E("לשון " + r3.ref + ": ״" + r3.text + "״ ") : "") + E("הבקשה תקינה רק אם הדבר מצוין בתעודת כושר הטיסה של כלי הטיס או באישור המנהל — המערכת אינה יכולה לוודא זאת; יש לצרף את האישור או התעודה.")]); }
+    // כללי ב-09 החלים על כל הפעלה/סגירה — בלשון הפמ״ת, בלי לחשב עבור המבקש אם נדרשת סגירה או אם חל פטור
+    { const ids = ["4א", "5ה1", "6ד", "7ב", "7ג", "7ד", "7ה", "7ח"].concat((inp.aircraft || []).length > 1 ? ["2ד", "5ד"] : []);
+      const q = ids.map(id => rule09(data, id)).filter(Boolean);
+      if (q.length) rows.push(["כללי פרק ב-09 החלים על הפעלת כטב״ם וסגירה אווירית (לשון הפמ״ת)", (data.zones && data.zones.rules09 && data.zones.rules09.edition) || "פמ״ת פנים ארצי ב-09",
+        E(q.map(r => "לשון " + r.ref + ": ״" + r.text + "״").join(" · ") + " · הציטוטים מוצגים כלשונם; המערכת אינה מחשבת עבור המבקש אם נדרשת סגירה, אם חל פטור או אם הרדיוס והגובה שנבחרו עומדים בהפרדות — האחריות לכך על המבקש.")]); }
     // רט״ג
     const n_in = zin.filter(z => z.src === "inpa"), n_near = znear.filter(z => z.src === "inpa");
     const matches = matchUnmapped(data.inpa && data.inpa.unmapped, res.osmProtected.filter(p => p.d <= R + th.near_zone_m));
@@ -160,7 +177,7 @@
       (hp.length ? "מנחתי מסוקים: " + hp.map(a => E((a.name || "ללא שם") + " — " + C.fmtDist(a.d))).join("; ") + "." : "")]);
     // גבולות
     rows.push(["קרבה לגבול מדינה (פמ״ת א-17 סעיף 4)", "OpenStreetMap",
-      res.borders.length ? res.borders.map(b => E("גבול " + b.name + ": " + C.fmtDist(b.d) + " מהנקודה (מגבלה: " + b.km + " ק״מ) — " + (b.violates ? "הסגירה נכנסת לרצועה" : "הסגירה מחוץ לרצועה"))).join("; ") + "." : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(th.border_scan_m) + "."]);
+      res.borders.length ? res.borders.map(b => E("גבול " + b.name + ": " + C.fmtDist(b.d) + " מהנקודה (מגבלה: " + b.km + " ק״מ) — " + (b.violates ? "הסגירה נכנסת לרצועה" : "הסגירה מחוץ לרצועה"))).join("; ") + "." : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(res.borderScanM || th.border_scan_m) + "."]);
     // נוטמים: סגירות אוויריות עד notam_near_m מקצה הסגירה; מכשולים שפורסמו בנוטם עד site_near_m
     const fetched = data.notamFetchedIso ? data.notamFetchedIso.replace("T", " ").slice(0, 16) + " UTC" : "";
     const nh = res.notams.hits, nob = res.notams.obstacles || [], ex = res.notams.excluded || [];
@@ -199,7 +216,7 @@
       ["נוטמים", (nt.total || 0) + " נוטמים בקובץ · " + (nt.valid || 0) + " בתוקף בחלון הפעילות · " + nt.hits.length + " סגירות אוויריות בטווח " + C.fmtDist(th.notam_near_m) + " · " + (nt.obstacles ? nt.obstacles.length : 0) + " מכשולים שפורסמו בטווח " + C.fmtDist(th.site_near_m)],
       ["OpenStreetMap — סביבה", osmN + " אלמנטים הוחזרו מהשרת. חיפוש מכשולים (מגדלים, חשמל, מבנים גבוהים...) עד " + C.fmtDist(2 * R) + " מהנקודה; חיפוש אתרים ותשתיות (אצטדיונים, כבישים, מסילות, מנחתים, בלונים, אתרי המונים...) עד " + C.fmtDist(siteR)],
       ["OpenStreetMap — שדות תעופה", res.airfields.length + " שדות תעופה/מנחתים בטווח " + C.fmtDist(th.airfield_scan_m)],
-      ["גבולות מדינה (א-17 סעיף 4)", res.borders.length ? res.borders.map(b => b.name + " " + C.fmtDist(b.d)).join(" · ") : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(th.border_scan_m)],
+      ["גבולות מדינה (א-17 סעיף 4)", res.borders.length ? res.borders.map(b => b.name + " " + C.fmtDist(b.d)).join(" · ") : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(res.borderScanM || th.border_scan_m)],
       ["פריטים שהוזנו ידנית", String((res.inp.manualItems || []).filter(m => (m.name || "").trim()).length)]
     ];
     const co = res.nearScan.censusOnly || [], CAP = 60;
@@ -212,6 +229,7 @@
     return [
       "מקור האיסורים: " + ((data.zones && data.zones.edition) || "") + (data.zones && data.zones.mapVersion ? " (מפת החברים v" + data.zones.mapVersion + ")" : "") + ". " + n + " אזורי LLR שהפמ״ת אינו מפרסם להם קואורדינטות (הן בפרק ENR 5.1 של ה-AIP) משורטטים בקירוב לפי מפת נספח א׳ בפמ״ת — אינם גבול רשמי; בנוסף הם נבדקים מול הנוטמים וסימוני אזור צבאי/מטווח ב-OpenStreetMap.",
       "אזורי הטיסה לכטב״ם (פרק ב-09, עדכון 1/26): " + ((data.zones && data.zones.approx09Ids && data.zones.approx09Ids.length) || 0) + " אזורים (" + ((data.zones && data.zones.approx09Ids) || []).join(", ") + ") משורטטים בקירוב לפי מפת נספח א׳ של הפרק — אינם הגבול הרשמי; שאר האזורים לפי הקואורדינטות בנספחים ב׳-1, ב׳-2 וב׳-3. אזור שגובהו המזערי (מעפ״י) גבוה מגובה הסגירה בכל קרקע בישראל נשלל, והדבר מצוין בדף הבדיקות.",
+      "אזורים שנשרטטו בקירוב נבדקים בשולי ביטחון נוספים של " + cfg.thresholds.approx_margin_m + " מ׳ (בנוסף ל-" + cfg.thresholds.near_zone_m + " מ׳ הרגילים), כי גבולם אינו הרשמי; הקואורדינטות המדויקות בפמ״ת.",
       "אתרי טבע בנספח ה׳ שאין להם גבולות בקובץ: " + ((data.inpa && data.inpa.unmapped && data.inpa.unmapped.length) || 0) + " — נבדקו לפי שם מול OpenStreetMap.",
       "OpenStreetMap הוא מאגר ציבורי שנבנה על ידי מתנדבים: ייתכנו מכשולים שלא סומנו, וגבהים שלא צוינו. סקר האתר של המטיס נשאר בתוקף.",
       "גבולות מרחב מבוקר (CTR/ATZ) אינם בנתונים; מוצג המרחק לשדה התעופה הקרוב ביותר.",
@@ -220,15 +238,15 @@
   }
 
   /* ---------- שם קובץ, הגשה, ומודל ל-Word ---------- */
-  const safeName = t => String(t || "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const safeName = (t, n) => String(t || "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, n || 80);
   // "<שם המיקום> — <תאריך הפעילות>" (התיקייה/הקובץ בדרייב)
   function fileBase(res) {
     const a = C.parseDate(res.inp.dateFrom), b = C.parseDate(res.inp.dateTo);
-    return safeName(res.inp.siteName) + " — " + C.ddmmyyyy(a) + (res.inp.dateTo !== res.inp.dateFrom ? " עד " + C.ddmmyyyy(b) : "");
+    return safeName(res.inp.siteName, 48) + " — " + C.ddmmyyyy(a) + (res.inp.dateTo !== res.inp.dateFrom ? " עד " + C.ddmmyyyy(b) : "");
   }
   function submissionHtml(res, cfg, data) {
     const wd = res.workingDays, r78 = rule09(data, "7ח");
-    return (wd != null ? "ימי עבודה (א׳–ה׳, בלי חגים) מיום ההגשה (" + E(res.todayYmd.split("-").reverse().join(".")) + ") ועד תחילת הפעילות: <b>" + wd + "</b>. הנוהל (א-11 סעיף 6.ב) דורש לפחות " + cfg.thresholds.min_working_days + ". " : "") +
+    return (wd != null ? "ימים א׳–ה׳ מיום ההגשה (" + E(res.todayYmd.split("-").reverse().join(".")) + ") ועד תחילת הפעילות: <b>" + wd + "</b> (המערכת אינה מנכה חגים — אם יש חג בטווח, יש לספור ידנית). הנוהל (א-11 סעיף 6.ב) דורש לפחות " + cfg.thresholds.min_working_days + " ימי עבודה. " : "") +
       "בנוסף יש להגיש את תוכנית הטיסה שוב למודיעין טיס ביום שלפני הטיסה: <span dir='ltr'>" + E(cfg.mail.fpl) + "</span> (א-11 סעיף 3.ד.4)." +
       (r78 ? " הערה: " + E(r78.ref) + " מציין 5 ימי עבודה מראש (״" + E(r78.text) + "״), בעוד פרק א-11 סעיף 6.ב (עדכון 1/26) מחייב לפחות " + cfg.thresholds.min_working_days + "; הבדיקה כאן לפי " + cfg.thresholds.min_working_days + "." : "");
   }
@@ -323,7 +341,7 @@
       "סגירה: מעגל ברדיוס " + res.R + " מטר סביב " + C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon),
       "גובה: " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)",
       "אנשי קשר בשטח: " + inp.contactNames + " — " + inp.contactPhone, "",
-      "מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), הדמיות ותצ״א עם סימון האזור (מפה/תצ״א — נדרש בנספח ג׳), וקובץ KML.", "",
+      "מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), הדמיות עם סימון האזור על רקע תצ״א, תצ״א נקי של האזור (מפה/תצ״א — נדרש בנספח ג׳), וקובץ KML.", "",
       "בברכה,", inp.requesterName, cfg.org.name, inp.requesterPhone
     ];
     const body = lines.join("\n");

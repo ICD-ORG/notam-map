@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   const KEY = "icdReqSession";
-  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [] };
+  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], busy: false };
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
@@ -12,7 +12,7 @@
     expired: "פג תוקף ההתחברות — יש להתחבר מחדש.", auth: "ההתחברות אינה תקפה — יש להתחבר מחדש.", weak_pass: "הסיסמה קצרה מדי (לפחות 10 תווים).",
     bad_user: "שם משתמש לא תקין (3–40 תווים: אותיות, ספרות, נקודה, מקף).", exists: "המשתמש כבר קיים.", no_user: "המשתמש לא נמצא.", self: "לא ניתן לבצע פעולה זו על המשתמש שלך.",
     forbidden: "הפעולה מותרת למנהל בלבד.", bad_code: "קוד ההקמה שגוי.", no_setup: "המערכת אינה במצב הקמה.", busy: "השרת עסוק, נסו שוב.", bad_folder: "התיקייה בדרייב אינה תקפה.",
-    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים לשליחת בדיקה.", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", bad_name: "שם התיקייה אינו תקין.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
+    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים לשליחת בדיקה.", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", bad_name: "שם התיקייה אינו תקין.", bad_rid: "מזהה הבקשה אינו תקין — רעננו את הדף.", not_ready: "הבקשה לא נשמרה בשרת כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב.", mode_changed: "מצב השליחה בשרת השתנה.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
   };
   const msg = r => (r && (ERR[r.error] || r.message || r.error)) || "שגיאה לא ידועה";
 
@@ -31,7 +31,7 @@
     if (!res.ok && (res.error === "auth" || res.error === "expired" || res.error === "blocked")) { logout(); showCover(msg(res)); }
     return res;
   }
-  function logout() { clear(); renderBar(); showCover(); }
+  function logout() { clear(); closeModal(); renderBar(); showCover(); }
 
   /* ---------- מסך כניסה ---------- */
   function cover() {
@@ -80,6 +80,7 @@
     if (A.role === "admin") $("ubAdmin").onclick = openAdmin;
   }
   function modal(html) {
+    if (A.busy) return null;     // באמצע שמירה/שליחה לא מחליפים את החלון הפתוח
     closeModal();
     const m = document.createElement("div"); m.id = "authModal"; m.className = "authCover2"; m.dir = "rtl";
     m.innerHTML = '<div class="authBox wide">' + html + '<div style="margin-top:12px"><button type="button" id="mdClose">סגור</button></div></div>';
@@ -89,6 +90,7 @@
   function closeModal() { const m = $("authModal"); if (m) m.remove(); }
 
   function openPassword() {
+    if (A.busy) return;
     modal('<h2>החלפת סיסמה</h2><form id="pwForm"><label class="f"><b>סיסמה נוכחית</b><input id="pwOld" type="password" autocomplete="current-password" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה חדשה (לפחות 10 תווים)</b><input id="pwNew" type="password" autocomplete="new-password" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה חדשה שוב</b><input id="pwNew2" type="password" autocomplete="new-password" dir="ltr"></label>' +
@@ -104,6 +106,7 @@
   }
 
   async function openAdmin() {
+    if (A.busy) return null;
     const m = modal('<h2>ניהול משתמשים</h2><div id="admBody">טוען…</div>');
     let filter = "";
     const draw = async () => {
@@ -162,7 +165,16 @@
   A.loggedIn = () => !!A.token && A.exp > Date.now();
   A.getMailMode = () => A.mailMode;
   A.getMailTo = () => A.mailTo;
-  A.setMailMode = m => { A.mailMode = m; };
+  A.setMailModeValue = m => { A.mailMode = m === "live" ? "live" : "test"; };
+  A.setBusy = b => { A.busy = !!b; };
+  // מרענן מהשרת את מצב השליחה והנמענים (ואת תקפות ההתחברות); נכשל סגור — בלי תשובה תקינה אין שליחה
+  A.refresh = async () => {
+    try {
+      const r = await call("me");
+      if (r.ok) { A.mailMode = r.mailMode === "live" ? "live" : "test"; A.mailTo = r.mailTo || []; A.user = r.user; A.role = r.role; }
+      return r;
+    } catch (e) { return { ok: false, error: "network", message: "אין חיבור לשרת" }; }
+  };
   A.modal = html => modal(html);
   A.closeModal = closeModal;
   A.user_ = () => A.user;

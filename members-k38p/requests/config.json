@@ -37,6 +37,7 @@
  },
  "thresholds": {
   "near_zone_m": 1000,
+  "approx_margin_m": 750,
   "site_near_m": 1000,
   "airfield_near_m": 1000,
   "airfield_scan_m": 15000,
@@ -81,5 +82,7 @@
     "פמ\"ת א-17"
    ]
   }
- }
+ },
+ "sync_retry_ms": 30000,
+ "sync_interval_ms": 900000
 }

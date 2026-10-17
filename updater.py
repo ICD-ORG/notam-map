@@ -52,7 +52,14 @@ PHRASES = [
 
 def http_get(url):
     req = urllib.request.Request(url, headers=HDRS)
-    return urllib.request.urlopen(req, timeout=90).read().decode('utf-8', 'ignore')
+    try:
+        return urllib.request.urlopen(req, timeout=90).read().decode('utf-8', 'ignore')
+    except urllib.error.URLError as e:
+        import ssl
+        if isinstance(getattr(e, 'reason', None), ssl.SSLError):
+            raise SystemExit('שגיאת תעודת TLS מול אתר רשות שדות התעופה (' + str(e.reason) + '). זו תקלה בצד האתר (למשל תעודה שפגה) — '
+                             'לא מכבים את אימות התעודה; הריצה הבאה תנסה שוב, ודף בקשות הטיסה יחסום בקשות כשהנוטמים ישנים מדי.')
+        raise
 
 def collect_fields(page):
     fields = {}

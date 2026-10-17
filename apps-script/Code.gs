@@ -24,7 +24,8 @@ var CFG = {
   MAX_SENDS_PER_HOUR: 10,
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
-  LOG_MAX: 1000
+  LOG_MAX: 1000,           // מעבר לכך נמחקות הישנות ביותר שלא נשלחו; רשומה עם שליחה חיה נשמרת תמיד
+  MAX_NEW_FOLDERS_PER_HOUR: 30   // תקרת תיקיות בקשה חדשות למשתמש בשעה — מונע הצפה של הדרייב והיומן
 };
 
 /* ---------- עזרים ---------- */
@@ -96,7 +97,11 @@ function clearFails_(name) { CacheService.getScriptCache().remove(failsKey_(name
 function validName_(n) { return typeof n === 'string' && /^[A-Za-z0-9._\-\u0590-\u05FF ]{3,40}$/.test(n) && n === n.trim(); }
 function validPass_(p) { return typeof p === 'string' && p.length >= CFG.MIN_PASS && p.length <= 200; }
 function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|\u200e\u200f\u202a-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
-function cleanFileName_(s) { return cleanFolderName_(s) || 'file'; }
+function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסיומת (אחרת הקובץ לא יזוהה כ-Word/תמונה בשליחה)
+  var raw = String(s || '').trim(), m = /\.[A-Za-z0-9]{1,5}$/.exec(raw), ext = m ? m[0].toLowerCase() : '';
+  var base = cleanFolderName_(ext ? raw.slice(0, -ext.length) : raw).slice(0, 110).trim();
+  return (base || 'file') + ext;
+}
 // נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה
 function cleanSubject_(s) { return String(s || '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
 function cleanBody_(s) { return String(s || '').replace(/\r\n?/g, '\n').replace(/\r/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, 20000); }
@@ -138,29 +143,56 @@ function doPost(e) {
 }
 
 /* ---------- יומן בקשות (קובץ בתיקיית הבקשות) ---------- */
+// היומן הוא גם ההגנה משליחה כפולה, ולכן הוא "נכשל סגור": שגיאת דרייב או JSON פגום זורקים שגיאה (ולא מחזירים רשימה ריקה),
+// כדי שלא יימחק ההיסטוריה ולא תתאפשר שליחה כפולה בגלל תקלה זמנית.
 function logFile_() {
   var root = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID), it = root.getFilesByName(CFG.LOG_NAME);
   return it.hasNext() ? it.next() : root.createFile(CFG.LOG_NAME, '[]', 'application/json');
 }
-function readLog_() { try { var a = JSON.parse(logFile_().getBlob().getDataAsString('UTF-8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-function writeLog_(arr) { logFile_().setContent(JSON.stringify(arr.slice(-CFG.LOG_MAX))); }
-// רשומה אחת לכל תיקיית בקשה: מי יצר, מי שמר לאחרונה, ורשימת שליחות
-function logSave_(user, folderId, name) {
-  var log = readLog_(), t = now_(), i;
-  for (i = 0; i < log.length; i++) if (log[i].id === folderId) break;
-  if (i === log.length) log.push({ id: folderId, name: name, user: user, created: t, saved: t, lastUser: user, sent: [] });
-  else { log[i].saved = t; log[i].lastUser = user; log[i].name = name; }
-  writeLog_(log);
+function readLog_() {
+  var it = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID).getFilesByName(CFG.LOG_NAME);
+  if (!it.hasNext()) return [];                       // עדיין לא נוצר יומן
+  var txt = it.next().getBlob().getDataAsString('UTF-8'), a;
+  if (!String(txt).trim()) return [];
+  try { a = JSON.parse(txt); } catch (e) { throw new Error('יומן הבקשות פגום — העבודה נעצרה כדי לא לאבד היסטוריה. יש לתקן או לשחזר את הקובץ בדרייב.'); }
+  if (!Array.isArray(a)) throw new Error('יומן הבקשות פגום — העבודה נעצרה כדי לא לאבד היסטוריה.');
+  return a;
 }
-function logSent_(user, folderId, name, mode, to) {
-  var log = readLog_(), t = now_(), i;
-  for (i = 0; i < log.length; i++) if (log[i].id === folderId) break;
-  if (i === log.length) { log.push({ id: folderId, name: name, user: user, created: t, saved: t, lastUser: user, sent: [] }); i = log.length - 1; }
-  log[i].sent.push({ t: t, user: user, mode: mode, to: to });
+// שליחה "פעילה" = לא נכשלה (כולל שליחה שהתחילה ולא ידוע אם הסתיימה — לכן שמרנית)
+function sentOk_(s) { return s.st !== 'failed'; }
+function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (s.mode === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
+function trimLog_(arr) {
+  var drop = arr.length - CFG.LOG_MAX, out = [];
+  if (drop <= 0) return arr;
+  arr.forEach(function (e) { if (drop > 0 && !liveSentAt_(e)) { drop--; return; } out.push(e); });   // רשומה עם שליחה חיה לעולם לא נמחקת
+  return out;
+}
+function writeLog_(arr) { logFile_().setContent(JSON.stringify(trimLog_(arr))); }
+function findByRid_(log, rid) { for (var i = 0; i < log.length; i++) if (log[i].rid === rid) return log[i]; return null; }
+function findById_(log, id) { for (var i = 0; i < log.length; i++) if (log[i].id === id) return log[i]; return null; }
+// שם תיקייה ייחודי ליומן: בקשה אחרת באותו מקום ותאריך מקבלת סיומת (2), (3)…
+function uniqueName_(log, name, rid) {
+  var taken = {};
+  log.forEach(function (e) { if (e.rid !== rid) taken[e.name] = true; });
+  var u = name, n = 1;
+  while (taken[u]) u = name.slice(0, 112) + ' (' + (++n) + ')';
+  return u;
+}
+// "השליחה התחילה" נרשמת לפני שהמייל יוצא; בסיום מתעדכנת ל-sent, ובכשל ל-failed
+function logSentBegin_(user, folderId, name, mode, to, sid) {
+  var log = readLog_(), t = now_(), e = findById_(log, folderId);
+  if (!e) { e = { id: folderId, rid: '', name: name, user: user, created: t, saved: t, lastUser: user, ready: false, sent: [] }; log.push(e); }
+  e.sent = e.sent || [];
+  e.sent.push({ sid: sid, t: t, user: user, mode: mode, to: to, st: 'sending' });
   writeLog_(log);
   return t;
 }
-function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (s.mode === 'live' && s.t > last) last = s.t; }); return last; }
+function logSentEnd_(folderId, sid, st) {
+  var log = readLog_(), e = findById_(log, folderId);
+  if (!e) return;
+  (e.sent || []).forEach(function (x) { if (x.sid === sid) x.st = st; });
+  writeLog_(log);
+}
 
 /* ---------- פעולות ---------- */
 var ACTIONS = {
@@ -172,7 +204,7 @@ var ACTIONS = {
     if (!safeEq_(sha256Hex_(String(r.code || '')), sc)) { noteFail_('bootstrap'); return { ok: false, error: 'bad_code' }; }
     if (!validName_(r.user)) return { ok: false, error: 'bad_user' };
     if (!validPass_(r.pass)) return { ok: false, error: 'weak_pass' };
-    var salt = randHex_(24), u = { role: 'admin', blocked: false, tv: 1, salt: salt, hash: hashPass_(salt, r.pass), created: now_(), changed: now_() };
+    var salt = randHex_(24), u = { role: 'admin', blocked: false, tv: now_(), salt: salt, hash: hashPass_(salt, r.pass), created: now_(), changed: now_() };
     putUser_(r.user, u);
     props_().deleteProperty('SETUP_CODE');
     return loginOk_(r.user, u);
@@ -198,9 +230,11 @@ var ACTIONS = {
   changePassword: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
     if (!validPass_(r.newPass)) return { ok: false, error: 'weak_pass' };
-    var u = a.user;
-    if (!safeEq_(hashPass_(u.salt, String(r.oldPass || '')), u.hash)) return { ok: false, error: 'bad_login' };
-    u.salt = randHex_(24); u.hash = hashPass_(u.salt, r.newPass); u.tv = (u.tv || 1) + 1; u.changed = now_();
+    var u = a.user, lk = 'pw:' + a.name;      // גם ניחוש הסיסמה הישנה (למי שמחזיק אסימון) מוגבל, כמו בכניסה
+    if (lockedFor_(lk)) return { ok: false, error: 'locked', message: 'יותר מדי ניסיונות — נסו שוב בעוד ' + CFG.LOCK_MINUTES + ' דקות' };
+    if (!safeEq_(hashPass_(u.salt, String(r.oldPass || '')), u.hash)) { noteFail_(lk); return { ok: false, error: 'bad_login' }; }
+    clearFails_(lk);
+    u.salt = randHex_(24); u.hash = hashPass_(u.salt, r.newPass); u.tv = (Number(u.tv) || 1) + 1; u.changed = now_();
     putUser_(a.name, u);
     return loginOk_(a.name, u);
   },
@@ -208,13 +242,14 @@ var ACTIONS = {
   // המנהל רואה את כל המשתמשים, וליד כל אחד: כמה בקשות שמר/שלח ומתי לאחרונה
   listUsers: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
-    var us = users_(), log = readLog_(), st = {};
+    var us = users_(), log = [], st = {}, logError = '';
+    try { log = readLog_(); } catch (err) { logError = String(err && err.message || err); }   // תקלת יומן לא מונעת מהמנהל לחסום משתמשים
     log.forEach(function (e) {
       var s = st[e.user] || (st[e.user] = { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 });
       s.requests++; if (e.saved > s.lastRequest) s.lastRequest = e.saved;
-      (e.sent || []).forEach(function (x) { if (x.mode === 'live') { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });
+      (e.sent || []).forEach(function (x) { if (x.mode === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });
     });
-    return { ok: true, mailMode: mailMode_(), users: Object.keys(us).sort().map(function (k) {
+    return { ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
       return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null };
     }) };
@@ -229,8 +264,8 @@ var ACTIONS = {
       .map(function (e) {
         var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null;
         return { name: e.name, user: e.user, lastUser: e.lastUser, created: e.created, saved: e.saved, url: 'https://drive.google.com/drive/folders/' + e.id,
-          sentLive: sent.filter(function (s) { return s.mode === 'live'; }).length, sentTest: sent.filter(function (s) { return s.mode !== 'live'; }).length,
-          lastSent: last ? { t: last.t, user: last.user, mode: last.mode } : null };
+          sentLive: sent.filter(function (s) { return s.mode === 'live' && sentOk_(s); }).length, sentTest: sent.filter(function (s) { return s.mode !== 'live' && sentOk_(s); }).length,
+          lastSent: last ? { t: last.t, user: last.user, mode: last.mode, st: last.st || 'sent' } : null, ready: !!e.ready };
       });
     return { ok: true, requests: rows };
   },
@@ -241,7 +276,8 @@ var ACTIONS = {
     if (!validPass_(r.newPass)) return { ok: false, error: 'weak_pass' };
     if (getUser_(r.newUser)) return { ok: false, error: 'exists' };
     var salt = randHex_(24);
-    putUser_(r.newUser, { role: r.role === 'admin' ? 'admin' : 'user', blocked: false, tv: 1, salt: salt, hash: hashPass_(salt, r.newPass), created: now_(), changed: now_() });
+    putUser_(r.newUser, { role: r.role === 'admin' ? 'admin' : 'user', blocked: false, tv: now_(),   // tv=זמן יצירה: משתמש שנמחק ונוצר מחדש באותו שם לא מחייה אסימונים ישנים
+       salt: salt, hash: hashPass_(salt, r.newPass), created: now_(), changed: now_() });
     return { ok: true };
   },
 
@@ -281,14 +317,50 @@ var ACTIONS = {
     return { ok: true, mailMode: m };
   },
 
+  // פותח (או ממשיך) תיקיית בקשה. rid = מזהה בקשה שהדפדפן יוצר: אותה בקשה חוזרת לאותה תיקייה, ובקשה אחרת — גם באותו מקום ותאריך —
+  // מקבלת תיקייה נפרדת. בקשה שכבר נשלחה "חי" אינה נערכת מחדש (מתחילים בקשה חדשה).
+  // התחלת שמירה מוחקת את קבצי הבקשה הקודמים בתיקייה ומאפסת את סימון ה"מוכנה"; רק saveEnd מסמן מוכנה.
   saveBegin: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
     var name = cleanFolderName_(r.folderName);
     if (!name) return { ok: false, error: 'bad_name' };
-    var root = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID);
-    var it = root.getFoldersByName(name), f = it.hasNext() ? it.next() : root.createFolder(name);
-    logSave_(a.name, f.getId(), name);
-    return { ok: true, folderId: f.getId(), url: f.getUrl(), name: name };
+    var rid = String(r.rid || '');
+    if (!/^[a-f0-9]{16,64}$/.test(rid)) return { ok: false, error: 'bad_rid' };
+    var log = readLog_(), entry = findByRid_(log, rid), folder = null, t = now_();
+    if (entry) {
+      if (entry.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
+      if (liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
+      try { folder = DriveApp.getFolderById(entry.id); if (folder.isTrashed()) folder = null; } catch (err) { folder = null; }
+    }
+    var unique = uniqueName_(log, name, rid);
+    if (!folder) {
+      var cache = CacheService.getScriptCache(), nk = 'nf:' + sha256Hex_(a.name).slice(0, 16) + ':' + Math.floor(t / 3600000), made = Number(cache.get(nk)) || 0;
+      if (made >= CFG.MAX_NEW_FOLDERS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי בקשות חדשות בשעה האחרונה' };
+      cache.put(nk, String(made + 1), 3600);
+      folder = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID).createFolder(unique);
+    } else {
+      if (folder.getName() !== unique) folder.setName(unique);
+      var old = folder.getFiles();
+      while (old.hasNext()) { var of = old.next(); if (/\.(docx|kml|png|jpe?g|json)$/i.test(of.getName())) of.setTrashed(true); }   // אין שאריות מגרסה קודמת (שם אחר) שיצורפו בטעות
+    }
+    if (!entry) { entry = { id: folder.getId(), rid: rid, name: unique, user: a.name, created: t, sent: [] }; log.push(entry); }
+    entry.id = folder.getId(); entry.name = unique; entry.base = name; entry.saved = t; entry.lastUser = a.name; entry.ready = false; entry.readyAt = 0;
+    writeLog_(log);
+    return { ok: true, folderId: folder.getId(), url: folder.getUrl(), name: unique };
+  },
+
+  // סוף שמירה: מסמן את הבקשה "מוכנה לשליחה" רק אם הלקוח אישר שהיא מוכנה והתיקייה מכילה Word ותמונה
+  saveEnd: function (r) {
+    var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
+    var folder = requestFolder_(r.folderId);
+    if (!folder) return { ok: false, error: 'bad_folder' };
+    var log = readLog_(), e = findById_(log, folder.getId());
+    if (!e) return { ok: false, error: 'bad_folder' };
+    if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
+    var c = folderFiles_(folder);
+    e.ready = !!r.ready && c.hasDocx && c.hasImage; e.readyAt = e.ready ? now_() : 0;
+    writeLog_(log);
+    return { ok: true, ready: e.ready };
   },
 
   saveFile: function (r) {
@@ -305,49 +377,72 @@ var ACTIONS = {
   },
 
   // שליחת הבקשה למשרד נוטאם. הנמענים קבועים (CFG.MAIL_TO); הקבצים נלקחים מהתיקייה שנשמרה בדרייב.
-  // במצב test המייל נשלח רק לבעלים. שליחה חוזרת של בקשה שכבר נשלחה "חי" דורשת again:true במפורש.
+  // תנאים שנאכפים כאן ולא רק בדפדפן: הבקשה ביומן ונשמרה כ"מוכנה" (saveEnd), רק בעליה או מנהל שולחים אותה,
+  // הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
+  // ושליחה חוזרת של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. במצב test המייל נשלח רק לבעלים.
   sendRequest: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
+    var mode = mailMode_();
+    if (r.expectMode !== mode) return { ok: false, error: 'mode_changed', mailMode: mode };
     var folder = requestFolder_(r.folderId);
     if (!folder) return { ok: false, error: 'bad_folder' };
     var subject = cleanSubject_(r.subject), body = cleanBody_(r.body);
     if (!subject || !body) return { ok: false, error: 'bad_mail' };
 
+    var log = readLog_(), entry = findById_(log, folder.getId());
+    if (!entry) return { ok: false, error: 'bad_folder' };
+    if (entry.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
+    if (!entry.ready) return { ok: false, error: 'not_ready', message: 'הבקשה לא נשמרה כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב' };
+    if (mode === 'live' && !r.again) {
+      if (liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
+      // אותו מקום ותאריך שכבר נשלחו חי מבקשה אחרת (למשל אחרי רענון הדף, כשמזהה הבקשה אבד) — גם זו כפילות אפשרית למשרד נוטאם
+      var base = entry.base || entry.name, twin = 0;
+      log.forEach(function (e) { if (e.id !== entry.id && (e.base || e.name) === base) twin = Math.max(twin, liveSentAt_(e)); });
+      if (twin) return { ok: false, error: 'already_sent', sentAt: twin, similar: true };
+    }
+
     var cache = CacheService.getScriptCache(), hourKey = 'sends:' + Math.floor(now_() / 3600000), sends = Number(cache.get(hourKey)) || 0;
     if (sends >= CFG.MAX_SENDS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי שליחות בשעה האחרונה' };
 
-    var files = [], names = [], total = 0, hasDocx = false, hasImage = false, it = folder.getFiles();
-    while (it.hasNext()) {
-      var f = it.next(), n = f.getName();
-      if (!/\.(docx|kml|png|jpe?g)$/i.test(n)) continue;       // רק קבצי הבקשה: לא יומן, לא JSON, לא סימוני שליחה
-      total += f.getSize();
-      if (/\.docx$/i.test(n)) hasDocx = true;
-      if (/\.(png|jpe?g)$/i.test(n)) hasImage = true;
-      files.push(f.getBlob()); names.push(n);
-    }
-    if (!hasDocx || !hasImage) return { ok: false, error: 'missing_files', message: 'חסר קובץ Word או תמונת מפה/תצ"א בתיקייה' };   // א-11 נספח ג': חובה לצרף מפה/תצ"א
-    if (total > CFG.MAX_MAIL_BYTES) return { ok: false, error: 'too_big' };
-
-    var log = readLog_(), entry = null;
-    for (var i = 0; i < log.length; i++) if (log[i].id === String(r.folderId)) entry = log[i];
-    var mode = mailMode_();
-    if (mode === 'live' && !r.again && liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
+    var c = folderFiles_(folder);
+    if (!c.hasDocx || !c.hasImage) return { ok: false, error: 'missing_files', message: 'חסר קובץ Word או תמונת מפה/תצ"א בתיקייה' };   // א-11 נספח ג': חובה לצרף מפה/תצ"א
+    if (c.total > CFG.MAX_MAIL_BYTES) return { ok: false, error: 'too_big' };
 
     var owner = ownerEmail_(), to = mode === 'live' ? CFG.MAIL_TO.slice() : (owner ? [owner] : []);
     if (!to.length) return { ok: false, error: 'no_owner' };
-    MailApp.sendEmail({
-      to: to.join(','), cc: mode === 'live' && owner ? owner : '', replyTo: owner || '', name: CFG.SENDER_NAME,
-      subject: (mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ') + subject, body: body, attachments: files
-    });
+    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), mode, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
     cache.put(hourKey, String(sends + 1), 3600);
-    var t = logSent_(a.name, String(r.folderId), folder.getName(), mode, to);
+    try {
+      MailApp.sendEmail({
+        to: to.join(','), cc: mode === 'live' && owner ? owner : '', replyTo: owner || '', name: CFG.SENDER_NAME,
+        subject: (mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ') + subject, body: body, attachments: c.blobs
+      });
+    } catch (err) {
+      try { logSentEnd_(folder.getId(), sid, 'failed'); } catch (e2) { /* הרשומה נשארת "בשליחה" — שמרני */ }
+      throw err;
+    }
+    try { logSentEnd_(folder.getId(), sid, 'sent'); } catch (e3) { /* המייל כבר יצא; הרשומה נשארת "בשליחה" וממשיכה לחסום כפילות */ }
     try {   // סימון בתוך תיקיית הבקשה, כדי שגם מי שפותח את התיקייה בדרייב יראה שנשלחה
       folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (mode === 'live' ? '' : ' (בדיקה)') + '.txt',
-        ['נשלח ע"י: ' + a.name, 'מצב: ' + (mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — לבעלים בלבד'), 'אל: ' + to.join(', '), 'עותק: ' + (mode === 'live' ? owner : '—'), 'נושא: ' + subject, 'קבצים: ' + names.join(' | ')].join('\n'), 'text/plain');
-    } catch (e) { /* הסימון אינו חיוני */ }
-    return { ok: true, mode: mode, to: to, cc: mode === 'live' ? owner : '', files: names, sentAt: t };
+        ['נשלח ע"י: ' + a.name, 'מצב: ' + (mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — לבעלים בלבד'), 'אל: ' + to.join(', '), 'עותק: ' + (mode === 'live' ? owner : '—'), 'נושא: ' + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
+    } catch (e4) { /* הסימון אינו חיוני */ }
+    return { ok: true, mode: mode, to: to, cc: mode === 'live' ? owner : '', files: c.names, sentAt: t };
   }
 };
+
+// קבצי הבקשה בתיקייה (Word, KML, תמונות) — לא יומן, לא JSON ולא סימוני שליחה
+function folderFiles_(folder) {
+  var out = { blobs: [], names: [], total: 0, hasDocx: false, hasImage: false }, it = folder.getFiles();
+  while (it.hasNext()) {
+    var f = it.next(), n = f.getName();
+    if (!/\.(docx|kml|png|jpe?g)$/i.test(n)) continue;
+    out.total += f.getSize();
+    if (/\.docx$/i.test(n)) out.hasDocx = true;
+    if (/\.(png|jpe?g)$/i.test(n)) out.hasImage = true;
+    out.blobs.push(f.getBlob()); out.names.push(n);
+  }
+  return out;
+}
 
 function loginOk_(name, u) {
   var t = makeToken_(name, u);

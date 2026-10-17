@@ -8,6 +8,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { makeEnv } from "../helpers/apps-script-env.mjs";
+import { dataHash } from "../../scripts/export-zones.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..", "..");
@@ -50,48 +51,55 @@ function tilePng(seed) {
 // נתוני אמת שמורים; חותמת הזמן של OSM מוחלפת ב"עכשיו" כדי שבדיקת הגיל (שרת עם נתונים ישנים נפסל) לא תכשיל את הבדיקה
 const fx = n => { const d = JSON.parse(fs.readFileSync(path.join(FX_OVERRIDE || path.join(ROOT, "members-k38p", "requests", "selftest", "yarkon"), n + ".json"), "utf8")); if (d.osm3s) d.osm3s.timestamp_osm_base = new Date().toISOString(); return JSON.stringify(d); };
 const CORS = { "access-control-allow-origin": "*" };
-const LEAFLET_DIR = process.env.LEAFLET_DIR || "";
+// Apps Script אמיתי אינו תומך ב-CORS preflight: כל פנייה אליו חייבת להיות "בקשה פשוטה" (text/plain). המדמה מסרב ל-OPTIONS וסופר הפרות.
+const API_STATS = { preflight: 0, nonSimple: 0, posts: 0 };
+const apiHandler = (env, calls, opts) => async r => {
+  const req = r.request(), m = req.method();
+  if (m === "OPTIONS") { API_STATS.preflight++; return r.abort(); }
+  if (m === "POST") { API_STATS.posts++; if (!/^text\/plain/i.test(req.headers()["content-type"] || "")) API_STATS.nonSimple++; }
+  if (opts && opts.apiDown) return r.abort();
+  const body = m === "POST" ? JSON.parse(req.postData() || "{}") : null;
+  if (body && calls) calls.actions.push(body.action);
+  if (opts && opts.apiDelay) await new Promise(x => setTimeout(x, opts.apiDelay));
+  r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: m === "POST" ? JSON.stringify(env.call(body)) : JSON.stringify(env.doGet()) });
+};
 
 async function newPage(browser, opts) {
   opts = opts || {};
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 }, locale: "he-IL", timezoneId: "Asia/Jerusalem", acceptDownloads: true });
   const page = await ctx.newPage();
-  const calls = { overpass: 0, tiles: 0, nominatim: 0 };
+  const calls = { overpass: 0, tiles: 0, nominatim: 0, actions: [] };
   page._calls = calls;
+  page._notamIso = new Date().toISOString();            // חותמת נוטמים יציבה לאורך הבדיקה (כמו בקובץ האמיתי); בדיקות יכולות להקדים אותה
+  if (opts.notamAgeH) page._notamIso = new Date(Date.now() - opts.notamAgeH * 3600e3).toISOString();   // נוטמים ישנים: גם במפה (אחרת הסנכרון היה חוסם מסיבה אחרת)
+  page._map = { tamper: false, zonesHash: null };        // מצב 'המפה התעדכנה' שאפשר להפעיל באמצע בדיקה
   page.on("pageerror", e => check("אין שגיאת JS בדף", false, String(e.message || e)));
   // השער של חברי האתר ושרת ההתחברות מדומים תמיד (גם במצב חי); רק OSM/Nominatim/אריחים אמיתיים במצב חי
   await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
   await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
-    const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API;
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API; d.sync_retry_ms = 400;
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
   });
-  if (opts.tamperMap) await page.route(/\/members-k38p\/index\.html/, r => { const h = fs.readFileSync(path.join(ROOT, "members-k38p", "index.html"), "utf8"); r.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: h.replace('name:"שמורת הטבע החולה"', 'name:"שמורת הטבע החולה (עודכן)"') }); });
+  const tamperedHtml = () => fs.readFileSync(path.join(ROOT, "members-k38p", "index.html"), "utf8").replace('name:"שמורת הטבע החולה"', 'name:"שמורת הטבע החולה (עודכן)"');
+  page._tamperedHash = () => dataHash(tamperedHtml());
+  await page.route(/\/members-k38p\/index\.html/, r => (opts.tamperMap || page._map.tamper) ? r.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: tamperedHtml() }) : r.continue());
+  await page.route(/\/members-k38p\/data\/zones\.json/, async r => {
+    if (!page._map.zonesHash) return r.continue();
+    const resp = await r.fetch(), j = await resp.json(); j.dataHash = page._map.zonesHash;
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(j) });
+  });
   if (opts.newPmt) await page.route(/\/members-k38p\/pamat-meta\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ pamat_update: "2/26", pamat_date: "01 FEB 2027", map_version: "9.9", map_date: "01 FEB 2027" }) }));
+  if (opts.notamAgeH) await page.route(/\/notam-data\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetched_iso: page._notamIso, notams: [] }) }));
   if (opts.mapNotamNewer) await page.route(/\/notam-data\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetched_iso: new Date(Date.now() + 3600e3).toISOString(), notams: [] }) }));
   // שרת Apps Script האמיתי (Code.gs) רץ כאן על הדמיית שירותי גוגל
   const env = opts.env || makeEnv(); page._env = env;
   if (!opts.env) { const code = env.run("initialize"); const b = env.call({ action: "bootstrap", code, user: ADMIN, pass: PASS }); if (!b.ok) throw new Error("bootstrap " + JSON.stringify(b)); }
-  await page.route(API, r => {
-    const m = r.request().method();
-    if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } });
-    if (opts.apiDown) return r.abort();
-    const body = m === "POST" ? JSON.stringify(env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(env.doGet());
-    r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body });
-  });
+  await page.route(API, apiHandler(env, calls, opts));
   if (!LIVE) {
     await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
-    if (LEAFLET_DIR) { // Leaflet מקומי (בסביבה בלי גישה ל-CDN): LEAFLET_DIR = .../package/dist
-      await page.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/1\.9\.4\/.*/, r => {
-        const name = r.request().url().split("/").pop().split("?")[0];
-        const alias = { "leaflet.min.js": "leaflet.js", "leaflet.min.css": "leaflet.css" }[name] || name;
-        const f = [path.join(LEAFLET_DIR, alias), path.join(LEAFLET_DIR, "images", alias)].find(x => fs.existsSync(x));
-        if (f) r.fulfill({ status: 200, contentType: f.endsWith(".css") ? "text/css" : f.endsWith(".js") ? "text/javascript" : "image/png", body: fs.readFileSync(f) });
-        else r.fulfill({ status: 404, body: "" });
-      });
-    }
     await page.route(/\/notam-all\.json/, r => { // תמונת מצב קבועה של הנוטמים, עם זמן משיכה "עכשיו" כדי שבדיקת הגיל לא תכשיל את הבדיקה
       const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "selftest", "notam-data.snap.json"), "utf8"));
-      d.fetched_iso = new Date().toISOString(); d.fetched_at = d.fetched_iso; d.listed = d.count = d.notams.length; d.failed = [];
+      d.fetched_iso = page._notamIso; d.fetched_at = d.fetched_iso; d.listed = d.count = d.notams.length; d.failed = [];
       if (opts.notamIncomplete) { d.listed += 2; d.failed = ["C0001/26", "C0002/26"]; }
       r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) });
     });
@@ -320,10 +328,10 @@ try {
       check("מנהל מוסיף משתמש מהממשק", !!page._env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).ok, "");
       // התחברות נוספת של dave בחלון אחר
       const ctx2 = await browser.newContext({ locale: "he-IL" }); const p2 = await ctx2.newPage();
-      await p2.route(API, r => { const m = r.request().method(); if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } }); r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: m === "POST" ? JSON.stringify(page._env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(page._env.doGet()) }); });
+      await p2.route(API, apiHandler(page._env, null, {}));
       await p2.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
       await p2.route(/\/requests\/config\.json/, r => { const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = API; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) }); });
-      await p2.route(/fonts\.|leaflet|arcgisonline|openstreetmap/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
+      await p2.route(/fonts\.|arcgisonline|openstreetmap/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
       await p2.goto(APP); await login(p2, "dave.pilot", "dave-pass-12345");
       check("משתמש רגיל: אין כפתור ניהול משתמשים", !(await p2.$("#ubAdmin")), "");
       // חסימה מהממשק של המנהל
@@ -366,12 +374,19 @@ try {
       const rec = JSON.parse(folder.files.find(f => f.name.endsWith(".json")).bytes.toString("utf8"));
       check("נתוני הבקשה בדרייב לא כוללים שמות וטלפונים", !/בודק ראשון|050-0000001|050-0000002/.test(JSON.stringify(rec)) && rec.inputs && rec.inputs.lat, Object.keys(rec.inputs || {}).join(","));
       // שמירה חוזרת באותו שם מחליפה ולא מכפילה
+      await page.evaluate(() => { document.getElementById("driveMsg").textContent = ""; });   // אחרת ההודעה הקודמת מספקת את ההמתנה לפני שהשמירה החוזרת הסתיימה
       await page.click("#btnDrive");
-      await page.waitForFunction(() => /נשמרו 6 קבצים/.test(document.querySelector("#driveMsg").textContent));
+      await page.waitForFunction(() => /נשמרו 6 קבצים/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
       await page.waitForTimeout(300);
       check("שמירה חוזרת מחליפה קבצים באותו שם (בלי כפילויות)", folder.files.filter(f => !f.trashed).length === 6 && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 1, "");
-      // חסימה אחרי הפקה: שמירה בדרייב נדחית
-      page._env.call({ action: "setBlocked", token: page._env.call({ action: "login", user: ADMIN, pass: PASS }).token, target: ADMIN, blocked: true });
+      // בקשה אחרת באותו מקום ותאריך (דף חדש = מזהה בקשה חדש): תיקייה נפרדת, והקבצים של הראשונה לא נדרסים
+      { const { ctx: ctxB, page: pageB } = await newPage(browser, { env: page._env });
+        await pageB.goto(APP); await pageB.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(pageB);
+        await readyRequest(pageB); await pageB.click("#btnDrive");
+        await pageB.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
+        const fs2 = Object.values(page._env.folders).filter(f => f.parent === "ROOT");
+        check("אותו מקום ותאריך מבקשה אחרת: שתי תיקיות נפרדות, והראשונה שלמה", fs2.length === 2 && /\(2\)$/.test(fs2[1].name) && folder.files.filter(f => !f.trashed).length === 6, fs2.map(f => f.name).join(" | "));
+        await ctxB.close(); }
       await ctx.close();
     }
     // 6ו: מידע שהתעדכן במפה ולא נקלט — חוסם: נתוני אזורים, מהדורת פמ"ת חדשה, נוטמים של המפה חדשים יותר
@@ -404,7 +419,7 @@ try {
       check("כפתור 'שלח' נפתח כשהבקשה מוכנה", !(await page.isDisabled("#btnSend")), "");
       await page.click("#btnSend"); await page.waitForSelector(".sendBox");
       const mt = await page.textContent(".sendBox");
-      check("חלון השליחה: מצב בדיקה, נמען הבעלים בלבד, נושא וקבצים", /מצב בדיקה/.test(mt) && /הבעלים \(בדיקה\)/.test(mt) && /בקשה לסגירה אווירית —/.test(mt) && /קובץ KML/.test(mt) && !/notamoffice@iaa\.gov\.il, nofm/.test(mt.split("נוסח המייל")[0].split("אל:")[1] || ""), mt.replace(/\s+/g, " ").slice(0, 200));
+      check("חלון השליחה: מצב בדיקה, נמען הבעלים בלבד, נושא וקבצים", /מצב בדיקה/.test(mt) && /בעל המערכת \(בדיקה\)/.test(mt) && /בקשה לסגירה אווירית —/.test(mt) && /קובץ KML/.test(mt) && !/notamoffice@iaa\.gov\.il, nofm/.test(mt.split("נוסח המייל")[0].split("אל:")[1] || ""), mt.replace(/\s+/g, " ").slice(0, 200));
       check("כפתור השליחה חסום עד סימון האישור", await page.isDisabled("#sendGo"), "");
       await page.check("#sendOk"); check("אחרי סימון האישור הכפתור נפתח", !(await page.isDisabled("#sendGo")), "");
       await page.click("#sendGo");
@@ -417,6 +432,86 @@ try {
       const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
       check("סימון 'נשלח (בדיקה)' נוצר בתיקייה בדרייב", folder.files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folder.files.map(f => f.name).join(" | ").slice(0, 200));
       const sm = await page.textContent("#sendMsg"); check("ההודעה בעמוד מציינת שליחה לבדיקה בלבד", /בדיקה/.test(sm), sm.slice(0, 120));
+      // הודעות 'נשלח'/'נשמר' שייכות לבקשה שנשלחה — כשהבקשה משתנה הן נמחקות ולא מטעות לגבי הבקשה החדשה
+      await page.click("#mdClose");
+      await page.fill("#siteName", "שם אחר לגמרי");
+      await page.waitForFunction(() => document.querySelector("#sendMsg").textContent === "" && document.querySelector("#driveMsg").textContent === "", null, { timeout: 5000 });
+      check("שינוי בבקשה אחרי שליחה מוחק את הודעות 'נשלח' ו'נשמר בדרייב'", true, "");
+      // בקשה שלא השתנתה נשלחת שוב מאותה תיקייה (בלי שמירה כפולה), ושינוי ב'דף הבדיקות' (Word) מצריך שמירה מחדש
+      await ctx.close();
+    }
+    // 6ח1: המנהל מעביר למצב חי בזמן שחלון השליחה פתוח בדפדפן שהציג 'בדיקה' — לא נשלח דבר, החלון נפתח מחדש במצב חי ודורש אישור מחדש
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      check("חלון השליחה נפתח במצב בדיקה", /מצב בדיקה/.test(await page.textContent(".sendBox")), "");
+      const env = page._env, adminTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "setMailMode", token: adminTok, mode: "live" });          // המנהל משנה בזמן שהחלון פתוח
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /מצב חי/.test((document.querySelector(".sendBox") || {}).textContent || ""), null, { timeout: 60000 });
+      check("מצב השליחה השתנה בשרת: לא נשלח מייל ולא נוצרה תיקייה בדרייב", env.mails.length === 0 && Object.values(env.folders).filter(f => f.parent === "ROOT").length === 0, env.mails.length + " מיילים");
+      check("החלון נפתח מחדש במצב חי, עם אזהרה ועם אישור שיש לסמן שוב", /אינה ניתנת לביטול/.test(await page.textContent(".sendBox")) && (await page.isDisabled("#sendGo")) && /מצב השליחה בשרת השתנה/.test(await page.textContent("#sendMsg")), "");
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלחה למשרד נוטאם|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      check("אחרי אישור מחודש במצב חי: נשלח למשרד נוטאם", env.mails.length === 1 && env.mails[0].to === "notamoffice@iaa.gov.il,nofm@iaa.gov.il", env.mails.length + " מיילים");
+      await ctx.close();
+    }
+    // 6ח2: בקשה ששונתה בזמן שחלון השליחה פתוח (אחרי שהבקשה הייתה 'מוכנה') — נחסמת בלחיצה ולא נשלחת
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      await page.check("#sendOk");
+      await page.evaluate(() => { const h = document.getElementById("height"); h.value = "95"; h.dispatchEvent(new Event("input", { bubbles: true })); });   // שינוי נתון אחרי הבדיקות
+      await page.click("#sendGo");
+      await page.waitForFunction(() => /נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 30000 });
+      const t = await page.textContent("#sendProg");
+      check("בקשה ששונתה אחרי שהייתה מוכנה: השליחה נעצרת, אין מייל ואין תיקייה", /אינה מוכנה|השתנו/.test(t) && page._env.mails.length === 0 && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 0, t.slice(0, 160));
+      await ctx.close();
+    }
+    // 6ח3: בזמן שמירה/שליחה — אי אפשר לסגור את החלון, להחליף אותו או להתחיל זרימה שנייה
+    {
+      const { ctx, page } = await newPage(browser, { apiDelay: 350 });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /שומר בדרייב/.test(document.querySelector("#sendProg").textContent), null, { timeout: 30000 });
+      const mid = await page.evaluate(() => ({ close: document.getElementById("mdClose").disabled, send: document.getElementById("btnSend").disabled, drive: document.getElementById("btnDrive").disabled, go: document.getElementById("sendGo").disabled, replaced: window.ReqAuth.modal("<b>x</b>") }));
+      check("באמצע שליחה: כפתור הסגירה, 'שמור בדרייב' ו'שלח' חסומים, והחלון לא מוחלף", mid.close && mid.send && mid.drive && mid.go && mid.replaced === null && !!(await page.$(".sendBox")), JSON.stringify(mid));
+      await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      check("זרימה אחת בלבד: saveBegin נקרא פעם אחת ונשלח מייל אחד", page._calls.actions.filter(a => a === "saveBegin").length === 1 && page._env.mails.length === 1, page._calls.actions.filter(a => a === "saveBegin").length + " saveBegin");
+      check("בסיום הכפתורים משוחררים", !(await page.evaluate(() => document.getElementById("mdClose").disabled)), "");
+      await ctx.close();
+    }
+    // 6ח4: חסימה/פקיעה באמצע שליחה: מסך הכניסה מוצג (החלון נסגר) ולא נשלח דבר
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      const adminTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "addUser", token: adminTok, newUser: "dave.pilot", newPass: "dave-pass-12345" });
+      const { ctx, page } = await newPage(browser, { env });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, "dave.pilot", "dave-pass-12345");
+      await readyRequest(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk");
+      env.call({ action: "setBlocked", token: adminTok, target: "dave.pilot", blocked: true });
+      await page.click("#sendGo");
+      await page.waitForSelector("#authCover", { timeout: 30000 });
+      const top = await page.evaluate(() => { const f = document.getElementById("authForm") || document.getElementById("authCover"), r = f.getBoundingClientRect(), el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return !!(el && el.closest("#authCover")); });
+      check("משתמש נחסם באמצע שליחה: מסך הכניסה מעל הכול, החלון נסגר, אין מייל ואין תיקייה", top && !(await page.$("#authModal")) && env.mails.length === 0 && Object.values(env.folders).filter(f => f.parent === "ROOT").length === 0 && /חסום/.test(await page.textContent("#authCover")), "");
+      await ctx.close();
+    }
+    // 6ח5: טקסט נ״צ לא חוקי לא מתעלם בשקט ולא מריץ את הבדיקות על הנקודה הקודמת
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await fillExample(page);
+      await page.fill("#coord", "זה לא נ״צ");
+      await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#e_coord").textContent.length > 0, null, { timeout: 10000 });
+      check("נ״צ לא חוקי: שגיאה בשדה ואין הרצה", /אינו חוקי/.test(await page.textContent("#e_coord")) && !(await page.isVisible("#resultsSec")) && page._calls.overpass === 0, await page.textContent("#e_coord"));
       await ctx.close();
     }
     // 6ט: מצב חי — נמענים מפמ״ת א-11 סעיף 6(א), עותק לבעלים, חסימת שליחה כפולה ושליחה חוזרת מפורשת
@@ -448,8 +543,9 @@ try {
       const adm = await page.textContent("#admBody");
       check("ניהול: מצב שליחה חי מוצג, והיומן מציג את הבקשה כנשלחה למשרד נוטאם (פעמיים)", /מצב שליחה: חי/.test(adm) && /נשלחה למשרד נוטאם \(2 פעמים\)/.test(adm), adm.replace(/\s+/g, " ").slice(0, 300));
       check("ניהול: ליד כל משתמש (שאינו המנהל עצמו) כפתור 'חסום מבקשות'", (await page.$$("button.block[data-blk='dave.pilot']")).length === 1 && (await page.$$("button[data-blk='" + ADMIN + "']")).length === 0, "");
-      const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => x.textContent.replace(/\s+/g, " ")));
-      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", rows.some(x => x.includes(ADMIN) && /\b1\b/.test(x)), rows.join(" || ").slice(0, 300));
+      const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => [...x.children].map(c => c.textContent.trim())));
+      const adminRow = rows.find(c => c[0] === ADMIN);
+      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", !!adminRow && adminRow[3] === "1" && adminRow[4] === "2", JSON.stringify(adminRow));
       await page.click("button.block[data-blk='dave.pilot']"); await page.waitForSelector("button.unblock[data-blk='dave.pilot']");
       check("חסימה מהכפתור: מופיע 'פתח מחדש את הבקשות' והמשתמש חסום בשרת", /פתח מחדש את הבקשות/.test(await page.textContent("button.unblock[data-blk='dave.pilot']")) && env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).error === "blocked", "");
       await page.click("button.unblock[data-blk='dave.pilot']"); await page.waitForSelector("button.block[data-blk='dave.pilot']");
@@ -474,6 +570,49 @@ try {
       check("כתובות יעד בשרת שונות מהנוהל: לא נפתח חלון שליחה ולא נשלח דבר", /שונות מהכתובות בנוהל א-11/.test(t) && !(await page.$(".sendBox")) && env.mails.length === 0, t.slice(0, 160));
       await ctx.close();
     }
+    // 6ל: המפה התעדכנה אחרי שהבקשה כבר הייתה מוכנה — שליחה/שמירה נחסמות, הנתונים נטענים מחדש, והבקשה חייבת בדיקה חוזרת
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      check("לפני עדכון המפה: כפתור השליחה פתוח", !(await page.isDisabled("#btnSend")), "");
+      page._map.tamper = true;                                 // המפה עודכנה; הייצוא עדיין לא רץ
+      await page.click("#btnSend");
+      await page.waitForFunction(() => /אינם מסונכרנים/.test(document.querySelector("#sendMsg").textContent), null, { timeout: 20000 });
+      check("המפה התעדכנה והייצוא טרם רץ: השליחה נחסמת, אין חלון ואין מייל", !(await page.$(".sendBox")) && page._env.mails.length === 0 && (await page.evaluate(() => document.querySelector("#syncBanner").style.display)) === "block", "");
+      check("המפה התעדכנה: שמירה בדרייב ושליחה חסומות בשער (שום תיקייה לא נוצרה)", (await page.isDisabled("#btnDrive")) && (await page.isDisabled("#btnSend")) && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 0, "");
+      page._map.zonesHash = page._tamperedHash();              // הייצוא האוטומטי הסתיים: zones.json תואם למפה החדשה — הדף מתאושש מעצמו
+      await page.waitForFunction(() => /הבקשה אינה מוכנה לשליחה/.test(document.querySelector("#gate").textContent) && /התעדכנו מאז הרצת הבדיקות/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+      check("אחרי שהייצוא הסתיים: הדף טוען נתונים חדשים, הבקשה מסומנת כישנה וחייבת הרצה מחדש", await page.isDisabled("#btnSend") && (await page.evaluate(() => window.__REQ.S.data.zones.dataHash)) === page._map.zonesHash, "");
+      await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#gate .banner") && !/התעדכנו מאז הרצת/.test(document.querySelector("#gate").textContent), null, { timeout: 150000 });
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 15000 });
+      check("אחרי הרצה חוזרת על הנתונים החדשים: הבקשה מוכנה והשליחה פתוחה", !(await page.isDisabled("#btnSend")), "");
+      await ctx.close();
+    }
+    // 6ם: נוטמים חדשים בשרת אחרי טעינת הדף — נטענים מחדש והבקשה נפסלת עד הרצה חוזרת
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      page._notamIso = new Date(Date.now() + 3 * 3600e3).toISOString();    // משיכה חדשה של הנוטמים (שני הקבצים)
+      await page.route(/\/notam-data\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetched_iso: page._notamIso, notams: [] }) }));
+      await page.click("#btnSend");
+      await page.waitForFunction(() => /התעדכנו מאז הרצת הבדיקות/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+      check("נוטמים חדשים אחרי הניתוח: הבקשה נפסלת וחייבת בדיקה חוזרת (בלי מייל)", await page.isDisabled("#btnSend") && page._env.mails.length === 0 && (await page.evaluate(() => window.__REQ.S.data.notamFetchedIso)) === page._notamIso, "");
+      await ctx.close();
+    }
+    // 6ו2: נוטמים ישנים מ-72 שעות (גם במפה, כלומר סנכרון תקין) — הבדיקה נכשלת וההודעה מסבירה מה לעשות; הבקשה לא מוכנה
+    {
+      const { ctx, page } = await newPage(browser, { notamAgeH: 80 });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await fillExample(page); await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      const g = await page.textContent("#gate");
+      check("נוטמים בני 80 שעות: הבקשה אינה מוכנה, ההודעה מציינת גיל ומה לעשות, ושליחה חסומה", /אינה מוכנה לשליחה/.test(g) && /נתוני הנוטמים ישנים \(80 שעות/.test(g) && /Run workflow/.test(g) && (await page.isDisabled("#btnSend")) && (await page.isDisabled("#btnDrive")), g.replace(/\s+/g, " ").slice(0, 200));
+      await ctx.close();
+    }
     // 6ה: קובץ נוטמים חלקי -> הבדיקה נכשלת ולא מוכן לשליחה
     {
       const { ctx, page } = await newPage(browser, { notamIncomplete: true });
@@ -485,6 +624,7 @@ try {
       await ctx.close();
     }
   }
+  check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 50 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();
 }

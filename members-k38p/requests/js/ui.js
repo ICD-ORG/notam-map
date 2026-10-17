@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, $ = id => document.getElementById(id);
-  const S = { cfg: null, data: {}, res: null, statuses: {}, map: null, overview: null, aerial: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null };
+  const S = { cfg: null, data: {}, res: null, statuses: {}, map: null, overview: null, aerial: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "" };
   const PERSON_KEY = "icd_req_person_v1";
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
   const esc = C.esc;
@@ -13,32 +13,48 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* פרטיות/חסימה */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
+  // כתובת ייחודית בכל בקשה: עוקפת את מטמון ה-HTTP של GitHub Pages ואת ה-service worker של המפה (שמגיש מהמטמון כשהרשת איטית)
+  const bust = u => u + (u.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
   async function getJson(url) {
-    const r = await fetch(url, { cache: "no-cache" });
+    const r = await fetch(bust(url), { cache: "no-store" });
     if (!r.ok) throw new Error(url + " — HTTP " + r.status);
     return r.json();
   }
   const wait = ms => new Promise(r => setTimeout(r, ms));
+  // מזהה בקשה: אותה בקשה נשמרת תמיד לאותה תיקייה בדרייב, ובקשה אחרת (גם באותו מקום ותאריך) — לתיקייה נפרדת
+  const newRid = () => { const a = new Uint8Array(12); (window.crypto || window.msCrypto).getRandomValues(a); return [...a].map(x => x.toString(16).padStart(2, "0")).join(""); };
+  // תוצאות שמירה/שליחה שייכות לבקשה שנשמרה; כשהבקשה משתנה או מורצת מחדש הן כבר לא נכונות ולא נשארות על המסך
+  function clearOutcome() {
+    S.sent = null; S.driveUrl = "";
+    ["driveMsg", "sendMsg"].forEach(id => { const e = $(id); if (e) { e.textContent = ""; e.className = "small"; } });
+  }
   function setStatus(k, ok, msg) { S.statuses[k] = { ok: !!ok, msg: msg || "" }; refreshGate(); }
 
   /* ---------- טעינת נתונים סטטיים ---------- */
-  async function loadStatic() {
-    try { S.cfg = await getJson("config.json"); }
-    catch (e) { $("e_run").textContent = "לא נטען קובץ ההגדרות: " + e.message; return false; }
-    buildControls();
-    const jobs = [
+  // טוען את כל הנתונים שנגזרים מהמפה ומהנוטמים (אזורים, שמורות, חוקי ב-09, מנחתים חקלאיים, נוטמים) — וגם בטעינה מחדש אחרי עדכון
+  function loadData() {
+    return [
       ["a17", Promise.all([getJson("../data/zones.json"), getJson("../data/inpa-zones.json"), getJson("../data/pmt-b09-rules.json")]).then(([z, i, r9]) => { z.rules09 = r9; S.data.zones = z; S.data.inpa = i; return (z.edition || "") + " · " + z.zones.length + " אזורים, " + i.sites.length + " אתרי רט״ג"; })],
       ["agri", getJson("../data/agri-airstrips.json").then(a => { S.data.agri = a; return a.airstrips.length + " מנחתים"; })],
       ["notam", loadNotams()]
     ];
-    await Promise.all(jobs.map(([k, p]) => p.then(m => setStatus(k, true, m), e => setStatus(k, false, "לא נטען: " + (e && e.message ? e.message : e)))));
+  }
+  const applyJobs = jobs => Promise.all(jobs.map(([k, p]) => p.then(m => setStatus(k, true, m), e => setStatus(k, false, "לא נטען: " + (e && e.message ? e.message : e)))));
+
+
+  async function loadStatic() {
+    try { S.cfg = await getJson("config.json"); }
+    catch (e) { $("e_run").textContent = "לא נטען קובץ ההגדרות: " + e.message; return false; }
+    buildControls();
+    const jobs = loadData();
+    await applyJobs(jobs);
     await checkSync();
-    setInterval(checkSync, 15 * 60 * 1000);   // גם בדף שנשאר פתוח שעות
+    setInterval(checkSync, (S.cfg && S.cfg.sync_interval_ms) || 15 * 60 * 1000);   // גם בדף שנשאר פתוח שעות
     return true;
   }
   async function loadNotams() {
     const d = await getJson("../../notam-all.json");
-    if (!d || !Array.isArray(d.notams)) throw new Error("אין נתוני נוטמים");
+    if (!d || !Array.isArray(d.notams) || !d.notams.length || !(d.count > 0) || !(d.listed > 0)) throw new Error("קובץ הנוטמים ריק או חסר — אי אפשר להסיק שאין סגירות");
     const missing = (d.failed && d.failed.length) || (d.listed > d.count ? d.listed - d.count : 0);
     if (missing) throw new Error("הקובץ אינו שלם: חסרים פרטים ל-" + missing + " נוטמים" + (d.failed && d.failed.length ? " (" + d.failed.join(", ") + ")" : "") + " — ממתינים לעדכון הבא");
     S.data.notams = d.notams; S.data.notamFetchedIso = d.fetched_iso;
@@ -46,22 +62,39 @@
   }
 
   /* ---------- סנכרון עם מפת החברים: המפה מתעדכנת בפרויקט אחר, ואסור לעבוד על מידע ישן ---------- */
-  let syncBusy = null;
+  // כל הקבצים נמשכים טריים (כתובת ייחודית) ומושווים: זה לזה (המפה מול הייצוא), לנתונים שבזיכרון הדף, ולנתונים שעליהם נעשה הניתוח
+  let syncBusy = null, syncRetry = null;
+  // כשהסנכרון נכשל הדף חוסם — ובודק שוב מעצמו (ברירת מחדל כל 30 שניות) עד שהוא מצליח, כדי שדף פתוח יתאושש אחרי שהייצוא האוטומטי הסתיים
+  function scheduleSyncRetry(ok) {
+    if (ok) { if (syncRetry) { clearTimeout(syncRetry); syncRetry = null; } return; }
+    if (!syncRetry) syncRetry = setTimeout(() => { syncRetry = null; checkSync(); }, (S.cfg && S.cfg.sync_retry_ms) || 30000);
+  }
+  async function fetchSyncInputs() {
+    const getText = async u => { const r = await fetch(bust(u), { cache: "no-store" }); if (!r.ok) throw new Error(u + " — HTTP " + r.status); return r.text(); };
+    const [html, meta, mapNotam, notamAll, zones] = await Promise.all([getText("../index.html"), getJson("../pamat-meta.json"), getJson("../../notam-data.json"), getJson("../../notam-all.json"), getJson("../data/zones.json")]);
+    return { html, meta, mapNotam, notamAll, zones };
+  }
   async function checkSync() {
     if (syncBusy) return syncBusy;
     syncBusy = (async () => {
       try {
-        const getText = async u => { const r = await fetch(u, { cache: "no-cache" }); if (!r.ok) throw new Error(u + " — HTTP " + r.status); return r.text(); };
-        // הנוטמים נטענים מחדש כדי להשוות לגרסה העדכנית ביותר
-        const [html, meta, mapNotam, nAll] = await Promise.all([getText("../index.html"), getJson("../pamat-meta.json"), getJson("../../notam-data.json"), getJson("../../notam-all.json")]);
-        const res = await window.ReqSync.check({ html, meta, zones: S.data.zones, cfg: S.cfg, mapNotam, notamAll: nAll });
+        let res = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const f = await fetchSyncInputs();
+          res = await window.ReqSync.check({ ...f, cfg: S.cfg, loaded: { zonesHash: S.data.zones && S.data.zones.dataHash, notamIso: S.data.notamFetchedIso }, analysis: S.analysisStamp || null });
+          if (res.reload && attempt === 0) { await applyJobs(loadData()); if (S.res) { S.stale = true; S.staleWhy = "data"; } continue; }   // נתוני הדף ישנים: טוענים מחדש ובודקים שוב
+          break;
+        }
+        if (res.analysisStale && S.res) { S.stale = true; S.staleWhy = "data"; }
         setStatus("sync", res.ok, res.problems.join(" · "));
         const b = $("syncBanner");
         if (res.ok) b.style.display = "none"; else { b.style.display = "block"; b.innerHTML = "<b>הנתונים אינם מסונכרנים עם מפת החברים — אי אפשר להשלים בקשה עד שהסנכרון יושלם.</b><ul>" + res.problems.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>"; }
         S.syncAt = new Date();
+        scheduleSyncRetry(res.ok);
         return res.ok;
       } catch (e) {
         setStatus("sync", false, "לא ניתן לאמת סנכרון עם המפה: " + (e && e.message ? e.message : e));
+        scheduleSyncRetry(false);
         return false;
       } finally { syncBusy = null; }
     })();
@@ -152,12 +185,12 @@
     S.ready = g.ready && !S.stale;
     const w = warnings();
     let html = "";
-    if (S.stale) html += '<div class="banner no">הנתונים בטופס השתנו מאז הרצת הבדיקות. יש ללחוץ שוב על "הרץ את כל הבדיקות" לפני שליחה.</div>';
+    if (S.stale) html += '<div class="banner no">' + (S.staleWhy === "data" ? "נתוני המפה או הנוטמים התעדכנו מאז הרצת הבדיקות." : "הנתונים בטופס השתנו מאז הרצת הבדיקות.") + ' יש ללחוץ שוב על "הרץ את כל הבדיקות" לפני שליחה.</div>';
     html += S.ready ? '<div class="banner ok">✔ כל הבדיקות הושלמו ללא כשל. הבקשה מוכנה לשליחה.</div>'
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     box.innerHTML = html;
-    ["btnPrint", "btnDocx", "btnKml", "btnPng", "btnOverview", "btnAerial", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready; });
+    ["btnPrint", "btnDocx", "btnKml", "btnPng", "btnOverview", "btnAerial", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
     $("btnMail").querySelector("button").disabled = !S.ready;
     $("btnMail").style.pointerEvents = S.ready ? "" : "none";
     if (S.report) renderReport();
@@ -170,11 +203,15 @@
     if (bl.length) out.push("<b>נמצא בלון (אטרקציה/מעוגן) בקרבת האזור:</b> " + esc(bl.map(O.itemText).join("; ")) + ". גובה ההעלאה ושעות ההפעלה אינם ידועים — יש לוודא מול מפעיל הבלון.");
     const sites = r.nearScan.near; if (sites.length) out.push("<b>אתרים ותשתיות בקרבת האזור (" + sites.length + "):</b> " + esc(sites.map(O.itemText).join("; ")) + ".");
     const a17in = r.zones.inside.filter(z => z.src === "a17"), b09in = r.zones.inside.filter(z => z.src === "b09"), b09near = r.zones.near.filter(z => z.src === "b09");
-    if (a17in.length) out.push("<b>הסגירה המבוקשת חופפת לאזור איסור/הגבלה:</b> " + esc(a17in.map(z => z.label).join("; ")) + ".");
-    if (b09in.length) out.push("<b>הסגירה המבוקשת בתוך אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09in.map(z => z.label + " (" + z.alt + ")").join("; ")) + ". יש לעיין בהערות האזור ובתיאום הנדרש (דף הבדיקות).");
-    if (b09near.length) out.push("<b>בקרבת אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09near.map(z => z.label + " — " + C.fmtDist(z.d)).join("; ")) + ". סעיף 7(ג): מרחק של לפחות 500 מ׳ מגבול אזור הפעילות (דף הבדיקות).");
+    const rl = id => ((S.data.zones && S.data.zones.rules09 && S.data.zones.rules09.rules) || []).find(x => x.id === id);
+    if ((r.inp.aircraft || []).length > 1) out.push("<b>נבחרו כמה כלי טיס בבקשה אחת.</b> " + ["2ד", "5ד"].map(rl).filter(Boolean).map(x => esc(x.ref) + ": ״" + esc(x.text) + "״").join(" ") + " יש לציין בבקשה אם הטיסה בכלי הטיס במקביל או ברצף.");
+    if (!r.inp.vlos) { const r3 = ((S.data.zones && S.data.zones.rules09 && S.data.zones.rules09.rules) || []).find(x => x.id === "3ג"); out.push("<b>הבקשה מציינת טיסה ללא קשר עין.</b> " + (r3 ? esc(r3.ref) + ": ״" + esc(r3.text) + "״ " : "") + "יש לוודא שהדבר מצוין בתעודת כושר הטיסה של כלי הטיס או באישור המנהל — המערכת אינה יכולה לאמת זאת."); }
+    if (C.splitList(r.inp.contactPhone).filter(x => /\d{7,}/.test(x.replace(/\D/g, ""))).length < 2) out.push("בנספח ג׳ שדה 12 נדרשים 2 אנשי קשר <b>וטלפונים</b> — הוזן טלפון אחד בלבד; מומלץ להוסיף טלפון לכל איש קשר (מופרדים בפסיק).");
+    if (a17in.length) out.push("<b>הסגירה המבוקשת חופפת לאזור איסור/הגבלה:</b> " + esc(a17in.map(z => z.label).join("; ")) + ". בקשה לחריגה: א-11 סעיף 3(ג) וא-17 סעיף 5 — <span dir='ltr'>caai-charigot@mot.gov.il</span> (הלשון המלאה בדף הבדיקות).");
+    if (b09in.length) out.push("<b>הסגירה המבוקשת חופפת (חלקית או כולה) לאזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09in.map(z => z.label + " (" + z.alt + ")").join("; ")) + ". יש לעיין בהערות האזור ובתיאום הנדרש (דף הבדיקות).");
+    if (b09near.length) out.push("<b>בקרבת אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09near.map(z => z.label + " — " + C.fmtDist(z.edge) + " מקצה הסגירה (" + C.fmtDist(z.d) + " מהנקודה)").join("; ")) + ". סעיף 7(ג): מרחק של לפחות 500 מ׳ מגבול אזור הפעילות שאושר (דף הבדיקות).");
     const bv = r.borders.filter(b => b.violates); if (bv.length) out.push("<b>הסגירה נכנסת לרצועת הגבול:</b> " + esc(bv.map(b => b.name + " (" + b.km + " ק״מ)").join("; ")) + ".");
-    if (r.workingDays != null && r.workingDays < th.min_working_days) out.push("הבקשה מוגשת " + r.workingDays + " ימי עבודה לפני מועד הפעילות; הנוהל (א-11 סעיף 6.ב) דורש לפחות " + th.min_working_days + " ימי עבודה (ספירה א׳–ה׳, בלי חגים).");
+    if (r.workingDays != null && r.workingDays < th.min_working_days) out.push("הבקשה מוגשת " + r.workingDays + " ימים (א׳–ה׳) לפני מועד הפעילות; הנוהל (א-11 סעיף 6.ב) דורש לפחות " + th.min_working_days + " ימי עבודה. המערכת אינה מנכה חגים — אם יש חג בטווח, ייתכן שמספר ימי העבודה בפועל נמוך יותר.");
     if (r.notamAgeH != null && r.notamAgeH > th.notam_warn_age_h) out.push("נתוני הנוטמים נמשכו לפני " + Math.round(r.notamAgeH) + " שעות.");
     return out;
   }
@@ -189,9 +226,11 @@
     $("e_run").textContent = "";
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
+    { const raw = $("coord").value.trim(); if (raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
     if (inp0.dateFrom && inp0.dateFrom < C.ilToday(new Date())) errs.push({ field: "dateFrom", msg: "תאריך ההתחלה כבר עבר" });
     showErrors(errs);
     if (errs.length) { setStatus("input", false, errs.map(e => e.msg).join(" · ")); $("e_run").textContent = "יש להשלים את השדות המסומנים."; return; }
+    S.analysisStamp = null;   // ניתוח חדש בדרך: 'הניתוח ישן' אינו אמור לחסום את ההרצה שמתקנת אותו
     await checkSync();
     for (const k of ["a17", "sync", "agri", "notam"]) if (!(S.statuses[k] && S.statuses[k].ok)) { $("e_run").textContent = "ההרצה נעצרה — " + ({ a17: "אזורי איסור וגנים", sync: "סנכרון עם מפת החברים", agri: "מנחתים חקלאיים", notam: "נוטמים" })[k] + " אינם תקינים: " + (S.statuses[k] ? S.statuses[k].msg : "ממתין") + (k === "sync" ? "" : ". רעננו את הדף."); return; }
     S.running = true; $("runBtn").disabled = true;
@@ -203,7 +242,7 @@
     const upd = () => progress(steps.map(x => ({ s: x.s, t: x.t, m: x.m })));
     const st = (k, s, m) => { const x = steps.find(y => y.k === k); x.s = s; x.m = m || ""; upd(); };
     upd();
-    S.res = null; S.report = null; S.stale = false; S.map = null; S.overview = null; S.aerial = null;
+    S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.map = null; S.overview = null; S.aerial = null; clearOutcome();
     { const ck = inp0.lat + "," + inp0.lon; if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "לא אושרה סקירה" };
     ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
@@ -230,13 +269,14 @@
       } catch (e) { data.reverse = null; st("reverse", "ok", "לא התקבל שם מ-Nominatim — השם נגזר משכבות OpenStreetMap או מהקלדה"); }
       const inp = readInputs(); inp.manualItems = S.manual;
       const res = C.analyze(inp, data, S.cfg, new Date());
+      S.analysisStamp = { zonesHash: S.data.zones.dataHash, notamIso: S.data.notamFetchedIso };
       const prevAuto = S.autoSite;
       if (!inp.siteName || inp.siteName === prevAuto) { if (res.siteSuggestion) { $("siteName").value = res.siteSuggestion; S.autoSite = res.siteSuggestion; res.inp.siteName = res.siteSuggestion; } }
       const errs2 = C.validateInput(res.inp, S.cfg); showErrors(errs2);
       if (errs2.length) { setStatus("input", false, errs2.map(e => e.msg).join(" · ")); st("calc", "no", errs2.map(e => e.msg).join(" · ")); throw new Error("חסרים פרטים בטופס"); }
       setStatus("input", true, "");
       const age = res.notamAgeH;
-      if (age == null || age > S.cfg.thresholds.notam_max_age_h) { setStatus("notam", false, age == null ? "לא ידוע מתי נמשכו הנוטמים" : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + "). יש לרענן: GitHub → Actions → עדכון נוטמים יומי → Run workflow"); }
+      if (age == null || age > S.cfg.thresholds.notam_max_age_h) { setStatus("notam", false, age == null ? "לא ידוע מתי נמשכו הנוטמים" : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + "). יש לרענן: GitHub → Actions → עדכון נוטמים יומי → Run workflow. אם הריצה נכשלת בגלל תעודת TLS של אתר רשות שדות התעופה — ממתינים לחידושה (אין לכבות אימות)."); }
       else setStatus("notam", true, "");
       S.data.near = data.near; S.data.far = data.far; S.data.ext = data.ext; S.data.reverse = data.reverse;
       S.res = res; S.scanKey = scanKey();
@@ -264,11 +304,12 @@
   /* ---------- שינויי קלט אחרי הרצה ---------- */
   function onScanInputChange() {
     $("ftHint").textContent = isFinite(parseFloat($("height").value)) ? "= " + (parseFloat($("height").value) * C.M2FT).toFixed(1) + " רגל" : "";
-    if (S.res && S.scanKey !== scanKey()) { S.stale = true; refreshGate(); }
+    if (S.res && S.scanKey !== scanKey()) { S.stale = true; clearOutcome(); refreshGate(); }
   }
   let rebuildTimer = null;
   function onSoftInputChange() {
     if (!S.res) return;
+    clearOutcome();
     clearTimeout(rebuildTimer);
     rebuildTimer = setTimeout(async () => {
       const i = readInputs();
@@ -339,7 +380,8 @@
     const inp = Object.assign({}, S.res.inp, { manualItems: S.manual });
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near, far: S.data.far, ext: S.data.ext, reverse: S.data.reverse };
     const prev = S.res; S.res = C.analyze(inp, data, S.cfg, new Date());
-    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — יש לאשר מחדש" };
+    S.analysisStamp = { zonesHash: S.data.zones.dataHash, notamIso: S.data.notamFetchedIso };
+    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — יש לאשר מחדש" }; clearOutcome();
     await buildMapImage(null, null); renderAll();
   }
   function addManual() {
@@ -352,6 +394,7 @@
     reanalyze();
   }
   function onReviewChange() {
+    clearOutcome();   // נוסח אישור הסקירה נכנס לקובץ ה-Word, ולכן הגרסה השמורה בדרייב כבר לא תואמת
     S.reviewAt = $("reviewOk").checked ? new Date() : null;
     setStatus("review", $("reviewOk").checked, $("reviewOk").checked ? "" : "לא אושרה סקירה");
   }
@@ -392,10 +435,16 @@
     if (png && png.length < MAX_B64) return { name: baseName() + " — " + label + ".png", mime: "image/png", b64: png };
     return m.jpegUrl ? { name: baseName() + " — " + label + ".jpg", mime: "image/jpeg", b64: m.jpegUrl.split(",")[1] } : null;
   }
-  // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל
+  // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל.
+  // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
   async function persistToDrive(progress) {
-    const begin = await window.ReqAuth.call("saveBegin", { folderName: baseName() });
-    if (!begin.ok) throw new Error(window.ReqAuth.msg(begin));
+    const A = window.ReqAuth, i0 = S.res.inp, key = JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo]);
+    if (!S.rid || (S.ridKey && S.ridKey !== key)) S.rid = newRid();
+    S.ridKey = key;
+    let begin = await A.call("saveBegin", { folderName: baseName(), rid: S.rid });
+    // הבקשה הקודמת עם אותו מזהה כבר נשלחה (והתיקייה שלה נעולה) והבקשה השתנתה מאז — זו בקשה חדשה, בתיקייה חדשה
+    if (!begin.ok && begin.error === "already_sent") { S.rid = newRid(); begin = await A.call("saveBegin", { folderName: baseName(), rid: S.rid }); }
+    if (!begin.ok) { const e = new Error(A.msg(begin)); e.code = begin.error; throw e; }
     const files = [
       { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
       { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
@@ -405,74 +454,104 @@
     let n = 0;
     for (const f of files) {
       if (progress) progress(++n, files.length, f.name);
-      const r = await window.ReqAuth.call("saveFile", { folderId: begin.folderId, name: f.name, mime: f.mime, b64: f.b64 });
-      if (!r.ok) throw new Error(f.name + ": " + window.ReqAuth.msg(r));
+      const r = await A.call("saveFile", { folderId: begin.folderId, name: f.name, mime: f.mime, b64: f.b64 });
+      if (!r.ok) throw new Error(f.name + ": " + A.msg(r));
     }
+    // השרת מסמן את הבקשה "מוכנה" רק כאן, אחרי שכל הקבצים נשמרו, והדפדפן מצהיר שכל הבדיקות עברו — ורק בקשה מסומנת תישלח
+    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready });
+    if (!end.ok) throw new Error(A.msg(end));
+    if (!end.ready) throw new Error("השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב");
     S.driveUrl = begin.url;
     return { folderId: begin.folderId, url: begin.url, name: begin.name, count: files.length };
   }
   async function saveToDrive() {
-    const out = $("driveMsg"), btn = $("btnDrive");
-    if (!S.ready) return;
-    if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
-    if (!(await checkSync())) { out.className = "small err"; out.textContent = "לא נשמר: הנתונים אינם מסונכרנים עם מפת החברים (ראו ההודעה בראש הדף)."; refreshGate(); return; }
-    btn.disabled = true; out.className = "small"; out.textContent = "שומר בדרייב…";
+    const out = $("driveMsg"), btn = $("btnDrive"), A = window.ReqAuth;
+    if (!S.ready || S.sending) return;
+    if (!A.loggedIn()) { A.show(); return; }
+    S.sending = true; A.setBusy(true); refreshGate();
     try {
+      if (!(await checkSync())) { out.className = "small err"; out.textContent = "לא נשמר: הנתונים אינם מסונכרנים עם מפת החברים (ראו ההודעה בראש הדף)."; return; }
+      if (!S.ready) { out.className = "small err"; out.textContent = "לא נשמר: הנתונים השתנו מאז הרצת הבדיקות — יש להריץ אותן שוב."; return; }
+      out.className = "small"; out.textContent = "שומר בדרייב…";
       const r = await persistToDrive((n, t, name) => { out.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
       out.className = "small ok";
       out.innerHTML = "✔ נשמרו " + r.count + " קבצים בדרייב, בתיקייה <b>" + esc(r.name) + '</b> — <a href="' + esc(r.url) + '" target="_blank" rel="noopener">פתח את התיקייה</a>';
     } catch (e) {
       out.className = "small err"; out.textContent = "השמירה בדרייב נכשלה: " + (e && e.message ? e.message : e);
-    } finally { btn.disabled = !S.ready; }
+    } finally { S.sending = false; A.setBusy(false); btn.disabled = !S.ready; refreshGate(); }
   }
 
   /* ---------- שליחה למשרד נוטאם (פמ"ת א-11 סעיף 6(א)) ---------- */
   const fmtTime = t => new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
   async function sendToNotam() {
-    if (!S.ready) return;
+    if (!S.ready || S.sending) return;
     const A = window.ReqAuth;
     if (!A.loggedIn()) { A.show(); return; }
     const out = $("sendMsg");
+    // מצב השליחה (בדיקה/חי) נקבע בשרת. מרעננים אותו כאן, ושולחים לשרת את המצב שהוצג למשתמש — אם הוא השתנה, השרת לא שולח
+    const me = await A.refresh();
+    if (!me.ok) { out.className = "small err"; out.textContent = "לא נשלח: לא ניתן לאמת את מצב השליחה מול השרת — " + A.msg(me); return; }
     if (!(await checkSync())) { out.className = "small err"; out.textContent = "לא נשלח: הנתונים אינם מסונכרנים עם מפת החברים (ראו ההודעה בראש הדף)."; refreshGate(); return; }
-    const mail = O.mail(S.res, S.cfg), live = A.getMailMode() === "live", serverTo = (A.getMailTo() || []).slice().sort().join(","), cfgTo = mail.to.slice().sort().join(",");
+    if (!S.ready) { out.className = "small err"; out.textContent = "לא נשלח: הנתונים השתנו מאז הרצת הבדיקות — יש להריץ אותן שוב."; return; }
+    const mail = O.mail(S.res, S.cfg), shown = A.getMailMode() === "live" ? "live" : "test", live = shown === "live";
+    const serverTo = (A.getMailTo() || []).slice().sort().join(","), cfgTo = mail.to.slice().sort().join(",");
     // כתובות היעד קבועות בשרת; מוודאים שהן זהות לכתובות שמצוינות בנוהל (config.json) — אחרת לא שולחים
     if (serverTo !== cfgTo) { out.className = "small err"; out.textContent = "לא נשלח: כתובות היעד בשרת (" + serverTo + ") שונות מהכתובות בנוהל א-11 סעיף 6(א) שבהגדרות (" + cfgTo + "). יש לעדכן את השרת."; return; }
     const names = ["טופס הבקשה (Word)" + ($("incChecks").checked ? " כולל דף בדיקות" : " בלי דף בדיקות"), "קובץ KML", "הדמיה — תקריב", "הדמיה — מבט כללי", "תצ״א נקי"];
     const warn = warnings().filter(w => /ימי עבודה|נוטמים נמשכו/.test(w));
     const m = A.modal('<div class="sendBox"><h2>שליחה למשרד נוטאם</h2>' +
-      (live ? '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> המייל יישלח באמת אל <span dir="ltr">' + esc(mail.to.join(", ")) + '</span>, ועותק יישלח אליך.</div>'
-            : '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה:</b> המייל יישלח רק אליך ולא יישלח למשרד נוטאם. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>') +
-      '<p><b>אל:</b> <span dir="ltr">' + esc((live ? mail.to : ["הבעלים (בדיקה)"]).join(", ")) + '</span></p><p><b>נושא:</b> ' + esc((live ? "" : "[בדיקה — לא נשלח למשרד נוטאם] ") + mail.subject) + '</p>' +
+      (live ? '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> המייל יישלח באמת אל <span dir="ltr">' + esc(mail.to.join(", ")) + '</span>. עותק יישלח לחשבון הבעלים של המערכת, ותשובות המשרד יגיעו אליו (ולא אליך).</div>'
+            : '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה:</b> המייל יישלח רק לחשבון הבעלים של המערכת (לא אליך) ולא יישלח למשרד נוטאם. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>') +
+      '<p><b>אל:</b> <span dir="ltr">' + esc((live ? mail.to : ["בעל המערכת (בדיקה)"]).join(", ")) + '</span></p><p><b>נושא:</b> ' + esc((live ? "" : "[בדיקה — לא נשלח למשרד נוטאם] ") + mail.subject) + '</p>' +
       '<p><b>קבצים שיצורפו:</b> ' + esc(names.join(" · ")) + '</p><details><summary>נוסח המייל</summary><pre>' + esc(mail.body) + '</pre></details>' +
       warn.map(w => '<div class="banner warn" style="margin:8px 0 0">' + w + '</div>').join("") +
       '<label class="checks" style="margin-top:10px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="sendOk" style="margin-top:4px"> עברתי על הבקשה (הטופס, התצ״א והמצאי) והיא מוכנה לשליחה' + (live ? " — השליחה אינה ניתנת לביטול" : "") + '</span></label>' +
-      '<div class="row" style="margin-top:10px"><button type="button" class="primary" id="sendGo" disabled>' + (live ? "שלח למשרד נוטאם" : "שלח בדיקה אליי") + '</button></div><div class="small" id="sendProg" role="status" style="margin-top:8px"></div></div>');
-    const ok = document.getElementById("sendOk"), go = document.getElementById("sendGo"), prog = document.getElementById("sendProg");
+      '<div class="row" style="margin-top:10px"><button type="button" class="primary" id="sendGo" disabled>' + (live ? "שלח למשרד נוטאם" : "שלח בדיקה לבעל המערכת") + '</button></div><div class="small" id="sendProg" role="status" style="margin-top:8px"></div></div>');
+    if (!m) return;
+    const ok = document.getElementById("sendOk"), go = document.getElementById("sendGo"), prog = document.getElementById("sendProg"), closeBtn = document.getElementById("mdClose");
     ok.onchange = () => { go.disabled = !ok.checked; };
     const doSend = async again => {
-      const r = await A.call("sendRequest", { folderId: S.sendFolder.folderId, subject: mail.subject, body: mail.body, again: !!again });
+      const r = await A.call("sendRequest", { folderId: S.sendFolder.folderId, subject: mail.subject, body: mail.body, again: !!again, expectMode: shown });
+      if (!r.ok && r.error === "mode_changed") { A.setMailModeValue(r.mailMode); const e = new Error("מצב השליחה השתנה בשרת"); e.code = "mode_changed"; throw e; }
       if (!r.ok && r.error === "already_sent") {
-        prog.innerHTML = 'הבקשה כבר נשלחה למשרד נוטאם ב-<b>' + esc(fmtTime(r.sentAt)) + '</b>. <button type="button" id="sendAgain">שלח שוב בכל זאת</button>';
-        document.getElementById("sendAgain").onclick = () => { prog.textContent = "שולח…"; doSend(true).catch(fail); };
+        prog.innerHTML = (r.similar ? 'בקשה על אותו מקום ותאריך כבר נשלחה למשרד נוטאם ב-' : 'הבקשה כבר נשלחה למשרד נוטאם ב-') + '<b>' + esc(fmtTime(r.sentAt)) + '</b>. <button type="button" id="sendAgain">שלח שוב בכל זאת</button>';
+        document.getElementById("sendAgain").onclick = () => guarded(async () => { prog.textContent = "שולח…"; await doSend(true); });
         go.disabled = true; return;
       }
       if (!r.ok) throw new Error(A.msg(r));
       S.sent = { at: r.sentAt, mode: r.mode, to: r.to };
-      const msgHtml = r.mode === "live" ? "✔ נשלחה למשרד נוטאם (<span dir='ltr'>" + esc(r.to.join(", ")) + "</span>) ב-" + esc(fmtTime(r.sentAt)) + (r.cc ? ". עותק נשלח אל <span dir='ltr'>" + esc(r.cc) + "</span>." : ".")
-        : "✔ נשלח במצב בדיקה אל <span dir='ltr'>" + esc(r.to.join(", ")) + "</span> בלבד — לא נשלח למשרד נוטאם.";
+      const msgHtml = r.mode === "live" ? "✔ נשלחה למשרד נוטאם (<span dir='ltr'>" + esc(r.to.join(", ")) + "</span>) ב-" + esc(fmtTime(r.sentAt)) + (r.cc ? ". עותק נשלח לחשבון הבעלים." : ".")
+        : "✔ נשלח במצב בדיקה לבעל המערכת בלבד — לא נשלח למשרד נוטאם.";
       prog.className = "small ok"; prog.innerHTML = msgHtml; out.className = "small ok"; out.innerHTML = msgHtml + ' <a href="' + esc(S.sendFolder.url) + '" target="_blank" rel="noopener">פתח את התיקייה בדרייב</a>';
       go.disabled = true; ok.disabled = true;
     };
     const fail = e => { prog.className = "small err"; prog.textContent = "השליחה נכשלה: " + (e && e.message ? e.message : e); go.disabled = !ok.checked; ok.disabled = false; };
-    go.onclick = async () => {
-      go.disabled = true; ok.disabled = true; prog.className = "small"; prog.textContent = "בודק סנכרון עם המפה…";
-      try {
-        if (!(await checkSync())) throw new Error("הנתונים אינם מסונכרנים עם מפת החברים — לא נשלח");
-        S.sendFolder = await persistToDrive((n, t, name) => { prog.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
-        prog.textContent = "שולח…";
-        await doSend(false);
-      } catch (e) { fail(e); }
+    // זרימה אחת בכל רגע: בזמן שמירה/שליחה אי אפשר לסגור את החלון, לפתוח חלון אחר או להתחיל זרימה שנייה
+    const guarded = async fn => {
+      if (S.sending) return;
+      S.sending = true; A.setBusy(true); refreshGate(); closeBtn.disabled = true; go.disabled = true; ok.disabled = true; prog.className = "small";
+      let reopen = false;
+      try { await fn(); }
+      catch (e) { if (e && e.code === "mode_changed") reopen = true; else fail(e); }
+      finally { S.sending = false; A.setBusy(false); refreshGate(); closeBtn.disabled = false; }
+      if (reopen) { A.closeModal(); out.className = "small err"; out.textContent = "מצב השליחה בשרת השתנה בזמן שהחלון היה פתוח — לא נשלח דבר. נפתח חלון חדש עם המצב העדכני; יש לאשר מחדש."; sendToNotam(); }
     };
+    go.onclick = () => guarded(async () => {
+      prog.textContent = "בודק מצב שליחה…";
+      const me2 = await A.refresh();
+      if (!me2.ok) throw new Error(A.msg(me2));
+      if ((A.getMailMode() === "live" ? "live" : "test") !== shown) { const e = new Error("מצב השליחה השתנה"); e.code = "mode_changed"; throw e; }
+      // המצב עשוי להשתנות מאז פתיחת החלון (עריכת קלט, סנכרון שנכשל, אישור סקירה שהוסר) — בודקים שוב ממש לפני השליחה
+      if (!S.ready || !$("reviewOk").checked) throw new Error("הבקשה אינה מוכנה לשליחה (בדיקות שלא הושלמו, נתונים ששונו או סקירה שלא אושרה) — לא נשלח");
+      prog.textContent = "בודק סנכרון עם המפה…";
+      if (!(await checkSync())) throw new Error("הנתונים אינם מסונכרנים עם מפת החברים — לא נשלח");
+      if (!S.ready) throw new Error("הנתונים השתנו מאז הרצת הבדיקות — לא נשלח");
+      // בקשה שלא השתנתה מאז השליחה הקודמת כבר שמורה בדרייב (clearOutcome מאפס כל שינוי) — לא שומרים שוב, כדי שהשרת יזהה שליחה כפולה
+      if (!(S.sent && S.sendFolder)) S.sendFolder = await persistToDrive((n, t, name) => { prog.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
+      if (!S.ready) throw new Error("הנתונים השתנו בזמן השמירה — לא נשלח. הרצו את הבדיקות שוב");
+      prog.textContent = "שולח…";
+      await doSend(false);
+    });
     return m;
   }
   async function copyMail() {
@@ -527,8 +606,8 @@
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); });
     ["siteName", "purpose", "vlos", "reqName", "reqPhone", "contactNames", "contactPhone"].forEach(id => $(id).addEventListener("input", () => { if (id.startsWith("req") || id.startsWith("contact")) savePerson(); onSoftInputChange(); }));
     $("aircraft").addEventListener("change", onSoftInputChange);
-    $("incChecks").addEventListener("change", () => { if (S.res) renderReport(); });
-    $("provider").addEventListener("change", () => { if (S.res) { S.stale = true; refreshGate(); } });
+    $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); } });
+    $("provider").addEventListener("change", () => { if (S.res) { S.stale = true; clearOutcome(); refreshGate(); } });
     $("runBtn").onclick = run; $("qBtn").onclick = searchPlace; $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
     $("btnPrint").onclick = () => window.print();
     $("btnKml").onclick = () => download(baseName() + ".kml", "application/vnd.google-earth.kml+xml", O.kml(S.res, { zones: S.data.zones }, S.cfg));

@@ -64,3 +64,42 @@ test("סימוני הדפדפן זהים לסימוני הייצוא", async () 
   const src = fs.readFileSync(path.join(ROOT, "scripts", "export-zones.mjs"), "utf8");
   for (const [a, b] of S.MARKS) { assert.ok(src.includes(JSON.stringify(a)), a); assert.ok(src.includes(JSON.stringify(b)), b); }
 });
+
+/* ===== חיזוק הסנכרון: טרי מול זיכרון, חותמת מהדורה מדף המפה, ניתוח ישן ===== */
+test("חותמת מהדורת הפמ״ת נקראת מדף המפה עצמו ומתאימה ל-pamat-meta.json ולהגדרות", () => {
+  const hs = S.htmlStamp(html);
+  assert.deepEqual(hs, { update: meta.pamat_update, date: meta.pamat_date });
+  assert.equal(cfg.pmt_editions.package.update, hs.update); assert.equal(cfg.pmt_editions.package.date, hs.date);
+});
+
+test("מהדורת פמ״ת חדשה שהוטמעה בדף המפה בלבד (pamat-meta.json לא עודכן) נתפסת", async () => {
+  const r = await S.check({ ...base(), html: html.replace(/UPDATE 1\/26 · 06 AUG 2026/g, "UPDATE 2/26 · 01 FEB 2027") });
+  assert.ok(!r.ok);
+  assert.ok(r.problems.some(x => /המוצגת בדף המפה \(2\/26 · 01 FEB 2027\) שונה מ-pamat-meta\.json/.test(x)), r.problems.join("|"));
+  assert.ok(r.problems.some(x => /חותמת דף המפה: 2\/26/.test(x) && /לאמת אותם מחדש/.test(x)));
+});
+
+test("חותמת המהדורה חסרה בדף המפה — כשל ברור", async () => {
+  const r = await S.check({ ...base(), html: html.replace(/UPDATE 1\/26 · 06 AUG 2026/g, "UPDATE") });
+  assert.ok(r.problems.some(x => /לא נמצאה חותמת מהדורת הפמ״ת/.test(x)));
+});
+
+test("דף פתוח עם נתוני אזורים ישנים מהעדכניים: reload=true; עם נוטמים ישנים: reload=true; זהים: false", async () => {
+  const same = await S.check({ ...base(), loaded: { zonesHash: zones.dataHash, notamIso: T } });
+  assert.ok(same.ok && !same.reload && !same.analysisStale);
+  const z = await S.check({ ...base(), loaded: { zonesHash: "old-hash", notamIso: T } });
+  assert.ok(z.reload && z.problems.some(x => /התעדכנו מאז טעינת הדף/.test(x)));
+  const n = await S.check({ ...base(), loaded: { zonesHash: zones.dataHash, notamIso: "2026-10-17T05:00:00Z" } });
+  assert.ok(n.reload);
+  const nn = await S.check({ ...base(), loaded: { zonesHash: zones.dataHash, notamIso: "2026-10-17T07:00:00Z" } });   // בדף נוטמים חדשים מהקובץ? (שעון) — לא "ישן"
+  assert.ok(!nn.reload);
+});
+
+test("הבקשה נבדקה על נתונים שהתעדכנו אחר כך: analysisStale=true (חייבים להריץ מחדש)", async () => {
+  const a = await S.check({ ...base(), analysis: { zonesHash: "old", notamIso: T } });
+  assert.ok(a.analysisStale && a.problems.some(x => /אחרי שהבקשה נבדקה/.test(x)));
+  const b = await S.check({ ...base(), analysis: { zonesHash: zones.dataHash, notamIso: "2026-10-16T00:00:00Z" } });
+  assert.ok(b.analysisStale);
+  const c = await S.check({ ...base(), analysis: { zonesHash: zones.dataHash, notamIso: T } });
+  assert.ok(c.ok && !c.analysisStale);
+});

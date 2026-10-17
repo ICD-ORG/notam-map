@@ -141,9 +141,9 @@ export function build(html, meta) {
   const apx = zones.filter(z => z.approx && !/^B09/.test(z.cat)).map(z => z.id);
   const apx09 = b09.filter(z => z.approx).map(z => z.id);
   const q09 = (ref, text) => ({ ref, text });
-  const mapVersion = (/v(\d+\.\d+(?:\.\d+)?)/.exec(html.slice(0, 20000)) || /MAP_VERSION\s*=\s*['"]([^'"]+)/.exec(html) || [])[1] || "";
+  const stamp = /MAP v(\d+(?:\.\d+)+) · (\d+ [A-Z]{3} \d{4})/.exec(html) || [], mapVersion = stamp[1] || "";
   // JSON בלבד: הנתונים נוצרו בהקשר vm נפרד ויש להם אב-טיפוס שונה (מערכים/אובייקטים) — מנרמלים כדי שיהיו רגילים לחלוטין
-  return JSON.parse(JSON.stringify({ edition, mapVersion, mapDate: meta.map_date || "", dataHash: dataHash(html), pamat: { update: meta.pamat_update, date: meta.pamat_date }, zones, approxIds: apx, approx09Ids: apx09,
+  return JSON.parse(JSON.stringify({ edition, mapVersion, mapDate: stamp[2] || meta.map_date || "", dataHash: dataHash(html), pamat: { update: meta.pamat_update, date: meta.pamat_date }, zones, approxIds: apx, approx09Ids: apx09,
     general: { LLU: llu, B09: { intro: q09(H.pg09(10), H.U09_INTRO), footnote: q09(H.pg09(10), H.U09_FOOT), sec4c: q09(H.pg09(2), H.U09_SEC4C), sec7a: q09(H.pg09(6), H.U09_SEC7A) } } }));
 }
 
