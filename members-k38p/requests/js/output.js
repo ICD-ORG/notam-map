@@ -330,7 +330,6 @@
       dayNightHead: ["תאריך", "זריחה", "שקיעה", "שעות יום בחלון", "שעות לילה בחלון"],
       dayNight: res.sun.map(r => ["יום " + r.dayName + " " + C.ddmmyyyy(r.date), r.sunrise, r.sunset, C.fmtHM(r.dayMin), C.fmtHM(r.nightMin)]),
       submission: submissionHtml(res, cfg, data),
-      notes: sourceNotes(res, data, cfg),
       review: o.review || "",
       footer: "הופק " + now.toLocaleString("he-IL")
     };

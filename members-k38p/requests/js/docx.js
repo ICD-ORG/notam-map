@@ -97,7 +97,7 @@
 
   // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], attachLine, mailLine, formFooter, aerialTitle, streetTitle, overviewTitle, regionTitle, mapNote, items:[{n,title,dist,where}],
   //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
-  //         submission, notes:[], review, footer, includeChecks}
+  //         submission, review, footer, includeChecks}
   async function build(m) {
     const body = [];
     // ----- עמוד 1: הטופס -----
@@ -168,7 +168,6 @@
           .concat(m.dayNight.map(r => ({ cells: r.map((t, i) => cell(textPara(String(t), { size: 19, after: 0 }), dw[i])) })))));
       }
       if (m.submission) { body.push(secHeading("הגשה")); body.push(htmlPara(m.submission, { size: 20 })); }
-      if (m.notes && m.notes.length) { body.push(secHeading("מגבלות והסתייגויות")); m.notes.forEach((n, i) => body.push(textPara((i + 1) + ". " + n, { size: 19 }))); }
       if (m.review) { body.push(secHeading("אישור סקירה אנושית")); body.push(textPara(m.review, { size: 20 })); }
     }
     body.push(textPara(m.footer || "", { size: 16, color: "555555", before: 120 }));

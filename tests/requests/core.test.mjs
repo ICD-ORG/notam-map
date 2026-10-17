@@ -905,7 +905,7 @@ test("Word: ארבע תמונות בסדר העמודים, כותרות סעיף
   assert.ok(pos(m.mapNote.slice(0, 40)) > pos(m.aerialTitle) && pos(m.mapNote.slice(0, 40)) < pos(m.streetTitle), "מקרא הצבעים מתחת לתצ״א");
   assert.ok(full.plain.includes(O.toText(O.attachmentsLine())), "שורת המצורפים בטופס"); assert.ok(!/עמודים 2–3|תצ״א נקי/.test(full.plain));
   // דף הבדיקות: כותרות סעיף ממוספרות ברצף
-  const HEADS = ["הנקודה", "הבדיקות שבוצעו", "מצאי לפי קבוצות", "יום ולילה בחלון הפעילות", "הגשה", "מגבלות והסתייגויות", "אישור סקירה אנושית"];
+  const HEADS = ["הנקודה", "הבדיקות שבוצעו", "מצאי לפי קבוצות", "יום ולילה בחלון הפעילות", "הגשה", "אישור סקירה אנושית"];
   const heads = lines => lines.map(l => /^(\d+)\. (.+)$/.exec(l)).filter(x => x && HEADS.includes(x[2])).map(x => x[1] + ". " + x[2]);
   assert.deepEqual(heads(full.lines), HEADS.map((h, i) => (i + 1) + ". " + h));
   // הערות הסיור בסעיף 1, מיד אחרי הנקודה ולפני סעיף 2
@@ -918,10 +918,11 @@ test("Word: ארבע תמונות בסדר העמודים, כותרות סעיף
   const grid = /<w:tblGrid>((?:<w:gridCol w:w="\d+"\/>)+)<\/w:tblGrid>/.exec(full.doc.slice(full.doc.indexOf("הבדיקות שבוצעו")));
   const cols = [...grid[1].matchAll(/w:w="(\d+)"/g)].map(x => +x[1]);
   assert.equal(cols.length, 4); assert.ok(cols[0] <= 700 && cols[0] < cols[1] && cols[0] < cols[2], "העמודה הראשונה צרה"); assert.equal(cols.reduce((a, b) => a + b, 0), D.helpers.CONTENT_W, "רוחבי העמודות מתאימים לרוחב הדף");
-  // אין "דוח כיסוי — מה נסרק" ואין שורת "מקורות:" בתחתית; הסעיף 6 ממוספר "1. …" ולא "• "
+  // אין "דוח כיסוי — מה נסרק", אין שורת "מקורות:" בתחתית ואין סעיף מגבלות/מקורות (הוא נשאר בתיבה שעל המסך בלבד); אין רשימת "• "
   assert.ok(!full.plain.includes("דוח כיסוי") && !full.plain.includes("מה נסרק") && !full.plain.includes("מקורות:") && !full.plain.includes("• "));
   assert.match(full.lines.filter(Boolean).pop(), /^הופק /);
-  const h6 = full.lines.indexOf("6. מגבלות והסתייגויות"); assert.ok(/^1\. מקור האיסורים:/.test(full.lines[h6 + 1]) && /^2\. /.test(full.lines[h6 + 2]));
+  assert.ok(!full.plain.includes("מגבלות והסתייגויות") && !full.plain.includes("מקור האיסורים") && !full.plain.includes("מאגר ציבורי שנבנה על ידי מתנדבים"), "אין הצהרות על מקור הנתונים מחוץ לעמודת המקור");
+  assert.equal(m.notes, undefined, "המודל לא נושא רשימת מגבלות");
   // המצאי נשאר: טבלת הקבוצות, והפריטים הנוספים בקרבה תחת סעיף המצאי
   assert.ok(pos("פריטים נוספים שנמצאו בקרבה ואינם בטופס") > pos("3. מצאי לפי קבוצות") && pos("פריטים נוספים שנמצאו בקרבה ואינם בטופס") < pos("4. יום ולילה בחלון הפעילות"));
   // n=26: הכותרת היא תת-סעיף "3.1" (לפי מונה הסעיף הנוכחי), לא כותרת בלי מספר ולא סעיף חדש שדוחף את הסעיפים הבאים
@@ -929,7 +930,7 @@ test("Word: ארבע תמונות בסדר העמודים, כותרות סעיף
   assert.ok(pos("3.1 פריטים נוספים שנמצאו בקרבה ואינם בטופס") > pos("3. מצאי לפי קבוצות") && pos("3.1 פריטים נוספים שנמצאו בקרבה ואינם בטופס") < pos("4. יום ולילה בחלון הפעילות"));
   assert.ok(!full.lines.includes("פריטים נוספים שנמצאו בקרבה ואינם בטופס"), "אין עוד כותרת בלי מספר");
   // רק סעיפים שמוצגים: בלי אישור סקירה ובלי הערות סיור — ממשיכים לספור ברצף, בלי סעיף 7; ובלי דף בדיקות — אין כותרות
-  const lean = await build({ review: "" }); assert.deepEqual(heads(lean.lines), HEADS.slice(0, 6).map((h, i) => (i + 1) + ". " + h));
+  const lean = await build({ review: "" }); assert.deepEqual(heads(lean.lines), HEADS.slice(0, 5).map((h, i) => (i + 1) + ". " + h));
   const noChecks = await build({ includeChecks: false }); assert.deepEqual(heads(noChecks.lines), []); assert.ok(!noChecks.plain.includes("הבדיקות שבוצעו"));
   // תמונה חסרה: העמוד שלה לא נוצר ושאר התמונות נשארות (גם אם חסרה הראשונה)
   const part = await build({ images: { aerial: null, street: img, overview: img, region: null } });
