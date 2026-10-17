@@ -514,6 +514,82 @@ try {
       check("נ״צ לא חוקי: שגיאה בשדה ואין הרצה", /אינו חוקי/.test(await page.textContent("#e_coord")) && !(await page.isVisible("#resultsSec")) && page._calls.overpass === 0, await page.textContent("#e_coord"));
       await ctx.close();
     }
+    // 6ט0: מנוי מטיס מסחרי — הרשמה עצמית בכרטיס Wix ששולם (קוד במייל), תפוגה, חידוש, ותצוגת הניהול
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      env.props.WIX_API_KEY = "test-key";
+      const DAYMS = 86400000, mk = (n, over) => Object.assign({ orderNumber: "ORD-E2E-" + n, status: "PAID", created: new Date(Date.now() - 3 * DAYMS).toISOString(), email: "pilot@example.com", firstName: "דנה", memberId: "m-1", tickets: [] }, over);
+      env.wix.orders.push(mk(1), mk(2, { email: "visitor@example.com", memberId: "" }));
+      const { ctx, page } = await newPage(browser, { env });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await page.waitForSelector("#authForm", { timeout: 20000 });
+      check("מסך הכניסה כולל קישור 'הרשמה / חידוש מנוי'", /הרשמה \/ חידוש מנוי/.test(await page.textContent("#auReg")), "");
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      // כתובת בלי כרטיס שולם (רוכש שאינו חבר): אותה תשובה, אין מייל, והקוד לא יעבוד
+      await page.fill("#rgEmail", "visitor@example.com"); await page.click("#rgSend"); await page.waitForSelector("#rgStep2", { state: "visible" });
+      check("בלי כרטיס זכאי: אותה הודעה גנרית ולא נשלח קוד", /אם נמצא כרטיס ששולם/.test(await page.textContent("#rgInfo")) && env.mails.length === 0, "");
+      await page.fill("#rgCode", "123456"); await page.fill("#rgUser", "vis.user"); await page.fill("#rgPass", "visitor-pass-12"); await page.click("#rgGo");
+      await page.waitForFunction(() => document.querySelector("#rgErr").textContent.length > 0);
+      check("קוד שגוי נדחה בהודעה ברורה ולא נוצר חשבון", /הקוד שגוי/.test(await page.textContent("#rgErr")) && !env.props["U:vis.user"], await page.textContent("#rgErr"));
+      // הרשמה אמיתית
+      await page.fill("#rgEmail", "pilot@example.com"); await page.click("#rgSend");
+      await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0);
+      await page.waitForFunction(() => true); await page.waitForTimeout(300);
+      const mailRec = env.mails[env.mails.length - 1], code = /(\d{6})/.exec(mailRec.subject)[1];
+      check("נשלח קוד בן 6 ספרות רק לכתובת הרכישה", mailRec.to === "pilot@example.com" && env.mails.length === 1, mailRec.to);
+      await page.fill("#rgCode", code); await page.fill("#rgUser", "dana.pilot"); await page.fill("#rgPass", "dana-pass-1234"); await page.click("#rgGo");
+      await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
+      const sub = await page.textContent("#ubSub");
+      check("אחרי ההרשמה: המשתמש מחובר, ובשורת המשתמש מוצג תוקף המנוי (12 חודשים)", /dana\.pilot/.test(await page.textContent("#userBar")) && /מנוי עד/.test(sub) && !/מסתיים בעוד/.test(sub), sub);
+      check("המשתמש החדש הוא משתמש רגיל: אין ניהול משתמשים", !(await page.$("#ubAdmin")), "");
+      // תפוגה: אחרי הסיום אי אפשר להיכנס, ויש הסבר וקישור לחידוש
+      const rec = JSON.parse(env.props["U:dana.pilot"]); rec.until = Date.now() - 1000; env.props["U:dana.pilot"] = JSON.stringify(rec);
+      await page.click("#ubOut"); await page.waitForSelector("#authForm");
+      await page.fill("#auUser", "dana.pilot"); await page.fill("#auPass", "dana-pass-1234"); await page.click("#auGo");
+      await page.waitForFunction(() => document.querySelector("#auErr").textContent.length > 0);
+      const ex = await page.textContent("#authCover");
+      check("מנוי שהסתיים: הודעה על הסיום, והסבר על חידוש עם קישור לרכישה", /המנוי הסתיים/.test(ex) && (await page.$$eval("#auErr a", a => a.map(x => x.href))).some(h => /icd\.org\.il\/events-1\/bqst-yswry-tysh/.test(h)), ex.replace(/\s+/g, " ").slice(0, 160));
+      // חידוש: כרטיס חדש → קוד → ללא שם משתמש וסיסמה
+      env.wix.orders.push(mk(3, { created: new Date().toISOString() }));
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      await page.fill("#rgEmail", "pilot@example.com"); await page.click("#rgSend"); await page.waitForSelector("#rgStep2", { state: "visible" }); await page.waitForTimeout(300);
+      const code2 = /(\d{6})/.exec(env.mails[env.mails.length - 1].subject)[1];
+      check("בחידוש הנושא של המייל מציין חידוש", /לחידוש/.test(env.mails[env.mails.length - 1].subject), env.mails[env.mails.length - 1].subject);
+      await page.fill("#rgCode", code2); await page.click("#rgGo");
+      await page.waitForSelector("#authForm", { timeout: 20000 });
+      check("אחרי חידוש: הודעה על התוקף החדש, וחזרה למסך הכניסה", /המנוי חודש עד/.test(await page.textContent("#auErr")), await page.textContent("#auErr"));
+      await page.fill("#auUser", "dana.pilot"); await page.fill("#auPass", "dana-pass-1234"); await page.click("#auGo");
+      await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
+      check("אחרי החידוש אפשר להיכנס", /dana\.pilot/.test(await page.textContent("#userBar")), "");
+      await page.click("#ubOut"); await page.waitForSelector("#authForm");
+      // ניהול: מנהל רואה מייל ותוקף, משנה תוקף, ובודק כרטיס
+      await page.fill("#auUser", ADMIN); await page.fill("#auPass", PASS); await page.click("#auGo");
+      await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
+      await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
+      const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => [...x.children].map(c => c.textContent.trim())));
+      const dr = rows.find(c => c[0] === "dana.pilot");
+      check("ניהול: ליד המשתמש מוצגים המייל ותאריך סיום המנוי", !!dr && dr[3] === "pilot@example.com" && /\d/.test(dr[4]) && !/הסתיים/.test(dr[4]), JSON.stringify(dr));
+      page.once("dialog", d => d.accept("2031-05-05"));
+      await page.click("[data-exp='dana.pilot']");
+      await page.waitForFunction(() => /2031|05\.05|5\.5\.2031|5\/5\/2031/.test(document.querySelector("#admBody").textContent), null, { timeout: 10000 });
+      check("ניהול: 'שינוי תוקף' מעדכן את תאריך הסיום בשרת", new Date(JSON.parse(env.props["U:dana.pilot"]).until).getUTCFullYear() === 2031, "");
+      await page.fill("#wxE", "pilot@example.com"); await page.click("#wxForm button[type=submit]");
+      await page.waitForFunction(() => /הזמנה ORD-E2E/.test(document.querySelector("#wxOut").textContent), null, { timeout: 10000 });
+      check("ניהול: אבחון כרטיס מציג את ההזמנות והאם נוצלו", /נוצלה ע״י dana\.pilot/.test(await page.textContent("#wxOut")), await page.textContent("#wxOut"));
+      await ctx.close();
+    }
+    // 6ט1: כפתורי "בקשות טיסה" במפה מוסתרים עד שהפיצ'ר מופעל (api_url), ומוצגים אחריו
+    for (const [active, label] of [[false, "לפני הפעלה (api_url ריק)"], [true, "אחרי הפעלה (api_url מוגדר)"]]) {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: "he-IL" }), pg = await ctx.newPage();
+      await pg.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+      await pg.route(/\/requests\/config\.json/, r => { const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = active ? API : ""; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) }); });
+      await pg.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet/, r => { const n = r.request().url().split("/").pop().split("?")[0]; const f = path.join(ROOT, "members-k38p", "requests", "vendor", "leaflet", n.replace(".min", "")); fs.existsSync(f) ? r.fulfill({ status: 200, contentType: n.endsWith("css") ? "text/css" : "text/javascript", body: fs.readFileSync(f) }) : r.fulfill({ status: 404, body: "" }); });
+      await pg.route(/fonts\.|arcgisonline|openstreetmap|googletagmanager|google-analytics/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
+      await pg.goto(BASE + "/members-k38p/index.html"); await pg.waitForTimeout(1500);
+      const st = await pg.evaluate(() => ["reqOpenHead", "reqOpenEmpty"].map(id => { const a = document.getElementById(id); return a ? { hidden: a.hidden, shown: !!(a.offsetWidth || a.offsetHeight) } : null; }));
+      check("כפתורי בקשות טיסה במפה — " + label + ": " + (active ? "מוצגים" : "מוסתרים"), st.every(x => x && (active ? !x.hidden : x.hidden)), JSON.stringify(st));
+      await ctx.close();
+    }
     // 6ט: מצב חי — נמענים מפמ״ת א-11 סעיף 6(א), עותק לבעלים, חסימת שליחה כפולה ושליחה חוזרת מפורשת
     {
       const first = await newPage(browser); const env = first.page._env; await first.ctx.close();

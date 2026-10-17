@@ -25,7 +25,18 @@ var CFG = {
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
   LOG_MAX: 1000,           // מעבר לכך נמחקות הישנות ביותר שלא נשלחו; רשומה עם שליחה חיה נשמרת תמיד
-  MAX_NEW_FOLDERS_PER_HOUR: 30   // תקרת תיקיות בקשה חדשות למשתמש בשעה — מונע הצפה של הדרייב והיומן
+  MAX_NEW_FOLDERS_PER_HOUR: 30,  // תקרת תיקיות בקשה חדשות למשתמש בשעה — מונע הצפה של הדרייב והיומן
+  // --- מנוי מטיס מסחרי: כרטיס "בקשת אישורי טיסה" באתר הארגון (Wix Events). הרשמה רק למי שיש לו הזמנה ששולמה בפועל.
+  WIX_SITE_ID: '29dca6d8-08d4-4679-a6e5-c5f4f3317d90',        // icd.org.il
+  WIX_EVENT_ID: 'fbcb2cc1-4dc7-4545-b9d5-08febf9f8153',       // האירוע "בקשת אישורי טיסה"
+  RENEW_URL: 'https://www.icd.org.il/events-1/bqst-yswry-tysh',
+  REQUIRE_MEMBER: true,         // הרוכש חייב להיות חבר רשום באתר (להזמנה memberId)
+  VALID_MONTHS: 12,             // כל כרטיס ששולם מזכה בתקופה הזו, מיום הרכישה (ובחידוש מוקדם — מתווסף לסוף התקופה הנוכחית)
+  REMIND_DAYS: [30, 3],         // תזכורות: חודש לפני הסיום, ו-3 ימים לפני
+  CODE_TTL_MIN: 15, CODE_MAX_TRIES: 5,
+  REG_PER_EMAIL_HOUR: 5, REG_PER_HOUR: 60,
+  RECHECK_ORDERS: true,         // בבדיקה היומית: הזמנה שבוטלה/הוחזרה — החשבון נחסם
+  WIX_MAX_PAGES: 5
 };
 
 /* ---------- עזרים ---------- */
@@ -78,6 +89,7 @@ function auth_(token) {
   if (!u) return { error: 'auth' };
   if (u.blocked) return { error: 'blocked' };
   if (String(u.tv) !== f[2] || u.role !== f[1]) return { error: 'auth' };
+  if (u.until && Number(u.until) < now_()) return { error: 'sub_expired' };      // המנוי הסתיים: האסימון הקיים מפסיק לעבוד באותו רגע
   return { name: name, user: u };
 }
 
@@ -140,6 +152,126 @@ function doPost(e) {
   } finally {
     if (locked) lock.releaseLock();
   }
+}
+
+/* ---------- מנוי מטיס מסחרי: אימות כרטיס מול Wix ---------- */
+// המפתח (API key של Wix עם הרשאת "Read Basic Events Order Info") נשמר ב-Script Properties בשם WIX_API_KEY — לא בקוד ולא ביומן.
+function normEmail_(e) { e = String(e || '').trim().toLowerCase(); return (e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) ? e : ''; }
+function addMonths_(ms, n) { var d = new Date(ms); d.setUTCMonth(d.getUTCMonth() + n); return d.getTime(); }
+// YYYY-MM-DD (או מספר מילישניות) -> סוף אותו יום בשעון ישראל (בקירוב: 21:00 UTC)
+function parseUntil_(v) {
+  if (typeof v === 'number' && v > 0) return v;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '').trim());
+  if (!m) return 0;
+  var t = new Date(m[1] + '-' + m[2] + '-' + m[3] + 'T21:00:00Z').getTime();
+  return t > 0 ? t : 0;
+}
+function fmtDate_(ms) { return Utilities.formatDate(new Date(ms), 'Asia/Jerusalem', 'dd.MM.yyyy'); }
+function emailKey_(email) { return 'E:' + sha256Hex_(email).slice(0, 30); }
+function orderKey_(orderNumber) { return 'O:' + sha256Hex_(String(orderNumber)).slice(0, 30); }
+function wixFetch_(path) {
+  var key = props_().getProperty('WIX_API_KEY');
+  if (!key) throw new Error('not_configured');
+  var res = UrlFetchApp.fetch('https://www.wixapis.com' + path, { method: 'get', muteHttpExceptions: true, headers: { Authorization: key, 'wix-site-id': CFG.WIX_SITE_ID } });
+  var code = res.getResponseCode();
+  if (code !== 200) throw new Error('wix_http_' + code);
+  try { return JSON.parse(res.getContentText()); } catch (e) { throw new Error('wix_bad_json'); }
+}
+// כל ההזמנות ששולמו באירוע, עבור כתובת מייל. אימות סגור: רק status=PAID בפועל (לא FREE ולא OFFLINE_PENDING), והמייל חייב להיות זהה (לא חיפוש חלקי).
+// מחזיר [{orderNumber, created(ms), email, name, member(bool), status}]
+function wixPaidOrders_(email) {
+  var out = [], offset = 0;
+  for (var page = 0; page < CFG.WIX_MAX_PAGES; page++) {
+    var r = wixFetch_('/events/v1/orders?eventId=' + encodeURIComponent(CFG.WIX_EVENT_ID) + '&status=PAID&fieldset=DETAILS&fieldset=TICKETS&searchPhrase=' + encodeURIComponent(email) + '&limit=100&offset=' + offset);
+    var list = (r && r.orders) || [];
+    list.forEach(function (o) {
+      if (!o || o.status !== 'PAID' || !o.orderNumber) return;
+      var mails = [o.email];
+      (o.tickets || []).forEach(function (t) { mails.push(t && t.guestDetails && t.guestDetails.email); });
+      if (!mails.some(function (m) { return normEmail_(m) === email; })) return;
+      var created = new Date(o.created).getTime();
+      if (!(created > 0)) return;
+      out.push({ orderNumber: String(o.orderNumber), created: created, email: email, name: String(o.firstName || '').slice(0, 40), member: !!o.memberId, status: o.status });
+    });
+    if (list.length < 100) break;
+    offset += 100;
+  }
+  return out.sort(function (a, b) { return a.created - b.created; });
+}
+// שגיאת Wix -> קוד שהלקוח מבין: לא הוגדר מפתח / Wix לא זמין (בשני המקרים לא מאשרים כלום — נכשל סגור)
+function wixErr_(e) { return String(e && e.message || e) === 'not_configured' ? 'not_configured' : 'wix_down'; }
+function wixOrderStatus_(orderNumber) {
+  var r = wixFetch_('/events/v1/orders?eventId=' + encodeURIComponent(CFG.WIX_EVENT_ID) + '&orderNumber=' + encodeURIComponent(orderNumber) + '&fieldset=DETAILS&limit=1');
+  var o = r && r.orders && r.orders[0];
+  return o ? String(o.status || '') : '';
+}
+function emailUser_(email) { var n = props_().getProperty(emailKey_(email)); return n ? { name: n, user: getUser_(n) } : null; }
+function orderOwner_(orderNumber) { return props_().getProperty(orderKey_(orderNumber)); }
+// ההזמנות שזכאות להרשמה/חידוש: שולמו, הרוכש חבר (אם נדרש), ועדיין לא נוצלו ע"י אף חשבון
+function eligibleOrders_(orders) {
+  return orders.filter(function (o) { return (!CFG.REQUIRE_MEMBER || o.member) && !orderOwner_(o.orderNumber); });
+}
+// תוקף חדש אחרי הוספת הזמנות: כל הזמנה מוסיפה VALID_MONTHS, מהמאוחר מבין (סוף התקופה הנוכחית, יום ההזמנה)
+function applyOrders_(until, orders) {
+  var u = Number(until) || 0;
+  orders.forEach(function (o) { u = addMonths_(Math.max(u, o.created), CFG.VALID_MONTHS); });
+  return u;
+}
+function subscriptionMail_(u, name, days, until) {
+  var first = String(u.displayName || '').trim(), hi = first ? 'שלום ' + first + ',' : 'שלום,', date = fmtDate_(until);
+  var renew = 'לחידוש המנוי: ' + CFG.RENEW_URL + '\nאחרי הרכישה נכנסים לדף בקשות הטיסה, לוחצים על "הרשמה / חידוש מנוי" ומקלידים את כתובת המייל שבה קניתם את הכרטיס. זה הכול — והתקופה החדשה מתווספת לסוף התקופה הנוכחית, כך שלא מפסידים אף יום.';
+  if (days > CFG.REMIND_DAYS[CFG.REMIND_DAYS.length - 1]) {
+    return { subject: 'המנוי שלך לבקשות טיסה מסתיים בעוד כחודש ✈', body: [hi, '',
+      'תודה שאתה חלק מהארגון הישראלי לרחפנים, ושאתה משתמש במערכת בקשות הטיסה שלנו — זה בדיוק בשביל זה היא נבנתה.',
+      'רצינו רק לעדכן שהמנוי שלך (שם משתמש: ' + name + ') מסתיים ב-' + date + ' — בעוד ' + days + ' ימים.', '',
+      renew, '', 'בהצלחה בטיסות ובאישורים,', 'צוות הארגון הישראלי לרחפנים'].join('\n') };
+  }
+  return { subject: 'תזכורת: המנוי שלך לבקשות טיסה מסתיים בעוד ' + (days <= 1 ? 'יום' : days + ' ימים'), body: [hi, '',
+    'תזכורת קצרה: המנוי שלך לבקשות טיסה (שם משתמש: ' + name + ') מסתיים ב-' + date + '. אחרי התאריך הזה לא יהיה אפשר להתחבר ולהגיש בקשות עד שהמנוי יחודש.', '',
+    renew, '', 'אם כבר חידשת — תודה, ואפשר להתעלם מהמייל.', 'צוות הארגון הישראלי לרחפנים'].join('\n') };
+}
+// בדיקה יומית (טריגר): תזכורות חודש ו-3 ימים לפני הסיום, וחסימת חשבון שהזמנתו בוטלה. להתקנה — להריץ פעם אחת installTrigger().
+function dailyCheck() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return { skipped: 'busy' };
+  var stat = { checked: 0, reminded: 0, blocked: 0, errors: 0 };
+  try {
+    var us = users_(), now = now_(), calls = 0, owner = ownerEmail_();
+    Object.keys(us).forEach(function (name) {
+      var u = us[name], changed = false;
+      if (!u.until) return;
+      stat.checked++;
+      if (CFG.RECHECK_ORDERS && !u.blocked && u.orders && u.orders.length && calls < 200) {
+        try {
+          for (var i = 0; i < u.orders.length && calls < 200; i++) {
+            calls++;
+            var st = wixOrderStatus_(u.orders[i]);
+            if (st === 'CANCELED' || st === 'DECLINED' || st === 'VOIDED') { u.blocked = true; u.blockedWhy = 'order_' + st; u.tv = (Number(u.tv) || 1) + 1; changed = true; stat.blocked++; break; }
+          }
+        } catch (e) { stat.errors++; /* תקלה ב-Wix אינה חוסמת משתמשים */ }
+      }
+      var days = Math.ceil((u.until - now) / 86400000), rem = u.reminded || {};
+      if (u.email && days >= 0 && !u.blocked) {
+        var step = days <= CFG.REMIND_DAYS[1] ? 'd3' : days <= CFG.REMIND_DAYS[0] ? 'd30' : '';
+        if (step && !rem[step] && !(step === 'd30' && rem.d3)) {
+          try {
+            var m = subscriptionMail_(u, name, days, u.until);
+            MailApp.sendEmail({ to: u.email, subject: m.subject, body: m.body, name: CFG.SENDER_NAME, replyTo: owner || '' });
+            rem[step] = now; if (step === 'd3') rem.d30 = rem.d30 || now;
+            u.reminded = rem; changed = true; stat.reminded++;
+          } catch (e) { stat.errors++; }
+        }
+      }
+      if (changed) putUser_(name, u);
+    });
+  } finally { lock.releaseLock(); }
+  Logger.log('dailyCheck ' + JSON.stringify(stat));
+  return stat;
+}
+function installTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'dailyCheck') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('dailyCheck').timeBased().everyDays(1).atHour(8).inTimezone('Asia/Jerusalem').create();
+  Logger.log('נוצר טריגר יומי (08:00 שעון ישראל) ל-dailyCheck');
 }
 
 /* ---------- יומן בקשות (קובץ בתיקיית הבקשות) ---------- */
@@ -217,6 +349,7 @@ var ACTIONS = {
     var good = !!u && safeEq_(hashPass_(u.salt, String(r.pass || '')), u.hash);
     if (!good) { noteFail_(name); return { ok: false, error: 'bad_login' }; }
     if (u.blocked) return { ok: false, error: 'blocked' };
+    if (u.until && Number(u.until) < now_()) { clearFails_(name); return { ok: false, error: 'sub_expired', until: u.until, renewUrl: CFG.RENEW_URL }; }
     clearFails_(name);
     u.lastLogin = now_(); putUser_(name, u);
     return loginOk_(name, u);
@@ -224,7 +357,7 @@ var ACTIONS = {
 
   me: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
-    return { ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO };
+    return { ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: a.user.until || null, renewUrl: CFG.RENEW_URL };
   },
 
   changePassword: function (r) {
@@ -251,7 +384,8 @@ var ACTIONS = {
     });
     return { ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
-      return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null };
+      return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
+        email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '' };
     }) };
   },
 
@@ -276,8 +410,10 @@ var ACTIONS = {
     if (!validPass_(r.newPass)) return { ok: false, error: 'weak_pass' };
     if (getUser_(r.newUser)) return { ok: false, error: 'exists' };
     var salt = randHex_(24);
-    putUser_(r.newUser, { role: r.role === 'admin' ? 'admin' : 'user', blocked: false, tv: now_(),   // tv=זמן יצירה: משתמש שנמחק ונוצר מחדש באותו שם לא מחייה אסימונים ישנים
-       salt: salt, hash: hashPass_(salt, r.newPass), created: now_(), changed: now_() });
+    var nu = { role: r.role === 'admin' ? 'admin' : 'user', blocked: false, tv: now_(),   // tv=זמן יצירה: משתמש שנמחק ונוצר מחדש באותו שם לא מחייה אסימונים ישנים
+      salt: salt, hash: hashPass_(salt, r.newPass), created: now_(), changed: now_(), source: 'manual' };
+    if (r.until) { var ut = parseUntil_(r.until); if (!ut) return { ok: false, error: 'bad_date' }; nu.until = ut; }
+    putUser_(r.newUser, nu);
     return { ok: true };
   },
 
@@ -305,6 +441,9 @@ var ACTIONS = {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
     if (!getUser_(String(r.target || ''))) return { ok: false, error: 'no_user' };
     if (r.target === a.name) return { ok: false, error: 'self' };
+    var du = getUser_(r.target);
+    (du && du.orders || []).forEach(function (o) { props_().deleteProperty(orderKey_(o)); });    // הכרטיסים משתחררים: אפשר להירשם מחדש איתם
+    if (du && du.email) props_().deleteProperty(emailKey_(du.email));
     delUser_(r.target);
     return { ok: true };
   },
@@ -315,6 +454,93 @@ var ACTIONS = {
     var m = r.mode === 'live' ? 'live' : 'test';
     props_().setProperty('MAIL_MODE', m);
     return { ok: true, mailMode: m };
+  },
+
+  // ----- הרשמה וחידוש מנוי (ללא התחברות): רק למי שרכש כרטיס "בקשת אישורי טיסה" ששולם בפועל -----
+  // התשובה כאן זהה בין אם יש כרטיס ובין אם אין, כדי שאי אפשר לברר דרכה מי רכש כרטיס. הקוד נשלח רק לכתובת שבהזמנה.
+  regStart: function (r) {
+    var email = normEmail_(r.email);
+    if (!email) return { ok: false, error: 'bad_email' };
+    var cache = CacheService.getScriptCache(), hk = Math.floor(now_() / 3600000), ek = 'regE:' + sha256Hex_(email).slice(0, 20) + ':' + hk, gk = 'regG:' + hk;
+    var ne = Number(cache.get(ek)) || 0, ng = Number(cache.get(gk)) || 0;
+    if (ne >= CFG.REG_PER_EMAIL_HOUR || ng >= CFG.REG_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי ניסיונות — נסו שוב בעוד שעה' };
+    cache.put(ek, String(ne + 1), 3600); cache.put(gk, String(ng + 1), 3600);
+    var orders;
+    try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
+    var eu = emailUser_(email), fresh = eligibleOrders_(orders), owner = ownerEmail_(), mode = '';
+    if (eu && eu.user) mode = fresh.length ? 'renew' : 'exists';
+    else if (fresh.length) mode = 'register';
+    if (mode === 'exists') {
+      MailApp.sendEmail({ to: email, name: CFG.SENDER_NAME, replyTo: owner || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
+        body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון (office@icd.org.il) ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' });
+    } else if (mode) {
+      var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
+      props_().setProperty('R:' + sha256Hex_(email).slice(0, 30), JSON.stringify({ h: sha256Hex_(salt + ':' + code), s: salt, exp: now_() + CFG.CODE_TTL_MIN * 60000, tries: 0 }));
+      MailApp.sendEmail({ to: email, name: CFG.SENDER_NAME, replyTo: owner || '', subject: (mode === 'renew' ? 'קוד לחידוש המנוי לבקשות טיסה' : 'קוד הרשמה לבקשות טיסה') + ': ' + code,
+        body: 'שלום,\n\nהקוד שלך ' + (mode === 'renew' ? 'לחידוש המנוי' : 'להרשמה לבקשות טיסה') + ': ' + code + '\nהקוד תקף ל-' + CFG.CODE_TTL_MIN + ' דקות. אם לא ביקשת — אפשר להתעלם מהמייל.\n\nצוות הארגון הישראלי לרחפנים' });
+    }
+    return { ok: true, sent: true };
+  },
+
+  regFinish: function (r) {
+    var email = normEmail_(r.email), code = String(r.code || '').replace(/\D/g, '');
+    if (!email || code.length !== 6) return { ok: false, error: 'bad_code' };
+    var rk = 'R:' + sha256Hex_(email).slice(0, 30), raw = props_().getProperty(rk), rec = null;
+    try { rec = raw ? JSON.parse(raw) : null; } catch (e) { rec = null; }
+    if (!rec || rec.exp < now_()) { props_().deleteProperty(rk); return { ok: false, error: 'bad_code' }; }
+    if (rec.tries >= CFG.CODE_MAX_TRIES) { props_().deleteProperty(rk); return { ok: false, error: 'bad_code' }; }
+    if (!safeEq_(sha256Hex_(rec.s + ':' + code), rec.h)) { rec.tries++; props_().setProperty(rk, JSON.stringify(rec)); return { ok: false, error: 'bad_code' }; }
+    // הקוד נכון: בודקים שוב מול Wix (ייתכן שההזמנה בוטלה/נוצלה בינתיים)
+    var orders;
+    try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
+    var eu = emailUser_(email), fresh = eligibleOrders_(orders);
+    if (!fresh.length) { props_().deleteProperty(rk); return { ok: false, error: 'no_ticket' }; }
+    var t = now_();
+    if (eu && eu.user) {                                              // חידוש
+      var u = eu.user, nu = applyOrders_(u.until, fresh);
+      if (nu <= t) { props_().deleteProperty(rk); return { ok: false, error: 'ticket_expired' }; }
+      u.until = nu; u.orders = (u.orders || []).concat(fresh.map(function (o) { return o.orderNumber; })); u.reminded = {}; u.renewed = t;
+      fresh.forEach(function (o) { props_().setProperty(orderKey_(o.orderNumber), eu.name); });
+      putUser_(eu.name, u); props_().deleteProperty(rk);
+      return { ok: true, renewed: true, until: nu };
+    }
+    var name = String(r.user || '').trim(), pass = String(r.pass || '');
+    if (!name || !pass) return { ok: false, error: 'need_credentials' };     // הקוד נשאר תקף
+    if (!validName_(name)) return { ok: false, error: 'bad_user' };
+    if (!validPass_(pass)) return { ok: false, error: 'weak_pass' };
+    if (getUser_(name)) return { ok: false, error: 'exists' };
+    var until = applyOrders_(0, fresh);
+    if (until <= t) { props_().deleteProperty(rk); return { ok: false, error: 'ticket_expired' }; }
+    var salt = randHex_(24), nu2 = { role: 'user', blocked: false, tv: t, salt: salt, hash: hashPass_(salt, pass), created: t, changed: t, source: 'ticket', email: email, displayName: fresh[0].name || '', until: until, orders: fresh.map(function (o) { return o.orderNumber; }), reminded: {}, lastLogin: t };
+    putUser_(name, nu2);
+    props_().setProperty(emailKey_(email), name);
+    fresh.forEach(function (o) { props_().setProperty(orderKey_(o.orderNumber), name); });
+    props_().deleteProperty(rk);
+    return loginOk_(name, nu2);
+  },
+
+  // מנהל: שינוי תאריך סיום מנוי של משתמש (until = YYYY-MM-DD, או ריק = ללא הגבלה)
+  setExpiry: function (r) {
+    var a = admin_(r); if (a.error) return { ok: false, error: a.error };
+    var u = getUser_(String(r.target || ''));
+    if (!u) return { ok: false, error: 'no_user' };
+    var ut = r.until ? parseUntil_(r.until) : 0;
+    if (r.until && !ut) return { ok: false, error: 'bad_date' };
+    if (ut) u.until = ut; else delete u.until;
+    u.reminded = {}; putUser_(r.target, u);
+    return { ok: true, until: ut || null };
+  },
+
+  // מנהל: אבחון — מה Wix מחזיר עבור כתובת מייל (לבדיקת ההגדרה אחרי הפעלה ולתמיכה). לא משנה דבר.
+  wixCheck: function (r) {
+    var a = admin_(r); if (a.error) return { ok: false, error: a.error };
+    var email = normEmail_(r.email);
+    if (!email) return { ok: false, error: 'bad_email' };
+    var orders;
+    try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
+    return { ok: true, requireMember: CFG.REQUIRE_MEMBER, orders: orders.map(function (o) {
+      return { orderNumber: o.orderNumber, created: o.created, member: o.member, used: !!orderOwner_(o.orderNumber), by: orderOwner_(o.orderNumber) || '', eligible: (!CFG.REQUIRE_MEMBER || o.member) && !orderOwner_(o.orderNumber) };
+    }), account: (emailUser_(email) || {}).name || '' };
   },
 
   // פותח (או ממשיך) תיקיית בקשה. rid = מזהה בקשה שהדפדפן יוצר: אותה בקשה חוזרת לאותה תיקייה, ובקשה אחרת — גם באותו מקום ותאריך —
@@ -446,7 +672,7 @@ function folderFiles_(folder) {
 
 function loginOk_(name, u) {
   var t = makeToken_(name, u);
-  return { ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO };
+  return { ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: u.until || null, renewUrl: CFG.RENEW_URL };
 }
 function admin_(r) {
   var a = auth_(r.token);

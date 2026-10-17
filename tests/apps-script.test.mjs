@@ -545,3 +545,242 @@ test("אותו מקום ותאריך שכבר נשלחו חי מבקשה אחר�
   // מקום אחר לא נחסם
   assert.ok(env.call(sendBody(env, token, savedRequest(env, token, "אתר אחר — 05.11.2026").folderId)).ok);
 });
+
+/* ===== מנוי מטיס מסחרי: כרטיס Wix → הרשמה בקוד מייל → תוקף, חידוש ותזכורות ===== */
+const DAY = 86400000;
+function withWix() {
+  const r = bootstrapped(); r.env.props.WIX_API_KEY = "test-key";
+  return r;
+}
+const iso = ms => new Date(ms).toISOString();
+let ordSeq = 0;
+function addOrder(env, over) {
+  const o = Object.assign({ orderNumber: "ORD-" + String(++ordSeq).padStart(4, "0"), status: "PAID", created: iso(env.now() - 2 * DAY), email: "pilot@example.com", firstName: "דנה", memberId: "m-1", tickets: [] }, over);
+  env.wix.orders.push(o); return o;
+}
+const codeFrom = env => { const m = env.mails[env.mails.length - 1]; const c = /(\d{6})/.exec(m.subject); assert.ok(c, "אין קוד בנושא: " + m.subject); return c[1]; };
+const regOk = (env, over) => {
+  assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);
+  return env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env), user: "dana.pilot", pass: "dana-pass-1234", ...over });
+};
+
+test("הרשמה: כרטיס ששולם → קוד למייל → שם משתמש וסיסמה שהמשתמש בוחר → כניסה; תוקף 12 חודשים מיום הרכישה", () => {
+  const { env, token } = withWix(); const o = addOrder(env);
+  const s = env.call({ action: "regStart", email: "Pilot@Example.com " });
+  assert.ok(s.ok);
+  assert.equal(env.mails.length, 1); assert.equal(env.mails[0].to, "pilot@example.com");
+  assert.match(env.mails[0].subject, /קוד הרשמה לבקשות טיסה: \d{6}/);
+  const r = env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env), user: "dana.pilot", pass: "dana-pass-1234" });
+  assert.ok(r.ok && r.token && r.role === "user", JSON.stringify(r));
+  const created = new Date(o.created); created.setUTCMonth(created.getUTCMonth() + 12);
+  assert.equal(r.until, created.getTime());
+  assert.ok(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }).ok);
+  const u = JSON.parse(env.props["U:dana.pilot"]); assert.equal(u.email, "pilot@example.com"); assert.deepEqual(Array.from(u.orders), [o.orderNumber]);
+  assert.ok(!JSON.stringify(env.props).includes("dana-pass-1234"));
+  // המשתמש הרגיל לא מנהל, והמנהל רואה אימייל ותוקף
+  assert.equal(env.call({ action: "listUsers", token: r.token }).error, "forbidden");
+  const row = env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot");
+  assert.equal(row.email, "pilot@example.com"); assert.equal(row.until, r.until); assert.equal(row.source, "ticket");
+  // בקריאות ל-Wix נשלחים מפתח וזיהוי אתר, ורק status=PAID של האירוע הנכון
+  const c = env.wix.calls[0]; assert.equal(c.headers.Authorization, "test-key"); assert.equal(c.headers["wix-site-id"], "29dca6d8-08d4-4679-a6e5-c5f4f3317d90");
+  assert.match(c.search, /eventId=fbcb2cc1-4dc7-4545-b9d5-08febf9f8153/); assert.match(c.search, /status=PAID/);
+});
+
+test("הרשמה: בלי כרטיס ששולם בפועל — לא נשלח קוד, והתשובה זהה (אי אפשר לברר מי רכש)", () => {
+  const { env } = withWix();
+  const base = env.call({ action: "regStart", email: "nobody@example.com" });   // אין הזמנות כלל
+  addOrder(env, { email: "free@example.com", status: "FREE" });
+  addOrder(env, { email: "offline@example.com", status: "OFFLINE_PENDING" });
+  addOrder(env, { email: "canceled@example.com", status: "CANCELED" });
+  addOrder(env, { email: "pending@example.com", status: "PENDING" });
+  addOrder(env, { email: "visitor@example.com", memberId: "" });                    // לא חבר רשום באתר
+  addOrder(env, { email: "other@example.com", eventId: "00000000-0000-0000-0000-000000000000" });   // אירוע אחר
+  addOrder(env, { email: "pilot@example.com.evil", status: "PAID" });                // התאמה חלקית
+  const answers = ["free", "offline", "canceled", "pending", "visitor", "other", "pilot"].map(n => env.call({ action: "regStart", email: n + "@example.com" }));
+  for (const a of answers) assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(base)));
+  assert.equal(env.mails.length, 0, "לא נשלח אף קוד");
+});
+
+test("הרשמה: הזמנה שנרשמה בשם מייל אחר/בכרטיס של משתתף אחר — מתאימים לפי המייל שבהזמנה או שבכרטיס, בשוויון מלא", () => {
+  const { env } = withWix();
+  addOrder(env, { email: "buyer@example.com", tickets: [{ guestDetails: { email: "holder@example.com" } }] });
+  assert.ok(env.call({ action: "regStart", email: "holder@example.com" }).ok);
+  assert.equal(env.mails.length, 1, "בעל הכרטיס (לא הרוכש) זכאי");
+  assert.ok(env.call({ action: "regStart", email: "holder@example.co" }).ok);
+  assert.equal(env.mails.length, 1, "מייל דומה אינו זכאי");
+});
+
+test("הרשמה: קוד שגוי נספר ונחסם אחרי 5, קוד פג תוקף אחרי 15 דקות, ושם משתמש/סיסמה נבדקים בלי לשרוף את הקוד", () => {
+  const { env } = withWix(); addOrder(env);
+  env.call({ action: "regStart", email: "pilot@example.com" }); const code = codeFrom(env);
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code, user: "dana.pilot" }).error, "need_credentials");
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code, user: "dana.pilot", pass: "short" }).error, "weak_pass");
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code, user: "a/b", pass: "dana-pass-1234" }).error, "bad_user");
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code, user: "itzik", pass: "dana-pass-1234" }).error, "exists");
+  for (let i = 0; i < 5; i++) assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code: "000000", user: "dana.pilot", pass: "dana-pass-1234" }).error, "bad_code");
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code, user: "dana.pilot", pass: "dana-pass-1234" }).error, "bad_code", "אחרי 5 כשלונות גם הקוד הנכון נדחה");
+  env.call({ action: "regStart", email: "pilot@example.com" }); const c2 = codeFrom(env);
+  env.advance(16 * 60000);
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code: c2, user: "dana.pilot", pass: "dana-pass-1234" }).error, "bad_code", "פג תוקף");
+});
+
+test("הרשמה: כל הזמנה נצרכת פעם אחת — לא אפשר להירשם פעמיים עם אותו כרטיס (גם במייל שני)", () => {
+  const { env } = withWix(); addOrder(env, { tickets: [{ guestDetails: { email: "friend@example.com" } }] });
+  assert.ok(regOk(env).ok);
+  env.call({ action: "regStart", email: "friend@example.com" });                    // אותה הזמנה, משתתף אחר
+  assert.equal(env.mails.filter(m => /קוד/.test(m.subject)).length, 1, "ההזמנה כבר נוצלה — אין קוד נוסף");
+  // מייל שכבר רשום ללא כרטיס חדש: מקבל תזכורת שם משתמש (לא קוד)
+  const before = env.mails.length; env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.equal(env.mails.length, before + 1); assert.match(env.mails[before].subject, /כבר קיים חשבון/); assert.match(env.mails[before].body, /dana\.pilot/);
+});
+
+test("כרטיס ישן מ-12 חודשים — אי אפשר להירשם איתו (ticket_expired)", () => {
+  const { env } = withWix(); addOrder(env, { created: iso(env.now() - 400 * DAY) });
+  env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env), user: "dana.pilot", pass: "dana-pass-1234" }).error, "ticket_expired");
+  assert.equal(env.props["U:dana.pilot"], undefined);
+});
+
+test("בלי מפתח Wix או כש-Wix נופל: נכשל סגור, בלי קוד ובלי חשבון", () => {
+  const a = bootstrapped(); addOrder(a.env);
+  assert.equal(a.env.call({ action: "regStart", email: "pilot@example.com" }).error, "not_configured");
+  const { env } = withWix(); addOrder(env);
+  env.fail.wix = 500;
+  assert.equal(env.call({ action: "regStart", email: "pilot@example.com" }).error, "wix_down");
+  env.fail.wix = 401;
+  assert.equal(env.call({ action: "regStart", email: "pilot@example.com" }).error, "wix_down");
+  assert.equal(env.mails.length, 0);
+  assert.equal(env.call({ action: "regStart", email: "not-an-email" }).error, "bad_email");
+});
+
+test("הרשמה: הגבלת קצב לכתובת ולשרת כולו", () => {
+  const { env } = withWix();
+  for (let i = 0; i < 5; i++) assert.ok(env.call({ action: "regStart", email: "x@example.com" }).ok);
+  assert.equal(env.call({ action: "regStart", email: "x@example.com" }).error, "rate");
+  env.advance(61 * 60000);
+  assert.ok(env.call({ action: "regStart", email: "x@example.com" }).ok);
+});
+
+test("תוקף: אחרי תאריך הסיום אי אפשר להתחבר, והאסימון הקיים נפסל; מנהל ומשתמשים ידניים — ללא הגבלה", () => {
+  const { env, token } = withWix(); addOrder(env);
+  const r = regOk(env);
+  assert.ok(env.call({ action: "me", token: r.token }).ok);
+  assert.equal(env.call({ action: "me", token: r.token }).until, r.until);
+  const rec = JSON.parse(env.props["U:dana.pilot"]); rec.until = env.now() + 3600000; env.props["U:dana.pilot"] = JSON.stringify(rec);   // שעה לפני הסיום, בתוך חיי האסימון (8 שעות)
+  assert.ok(env.call({ action: "me", token: r.token }).ok);
+  env.advance(2 * 3600000);
+  const lg = env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" });
+  assert.equal(lg.error, "sub_expired"); assert.match(lg.renewUrl, /icd\.org\.il\/events-1\//);
+  assert.equal(env.call({ action: "me", token: r.token }).error, "sub_expired");
+  assert.equal(env.call({ action: "saveBegin", token: r.token, folderName: "x", rid: newRid() }).error, "sub_expired");
+  assert.equal(env.call({ action: "login", user: "dana.pilot", pass: "wrong-wrong-12" }).error, "bad_login", "סיסמה שגויה לא מגלה תפוגה");
+  const adm = env.call({ action: "login", user: "itzik", pass: PASS }); assert.ok(adm.ok && adm.until === null);
+});
+
+test("חידוש: כרטיס חדש מאריך מהמאוחר מבין סוף התקופה ויום הרכישה; כרטיס שנוצל לא; התזכורות מתאפסות", () => {
+  const { env } = withWix(); const o1 = addOrder(env, { created: iso(env.now() - 340 * DAY) });
+  const r = regOk(env), end1 = r.until;
+  env.advance(end1 - env.now() - 11 * DAY);                      // 11 ימים לפני הסיום
+  const o2 = addOrder(env, { created: iso(env.now() - DAY) });   // חידוש מוקדם
+  env.call({ action: "regStart", email: "pilot@example.com" });
+  const fin = env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env) });
+  assert.ok(fin.ok && fin.renewed, JSON.stringify(fin));
+  const e = new Date(end1); e.setUTCMonth(e.getUTCMonth() + 12);
+  assert.equal(fin.until, e.getTime(), "מתווסף לסוף התקופה הנוכחית — לא מפסידים ימים");
+  assert.ok(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }).ok);
+  assert.deepEqual(Array.from(JSON.parse(env.props["U:dana.pilot"]).orders), [o1.orderNumber, o2.orderNumber]);
+  // אין כרטיס חדש → אין קוד חידוש
+  const n = env.mails.length; env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.match(env.mails[n].subject, /כבר קיים חשבון/);
+});
+
+test("חידוש אחרי שהמנוי כבר פג: מתחיל מיום הרכישה החדשה", () => {
+  const { env } = withWix(); addOrder(env, { created: iso(env.now() - 300 * DAY) });
+  const r = regOk(env);
+  env.advance(r.until - env.now() + 10 * DAY);                   // פג לפני 10 ימים
+  const o2 = addOrder(env, { created: iso(env.now() - 1000) });
+  env.call({ action: "regStart", email: "pilot@example.com" });
+  const fin = env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env) });
+  const e = new Date(Date.parse(o2.created)); e.setUTCMonth(e.getUTCMonth() + 12);
+  assert.equal(fin.until, e.getTime());
+  assert.ok(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }).ok);
+});
+
+test("תזכורות: חודש לפני (פעם אחת), 3 ימים לפני (פעם אחת), בלי כפילויות, עם קישור חידוש ושם המשתמש", () => {
+  const { env } = withWix(); addOrder(env, { created: iso(env.now() - 300 * DAY) });
+  const r = regOk(env), end = r.until, mailsBefore = () => env.mails.filter(m => /המנוי שלך לבקשות טיסה/.test(m.subject));
+  assert.equal(env.run("dailyCheck").reminded, 0, "רחוק מהסיום — אין תזכורת");
+  env.advance(end - env.now() - 29 * DAY);                       // 29 ימים לפני
+  assert.equal(env.run("dailyCheck").reminded, 1);
+  let ms = mailsBefore(); assert.equal(ms.length, 1);
+  assert.match(ms[0].subject, /מסתיים בעוד כחודש/); assert.equal(ms[0].to, "pilot@example.com");
+  assert.match(ms[0].body, /dana\.pilot/); assert.match(ms[0].body, /https:\/\/www\.icd\.org\.il\/events-1\/bqst-yswry-tysh/); assert.match(ms[0].body, /שלום דנה/);
+  assert.equal(env.run("dailyCheck").reminded, 0, "אותה תזכורת לא נשלחת פעמיים");
+  env.advance(25 * DAY);                                         // 4 ימים לפני: עדיין לא
+  assert.equal(env.run("dailyCheck").reminded, 0);
+  env.advance(DAY);                                              // 3 ימים לפני
+  assert.equal(env.run("dailyCheck").reminded, 1);
+  ms = mailsBefore(); assert.equal(ms.length, 2); assert.match(ms[1].subject, /תזכורת: .*מסתיים בעוד 3 ימים/); assert.match(ms[1].body, /bqst-yswry-tysh/);
+  assert.equal(env.run("dailyCheck").reminded, 0);
+  env.advance(5 * DAY);                                          // אחרי הסיום: אין מייל נוסף
+  assert.equal(env.run("dailyCheck").reminded, 0);
+});
+
+test("תזכורות: אם הבדיקה הראשונה כבר בתוך 3 הימים — נשלח מייל אחד בלבד (לא שניים); חידוש מאפס את התזכורות", () => {
+  const { env } = withWix(); addOrder(env, { created: iso(env.now() - 340 * DAY) });
+  const r = regOk(env);
+  env.advance(r.until - env.now() - 2 * DAY);
+  assert.equal(env.run("dailyCheck").reminded, 1); assert.equal(env.run("dailyCheck").reminded, 0);
+  assert.equal(env.mails.filter(m => /המנוי שלך/.test(m.subject)).length, 1);
+  addOrder(env, { created: iso(env.now()) });
+  env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.ok(env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env) }).renewed);
+  assert.deepEqual(JSON.parse(JSON.stringify(JSON.parse(env.props["U:dana.pilot"]).reminded)), {});
+});
+
+test("בדיקה יומית: הזמנה שבוטלה/הוחזרה — החשבון נחסם והאסימון נפסל; תקלת Wix לא חוסמת אף אחד; מנהל ידני לא נבדק", () => {
+  const { env, token } = withWix(); const o = addOrder(env); const r = regOk(env);
+  env.fail.wix = 503;
+  assert.equal(env.run("dailyCheck").blocked, 0); assert.ok(env.call({ action: "me", token: r.token }).ok);
+  env.fail.wix = 0;
+  assert.equal(env.run("dailyCheck").blocked, 0, "הזמנה עדיין שולמה");
+  o.status = "CANCELED";
+  const st = env.run("dailyCheck"); assert.equal(st.blocked, 1);
+  assert.equal(env.call({ action: "me", token: r.token }).error, "blocked");
+  assert.equal(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }).error, "blocked");
+  assert.equal(env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot").blockedWhy, "order_CANCELED");
+  // המנהל יכול לשחרר (חסימה/ביטול חסימה קיימים)
+  assert.ok(env.call({ action: "setBlocked", token, target: "dana.pilot", blocked: false }).ok);
+});
+
+test("טריגר יומי: installTrigger יוצר טריגר אחד ל-dailyCheck ב-08:00 שעון ישראל, וגם בהרצה חוזרת", () => {
+  const { env } = withWix();
+  env.run("installTrigger"); env.run("installTrigger");
+  assert.equal(env.triggers.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(env.triggers[0].spec)), { days: 1, hour: 8, tz: "Asia/Jerusalem" });
+  assert.equal(env.triggers[0].getHandlerFunction(), "dailyCheck");
+});
+
+test("מנהל: שינוי תאריך סיום, הסרת הגבלה, משתמש ידני עם תוקף, אבחון Wix; משתמש רגיל לא; מחיקת משתמש משחררת את הכרטיס", () => {
+  const { env, token } = withWix(); addOrder(env); const r = regOk(env);
+  assert.equal(env.call({ action: "setExpiry", token: r.token, target: "dana.pilot", until: "2030-01-01" }).error, "forbidden");
+  assert.equal(env.call({ action: "setExpiry", token, target: "dana.pilot", until: "31/12/2030" }).error, "bad_date");
+  assert.ok(env.call({ action: "setExpiry", token, target: "dana.pilot", until: "2030-01-01" }).ok);
+  assert.ok(env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot").until > Date.parse("2030-01-01T00:00:00Z"));
+  assert.ok(env.call({ action: "setExpiry", token, target: "dana.pilot", until: "" }).ok);
+  assert.equal(env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot").until, null);
+  assert.ok(env.call({ action: "addUser", token, newUser: "tmp.user", newPass: "tmp-pass-12345", until: "2000-01-01" }).ok);
+  assert.equal(env.call({ action: "login", user: "tmp.user", pass: "tmp-pass-12345" }).error, "sub_expired");
+  const chk = env.call({ action: "wixCheck", token, email: "pilot@example.com" });
+  assert.ok(chk.ok && chk.orders.length === 1 && chk.orders[0].used && chk.orders[0].by === "dana.pilot" && chk.account === "dana.pilot");
+  assert.equal(env.call({ action: "wixCheck", token: r.token, email: "pilot@example.com" }).error, "forbidden");
+  assert.ok(env.call({ action: "deleteUser", token, target: "dana.pilot" }).ok);
+  assert.equal(env.call({ action: "wixCheck", token, email: "pilot@example.com" }).orders[0].eligible, true, "הכרטיס משתחרר");
+  assert.ok(regOk(env, { user: "dana.second" }).ok, "אפשר להירשם מחדש עם אותו כרטיס");
+});
+
+test("אבחון Wix מציג למה כרטיס לא זכאי (הרוכש אינו חבר רשום)", () => {
+  const { env, token } = withWix(); addOrder(env, { memberId: "" });
+  const chk = env.call({ action: "wixCheck", token, email: "pilot@example.com" });
+  assert.equal(chk.requireMember, true); assert.equal(chk.orders[0].member, false); assert.equal(chk.orders[0].eligible, false);
+});

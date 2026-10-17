@@ -13,7 +13,26 @@ export function makeEnv() {
   const props = {}, cache = {}, logs = [];
   // השעון המדומה מתחיל בזמן אמיתי: הדפדפן בבדיקות e2e משווה אותו (פקיעת אסימון) לשעון שלו
   let clock = Date.now();
-  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false };
+  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0 };
+  // Wix מדומה (Events orders): env.wix.orders = [{orderNumber,status,created,email,firstName,memberId,tickets,eventId}], נבדקים הכותרות והסינון כמו ב-API האמיתי
+  const wix = { orders: [], calls: [], eventId: "fbcb2cc1-4dc7-4545-b9d5-08febf9f8153", siteId: "29dca6d8-08d4-4679-a6e5-c5f4f3317d90" };
+  const triggers = [];
+  const fetchApp = (url, opts) => {
+    const u = new URL(url), q = u.searchParams, headers = (opts && opts.headers) || {};
+    wix.calls.push({ path: u.pathname, search: u.search, headers });
+    const reply = (code, body) => ({ getResponseCode: () => code, getContentText: () => (typeof body === "string" ? body : JSON.stringify(body)) });
+    if (fail.wix) return reply(fail.wix, "boom");
+    if (u.host !== "www.wixapis.com" || u.pathname !== "/events/v1/orders") return reply(404, "nf");
+    if (!headers.Authorization || headers["wix-site-id"] !== wix.siteId) return reply(401, "unauthorized");
+    let list = wix.orders.filter(o => (o.eventId || wix.eventId) === q.get("eventId"));
+    const st = q.getAll("status"); if (st.length) list = list.filter(o => st.includes(o.status));
+    if (q.get("orderNumber")) list = list.filter(o => o.orderNumber === q.get("orderNumber"));
+    const sp = (q.get("searchPhrase") || "").toLowerCase();   // חיפוש חלקי (כמו Wix): הקוד חייב להשוות שוויון בעצמו
+    if (sp) list = list.filter(o => [o.email, o.firstName, o.orderNumber].some(x => String(x || "").toLowerCase().includes(sp)) || (o.tickets || []).some(t => String((t.guestDetails || {}).email || "").toLowerCase().includes(sp)));
+    const off = Number(q.get("offset") || 0), lim = Math.min(100, Number(q.get("limit") || 100));
+    const page = list.slice(off, off + lim).map(o => { const c = { ...o }; delete c.eventId; return c; });
+    return reply(200, { total: list.length, offset: off, limit: lim, orders: page, facets: {} });
+  };
   const toBuf = v => Array.isArray(v) ? Buffer.from(v.map(x => x & 0xff)) : Buffer.from(String(v), "utf8");
   const signed = b => [...b].map(x => (x > 127 ? x - 256 : x));
   // Drive מדומה: תיקיות וקבצים בזיכרון
@@ -42,6 +61,9 @@ export function makeEnv() {
   const sandbox = {
     Logger: { log: m => logs.push(String(m)) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; }, getProperties: () => ({ ...props }) }) },
+    UrlFetchApp: { fetch: fetchApp },
+    ScriptApp: { getProjectTriggers: () => triggers.slice(), deleteTrigger: t => { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
+      newTrigger: fn => { const t = { fn, getHandlerFunction: () => fn, spec: {} }; const b = { timeBased: () => b, everyDays: n => { t.spec.days = n; return b; }, atHour: h => { t.spec.hour = h; return b; }, inTimezone: z => { t.spec.tz = z; return b; }, create: () => { triggers.push(t); return t; } }; return b; } },
     MailApp: { sendEmail: m => { if (hooks.beforeMail) hooks.beforeMail(m); if (fail.mail) throw new Error("mail down"); mails.push(m); } },
     Session: { getEffectiveUser: () => ({ getEmail: () => "owner@icd.test" }) },
     CacheService: { getScriptCache: () => ({ get: k => (cache[k] && cache[k].exp > clock ? cache[k].v : null), put: (k, v, s) => { cache[k] = { v, exp: clock + s * 1000 }; }, remove: k => { delete cache[k]; } }) },
@@ -67,7 +89,7 @@ export function makeEnv() {
   vm.runInContext(SRC, sandbox, { filename: "Code.gs" });
   vm.runInContext("CFG.ROOT_FOLDER_ID = '" + ROOT_ID + "'", sandbox);   // בבדיקות התיקייה הראשית היא ההדמיה
   const call = (obj) => JSON.parse(vm.runInContext("doPost", sandbox)({ postData: { contents: JSON.stringify(obj) } }).text);
-  return { sandbox, call, props, logs, folders, mails, hooks, fail, now: () => clock, advance: ms => { clock += ms; },
+  return { sandbox, call, props, logs, folders, mails, hooks, fail, wix, triggers, now: () => clock, advance: ms => { clock += ms; },
     run: name => vm.runInContext(name + "()", sandbox), doGet: () => JSON.parse(vm.runInContext("doGet", sandbox)().text) };
 }
 
