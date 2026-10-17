@@ -23,12 +23,15 @@
     return it.n + ". " + it.title + " — " + dLabel(it.d) + (it.height ? " · גובה " + C.trimNum(it.height, 0) + " מ׳" : "");
   }
   // גובה האזור כפי שהוא במפה; לאזור משורטט בקירוב אין גובה מובנה — מציגים את לשון הפמ״ת
-  const zoneAlt = z => z.alt || (z.pmt ? "לפי הפמ״ת: " + z.pmt : "הגובה לפי הפמ״ת");
-  const approxMark = z => z.approx ? " (שרטוט בקירוב לפי מפת נספח א׳ בפמ״ת — אינו הגבול הרשמי; הקואורדינטות ב-ENR 5.1)" : "";
+  const isB09 = z => z.src === "b09";
+  const rule09 = (data, id) => ((data && data.zones && data.zones.rules09 && data.zones.rules09.rules) || []).find(r => r.id === id);
+  // גובה האזור כפי שהוא במפה; לאזור משורטט בקירוב (LLR) אין גובה מובנה — מציגים את לשון הפמ״ת. באזור ב-09 עם גובה מזערי מעפ״י — מציינים מתי יש חפיפה אנכית
+  const zoneAlt = z => (z.alt || (z.pmt ? "לפי הפמ״ת: " + z.pmt : "הגובה לפי הפמ״ת")) + (isB09(z) && z.needGroundFt > 0 ? " — אין חפיפה אנכית אלא אם גובה הקרקע באתר מעל " + C.fmtInt(z.needGroundFt) + " רגל מעפ״י" : "");
+  const approxMark = z => !z.approx ? "" : isB09(z) ? " (שרטוט בקירוב לפי מפת נספח א׳ של פרק ב-09 — אינו הגבול הרשמי; הקואורדינטות והתיאור בשורת האזור בנספח)" : " (שרטוט בקירוב לפי מפת נספח א׳ בפמ״ת — אינו הגבול הרשמי; הקואורדינטות ב-ENR 5.1)";
   function airInfraLines(res, data, cfg) {
     const th = cfg.thresholds, lines = [], R = res.R;
-    res.zones.inside.forEach(z => lines.push("חופף לאזור " + z.id + " ״" + z.name + "״ — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
-    res.zones.near.forEach(z => lines.push("בקרבת האזור: " + z.id + " ״" + z.name + "״ — במרחק " + C.fmtDist(z.d) + " מהנקודה (" + C.fmtDist(z.edge) + " מקצה הסגירה המבוקשת) — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
+    res.zones.inside.forEach(z => lines.push("חופף לאזור " + z.label + " — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
+    res.zones.near.forEach(z => lines.push("בקרבת האזור: " + z.label + " — במרחק " + C.fmtDist(z.d) + " מהנקודה (" + C.fmtDist(z.edge) + " מקצה הסגירה המבוקשת) — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
     const have = new Set(); res.nearScan.items.forEach(i => i.ids.forEach(x => have.add(x)));
     res.airfields.filter(a => a.d - R <= th.airfield_near_m && !have.has(a.id)).forEach(a =>
       lines.push("בקרבת האזור: " + (a.type === "aerodrome" ? "שדה תעופה" : "מנחת מסוקים") + (a.name ? " ״" + a.name + "״" : "") + (a.icao ? " (" + a.icao + ")" : "") + " — במרחק " + C.fmtDist(a.d) + " מהנקודה" + (a.inactive ? " (לא פעיל לפי OSM)" : "") + "."));
@@ -118,6 +121,18 @@
     rows.push(["אזורים אסורים, מוגבלים ומסוכנים (LLP, LLR, LLD, LLU) ובלונים מעוגנים", a17edition,
       (a_in.length ? "<b>חפיפה לסגירה המבוקשת:</b> " + a_in.map(zl).map(E).join("; ") + ". " : "בתוך הסגירה (" + R + " מ׳): אין. ") +
       (a_near.length ? "<b>בקרבת הסגירה (עד " + C.fmtDist(R + th.near_zone_m) + " מהנקודה):</b> " + a_near.map(zl).map(E).join("; ") + "." : "בטווח " + C.fmtDist(R + th.near_zone_m) + " מהנקודה: אין אזור נוסף.")]);
+    // פרק ב-09 — אזורי טיסה לכטב״ם (חובה: מוצג תמיד, גם כשאין אזור בקרבה)
+    {
+      const b_in = zin.filter(isB09), b_near = znear.filter(isB09), ex09 = (res.zones.excluded || []);
+      const bz = z => z.label + " (" + z.kind + "; " + zoneAlt(z) + ") — " + C.fmtDist(z.d) + " מהנקודה" + approxMark(z) + " · לשון הפמ״ת (" + z.pmtRef + "): ״" + z.pmt + "״";
+      const quotes = ["7ב", "7ג"].map(id => rule09(data, id)).filter(Boolean).map(r => "לשון " + r.ref + ": ״" + r.text + "״").join(" · ");
+      const intro = data.zones && data.zones.general && data.zones.general.B09 && data.zones.general.B09.intro;
+      rows.push(["אזורי טיסה לכטב״ם (פרק ב-09: נספחים ב׳-1, ב׳-2, ב׳-3 ומפת נספח א׳)", (data.zones && data.zones.rules09 && data.zones.rules09.edition) || "פמ״ת פנים ארצי ב-09",
+        (b_in.length ? "<b>הסגירה בתוך אזור טיסה לכטב״ם:</b> " + b_in.map(bz).map(E).join("; ") + ". " : "בתוך הסגירה (" + R + " מ׳): אין אזור טיסה לכטב״ם. ") +
+        (b_near.length ? "<b>בקרבת הסגירה (עד " + C.fmtDist(R + th.near_zone_m) + " מהנקודה):</b> " + b_near.map(bz).map(E).join("; ") + ". " : "בטווח " + C.fmtDist(R + th.near_zone_m) + " מהנקודה: אין אזור נוסף. ") +
+        ((b_in.length || b_near.length) ? E((intro ? "לשון הפמ״ת (" + intro.ref + "): ״" + intro.text + "״ · " : "") + quotes) : "") +
+        (ex09.length ? " <span class='muted'>נשללו לפי גובה (גובה מזערי מעפ״י גבוה מגובה הסגירה בכל קרקע בישראל): " + E(ex09.map(x => x.id).join(", ")) + ".</span>" : "")]);
+    }
     // רט״ג
     const n_in = zin.filter(z => z.src === "inpa"), n_near = znear.filter(z => z.src === "inpa");
     const matches = matchUnmapped(data.inpa && data.inpa.unmapped, res.osmProtected.filter(p => p.d <= R + th.near_zone_m));
@@ -173,11 +188,12 @@
       const it = all.filter(i => i.grp === g), sum = f => it.filter(f).reduce((a, i) => a + i.count, 0);
       return { group: g, found: sum(() => true), inside: sum(i => i.zone === "in"), ring: sum(i => i.zone === "ring"), near: sum(i => i.zone === "near") };
     }).filter(g => g.group !== "הוזן ידנית" || g.found > 0);
-    const z = res.zones, a17 = x => x.src === "a17", nz = (data.zones && data.zones.zones ? data.zones.zones.length : 0);
+    const z = res.zones, a17 = x => x.src === "a17", zl = (data.zones && data.zones.zones) || [], nz = zl.filter(x => !/^B09/.test(x.cat)).length, n09 = zl.length - nz;
     const nt = res.notams, osmN = data.near && data.near.elements ? data.near.elements.length : 0;
     const siteR = R + th.site_near_m;
     const sources = [
       ["אזורי איסור/הגבלה/סכנה (א-17)", nz + " אזורים נבדקו" + ((data.zones && data.zones.approxIds && data.zones.approxIds.length) ? " (מתוכם " + data.zones.approxIds.length + " אזורי LLR משורטטים בקירוב)" : "") + ". בתוך הסגירה: " + z.inside.filter(a17).length + " · בקרבה (עד " + C.fmtDist(th.near_zone_m) + " מקצה הסגירה): " + z.near.filter(a17).length],
+      ["אזורי טיסה לכטב״ם (פרק ב-09)", n09 + " אזורים נבדקו" + ((data.zones && data.zones.approx09Ids && data.zones.approx09Ids.length) ? " (מתוכם " + data.zones.approx09Ids.length + " משורטטים בקירוב)" : "") + ". בתוך הסגירה: " + z.inside.filter(isB09).length + " · בקרבה (עד " + C.fmtDist(th.near_zone_m) + " מקצה הסגירה): " + z.near.filter(isB09).length + " · נשללו לפי גובה: " + ((z.excluded || []).length)],
       ["שמורות טבע וגנים לאומיים (רט״ג)", ((data.inpa && data.inpa.sites) ? data.inpa.sites.length : 0) + " אתרים עם גבולות נבדקו (+ " + ((data.inpa && data.inpa.unmapped) ? data.inpa.unmapped.length : 0) + " ללא גבולות — נבדקו לפי שם מול OpenStreetMap). בתוך הסגירה: " + z.inside.filter(x => x.src === "inpa").length + " · בקרבה: " + z.near.filter(x => x.src === "inpa").length],
       ["מנחתים חקלאיים", res.agri.length + " מנחתים נבדקו; הקרוב ביותר: " + (res.agri[0] ? res.agri[0].name + ", " + C.fmtDist(res.agri[0].d) : "—")],
       ["נוטמים", (nt.total || 0) + " נוטמים בקובץ · " + (nt.valid || 0) + " בתוקף בחלון הפעילות · " + nt.hits.length + " סגירות אוויריות בטווח " + C.fmtDist(th.notam_near_m) + " · " + (nt.obstacles ? nt.obstacles.length : 0) + " מכשולים שפורסמו בטווח " + C.fmtDist(th.site_near_m)],
@@ -195,6 +211,7 @@
     const n = (data.zones && data.zones.approxIds) ? data.zones.approxIds.length : 0;
     return [
       "מקור האיסורים: " + ((data.zones && data.zones.edition) || "") + (data.zones && data.zones.mapVersion ? " (מפת החברים v" + data.zones.mapVersion + ")" : "") + ". " + n + " אזורי LLR שהפמ״ת אינו מפרסם להם קואורדינטות (הן בפרק ENR 5.1 של ה-AIP) משורטטים בקירוב לפי מפת נספח א׳ בפמ״ת — אינם גבול רשמי; בנוסף הם נבדקים מול הנוטמים וסימוני אזור צבאי/מטווח ב-OpenStreetMap.",
+      "אזורי הטיסה לכטב״ם (פרק ב-09, עדכון 1/26): " + ((data.zones && data.zones.approx09Ids && data.zones.approx09Ids.length) || 0) + " אזורים (" + ((data.zones && data.zones.approx09Ids) || []).join(", ") + ") משורטטים בקירוב לפי מפת נספח א׳ של הפרק — אינם הגבול הרשמי; שאר האזורים לפי הקואורדינטות בנספחים ב׳-1, ב׳-2 וב׳-3. אזור שגובהו המזערי (מעפ״י) גבוה מגובה הסגירה בכל קרקע בישראל נשלל, והדבר מצוין בדף הבדיקות.",
       "אתרי טבע בנספח ה׳ שאין להם גבולות בקובץ: " + ((data.inpa && data.inpa.unmapped && data.inpa.unmapped.length) || 0) + " — נבדקו לפי שם מול OpenStreetMap.",
       "OpenStreetMap הוא מאגר ציבורי שנבנה על ידי מתנדבים: ייתכנו מכשולים שלא סומנו, וגבהים שלא צוינו. סקר האתר של המטיס נשאר בתוקף.",
       "גבולות מרחב מבוקר (CTR/ATZ) אינם בנתונים; מוצג המרחק לשדה התעופה הקרוב ביותר.",
@@ -209,10 +226,11 @@
     const a = C.parseDate(res.inp.dateFrom), b = C.parseDate(res.inp.dateTo);
     return safeName(res.inp.siteName) + " — " + C.ddmmyyyy(a) + (res.inp.dateTo !== res.inp.dateFrom ? " עד " + C.ddmmyyyy(b) : "");
   }
-  function submissionHtml(res, cfg) {
-    const wd = res.workingDays;
+  function submissionHtml(res, cfg, data) {
+    const wd = res.workingDays, r78 = rule09(data, "7ח");
     return (wd != null ? "ימי עבודה (א׳–ה׳, בלי חגים) מיום ההגשה (" + E(res.todayYmd.split("-").reverse().join(".")) + ") ועד תחילת הפעילות: <b>" + wd + "</b>. הנוהל (א-11 סעיף 6.ב) דורש לפחות " + cfg.thresholds.min_working_days + ". " : "") +
-      "בנוסף יש להגיש את תוכנית הטיסה שוב למודיעין טיס ביום שלפני הטיסה: <span dir='ltr'>" + E(cfg.mail.fpl) + "</span> (א-11 סעיף 3.ד.4).";
+      "בנוסף יש להגיש את תוכנית הטיסה שוב למודיעין טיס ביום שלפני הטיסה: <span dir='ltr'>" + E(cfg.mail.fpl) + "</span> (א-11 סעיף 3.ד.4)." +
+      (r78 ? " הערה: " + E(r78.ref) + " מציין 5 ימי עבודה מראש (״" + E(r78.text) + "״), בעוד פרק א-11 סעיף 6.ב (עדכון 1/26) מחייב לפחות " + cfg.thresholds.min_working_days + "; הבדיקה כאן לפי " + cfg.thresholds.min_working_days + "." : "");
   }
   const whereOf = i => i.zone === "in" ? "בתוך האזור" : i.zone === "ring" ? "בטבעת הכתומה" : "בקרבת האזור";
   // o: {images:{map,aerial}, includeChecks, draft, review (טקסט), creator}
@@ -237,7 +255,7 @@
       coverage: (function () { const c = buildCoverage(res, data, cfg); return { sources: c.sources, groups: c.groups, censusOnly: c.censusOnly.map(i => ({ title: i.title, dist: dLabel(i.d) })), censusMore: c.censusMore }; })(),
       dayNightHead: ["תאריך", "זריחה", "שקיעה", "שעות יום בחלון", "שעות לילה בחלון"],
       dayNight: res.sun.map(r => ["יום " + r.dayName + " " + C.ddmmyyyy(r.date), r.sunrise, r.sunset, C.fmtHM(r.dayMin), C.fmtHM(r.nightMin)]),
-      submission: submissionHtml(res, cfg),
+      submission: submissionHtml(res, cfg, data),
       notes: sourceNotes(res, data, cfg),
       review: o.review || "",
       footer: "מקורות: " + ((data.zones && data.zones.edition) || "") + " · פמ״ת א-11 עדכון 1/26 · OpenStreetMap · נוטמים · הופק " + now.toLocaleString("he-IL")
@@ -257,6 +275,7 @@
     out.push('<Style id="green"><LineStyle><color>ff3e8e1e</color><width>3</width></LineStyle><PolyStyle><color>663e8e1e</color></PolyStyle></Style>');
     out.push('<Style id="orange"><LineStyle><color>ff007be0</color><width>3</width></LineStyle><PolyStyle><color>55007be0</color></PolyStyle></Style>');
     out.push('<Style id="red"><LineStyle><color>ff202dd9</color><width>3</width></LineStyle><PolyStyle><color>55202dd9</color></PolyStyle></Style>');
+    out.push('<Style id="blue"><LineStyle><color>ffeb6325</color><width>3</width></LineStyle><PolyStyle><color>55eb6325</color></PolyStyle></Style>');   // אזורי טיסה לכטב"ם (ב-09)
     out.push('<Style id="dist"><LineStyle><color>ff202dd9</color><width>2</width></LineStyle></Style>');
     out.push('<Style id="powerline"><LineStyle><color>ff00d4ff</color><width>4</width></LineStyle></Style>');
     out.push('<Style id="ground"><IconStyle><color>ffeed322</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_square.png</href></Icon></IconStyle><LineStyle><color>ffeed322</color><width>3</width></LineStyle><PolyStyle><color>55eed322</color></PolyStyle></Style>');
@@ -267,7 +286,7 @@
     out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳)") + '</name><styleUrl>#orange</styleUrl>' + poly(circ(2 * R), circ(R).slice().reverse()) + "</Placemark>");
     [...res.zones.inside, ...res.zones.near].forEach(z => {
       const rings = z.z.rings && z.z.rings.length ? z.z.rings : (z.z.c && z.z.r ? [C.circlePoints(new C.Proj(z.z.c[0], z.z.c[1]), z.z.r, 96)] : []);
-      rings.forEach(rg => out.push("<Placemark><name>" + X(z.id + " " + z.name + " — " + z.kind + "; " + z.alt + " (" + z.d.toFixed(0) + " מ׳ מהנקודה)") + '</name><styleUrl>#red</styleUrl>' + poly(rg) + "</Placemark>"));
+      rings.forEach(rg => out.push("<Placemark><name>" + X(z.label + " — " + z.kind + "; " + z.alt + (z.approx ? " (שרטוט בקירוב)" : "") + " (" + z.d.toFixed(0) + " מ׳ מהנקודה)") + '</name><styleUrl>#' + (z.src === "b09" ? "blue" : "red") + '</styleUrl>' + poly(rg) + "</Placemark>"));
       if (z.d >= 1) out.push("<Placemark><name>" + X(Math.round(z.d) + " מ׳ עד " + z.id) + '</name><styleUrl>#dist</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + inp.lon + "," + inp.lat + ",0 " + z.ll[1] + "," + z.ll[0] + ",0</coordinates></LineString></Placemark>");
     });
     if (res.nearScan.items.length) {
@@ -304,7 +323,7 @@
       "סגירה: מעגל ברדיוס " + res.R + " מטר סביב " + C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon),
       "גובה: " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)",
       "אנשי קשר בשטח: " + inp.contactNames + " — " + inp.contactPhone, "",
-      "מצורפים: טופס הבקשה (PDF), מפה/תצ״א עם סימון האזור, וקובץ KML.", "",
+      "מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), הדמיות ותצ״א עם סימון האזור (מפה/תצ״א — נדרש בנספח ג׳), וקובץ KML.", "",
       "בברכה,", inp.requesterName, cfg.org.name, inp.requesterPhone
     ];
     const body = lines.join("\n");

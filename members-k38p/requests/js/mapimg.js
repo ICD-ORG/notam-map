@@ -74,7 +74,7 @@
     if (!plain) {
     [...res.zones.inside, ...res.zones.near].forEach(zn => {
       const zz = zn.z, rings = zz.rings && zz.rings.length ? zz.rings : (zz.c && zz.r ? [C.circlePoints(new C.Proj(zz.c[0], zz.c[1]), zz.r, 96)] : []);
-      rings.forEach(rg => { path(rg, true); g.fillStyle = "rgba(255,59,48,0.30)"; g.fill(); g.lineWidth = 3; g.strokeStyle = "#d92d20"; g.setLineDash(zn.approx ? [10, 7] : []); g.stroke(); g.setLineDash([]); });   // בקירוב = קו מקווקו
+      rings.forEach(rg => { path(rg, true); g.fillStyle = zn.src === "b09" ? "rgba(59,130,246,0.26)" : "rgba(255,59,48,0.30)"; g.fill(); g.lineWidth = 3; g.strokeStyle = zn.src === "b09" ? "#2563eb" : "#d92d20"; g.setLineDash(zn.approx ? [10, 7] : []); g.stroke(); g.setLineDash([]); });   // בקירוב = קו מקווקו
     });
     // ---- טבעת כתומה וירוקה ----
     const rO = 2 * res.R * pxPerM, rG = res.R * pxPerM;
@@ -132,11 +132,12 @@
       const a = [W / 2, H / 2], b = X(zn.ll[0], zn.ll[1]);
       if (!inView(b)) return;
       if (zn.d >= 1) {
-        g.setLineDash([8, 6]); g.lineWidth = 2.5; g.strokeStyle = "#ff3b30"; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.setLineDash([]);
-        g.beginPath(); g.arc(b[0], b[1], 5, 0, 2 * Math.PI); g.fillStyle = "#ff3b30"; g.fill();
+        const zc = zn.src === "b09" ? "#3b82f6" : "#ff3b30";
+        g.setLineDash([8, 6]); g.lineWidth = 2.5; g.strokeStyle = zc; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.setLineDash([]);
+        g.beginPath(); g.arc(b[0], b[1], 5, 0, 2 * Math.PI); g.fillStyle = zc; g.fill();
       }
       const lx = Math.min(Math.max(b[0], 150), W - 150), ly = Math.min(Math.max(b[1] - 20, 120), H - 40);
-      text(zn.id + " · " + zn.name + (zn.approx ? " (בקירוב)" : "") + (zn.d >= 1 ? " · " + C.fmtDist(zn.d) : ""), lx, ly, { color: "#ffd1cc", ltr: true });
+      text(zn.id + (zn.src === "b09" ? " · כטב״ם ב-09" : " · " + zn.name) + (zn.approx ? " (בקירוב)" : "") + (zn.d >= 1 ? " · " + C.fmtDist(zn.d) : ""), lx, ly, { color: zn.src === "b09" ? "#cfe0ff" : "#ffd1cc", ltr: true });
     });
 
     // ---- מרכז ----
@@ -164,7 +165,7 @@
     text("רדיוס " + res.R + " מ׳   ·   גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל) מעפ״ש (AGL)", W - 20, 50, { align: "right", size: 15, bold: false, color: "#cfe3ff", halo: "rgba(0,0,0,0)" });
     text(C.dmsLat(inp.lat) + "   " + C.dmsLon(inp.lon), 20, 50, { align: "left", ltr: true, size: 15, bold: false, color: "#cfe3ff", halo: "rgba(0,0,0,0)" });
     // ---- מקרא ----
-    const items = [["#22c55e", "ירוק: אזור הסגירה (0–" + res.R + " מ׳)"], ["#ff9500", "כתום: עד " + 2 * res.R + " מ׳"], ["#ff3b30", "אדום: אזור אסור/מוגבל (פמ״ת א-17)"], ["#ffd400", "צהוב: מכשול (מספר = ברשימה בטופס)"], ["#22d3ee", "תכלת: אתר/תשתית קרקעית (אצטדיון, כביש, מסילה...)"], ["#e040fb", "סגול: תשתית/מכשול אווירי (שדה, מנחת, בלון)"], ["#a3e635", "ירוק בהיר: אתר המונים / תשתית נוספת"]];
+    const items = [["#22c55e", "ירוק: אזור הסגירה (0–" + res.R + " מ׳)"], ["#ff9500", "כתום: עד " + 2 * res.R + " מ׳"], ["#ff3b30", "אדום: אזור אסור/מוגבל (פמ״ת א-17)"], ...(([...res.zones.inside, ...res.zones.near].some(z => z.src === "b09")) ? [["#3b82f6", "כחול: אזור טיסה לכטב״ם (פמ״ת ב-09)"]] : []), ["#ffd400", "צהוב: מכשול (מספר = ברשימה בטופס)"], ["#22d3ee", "תכלת: אתר/תשתית קרקעית (אצטדיון, כביש, מסילה...)"], ["#e040fb", "סגול: תשתית/מכשול אווירי (שדה, מנחת, בלון)"], ["#a3e635", "ירוק בהיר: אתר המונים / תשתית נוספת"]];
     const lx0 = W - 20 - 420, ly0 = H - 20 - items.length * 26 - 12;
     g.fillStyle = "rgba(0,0,0,0.62)"; g.fillRect(lx0 - 12, ly0 - 8, 432, items.length * 26 + 20);
     items.forEach((it, i) => { g.fillStyle = it[0]; g.fillRect(lx0 + 400, ly0 + 5 + i * 26, 16, 16); text(it[1], lx0 + 390, ly0 + 13 + i * 26, { align: "right", size: 14, bold: false, halo: "rgba(0,0,0,0)" }); });

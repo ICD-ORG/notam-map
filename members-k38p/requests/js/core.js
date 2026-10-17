@@ -84,7 +84,8 @@
   }
   const ZONE_KIND = {
     LLP: "אזור אסור לטיסה (LLP)", LLR: "אזור מוגבל לטיסה (LLR)", LLD: "אזור מסוכן לטיסה (LLD)",
-    LLU: "אזור אסור לטיסת כטב״ם וטיסן (LLU)", OBS: "בלון מעוגן (OBS)"
+    LLU: "אזור אסור לטיסת כטב״ם וטיסן (LLU)", OBS: "בלון מעוגן (OBS)",
+    B09: "אזור טיסה לכטב״ם (פרק ב-09)", B09B: "אזור טיסה לכטב״ם — בראשית (פרק ב-09)"
   };
 
   /* ================= שאילתות OpenStreetMap (משותפות לאפליקציה ולבדיקות) ================= */
@@ -371,15 +372,20 @@
     return best;
   }
   // מחזיר {inside:[...], near:[...]} — לפי קצה הסגירה המבוקשת (R) ועוד near_zone_m
-  function analyzeZones(P, R, data, nearM) {
-    const out = { inside: [], near: [] };
+  function analyzeZones(P, R, data, nearM, topFt) {
+    const out = { inside: [], near: [], excluded: [] };
     const push = (z, src, kindLabel, altTxt) => {
       const r = zoneDistance(P, z); if (!r) return;
+      // אזור ב-09 שגובהו המזערי (מעפ"י) גבוה מהסגירה בלי תלות בגובה הקרקע בישראל — אין חפיפה אנכית (אותו כלל כמו בנוטמים)
+      if (src === "b09" && topFt != null && z.minFt >= topFt + TERRAIN_MAX_FT && r.d <= R + nearM) { out.excluded.push({ id: z.id, minFt: z.minFt, d: r.d }); return; }
       if (r.d > R + nearM) return;
-      const rec = { id: z.id, name: z.name, cat: z.cat || src, src, kind: kindLabel, d: r.d, edge: Math.max(0, r.d - R), p: r.p, ll: P.ll(r.p[0], r.p[1]), alt: altTxt, note: z.note || "", approx: !!z.approx, pmt: z.pmt || "", pmtRef: z.pmtRef || "", z };
+      const rec = { id: z.id, name: z.name, cat: z.cat || src, src, kind: kindLabel, d: r.d, edge: Math.max(0, r.d - R), p: r.p, ll: P.ll(r.p[0], r.p[1]), alt: altTxt, note: z.note || "", approx: !!z.approx, pmt: z.pmt || "", pmtRef: z.pmtRef || "", coord: z.coord || "", needGroundFt: (src === "b09" && z.minFt > 0 && topFt != null) ? Math.max(0, Math.round(z.minFt - topFt)) : 0, label: (z.cat === "B09" || z.cat === "B09B") ? z.id : z.id + " ״" + z.name + "״", z };
       (r.d <= R ? out.inside : out.near).push(rec);
     };
-    (data.zones || []).forEach(z => push(z, "a17", ZONE_KIND[z.cat] || z.cat, z.alt || altRange(z)));
+    (data.zones || []).forEach(z => {
+      const b09 = z.cat === "B09" || z.cat === "B09B";   // אזורי טיסה לכטב״ם מפרק ב-09 — אינם איסור, ומוצגים בנפרד מא-17
+      push(z, b09 ? "b09" : "a17", b09 ? ZONE_KIND[z.cat].replace("(פרק ב-09)", "(פרק ב-09, " + (z.appendix || "") + ")").replace(", )", ")") : (ZONE_KIND[z.cat] || z.cat), z.alt || altRange(z));
+    });
     ((data.inpa && data.inpa.sites) || []).forEach(s =>
       push({ id: s.id, name: s.name, cat: s.kind === "P" ? "NP" : "NR", rings: s.rings, note: s.note, max: s.max }, "inpa", s.kind === "P" ? "גן לאומי (רט״ג)" : "שמורת טבע (רט״ג)",
         "סגור להטסה מהקרקע ועד " + fmtInt(s.max) + " רגל מעפ״ש"));
@@ -656,7 +662,7 @@
     const P = new Proj(inp.lat, inp.lon), R = inp.radius, th = cfg.thresholds;
     const res = { P, R, inp };
     res.nearScan = analyzeNear(P, R, { elements: ((data.near && data.near.elements) || []).concat(manualElements(inp.manualItems)) }, th);
-    res.zones = analyzeZones(P, R, { zones: data.zones && data.zones.zones, inpa: data.inpa }, th.near_zone_m);
+    res.zones = analyzeZones(P, R, { zones: data.zones && data.zones.zones, inpa: data.inpa }, th.near_zone_m, inp.heightM * M2FT);
     res.agri = analyzeAgri(P, data.agri && data.agri.airstrips);
     res.airfields = analyzeAirfields(P, data.far, th.airfield_scan_m);
     res.places = nearestPlaces(P, data.far, 5);
@@ -681,7 +687,8 @@
   // statuses: {key:{ok:boolean,msg}} מילוי ע"י הממשק; כאן רק הרשימה ההכרחית והחישוב
   const REQUIRED_CHECKS = [
     ["input", "קלט תקין"],
-    ["a17", "אזורי פמ״ת א-17 וגנים/שמורות רט״ג"],
+    ["a17", "אזורי פמ״ת א-17, פרק ב-09 וגנים/שמורות רט״ג"],
+    ["sync", "סנכרון עם מפת החברים (אין עדכון שלא נקלט)"],
     ["agri", "מנחתים חקלאיים"],
     ["notam", "נוטמים בתוקף"],
     ["osm_near", "מכשולים ותשתיות בסביבה (OpenStreetMap)"],

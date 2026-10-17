@@ -69,5 +69,17 @@
   "b09": "פמ״ת פנים ארצי ב-09"
  },
  "api_url": "",
- "drive_folder_url": "https://drive.google.com/drive/folders/1UvfFhmCau9P_mbfhSFP2AmOHMbvkVbtL"
+ "drive_folder_url": "https://drive.google.com/drive/folders/1UvfFhmCau9P_mbfhSFP2AmOHMbvkVbtL",
+ "pmt_editions": {
+  "package": {
+   "update": "1/26",
+   "date": "06 AUG 2026",
+   "verified": "2026-10-17",
+   "covers": [
+    "פמ\"ת א-11 (טופס נספח ג', סעיף 6, כתובות)",
+    "פמ\"ת ב-09 (סעיף 7 ונספחים)",
+    "פמ\"ת א-17"
+   ]
+  }
+ }
 }

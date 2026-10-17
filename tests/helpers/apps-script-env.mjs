@@ -17,17 +17,31 @@ export function makeEnv() {
   // Drive מדומה: תיקיות וקבצים בזיכרון
   const folders = { ROOT: { id: "ROOT", name: "root", parent: null, files: [] } };
   let seq = 0;
+  const mails = [];
+  const fileApi = file => ({
+    getId: () => file.id, getUrl: () => "https://drive/file/" + file.id, getName: () => file.name, getSize: () => file.bytes.length,
+    setTrashed: t => { file.trashed = t; }, setContent: c => { file.bytes = Buffer.from(String(c), "utf8"); },
+    getBlob: () => ({ bytes: file.bytes, mime: file.mime, name: file.name, getDataAsString: () => file.bytes.toString("utf8") }),
+  });
   const mkFolder = f => ({
-    getId: () => f.id, getUrl: () => "https://drive/" + f.id,
+    getId: () => f.id, getUrl: () => "https://drive/" + f.id, getName: () => f.name,
     getParents() { const p = f.parent && folders[f.parent]; let used = !p; return { hasNext: () => !used, next: () => { used = true; return mkFolder(p); } }; },
     getFoldersByName(n) { const hit = Object.values(folders).filter(x => x.parent === f.id && x.name === n); let i = 0; return { hasNext: () => i < hit.length, next: () => mkFolder(hit[i++]) }; },
     createFolder(n) { const id = "F" + ++seq; folders[id] = { id, name: n, parent: f.id, files: [] }; return mkFolder(folders[id]); },
-    getFilesByName(n) { const hit = f.files.filter(x => x.name === n && !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => ({ setTrashed: t => { hit[i++].trashed = t; } }) }; },
-    createFile(blob) { const file = { id: "X" + ++seq, name: blob.name, mime: blob.mime, bytes: blob.bytes, trashed: false }; f.files.push(file); return { getId: () => file.id, getUrl: () => "https://drive/file/" + file.id }; },
+    getFilesByName(n) { const hit = f.files.filter(x => x.name === n && !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => fileApi(hit[i++]) }; },
+    getFiles() { const hit = f.files.filter(x => !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => fileApi(hit[i++]) }; },
+    createFile(a1, content, mime) {
+      const file = typeof a1 === "object" ? { id: "X" + ++seq, name: a1.name, mime: a1.mime, bytes: a1.bytes, trashed: false }
+        : { id: "X" + ++seq, name: a1, mime: mime || "text/plain", bytes: Buffer.from(String(content), "utf8"), trashed: false };
+      f.files.push(file); return fileApi(file);
+    },
   });
+  const tzFmt = (d, tz, pat) => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value])); return pat.replace("yyyy", p.year).replace("MM", p.month).replace("dd", p.day).replace("HH", p.hour).replace("mm", p.minute); };
   const sandbox = {
     Logger: { log: m => logs.push(String(m)) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; }, getProperties: () => ({ ...props }) }) },
+    MailApp: { sendEmail: m => { mails.push(m); } },
+    Session: { getEffectiveUser: () => ({ getEmail: () => "owner@icd.test" }) },
     CacheService: { getScriptCache: () => ({ get: k => (cache[k] && cache[k].exp > clock ? cache[k].v : null), put: (k, v, s) => { cache[k] = { v, exp: clock + s * 1000 }; }, remove: k => { delete cache[k]; } }) },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
@@ -39,6 +53,7 @@ export function makeEnv() {
       base64EncodeWebSafe: v => toBuf(v).toString("base64url"),
       base64DecodeWebSafe: s => signed(Buffer.from(s, "base64url")),
       base64Decode: s => signed(Buffer.from(s, "base64")),
+      formatDate: tzFmt,
       newBlob: (bytes, mime, name) => ({ bytes: toBuf(bytes), mime, name, getDataAsString: () => toBuf(bytes).toString("utf8") }),
     },
     DriveApp: { getFolderById: id => { if (!folders[id]) throw new Error("no folder"); return mkFolder(folders[id]); } },
@@ -50,7 +65,7 @@ export function makeEnv() {
   vm.runInContext(SRC, sandbox, { filename: "Code.gs" });
   vm.runInContext("CFG.ROOT_FOLDER_ID = '" + ROOT_ID + "'", sandbox);   // בבדיקות התיקייה הראשית היא ההדמיה
   const call = (obj) => JSON.parse(vm.runInContext("doPost", sandbox)({ postData: { contents: JSON.stringify(obj) } }).text);
-  return { sandbox, call, props, logs, folders, advance: ms => { clock += ms; },
+  return { sandbox, call, props, logs, folders, mails, advance: ms => { clock += ms; },
     run: name => vm.runInContext(name + "()", sandbox), doGet: () => JSON.parse(vm.runInContext("doGet", sandbox)().text) };
 }
 

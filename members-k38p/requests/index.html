@@ -121,6 +121,7 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 
 <main class="wrap">
 
+<div id="syncBanner" class="banner no" style="display:none" role="alert"></div>
 <div id="selftestBanner" class="banner warn" style="display:none"></div>
 
 <section class="card" id="inputs">
@@ -210,12 +211,14 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
       <button type="button" id="btnOverview">הורד הדמיה — מבט כללי (PNG)</button>
       <button type="button" id="btnAerial">הורד תצ״א נקי (PNG)</button>
       <button type="button" id="btnCopy">העתק טקסט מייל</button>
-      <button type="button" class="primary" id="btnDrive">שמור בדרייב</button>
+      <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
+      <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
       <a id="btnMail" href="#" role="button" style="text-decoration:none"><button type="button" tabindex="-1">פתח מייל</button></a>
     </div>
     <p class="small" style="margin-top:8px">את הקבצים (PDF, תמונת מפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
     <p class="small" id="mailInfo"></p>
     <p class="small" id="driveMsg" role="status"></p>
+    <p class="small" id="sendMsg" role="status"></p>
   </div>
   <div id="reportHost"><div id="report"></div></div>
   <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (מוצג גם בדף הבדיקות)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
@@ -233,6 +236,7 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/auth.js?v=1"></script>
+<script src="js/sync.js?v=1"></script>
 <script src="js/core.js?v=3"></script>
 <script src="js/output.js?v=3"></script>
 <script src="js/docx.js?v=2"></script>

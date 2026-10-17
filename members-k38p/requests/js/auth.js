@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   const KEY = "icdReqSession";
-  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login" };
+  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [] };
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
@@ -12,7 +12,7 @@
     expired: "פג תוקף ההתחברות — יש להתחבר מחדש.", auth: "ההתחברות אינה תקפה — יש להתחבר מחדש.", weak_pass: "הסיסמה קצרה מדי (לפחות 10 תווים).",
     bad_user: "שם משתמש לא תקין (3–40 תווים: אותיות, ספרות, נקודה, מקף).", exists: "המשתמש כבר קיים.", no_user: "המשתמש לא נמצא.", self: "לא ניתן לבצע פעולה זו על המשתמש שלך.",
     forbidden: "הפעולה מותרת למנהל בלבד.", bad_code: "קוד ההקמה שגוי.", no_setup: "המערכת אינה במצב הקמה.", busy: "השרת עסוק, נסו שוב.", bad_folder: "התיקייה בדרייב אינה תקפה.",
-    bad_file: "הקובץ גדול מדי או ריק.", bad_name: "שם התיקייה אינו תקין.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
+    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים לשליחת בדיקה.", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", bad_name: "שם התיקייה אינו תקין.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
   };
   const msg = r => (r && (ERR[r.error] || r.message || r.error)) || "שגיאה לא ידועה";
 
@@ -61,7 +61,7 @@
         const body = boot ? { action: "bootstrap", code: $("auCode").value.trim(), user: $("auUser").value.trim(), pass: $("auPass").value } : { action: "login", user: $("auUser").value.trim(), pass: $("auPass").value };
         const r = await post(body);
         if (!r.ok) { $("auErr").textContent = msg(r); btn.disabled = false; return; }
-        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; save();
+        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; A.mailMode = r.mailMode || "test"; A.mailTo = r.mailTo || []; save();
         hideCover(); renderBar();
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("auErr").textContent = "אין חיבור לשרת ההתחברות. נסו שוב."; btn.disabled = false; }
@@ -98,27 +98,46 @@
       if ($("pwNew").value !== $("pwNew2").value) { $("pwErr").textContent = "הסיסמאות החדשות אינן זהות."; return; }
       const r = await call("changePassword", { oldPass: $("pwOld").value, newPass: $("pwNew").value });
       if (!r.ok) { $("pwErr").textContent = msg(r); return; }
-      A.token = r.token; A.exp = r.exp; save(); closeModal();
+      A.token = r.token; A.exp = r.exp; A.mailMode = r.mailMode || A.mailMode; save(); closeModal();
       alert("הסיסמה הוחלפה. התחברויות אחרות של המשתמש נותקו.");
     };
   }
 
   async function openAdmin() {
     const m = modal('<h2>ניהול משתמשים</h2><div id="admBody">טוען…</div>');
+    let filter = "";
     const draw = async () => {
-      const r = await call("listUsers");
+      const [r, rq] = await Promise.all([call("listUsers"), call("listRequests", { user: filter || undefined, limit: 100 })]);
       const body = $("admBody"); if (!body) return;
       if (!r.ok) { body.innerHTML = '<div class="err">' + esc(msg(r)) + "</div>"; return; }
-      const fmt = t => t ? new Date(t).toLocaleString("he-IL") : "—";
-      body.innerHTML = '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
-        r.users.map(u => '<tr><td dir="ltr">' + esc(u.user) + '</td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td><td>' + (u.blocked ? '<b class="err">חסום</b>' : "פעיל") + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td>' +
-          (u.user === A.user ? "—" : '<button type="button" data-blk="' + esc(u.user) + '" data-to="' + (u.blocked ? 0 : 1) + '">' + (u.blocked ? "בטל חסימה" : "חסום") + '</button> <button type="button" data-rst="' + esc(u.user) + '">איפוס סיסמה</button> <button type="button" data-del="' + esc(u.user) + '">מחק</button>') + '</td></tr>').join("") + "</table>" +
+      A.mailMode = r.mailMode || A.mailMode;
+      const fmt = t => t ? new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
+      const modeLive = A.mailMode === "live";
+      body.innerHTML =
+        '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק אליך") + '</b> ' +
+        '<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button></div>' +
+        '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +
+        '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>בקשות שנשמרו</th><th>נשלחו למשרד נוטאם</th><th>בקשה אחרונה</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
+        r.users.map(u => '<tr' + (u.blocked ? ' class="blocked"' : "") + '><td dir="ltr"><a href="#" data-flt="' + esc(u.user) + '">' + esc(u.user) + '</a></td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td><td>' + (u.blocked ? '<b class="err">חסום מבקשות</b>' : "פעיל") + '</td><td>' + u.requests + '</td><td>' + u.sent + '</td><td>' + esc(fmt(u.lastRequest)) + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td class="acts">' +
+          (u.user === A.user ? "—" : '<button type="button" class="' + (u.blocked ? "unblock" : "block") + '" data-blk="' + esc(u.user) + '" data-to="' + (u.blocked ? 0 : 1) + '">' + (u.blocked ? "✔ פתח מחדש את הבקשות" : "🚫 חסום מבקשות") + '</button> <button type="button" data-rst="' + esc(u.user) + '">איפוס סיסמה</button> <button type="button" data-del="' + esc(u.user) + '">מחק</button>') + '</td></tr>').join("") + "</table>" +
+        '<h3 style="margin:14px 0 6px">יומן בקשות' + (filter ? ' של <span dir="ltr">' + esc(filter) + '</span> <a href="#" id="admAll">(הצג את כולם)</a>' : " — כל המשתמשים") + '</h3>' +
+        (rq.ok && rq.requests.length ? '<table class="admTbl"><tr><th>נשמרה</th><th>משתמש</th><th>בקשה</th><th>סטטוס</th><th>תיקייה</th></tr>' +
+          rq.requests.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td><td>' + esc(x.name) + '</td><td>' +
+            (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : x.sentTest ? "נשלחה לבדיקה בלבד" : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
+          : '<div class="small">' + (rq.ok ? "אין בקשות ביומן." : esc(msg(rq))) + "</div>") +
         '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label><button class="primary" type="submit">הוסף</button></form>' +
         '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><button type="submit">אפס</button></form><div class="err" id="admErr"></div>';
       const fail = rr => { $("admErr").textContent = msg(rr); };
       body.querySelectorAll("[data-blk]").forEach(b => b.onclick = async () => { const rr = await call("setBlocked", { target: b.dataset.blk, blocked: b.dataset.to === "1" }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!confirm("למחוק את המשתמש " + b.dataset.del + "?")) return; const rr = await call("deleteUser", { target: b.dataset.del }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-rst]").forEach(b => b.onclick = () => { $("rsU").value = b.dataset.rst; $("rsP").focus(); });
+      body.querySelectorAll("[data-flt]").forEach(b => b.onclick = ev => { ev.preventDefault(); filter = b.dataset.flt; draw(); });
+      if ($("admAll")) $("admAll").onclick = ev => { ev.preventDefault(); filter = ""; draw(); };
+      $("admMode").onclick = async () => {
+        const toLive = !modeLive;
+        if (toLive && !confirm("מעכשיו כל בקשה שתישלח תישלח באמת למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il). להמשיך?")) return;
+        const rr = await call("setMailMode", { mode: toLive ? "live" : "test" }); rr.ok ? draw() : fail(rr);
+      };
       $("addForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("addUser", { newUser: $("adU").value.trim(), newPass: $("adP").value, role: $("adA").checked ? "admin" : "user" }); rr.ok ? draw() : fail(rr); };
       $("rstForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("resetPassword", { target: $("rsU").value.trim(), newPass: $("rsP").value }); if (rr.ok) { draw(); } else fail(rr); };
     };
@@ -133,7 +152,7 @@
     if (A.cfg.api_url && restore()) {
       try {
         const r = await post({ action: "me", token: A.token });
-        if (r.ok) { A.user = r.user; A.role = r.role; hideCover(); renderBar(); document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } })); return; }
+        if (r.ok) { A.user = r.user; A.role = r.role; A.mailMode = r.mailMode || "test"; A.mailTo = r.mailTo || []; hideCover(); renderBar(); document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } })); return; }
       } catch (e) { /* אין רשת — מציגים כניסה */ }
       clear();
     }
@@ -141,6 +160,11 @@
     await showCover();
   };
   A.loggedIn = () => !!A.token && A.exp > Date.now();
+  A.getMailMode = () => A.mailMode;
+  A.getMailTo = () => A.mailTo;
+  A.setMailMode = m => { A.mailMode = m; };
+  A.modal = html => modal(html);
+  A.closeModal = closeModal;
   A.user_ = () => A.user;
   A.call = call;
   A.msg = msg;

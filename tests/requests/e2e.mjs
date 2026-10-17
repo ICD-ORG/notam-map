@@ -65,6 +65,9 @@ async function newPage(browser, opts) {
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API;
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
   });
+  if (opts.tamperMap) await page.route(/\/members-k38p\/index\.html/, r => { const h = fs.readFileSync(path.join(ROOT, "members-k38p", "index.html"), "utf8"); r.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: h.replace('name:"שמורת הטבע החולה"', 'name:"שמורת הטבע החולה (עודכן)"') }); });
+  if (opts.newPmt) await page.route(/\/members-k38p\/pamat-meta\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ pamat_update: "2/26", pamat_date: "01 FEB 2027", map_version: "9.9", map_date: "01 FEB 2027" }) }));
+  if (opts.mapNotamNewer) await page.route(/\/notam-data\.json/, r => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ fetched_iso: new Date(Date.now() + 3600e3).toISOString(), notams: [] }) }));
   // שרת Apps Script האמיתי (Code.gs) רץ כאן על הדמיית שירותי גוגל
   const env = opts.env || makeEnv(); page._env = env;
   if (!opts.env) { const code = env.run("initialize"); const b = env.call({ action: "bootstrap", code, user: ADMIN, pass: PASS }); if (!b.ok) throw new Error("bootstrap " + JSON.stringify(b)); }
@@ -115,6 +118,13 @@ async function login(page, user, pass) {
   await page.fill("#auUser", user || ADMIN); await page.fill("#auPass", pass || PASS);
   await page.click("#auGo");
   await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
+}
+
+async function readyRequest(page) {
+  await fillExample(page); await page.click("#runBtn");
+  await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+  await page.check("#reviewOk");
+  await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 15000 });
 }
 
 async function fillExample(page, over) {
@@ -364,6 +374,106 @@ try {
       page._env.call({ action: "setBlocked", token: page._env.call({ action: "login", user: ADMIN, pass: PASS }).token, target: ADMIN, blocked: true });
       await ctx.close();
     }
+    // 6ו: מידע שהתעדכן במפה ולא נקלט — חוסם: נתוני אזורים, מהדורת פמ"ת חדשה, נוטמים של המפה חדשים יותר
+    for (const [opt, rx, label] of [["tamperMap", /נתוני האזורים במפה עודכנו/, "עדכון בנתוני האזורים של המפה"], ["newPmt", /פורסם עדכון פמ״ת/, "מהדורת פמ״ת חדשה"], ["mapNotamNewer", /מפגר אחרי קובץ הנוטמים של המפה/, "נוטמים חדשים יותר במפה"]]) {
+      const { ctx, page } = await newPage(browser, { [opt]: true });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await page.waitForFunction(() => document.querySelector("#syncBanner").style.display === "block", null, { timeout: 20000 });
+      const b = await page.textContent("#syncBanner");
+      check("סנכרון — " + label + ": באנר בראש הדף", rx.test(b) && /אי אפשר להשלים בקשה/.test(b), b.replace(/\s+/g, " ").slice(0, 160));
+      await fillExample(page); await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#e_run").textContent.length > 0, null, { timeout: 20000 });
+      const er = await page.textContent("#e_run");
+      check("סנכרון — " + label + ": ההרצה נעצרת ואין בקשה מוכנה", /סנכרון עם מפת החברים/.test(er) && !(await page.isVisible("#resultsSec")), er.slice(0, 160));
+      await ctx.close();
+    }
+    // 6ז: ללא עדכון — אין באנר
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await page.waitForTimeout(1500);
+      check("סנכרון — מצב תקין: אין באנר והסטטוס תקין", (await page.evaluate(() => document.querySelector("#syncBanner").style.display)) !== "block" && (await page.evaluate(() => window.__REQ.S.statuses.sync.ok)), "");
+      await ctx.close();
+    }
+    // 6ח: כפתור שלח — מצב בדיקה (ברירת מחדל): מודל אישור, שליחה לבעלים בלבד, קבצים מצורפים, סימון בדרייב, יומן
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      check("כפתור 'שלח' חסום לפני שהבקשה מוכנה", await page.isDisabled("#btnSend"), "");
+      await readyRequest(page);
+      check("כפתור 'שלח' נפתח כשהבקשה מוכנה", !(await page.isDisabled("#btnSend")), "");
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      const mt = await page.textContent(".sendBox");
+      check("חלון השליחה: מצב בדיקה, נמען הבעלים בלבד, נושא וקבצים", /מצב בדיקה/.test(mt) && /הבעלים \(בדיקה\)/.test(mt) && /בקשה לסגירה אווירית —/.test(mt) && /קובץ KML/.test(mt) && !/notamoffice@iaa\.gov\.il, nofm/.test(mt.split("נוסח המייל")[0].split("אל:")[1] || ""), mt.replace(/\s+/g, " ").slice(0, 200));
+      check("כפתור השליחה חסום עד סימון האישור", await page.isDisabled("#sendGo"), "");
+      await page.check("#sendOk"); check("אחרי סימון האישור הכפתור נפתח", !(await page.isDisabled("#sendGo")), "");
+      await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      const pr = await page.textContent("#sendProg");
+      check("שליחת בדיקה הצליחה (לבעלים בלבד)", /נשלח במצב בדיקה/.test(pr) && /לא נשלח למשרד נוטאם/.test(pr), pr.slice(0, 160));
+      const mails = page._env.mails;
+      check("נשלח מייל אחד לבעלים עם 5 קבצים מצורפים (Word, KML ושלוש תמונות — בלי JSON) ללא נמען חיצוני", mails.length === 1 && mails[0].to === "owner@icd.test" && mails[0].attachments.length === 5 && !/iaa\.gov\.il/.test(JSON.stringify(mails[0].to + mails[0].cc)), mails.length + " מיילים; " + (mails[0] && mails[0].attachments.map(a => a.name).join(" | ")));
+      check("נושא הבדיקה מסומן ונוסח המייל נשמר", /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית — /.test(mails[0].subject) && /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\)/.test(mails[0].body), mails[0].subject.slice(0, 80));
+      const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
+      check("סימון 'נשלח (בדיקה)' נוצר בתיקייה בדרייב", folder.files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folder.files.map(f => f.name).join(" | ").slice(0, 200));
+      const sm = await page.textContent("#sendMsg"); check("ההודעה בעמוד מציינת שליחה לבדיקה בלבד", /בדיקה/.test(sm), sm.slice(0, 120));
+      await ctx.close();
+    }
+    // 6ט: מצב חי — נמענים מפמ״ת א-11 סעיף 6(א), עותק לבעלים, חסימת שליחה כפולה ושליחה חוזרת מפורשת
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      const adminTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "setMailMode", token: adminTok, mode: "live" });
+      const { ctx, page } = await newPage(browser, { env });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      const mt = await page.textContent(".sendBox");
+      check("חלון השליחה במצב חי: הנמענים מפמ״ת א-11 והודעה שהשליחה אינה ניתנת לביטול", /מצב חי/.test(mt) && /notamoffice@iaa\.gov\.il, nofm@iaa\.gov\.il/.test(mt) && /אינה ניתנת לביטול/.test(mt), mt.replace(/\s+/g, " ").slice(0, 220));
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלחה למשרד נוטאם|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      const m = env.mails[0];
+      check("מצב חי: נשלח ל-notamoffice@ ול-nofm@ בלבד, עותק לבעלים", env.mails.length === 1 && m.to === "notamoffice@iaa.gov.il,nofm@iaa.gov.il" && m.cc === "owner@icd.test" && !/^\[בדיקה/.test(m.subject), JSON.stringify([m.to, m.cc]));
+      check("מצב חי: הודעת הצלחה עם הנמענים והשעה", /נשלחה למשרד נוטאם/.test(await page.textContent("#sendProg")), "");
+      await page.click("#mdClose"); await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => document.querySelector("#sendAgain"), null, { timeout: 120000 });
+      check("שליחה חוזרת של אותה בקשה: נחסמת עם הודעה מתי נשלחה", env.mails.length === 1 && /כבר נשלחה למשרד נוטאם/.test(await page.textContent("#sendProg")), "");
+      await page.click("#sendAgain");
+      await page.waitForFunction(() => /נשלחה למשרד נוטאם/.test(document.querySelector("#sendProg").textContent) && !document.querySelector("#sendAgain"), null, { timeout: 60000 });
+      check("'שלח שוב בכל זאת' שולח מייל נוסף", env.mails.length === 2, "");
+      // ניהול: יומן בקשות מציג את הבקשה כנשלחה, ויש כפתור חסימה ליד כל משתמש
+      env.call({ action: "addUser", token: adminTok, newUser: "dave.pilot", newPass: "dave-pass-12345" });
+      await page.click("#mdClose"); await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
+      const adm = await page.textContent("#admBody");
+      check("ניהול: מצב שליחה חי מוצג, והיומן מציג את הבקשה כנשלחה למשרד נוטאם (פעמיים)", /מצב שליחה: חי/.test(adm) && /נשלחה למשרד נוטאם \(2 פעמים\)/.test(adm), adm.replace(/\s+/g, " ").slice(0, 300));
+      check("ניהול: ליד כל משתמש (שאינו המנהל עצמו) כפתור 'חסום מבקשות'", (await page.$$("button.block[data-blk='dave.pilot']")).length === 1 && (await page.$$("button[data-blk='" + ADMIN + "']")).length === 0, "");
+      const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => x.textContent.replace(/\s+/g, " ")));
+      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", rows.some(x => x.includes(ADMIN) && /\b1\b/.test(x)), rows.join(" || ").slice(0, 300));
+      await page.click("button.block[data-blk='dave.pilot']"); await page.waitForSelector("button.unblock[data-blk='dave.pilot']");
+      check("חסימה מהכפתור: מופיע 'פתח מחדש את הבקשות' והמשתמש חסום בשרת", /פתח מחדש את הבקשות/.test(await page.textContent("button.unblock[data-blk='dave.pilot']")) && env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).error === "blocked", "");
+      await page.click("button.unblock[data-blk='dave.pilot']"); await page.waitForSelector("button.block[data-blk='dave.pilot']");
+      check("פתיחה מחדש מהכפתור: המשתמש יכול שוב להיכנס", !!env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).ok, "");
+      // החלפה למצב בדיקה מהממשק
+      page.once("dialog", d => d.accept());
+      await page.click("#admMode"); await page.waitForFunction(() => /מצב שליחה: בדיקה/.test(document.querySelector("#admBody").textContent) || document.querySelector(".admMode.test"), null, { timeout: 10000 });
+      check("מנהל מעביר בחזרה למצב בדיקה מהממשק", env.call({ action: "me", token: adminTok }).mailMode === "test", "");
+      await ctx.close();
+    }
+    // 6י: כתובות היעד בשרת שונות מהנוהל — לא שולחים
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      const adminTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "setMailMode", token: adminTok, mode: "live" });
+      env.run("(function(){ CFG.MAIL_TO = ['evil@example.com']; })");
+      const { ctx, page } = await newPage(browser, { env });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await readyRequest(page); await page.click("#btnSend");
+      await page.waitForFunction(() => document.querySelector("#sendMsg").textContent.length > 0, null, { timeout: 20000 });
+      const t = await page.textContent("#sendMsg");
+      check("כתובות יעד בשרת שונות מהנוהל: לא נפתח חלון שליחה ולא נשלח דבר", /שונות מהכתובות בנוהל א-11/.test(t) && !(await page.$(".sendBox")) && env.mails.length === 0, t.slice(0, 160));
+      await ctx.close();
+    }
     // 6ה: קובץ נוטמים חלקי -> הבדיקה נכשלת ולא מוכן לשליחה
     {
       const { ctx, page } = await newPage(browser, { notamIncomplete: true });
@@ -371,7 +481,7 @@ try {
       await fillExample(page); await page.click("#runBtn");
       await page.waitForFunction(() => document.querySelector("#e_run").textContent.length > 0, null, { timeout: 15000 });
       const g = await page.textContent("#e_run");
-      check("קובץ נוטמים חלקי (חסרים פרטים): ההרצה נעצרת ואין בקשה מוכנה", /לא נטענו/.test(g) && /אינו שלם/.test(g) && !(await page.isVisible("#resultsSec")), g.slice(0, 200));
+      check("קובץ נוטמים חלקי (חסרים פרטים): ההרצה נעצרת ואין בקשה מוכנה", /נוטמים אינם תקינים/.test(g) && /אינו שלם/.test(g) && !(await page.isVisible("#resultsSec")), g.slice(0, 200));
       await ctx.close();
     }
   }

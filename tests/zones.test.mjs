@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { build } from "../scripts/export-zones.mjs";
+import { build, loadAreas } from "../scripts/export-zones.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = fs.readFileSync(path.join(ROOT, "members-k38p", "index.html"), "utf8");
@@ -63,12 +63,12 @@ test("מעגלים: מרכז ורדיוס תואמים לפריסת הנקודו
 
 test("ששה־עשר אזורי LLR משורטטים בקירוב ומסומנים approx; האחרים לא", () => {
   assert.equal(out.approxIds.length, 16);
-  for (const z of out.zones) assert.equal(!!z.approx, out.approxIds.includes(z.id), z.id);
+  for (const z of out.zones.filter(x => !/^B09/.test(x.cat))) assert.equal(!!z.approx, out.approxIds.includes(z.id), z.id);
   for (const id of out.approxIds) assert.ok(!G.has(id), id + " אינו בנתונים המאומתים — אין לו קואורדינטות רשמיות");
   assert.ok(out.approxIds.every(id => /^LLR/.test(id)));
 });
 
-test("סך האזורים = 147 מאומתים + 16 בקירוב", () => assert.equal(out.zones.length, 147 + 16));
+test("סך האזורים = 147 מאומתים + 16 LLR בקירוב + 42 אזורי טיסה לכטב״ם (ב-09)", () => assert.equal(out.zones.length, 147 + 16 + 42));
 
 test("מחרוזת הגובה של המפה מכילה את הגובה המרבי המאומת (פרט לחריגים מתועדים)", () => {
   const known = new Set(["LLP11", "LLD42"]); // LLP11: "בכל גובה" לפי לשון הפמ"ת מול 8000 בטבלה; LLD42: מתחת לפני הים
@@ -85,6 +85,45 @@ test("מחרוזת הגובה של המפה מכילה את הגובה המרב�
 test("לכל אזור פמ״ת (לא בקירוב) יש ציטוט לשון הפמ״ת עם הפניה לעמוד", () => {
   const miss = out.zones.filter(z => !z.approx && z.cat !== "OBS" && (!z.pmt || !z.pmtRef)).map(z => z.id);
   assert.deepEqual(miss, []);
+});
+
+const B09 = out.zones.filter(z => /^B09/.test(z.cat));
+const H = loadAreas(html);
+// בפמ"ת שתי קואורדינטות מודפסות בלי גרש דקות (fx) — נקראות כדקות
+const dmsPt = (n, e) => { const f = t => { const m = /(\d+)°\s*(\d+)(?:'|\s)\s*(\d+(?:\.\d+)?)/.exec(t); return +m[1] + m[2] / 60 + m[3] / 3600; }; return [f(n), f(e)]; };
+
+test("ב-09: 42 אזורים (18 בנספח ב׳-1, 12 בב׳-2, 12 בב׳-3), מזהים ייחודיים, וחמישה משורטטים בקירוב מהמפה", () => {
+  assert.equal(B09.length, 42);
+  assert.deepEqual(["נספח ב'-1", "נספח ב'-2", "נספח ב'-3"].map(a => B09.filter(z => z.appendix === a).length), [18, 12, 12]);
+  assert.equal(new Set(B09.map(z => z.id)).size, 42);
+  assert.deepEqual(out.approx09Ids.slice().sort(), ["אשכול", "כוכב יאיר", "נטף", "קרן דרום", "קרן צפון"].sort());
+});
+
+test("ב-09: גבולות האזורים שבנספחים תואמים לקואורדינטות שבטבלה (אימות עצמאי מחרוזות ה-DMS) בטווח 5 מ׳", () => {
+  const bad = [];
+  let checked = 0;
+  for (const u of H.UAS09) {
+    if (u.g.k !== "poly" || u.rows.some(r => r.k !== "c")) continue;
+    const z = B09.find(x => x.id === u.id), ring = z.rings[0].slice(0, -1);
+    const pts = u.rows.map(r => dmsPt(r.n, r.e));
+    checked++;
+    // כל נקודה בטבלה חייבת להופיע בגבול; (חריגות כתיב מתועדות בשדה fx)
+    const fx = (u.fx || []).length;
+    // נקודת הסגירה האחרונה בטבלה (חוזרת לראשונה) עשויה להיות מודפסת בהפרש של מטרים בודדים; המפה מסירה אותה
+    const closing = pts.length > 3 && dist(pts[pts.length - 1], pts[0]) <= 15 ? pts.length - 1 : -1;
+    const miss = pts.filter((p, i) => i !== closing && !ring.some(q => dist(p, q) <= 5)).length;
+    if (miss > fx) bad.push(u.id + " (" + miss + "/" + fx + ")");
+  }
+  assert.ok(checked >= 20, "נבדקו רק " + checked);
+  assert.deepEqual(bad, []);
+});
+
+test("ב-09: כל אזור כולל גובה פרשני, ציטוט ושורת תיאום/הערות כפי שבפמ״ת; 401 א מחייב בקשה למשרד נוטאם", () => {
+  for (const z of B09) assert.ok(z.alt && z.pmt.startsWith("שם: "), z.id);
+  const z = B09.find(x => x.id === "401 א");
+  assert.match(z.coord, /הגשת בקשה למשרד נוטאם 5 ימי עבודה מראש/);
+  assert.equal(z.minFt, 9000);
+  assert.equal(B09.filter(x => x.minFt > 0).length, 12);
 });
 
 test("מהדורת הפמ״ת נלקחת מ-pamat-meta.json", () => {

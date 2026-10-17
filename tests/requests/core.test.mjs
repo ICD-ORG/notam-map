@@ -13,7 +13,8 @@ const C = require(path.join(ROOT, "members-k38p/requests/js/core.js"));
 const O = require(path.join(ROOT, "members-k38p/requests/js/output.js"));
 const J = p => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
 const cfg = J("members-k38p/requests/config.json"), exp = J("members-k38p/requests/selftest/expected.json");
-const zones = J("members-k38p/data/zones.json"), inpa = J("members-k38p/data/inpa-zones.json"), agri = J("members-k38p/data/agri-airstrips.json");
+const zones = J("members-k38p/data/zones.json"), rules09 = J("members-k38p/data/pmt-b09-rules.json"), inpa = J("members-k38p/data/inpa-zones.json"), agri = J("members-k38p/data/agri-airstrips.json");
+zones.rules09 = rules09;
 const snap = J("members-k38p/requests/selftest/notam-data.snap.json");
 const fixture = n => ({ near: J(`members-k38p/requests/selftest/${n}/near.json`), far: J(`members-k38p/requests/selftest/${n}/far.json`), ext: J(`members-k38p/requests/selftest/${n}/ext.json`), reverse: J(`members-k38p/requests/selftest/${n}/reverse.json`) });
 const baseInput = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contactNames: "א; ב", contactPhone: "050-0000001" });
@@ -400,4 +401,92 @@ test("שם קובץ/תיקייה: מיקום + תאריך, בלי תווים א�
   const res = C.analyze(Object.assign({}, baseInput, { siteName: 'פארק/הירקון: "גבעה" <1>' }), mkData(fixture("yarkon")), cfg, now);
   const f = O.fileBase(res);
   assert.ok(f.startsWith("פארק הירקון גבעה 1") && f.includes("20.10.2026") && !/[\\/:*?"<>|]/.test(f), f);
+});
+
+/* ===== פרק ב-09: אזורי טיסה לכטב״ם ===== */
+const z09 = id => zones.zones.find(z => z.cat.startsWith("B09") && z.id === id);
+const centroid = z => { const r = z.rings[0].slice(0, -1); return [r.reduce((s, p) => s + p[0], 0) / r.length, r.reduce((s, p) => s + p[1], 0) / r.length]; };
+
+test("ב-09: 42 אזורים בנתונים — 30 בנספחים ב׳-1/ב׳-2 ו-12 אזורי בראשית — ולכולם ציטוט פמ״ת והפניה", () => {
+  const all = zones.zones.filter(z => z.cat.startsWith("B09"));
+  assert.equal(all.length, 42);
+  assert.equal(all.filter(z => z.cat === "B09B").length, 12);
+  for (const z of all) { assert.ok(z.pmt && z.pmtRef && z.appendix, z.id); assert.ok(z.minFt !== null && z.minFt >= 0, z.id); assert.ok(z.rings && z.rings[0].length >= 4, z.id); }
+});
+
+test("ב-09: נקודה בתוך אזור (כרמל מרכז) — בפנים, בלי חריגה, סיווג b09 ולא א-17", () => {
+  const z = z09("כרמל מרכז"), c = centroid(z), P = new C.Proj(c[0], c[1]);
+  const r = C.analyzeZones(P, 100, { zones: zones.zones, inpa: { sites: [] } }, 1000, 262.5);
+  const hit = r.inside.find(x => x.id === "כרמל מרכז");
+  assert.ok(hit && hit.src === "b09" && hit.d === 0, JSON.stringify(r.inside.map(x => x.id)));
+  assert.match(hit.kind, /אזור טיסה לכטב״ם \(פרק ב-09, נספח ב'-1\)/);
+  assert.equal(hit.label, "כרמל מרכז");
+  assert.ok(!r.inside.concat(r.near).some(x => x.src === "a17" && x.id === "כרמל מרכז"));
+});
+
+test("ב-09: אזור שגובהו המזערי מעל הסגירה בכל קרקע נשלל (502א), ואזור עם 9,000 רגל נשאר עם הערת חפיפה אנכית", () => {
+  const z502 = z09("502א"), P1 = new C.Proj(...centroid(z502));
+  const r1 = C.analyzeZones(P1, 100, { zones: zones.zones, inpa: { sites: [] } }, 1000, 262.5);
+  assert.ok(!r1.inside.concat(r1.near).some(x => x.id === "502א"));
+  assert.ok(r1.excluded.some(x => x.id === "502א" && x.minFt === 11000));
+  const z401 = z09("401 א"), P2 = new C.Proj(...centroid(z401));
+  const r2 = C.analyzeZones(P2, 100, { zones: zones.zones, inpa: { sites: [] } }, 1000, 262.5);
+  const h = r2.inside.find(x => x.id === "401 א"); assert.ok(h, "401 א חסר");
+  assert.equal(h.needGroundFt, 8738);
+  const c401 = centroid(z401), data = mkData(fixture("yarkon")), resF = C.analyze(Object.assign({}, baseInput, { lat: c401[0], lon: c401[1], heightM: 80 }), data, cfg, now);
+  assert.match(O.airInfraLines(resF, data, cfg).join(" "), /אין חפיפה אנכית אלא אם גובה הקרקע באתר מעל 8,738 רגל/);
+});
+
+test("ב-09: מרחק לאזור קרוב נכון (בדיקה עצמאית מול ויסנטי) ומופיע כ'בקרבה' עד 1 ק״מ מקצה הסגירה", () => {
+  const z = z09("כרמל מרכז"), ring = z.rings[0];
+  const v = ring[0], P = new C.Proj(v[0] + 0.004, v[1]); // כ-445 מ׳ צפונה מקודקוד
+  const r = C.analyzeZones(P, 100, { zones: zones.zones, inpa: { sites: [] } }, 1000, 262.5);
+  const hits = r.inside.concat(r.near).filter(x => x.id === "כרמל מרכז");
+  if (hits.length) {
+    const h = hits[0], lat = P.ll(0, 0)[0], lon = P.ll(0, 0)[1];
+    const dmin = Math.min(...ring.map(p => vincenty(lat, lon, p[0], p[1])));
+    assert.ok(h.d <= dmin + 1, "d=" + h.d + " dmin=" + dmin);
+    assert.ok(h.d <= 100 + 1000);
+  }
+});
+
+test("ב-09: דף הבדיקות מציג תמיד שורת ב-09; בפנים — עם ציטוט הפמ״ת וסעיף 7(ג); בלי אזור — 'אין'", () => {
+  const res0 = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now);
+  const rows0 = O.buildChecks(res0, mkData(fixture("yarkon")), cfg);
+  const row0 = rows0.find(r => /פרק ב-09/.test(r[0])); assert.ok(row0, "שורת ב-09 חסרה");
+  assert.match(row0[2], /אין אזור טיסה לכטב״ם/);
+  assert.match(row0[2], /נשללו לפי גובה/);       // 502א בירקון
+  const z = z09("כרמל מרכז"), c = centroid(z);
+  const fx = fixture("yarkon");
+  const inp = Object.assign({}, baseInput, { lat: c[0], lon: c[1] });
+  const data = mkData(fx); const res = C.analyze(inp, data, cfg, now);
+  const row = O.buildChecks(res, data, cfg).find(r => /פרק ב-09/.test(r[0]));
+  assert.match(row[2], /הסגירה בתוך אזור טיסה לכטב״ם/);
+  assert.match(row[2], /כרמל מרכז/);
+  assert.match(row[2], /לשון הפמ״ת \(עמ' 10 בפרק ב-09, עדכון 1\/26\)/);
+  assert.match(row[2], /מרחק שלא יפחת מ-500 מטר מגבול אזור הפעילות/);
+});
+
+test("ב-09: כיסוי — שורה נפרדת עם 42 אזורים; מגבלות המקורות מזכירות את אזורי הקירוב; הגשה מצטטת 7(ח)", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now);
+  const cov = O.buildCoverage(res, data, cfg);
+  const row = cov.sources.find(r => /פרק ב-09/.test(r[0]));
+  assert.match(row[1], /^42 אזורים נבדקו \(מתוכם 5 משורטטים בקירוב\)/);
+  const a17row = cov.sources.find(r => /א-17/.test(r[0])); assert.match(a17row[1], /^163 אזורים נבדקו/);
+  assert.ok(O.sourceNotes(res, data, cfg).some(n => /אשכול/.test(n) && /אינם הגבול הרשמי/.test(n)));
+  assert.match(O.submissionHtml(res, cfg, data), /5 ימי עבודה מראש/);
+});
+
+test("ב-09: KML — אזור כטב״ם בסגנון כחול ולא אדום", () => {
+  const z = z09("כרמל מרכז"), c = centroid(z);
+  const data = mkData(fixture("yarkon")), res = C.analyze(Object.assign({}, baseInput, { lat: c[0], lon: c[1] }), data, cfg, now);
+  const kml = O.kml(res, { zones }, cfg);
+  assert.match(kml, /<Style id="blue">/);
+  assert.match(kml, /כרמל מרכז[^<]*<\/name><styleUrl>#blue<\/styleUrl>/);
+});
+
+test("ב-09: חוקי סעיף 7 נטענו מהקובץ המאומת (7ב, 7ג, 7ח) עם הפניה לעמוד ועדכון", () => {
+  assert.deepEqual(rules09.rules.map(r => r.id), ["7ב", "7ג", "7ח"]);
+  for (const r of rules09.rules) assert.match(r.ref, /עמ' \d(–\d)?, עדכון 1\/26/);
+  assert.match(rules09.rules[1].text, /500 מטר/); assert.match(rules09.rules[1].text, /רדיוס הסגירה/);
 });

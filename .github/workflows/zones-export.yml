@@ -15,6 +15,8 @@ on:
       - 'members-k38p/**'
       - 'scripts/**'
       - 'tests/**'
+  schedule:
+    - cron: '17 */6 * * *'   # רשת ביטחון: גם אם הטריגר של דחיפה נכשל, הקובץ לא ישתהה יותר מ-6 שעות אחרי המפה
   workflow_dispatch: {}
 
 permissions:

@@ -164,3 +164,173 @@ test("פעולה לא קיימת וגוף שבור נדחים בלי קריסה"
   const out = JSON.parse(vm.runInContext("doPost", env.sandbox)({ postData: { contents: "{not json" } }).text);
   assert.equal(out.error, "bad_request");
 });
+
+/* ===== שליחה למשרד נוטאם, מצב בדיקה/חי, יומן בקשות וניהול ===== */
+const b64 = t => Buffer.from(t).toString("base64");
+function savedRequest(env, token, name = "פי גלילות, תל אביב — 22.10.2026", files) {
+  const b = env.call({ action: "saveBegin", token, folderName: name });
+  assert.ok(b.ok, JSON.stringify(b));
+  for (const [n, mime] of (files || [["בקשה.docx", "application/octet-stream"], ["הדמיה.png", "image/png"], ["תצ״א.png", "image/png"], ["קובץ.kml", "application/vnd.google-earth.kml+xml"], ["נתונים.json", "application/json"]]))
+    assert.ok(env.call({ action: "saveFile", token, folderId: b.folderId, name: n, mime, b64: b64("תוכן " + n) }).ok);
+  return b;
+}
+const goLive = (env, token) => assert.ok(env.call({ action: "setMailMode", token, mode: "live" }).ok);
+
+test("ברירת מחדל: מצב בדיקה — המייל נשלח רק לבעלים, עם קידומת בדיקה ובלי עותק למשרד נוטאם", () => {
+  const { env, token } = bootstrapped();
+  assert.equal(env.call({ action: "me", token }).mailMode, "test");
+  const b = savedRequest(env, token);
+  const r = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "בקשה לסגירה אווירית — פי גלילות", body: "שלום" });
+  assert.ok(r.ok && r.mode === "test", JSON.stringify(r));
+  assert.deepEqual(r.to, ["owner@icd.test"]);
+  assert.equal(env.mails.length, 1);
+  assert.equal(env.mails[0].to, "owner@icd.test");
+  assert.match(env.mails[0].subject, /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית/);
+  assert.ok(!/iaa\.gov\.il/.test(JSON.stringify(env.mails[0])));
+});
+
+test("מצב חי: נמענים קבועים מפמ״ת א-11 סעיף 6(א) בלבד, עותק לבעלים, נושא ללא קידומת", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token);
+  const r = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "בקשה לסגירה אווירית — פי גלילות", body: "שלום" });
+  assert.ok(r.ok && r.mode === "live");
+  assert.deepEqual(r.to, ["notamoffice@iaa.gov.il", "nofm@iaa.gov.il"]);
+  const m = env.mails[0];
+  assert.equal(m.to, "notamoffice@iaa.gov.il,nofm@iaa.gov.il");
+  assert.equal(m.cc, "owner@icd.test");
+  assert.equal(m.subject, "בקשה לסגירה אווירית — פי גלילות");
+  assert.equal(m.replyTo, "owner@icd.test");
+});
+
+test("הלקוח לא יכול לקבוע נמענים: שדות to/cc/bcc בבקשה מתעלמים", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token);
+  const r = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נושא", body: "גוף", to: "evil@example.com", cc: "evil@example.com", bcc: "evil@example.com", recipients: ["evil@example.com"] });
+  assert.ok(r.ok);
+  assert.ok(!/evil@example/.test(JSON.stringify(env.mails[0])));
+});
+
+test("מצורפים רק Word, KML ותמונות; לא JSON, לא יומן ולא סימוני שליחה", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  const r = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נושא", body: "גוף" });
+  assert.deepEqual(r.files.sort(), ["בקשה.docx", "הדמיה.png", "קובץ.kml", "תצ״א.png"].sort());
+  assert.equal(env.mails[0].attachments.length, 4);
+  const marks = env.folders[b.folderId].files.filter(f => /^נשלח — /.test(f.name));
+  assert.equal(marks.length, 1);
+  assert.match(marks[0].name, /\(בדיקה\)\.txt$/);
+  // שליחה נוספת לא מצרפת את סימון השליחה הקודם
+  const r2 = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נושא", body: "גוף" });
+  assert.ok(r2.ok && !r2.files.some(n => /^נשלח/.test(n)));
+});
+
+test("חובה לצרף Word ותמונת מפה/תצ״א (א-11 נספח ג׳): בלי אחד מהם — נדחה", () => {
+  const { env, token } = bootstrapped();
+  const noImg = savedRequest(env, token, "בלי תמונה", [["בקשה.docx", "x"]]);
+  assert.equal(env.call({ action: "sendRequest", token, folderId: noImg.folderId, subject: "נ", body: "ג" }).error, "missing_files");
+  const noDoc = savedRequest(env, token, "בלי וורד", [["הדמיה.png", "image/png"]]);
+  assert.equal(env.call({ action: "sendRequest", token, folderId: noDoc.folderId, subject: "נ", body: "ג" }).error, "missing_files");
+  assert.equal(env.mails.length, 0);
+});
+
+test("שליחה חוזרת למשרד נוטאם של אותה בקשה נחסמת, ורק again:true מאפשר; שליחות בדיקה לא חוסמות", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  assert.ok(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" }).ok);
+  assert.ok(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" }).ok);   // בדיקה פעמיים — מותר
+  goLive(env, token);
+  const first = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" });
+  assert.ok(first.ok && first.mode === "live");
+  const dup = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" });
+  assert.equal(dup.error, "already_sent"); assert.ok(dup.sentAt > 0);
+  assert.equal(env.mails.length, 3);
+  assert.ok(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג", again: true }).ok);
+  assert.equal(env.mails.length, 4);
+});
+
+test("הזרקת כותרות: שורות חדשות ותווי בקרה בנושא מנוקים; גוף נחתך", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נושא\r\nBcc: evil@example.com\u2028x", body: "א".repeat(30000) });
+  assert.ok(!/[\r\n]/.test(env.mails[0].subject));
+  assert.ok(!/\u2028/.test(env.mails[0].subject));
+  assert.equal(env.mails[0].body.length, 20000);
+  assert.equal(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "  ", body: "ג" }).error, "bad_mail");
+  assert.equal(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "" }).error, "bad_mail");
+});
+
+test("שליחה: רק מתוך תיקיית הבקשות, רק למשתמש מחובר ולא חסום, והגבלת קצב בשעה", () => {
+  const { env, token } = bootstrapped();
+  env.folders.OUT = { id: "OUT", name: "פרטי", parent: null, files: [{ id: "q", name: "בקשה.docx", mime: "x", bytes: Buffer.from("x"), trashed: false }, { id: "q2", name: "a.png", mime: "x", bytes: Buffer.from("x"), trashed: false }] };
+  assert.equal(env.call({ action: "sendRequest", token, folderId: "OUT", subject: "נ", body: "ג" }).error, "bad_folder");
+  assert.equal(env.call({ action: "sendRequest", token, folderId: "ROOT", subject: "נ", body: "ג" }).error, "bad_folder");
+  assert.equal(env.call({ action: "sendRequest", folderId: "x", subject: "נ", body: "ג" }).ok, false);
+  const b = savedRequest(env, token);
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  env.call({ action: "setBlocked", token, target: "dave", blocked: true });
+  assert.equal(env.call({ action: "sendRequest", token: dave.token, folderId: b.folderId, subject: "נ", body: "ג" }).error, "blocked");
+  for (let i = 0; i < 10; i++) assert.ok(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" }).ok);
+  assert.equal(env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג" }).error, "rate");
+  assert.equal(env.mails.length, 10);
+});
+
+test("מצב שליחה: רק מנהל משנה; משתמש רגיל לא יכול להעביר ל'חי'", () => {
+  const { env, token } = bootstrapped();
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  assert.equal(env.call({ action: "setMailMode", token: dave.token, mode: "live" }).error, "forbidden");
+  assert.equal(env.call({ action: "me", token: dave.token }).mailMode, "test");
+  assert.ok(env.call({ action: "setMailMode", token, mode: "live" }).ok);
+  assert.equal(env.call({ action: "me", token: dave.token }).mailMode, "live");
+  assert.ok(env.call({ action: "setMailMode", token, mode: "garbage" }).ok);
+  assert.equal(env.call({ action: "me", token }).mailMode, "test");
+});
+
+test("יומן בקשות: המנהל רואה את כל מי שהגיש, מתי, ומה נשלח; משתמש רגיל לא רואה", () => {
+  const { env, token } = bootstrapped();
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  const b1 = savedRequest(env, token, "אתר א — 01.11.2026");
+  const b2 = savedRequest(env, dave.token, "אתר ב — 02.11.2026");
+  env.call({ action: "sendRequest", token: dave.token, folderId: b2.folderId, subject: "נ", body: "ג" });
+  const reqs = env.call({ action: "listRequests", token });
+  assert.ok(reqs.ok); assert.equal(reqs.requests.length, 2);
+  const byName = Object.fromEntries(reqs.requests.map(x => [x.name, x]));
+  assert.equal(byName["אתר ב — 02.11.2026"].user, "dave");
+  assert.equal(byName["אתר ב — 02.11.2026"].sentTest, 1); assert.equal(byName["אתר ב — 02.11.2026"].sentLive, 0);
+  assert.equal(byName["אתר א — 01.11.2026"].user, "itzik");
+  assert.match(byName["אתר א — 01.11.2026"].url, /drive\.google\.com\/drive\/folders\//);
+  assert.equal(env.call({ action: "listRequests", token, user: "dave" }).requests.length, 1);
+  assert.equal(env.call({ action: "listRequests", token: dave.token }).error, "forbidden");
+  const users = env.call({ action: "listUsers", token }).users;
+  const d = users.find(u => u.user === "dave"), i = users.find(u => u.user === "itzik");
+  assert.equal(d.requests, 1); assert.ok(d.lastRequest > 0); assert.equal(i.requests, 1);
+  assert.equal(d.sent, 0);   // שליחת בדיקה לא נספרת כהגשה למשרד נוטאם
+});
+
+test("יומן: שמירה חוזרת של אותה בקשה לא יוצרת שורה נוספת; משתמש חסום נשאר ברשימה עם הבקשות שלו", () => {
+  const { env, token } = bootstrapped();
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  savedRequest(env, dave.token, "אתר ג — 03.11.2026"); savedRequest(env, dave.token, "אתר ג — 03.11.2026");
+  assert.equal(env.call({ action: "listRequests", token }).requests.length, 1);
+  env.call({ action: "setBlocked", token, target: "dave", blocked: true });
+  const users = env.call({ action: "listUsers", token }).users, d = users.find(u => u.user === "dave");
+  assert.ok(d.blocked && d.requests === 1);
+});
+
+test("מספר גדול של משתמשים: אין מגבלת 9KB של מאפיין בודד (80 משתמשים)", () => {
+  const { env, token } = bootstrapped();
+  for (let i = 0; i < 80; i++) assert.ok(env.call({ action: "addUser", token, newUser: "pilot." + String(i).padStart(3, "0"), newPass: "pilot-pass-" + i + "xx" }).ok, "i=" + i);
+  assert.equal(env.call({ action: "listUsers", token }).users.length, 81);
+  assert.ok(Object.keys(env.props).filter(k => k.startsWith("U:")).every(k => env.props[k].length < 9000));
+  assert.ok(env.call({ action: "login", user: "pilot.079", pass: "pilot-pass-79xx" }).ok);
+});
+
+test("שם משתמש בעברית נתמך; שמות לא תקינים נדחים", () => {
+  const { env, token } = bootstrapped();
+  assert.ok(env.call({ action: "addUser", token, newUser: "יצחק בן שבת", newPass: "dave-pass-123" }).ok);
+  assert.ok(env.call({ action: "login", user: "יצחק בן שבת", pass: "dave-pass-123" }).ok);
+  for (const bad of ["ab", " lead", "x".repeat(41), "a/b", "evil\nname", "a<script>b"]) assert.equal(env.call({ action: "addUser", token, newUser: bad, newPass: "dave-pass-123" }).error, "bad_user", JSON.stringify(bad));
+});
