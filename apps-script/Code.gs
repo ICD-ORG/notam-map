@@ -71,9 +71,9 @@ function noteFail_(name) {
 function clearFails_(name) { CacheService.getScriptCache().remove(failsKey_(name)); }
 
 /* ---------- בדיקות קלט ---------- */
-function validName_(n) { return typeof n === 'string' && /^[A-Za-z0-9._\-֐-׿ ]{3,40}$/.test(n) && n === n.trim(); }
+function validName_(n) { return typeof n === 'string' && /^[A-Za-z0-9._\-\u0590-\u05FF ]{3,40}$/.test(n) && n === n.trim(); }
 function validPass_(p) { return typeof p === 'string' && p.length >= CFG.MIN_PASS && p.length <= 200; }
-function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|‎‏‪-‮]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
+function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|\u200e\u200f\u202a-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
 function cleanFileName_(s) { return cleanFolderName_(s) || 'file'; }
 
 /* ---------- אתחול (פעם אחת, מהעורך) ---------- */

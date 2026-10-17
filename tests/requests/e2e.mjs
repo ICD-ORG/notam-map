@@ -59,6 +59,22 @@ async function newPage(browser, opts) {
   const calls = { overpass: 0, tiles: 0, nominatim: 0 };
   page._calls = calls;
   page.on("pageerror", e => check("אין שגיאת JS בדף", false, String(e.message || e)));
+  // השער של חברי האתר ושרת ההתחברות מדומים תמיד (גם במצב חי); רק OSM/Nominatim/אריחים אמיתיים במצב חי
+  await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
+  await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API;
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
+  });
+  // שרת Apps Script האמיתי (Code.gs) רץ כאן על הדמיית שירותי גוגל
+  const env = opts.env || makeEnv(); page._env = env;
+  if (!opts.env) { const code = env.run("initialize"); const b = env.call({ action: "bootstrap", code, user: ADMIN, pass: PASS }); if (!b.ok) throw new Error("bootstrap " + JSON.stringify(b)); }
+  await page.route(API, r => {
+    const m = r.request().method();
+    if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } });
+    if (opts.apiDown) return r.abort();
+    const body = m === "POST" ? JSON.stringify(env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(env.doGet());
+    r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body });
+  });
   if (!LIVE) {
     await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
     if (LEAFLET_DIR) { // Leaflet מקומי (בסביבה בלי גישה ל-CDN): LEAFLET_DIR = .../package/dist
@@ -75,21 +91,6 @@ async function newPage(browser, opts) {
       d.fetched_iso = new Date().toISOString(); d.fetched_at = d.fetched_iso; d.listed = d.count = d.notams.length; d.failed = [];
       if (opts.notamIncomplete) { d.listed += 2; d.failed = ["C0001/26", "C0002/26"]; }
       r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) });
-    });
-    await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
-    await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
-      const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API;
-      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
-    });
-    // שרת Apps Script האמיתי (Code.gs) רץ כאן על הדמיית שירותי גוגל
-    const env = opts.env || makeEnv(); page._env = env;
-    if (!opts.env) { const code = env.run("initialize"); const b = env.call({ action: "bootstrap", code, user: ADMIN, pass: PASS }); if (!b.ok) throw new Error("bootstrap " + JSON.stringify(b)); }
-    await page.route(API, r => {
-      const m = r.request().method();
-      if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } });
-      if (opts.apiDown) return r.abort();
-      const body = m === "POST" ? JSON.stringify(env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(env.doGet());
-      r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body });
     });
     await page.route(/server\.arcgisonline\.com|tile\.openstreetmap\.org/, r => { calls.tiles++; if (opts.failTiles) return r.abort(); r.fulfill({ status: 200, contentType: "image/png", headers: CORS, body: tilePng(calls.tiles) }); });
     await page.route(/overpass/, async r => {

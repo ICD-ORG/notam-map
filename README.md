@@ -75,3 +75,19 @@ Actions → עדכון נוטמים יומי → Run workflow. תוך דקה ה�
 ---
 
 © הארגון הישראלי לרחפנים · icd.org.il · לכל בעיה טכנית: 052-5076677
+
+---
+
+## בקשות טיסה (בקשת סגירה אווירית — נספח ג׳ לפמ״ת א-11)
+
+כפתור **📝 בקשות טיסה** במפת החברים פותח את `members-k38p/requests/` — טופס עם שדות חובה, וממנו המערכת מריצה את כל הבדיקות (א-17, רט״ג, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומפיקה Word, KML, הדמיות ותצ״א. הכניסה לדף בשם משתמש וסיסמה נפרדים (ניהול משתמשים, חסימה והחלפת סיסמה), והשמירה לדרייב אוטומטית — ראו `apps-script/README.md`.
+
+**מקור יחיד לנתונים:**
+| נתון | מקור | קובץ |
+|---|---|---|
+| אזורי א-17 (147 + 16 אזורי LLR בקירוב) | המפה עצמה (`members-k38p/index.html`) | `members-k38p/data/zones.json` — נגזר אוטומטית ב-`scripts/export-zones.mjs` (workflow ‏`zones-export.yml`) |
+| שמורות וגנים | `members-k38p/data/inpa-zones.json` | — |
+| מנחתים חקלאיים | טבלת הארגון | `members-k38p/data/agri-airstrips.json` |
+| כל הנוטמים הפנים-ארציים | `updater.py` ← `notam_all.py` | `notam-all.json` (`notam-data.json` של המפה לא משתנה) |
+
+בדיקות: `node --test tests/zones.test.mjs tests/apps-script.test.mjs tests/requests/core.test.mjs`, `python -m unittest tests/test_notam_all.py`, ובדיקת דפדפן `node tests/requests/e2e.mjs`.
