@@ -1,0 +1,81 @@
+name: בדיקות (אזורים, שרת התחברות, בקשות טיסה)
+
+on:
+  push:
+    branches: ['claude-icd/**']
+    paths:
+      - 'members-k38p/**'
+      - 'apps-script/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'notam_all.py'
+      - 'updater.py'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - 'members-k38p/**'
+      - 'apps-script/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'notam_all.py'
+      - 'updater.py'
+  workflow_dispatch:
+    inputs:
+      live:
+        description: 'להריץ גם בדיקה חיה (Overpass, Nominatim, תצלום אוויר אמיתי)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mock:
+    name: יחידה + דפדפן עם נתוני אמת שמורים
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: האם zones.json שבמאגר תואם למפה (אזהרה בלבד — הבדיקות עצמן רצות על ייצוא טרי)
+        run: node scripts/export-zones.mjs --check || echo "::warning::zones.json במאגר אינו תואם למפה — הייצוא האוטומטי ירענן אותו אחרי המיזוג"
+      - name: ייצוא מחדש של zones.json מהמפה (בסביבת הבדיקה בלבד)
+        run: node scripts/export-zones.mjs   # בבקשת מיזוג שמשנה את המפה הקובץ שבמאגר ישן עד המיזוג; הייצוא האוטומטי ירענן אותו אחריו
+      - name: בדיקות Node (אזורים, סנכרון, שרת Apps Script, ליבת הבקשות)
+        run: node --test tests/zones.test.mjs tests/sync.test.mjs tests/apps-script.test.mjs tests/requests/core.test.mjs
+      - name: בדיקות Python (קובץ כל הנוטמים)
+        run: python -m unittest tests/test_notam_all.py
+      - name: התקנת Playwright
+        run: |
+          npm init -y >/dev/null
+          npm i playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: בדיקת דפדפן מלאה (נתונים שמורים, שרת התחברות מדומה על Code.gs האמיתי)
+        run: node tests/requests/e2e.mjs tests/out-mock
+
+  live:
+    name: הרצה חיה (OpenStreetMap, Nominatim ותצלום אוויר אמיתיים)
+    runs-on: ubuntu-latest
+    needs: mock
+    if: github.event_name == 'workflow_dispatch' && inputs.live == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/export-zones.mjs
+      - name: התקנת Playwright
+        run: |
+          npm init -y >/dev/null
+          npm i playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: הרצה חיה
+        run: E2E_LIVE=1 node tests/requests/e2e.mjs tests/out-live

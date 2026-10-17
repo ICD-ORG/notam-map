@@ -52,7 +52,14 @@ PHRASES = [
 
 def http_get(url):
     req = urllib.request.Request(url, headers=HDRS)
-    return urllib.request.urlopen(req, timeout=90).read().decode('utf-8', 'ignore')
+    try:
+        return urllib.request.urlopen(req, timeout=90).read().decode('utf-8', 'ignore')
+    except urllib.error.URLError as e:
+        import ssl
+        if isinstance(getattr(e, 'reason', None), ssl.SSLError):
+            raise SystemExit('שגיאת תעודת TLS מול אתר רשות שדות התעופה (' + str(e.reason) + '). זו תקלה בצד האתר (למשל תעודה שפגה) — '
+                             'לא מכבים את אימות התעודה; הריצה הבאה תנסה שוב, ודף בקשות הטיסה יחסום בקשות כשהנוטמים ישנים מדי.')
+        raise
 
 def collect_fields(page):
     fields = {}
@@ -198,6 +205,18 @@ def main():
     with open('notam-data.json', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print(f'נשמר notam-data.json עם {len(notams)} נוטמים. העלו את הקובץ לאתר.')
+
+    # קובץ נפרד עם כל הנוט"מים (לבדיקות בקשות טיסה). כשל כאן לא פוגע בעדכון המפה שלמעלה.
+    try:
+        import notam_all
+        have = {n['id']: n['raw'] for n in notams}
+        allx, failed = notam_all.collect(list(previews.keys()), locs,
+                                         lambda nid: fetch_detail(fields0, num_map[nid]) if nid in num_map else None,
+                                         notam_all.load_prev_raw('notam-all.json'), have)
+        notam_all.write('notam-all.json', allx, failed, len(previews), now_iso, now.strftime('%d/%m/%Y %H:%M UTC'))
+        print(f'נשמר notam-all.json: {len(allx)} מתוך {len(previews)} נוטמים' + (f', לא נמשכו: {failed}' if failed else ''))
+    except Exception as e:
+        print(f'אזהרה: notam-all.json לא עודכן — {e}')
 
 if __name__ == '__main__':
     main()

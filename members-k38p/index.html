@@ -347,6 +347,13 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
 #pfModal .pf-go:focus-visible, #pfModal .pf-list input:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
 .pf-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px}
 .pf-btn{display:block; width:100%; min-height:46px; padding:0 12px; border:0; border-radius:10px; background:#2f8f5b; color:#fff; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent}
+.req-link{display:flex; align-items:center; justify-content:center; width:100%; min-height:46px; padding:0 12px; border-radius:10px; background:#2b6cb0; color:#fff; font-weight:700; font-size:14px; font-family:inherit; text-decoration:none; box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+.req-link:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
+.req-link[hidden]{display:none}   /* הכפתור מוצג רק אחרי שהפיצ׳ר הופעל (requests/config.json: api_url) */
+.act-pair:has(> .req-link[hidden]) > .pf-btn{flex-basis:100%}   /* כשכפתור הבקשות מוסתר — כפתור הבדיקות תופס את כל השורה */
+header .req-link{margin-top:8px}
+.act-pair{display:flex; gap:3px; width:100%; margin:0 0 10px; border-radius:10px; overflow:hidden; background:#0b1220}
+.act-pair > .pf-btn, .act-pair > .req-link{flex:1 1 50%; width:auto; min-width:0; border-radius:0; padding:0 6px; white-space:nowrap}
 .pf-btn:focus-visible, .pf-redo:focus-visible{outline:2px solid #7fc0ff; outline-offset:2px}
 .pf-row.ok{background:#0d2114; border:1px solid #2c5a3a; border-radius:10px; padding:0 12px; min-height:46px; color:#9fe0b2; font-weight:700; font-size:13.5px; justify-content:space-between}
 .pf-redo{border:1px solid #2c5a3a; background:transparent; color:#9fe0b2; border-radius:8px; min-height:36px; padding:0 10px; font-family:inherit; font-size:12.5px; cursor:pointer}
@@ -517,6 +524,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
       <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3.1 · 17 OCT 2026</span>
+      <a class="req-link" id="reqOpenHead" href="requests/" hidden>📝 בקשות טיסה</a>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
@@ -554,7 +562,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
           <h2>מה יש כאן?</h2>
           <p>הקישו על נקודה במפה כדי לראות אילו אזורים אסורים, מוגבלים, שמורות, גנים ונוט"מים חלים עליה. גבול האזור הנבחר יודגש במפה ותסומן סיכת מיקום.</p>
           <p>אפשר גם לבחור אתר או נוט"ם מהרשימות בלשוניות "שכבות" ו"נוט"מים".</p>
-          <p><button type="button" class="pf-btn" id="pfOpenEmpty">🚁 בדיקות לפני טיסה</button></p>
+          <div class="act-pair"><button type="button" class="pf-btn" id="pfOpenEmpty">🚁 בדיקות לפני טיסה</button><a class="req-link" id="reqOpenEmpty" href="requests/" hidden>📝 בקשות טיסה</a></div>
           <div class="hstats" id="hereStats"></div>
         </div>
       </div>
@@ -3742,6 +3750,15 @@ setTimeout(registerSW,20000);
     var it=e.target.closest&&e.target.closest('.pl-item'); if(it&&list.contains(it)) choose(+it.dataset.i);
   });
   document.addEventListener('click',function(e){ if(!box.hidden&&e.target!==qEl&&!box.contains(e.target)) hideBox(); });
+})();
+</script>
+<script>
+/* כפתורי "בקשות טיסה" מוצגים רק כשהפיצ'ר מופעל: אחרי שהוגדרה כתובת שרת ההתחברות ב-requests/config.json. עד אז הם מוסתרים, כדי שלא יוביל לדף שאינו פעיל. */
+(function () {
+  fetch('requests/config.json?_=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (c) {
+    if (!c || !c.api_url) return;
+    ['reqOpenHead', 'reqOpenEmpty'].forEach(function (id) { var a = document.getElementById(id); if (a) a.hidden = false; });
+  }).catch(function () { /* נשאר מוסתר */ });
 })();
 </script>
 </body>

@@ -42,10 +42,14 @@ jobs:
         run: |
           git config user.name "notam-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add notam-data.json
+          git add notam-data.json notam-all.json
           if git diff --cached --quiet; then
             echo "אין שינויים בנתונים"
           else
             git commit -m "עדכון נוטמים אוטומטי $(date -u +'%d/%m/%Y %H:%M UTC')"
-            git push
+            for i in 1 2 3 4; do
+              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push && exit 0
+              echo "דחיפה נכשלה (ניסיון $i) — מנסה שוב"; sleep $((i * 5))
+            done
+            echo "לא ניתן לדחוף את קובצי הנוטמים"; exit 1
           fi

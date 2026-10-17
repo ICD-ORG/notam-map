@@ -1,0 +1,54 @@
+name: ייצוא אזורי א-17 וב-09 מהמפה
+
+# מפת החברים היא המקור היחיד לאזורי א-17 ולאזורי הכטב"ם (פרק ב-09). הקובץ members-k38p/data/zones.json נגזר ממנה אוטומטית,
+# ודף בקשות הטיסה קורא ממנו; הדף חוסם בקשות כל עוד הקובץ אינו תואם למפה (members-k38p/requests/js/sync.js).
+# הסדר: קודם מייצאים מחדש, אחר כך בודקים, ורק אז שומרים — אחרת כל שינוי במפה היה מכשיל את הבדיקות לפני הרענון.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'members-k38p/index.html'
+      - 'members-k38p/pamat-meta.json'
+      - 'scripts/export-zones.mjs'
+  schedule:
+    - cron: '17 */6 * * *'   # רשת ביטחון: גם אם הטריגר של דחיפה נכשל, הקובץ לא ישתהה יותר מ-6 שעות אחרי המפה
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: zones-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: ייצוא מחדש מהמפה
+        run: node scripts/export-zones.mjs
+      - name: בדיקות (ייצוא וסנכרון)
+        run: node --test tests/zones.test.mjs tests/sync.test.mjs
+      - name: שמירה בענף הראשי
+        run: |
+          git config user.name "notam-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add members-k38p/data/zones.json
+          if git diff --cached --quiet; then
+            echo "הקובץ מעודכן"
+          else
+            git commit -m "ייצוא אוטומטי של אזורים מהמפה (א-17 וב-09)"
+            for i in 1 2 3 4; do
+              git pull --rebase origin "${{ github.ref_name }}" && git push && exit 0
+              echo "ניסיון $i נכשל — מנסה שוב"; sleep $((i * 5))
+            done
+            echo "לא ניתן לדחוף את zones.json אחרי 4 ניסיונות"; exit 1
+          fi

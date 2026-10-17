@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>בקשות טיסה — בקשת סגירה אווירית (נספח ג׳ לפמ״ת א-11)</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="robots" content="noindex,nofollow">
+<script src="../gate.js"></script>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b1220;--panel:#121c2e;--panel-2:#0f1726;--line:#22304a;--ink:#e9eff9;--muted:#8fa0ba;--amber:#ffb84d;--red:#ff3b3b;--green:#4ade80;--cyan:#67d8e8;--radius:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,'Segoe UI',Arial,sans-serif;overflow-x:hidden;max-width:100%}
+a{color:var(--cyan)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 18px;width:100%}
+header{padding:16px 0 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,184,77,.06),transparent 60%),var(--panel-2)}
+header h1{font-size:23px;font-weight:900}header h1 span{color:var(--amber)}
+header .sub{color:var(--muted);font-size:13px;margin-top:4px}
+header .back{display:inline-block;margin-bottom:8px;font-size:13px;text-decoration:none;font-weight:700}
+main{padding:16px 0 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.card h2{font-size:15px;font-weight:700;color:var(--amber);margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:500}
+label.f b{color:var(--ink);font-weight:700;font-size:13px}
+input,select,textarea,button{font-family:inherit;font-size:14.5px}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=time],input[type=tel],select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;min-height:40px}
+input:focus,select:focus{outline:2px solid var(--cyan);outline-offset:1px}
+input.bad,select.bad{border-color:var(--red)}
+.hint{color:var(--muted);font-size:12px;line-height:1.6}
+.checks{display:flex;flex-wrap:wrap;gap:8px 14px}
+.checks label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)}
+button{cursor:pointer;border-radius:10px;padding:9px 16px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);font-weight:700;transition:.15s;min-height:40px}
+button:hover:not(:disabled){border-color:var(--amber);color:var(--amber)}
+button.primary{background:var(--amber);border-color:var(--amber);color:#1a1204}
+button.primary:hover:not(:disabled){filter:brightness(1.08);color:#1a1204}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#map{height:min(420px,52vh);min-height:280px;border-radius:12px;border:1px solid var(--line);background:#060a12}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-left:5px;border:1px solid #fff3}
+.err{color:#ffb3b3;font-size:12.5px;margin-top:4px}
+#progress{list-style:none;margin-top:10px;display:grid;gap:5px;font-size:13.5px}
+#progress li{display:flex;gap:8px;align-items:baseline}
+#progress .s{width:18px;text-align:center;font-weight:900}
+.s.ok{color:var(--green)}.s.no{color:var(--red)}.s.wait{color:var(--amber)}
+.banner{padding:12px 14px;border-radius:12px;font-weight:700;font-size:14.5px;line-height:1.7;margin-bottom:12px}
+.banner.ok{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.55);color:#bff5d3}
+.banner.no{background:rgba(255,59,59,.10);border:1px solid rgba(255,59,59,.55);color:#ffc2c2}
+.banner.warn{background:rgba(255,184,77,.10);border:1px solid rgba(255,184,77,.5);color:#ffe0b0;font-weight:500}
+.banner ul{margin:6px 18px 0;font-weight:500}
+details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-weight:700;font-size:13.5px}
+.small{font-size:12.5px;color:var(--muted);line-height:1.7}
+.person{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:12px}
+.st-list{list-style:none;display:grid;gap:3px;margin-top:6px;font-size:13px}
+.st-list .ok{color:var(--green)}.st-list .no{color:var(--red)}
+#places{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+#places button{text-align:right;font-weight:500;font-size:13px;min-height:34px}
+
+/* ===== הדוח (תצוגה על המסך + הדפסה) ===== */
+#report{margin-top:6px}
+.paper{background:#fff;color:#111;border-radius:6px;padding:20px 22px;margin:0 auto 16px;max-width:900px;font-size:13px;line-height:1.55;box-shadow:0 4px 22px rgba(0,0,0,.45)}
+.paper h1{font-size:19px;margin:0 0 4px}.paper h2{font-size:14.5px;margin:14px 0 6px;color:#111}
+.paper .hdr{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px;font-weight:700}
+.paper .draft{background:#ffe3e3;border:2px solid #d92d20;color:#8a1010;padding:6px 10px;margin-bottom:8px;font-weight:700}
+.paper table.f{width:100%;border-collapse:collapse}
+.paper table.f td{border:1px solid #000;padding:6px 9px;vertical-align:middle}
+.paper td.k{width:40%;background:#efefef;font-weight:700}
+.paper td.k small{font-weight:400;font-size:11px;display:block;color:#333}
+.paper .muted{color:#666;font-size:11.5px}
+.paper table.t{width:100%;border-collapse:collapse;margin:4px 0 10px}
+.paper table.t th,.paper table.t td{border:1px solid #999;padding:5px 7px;text-align:right;vertical-align:top}
+.paper table.t th{background:#eee}
+.paper table.ck th:nth-child(1){width:20%}.paper table.ck th:nth-child(2){width:16%}
+.paper img.mapimg{width:100%;display:block;border:1px solid #555}
+.paper .foot{margin-top:8px;font-size:10.5px;color:#555;border-top:1px solid #000;padding-top:3px;display:flex;justify-content:space-between}
+.paper ul{margin:4px 18px}
+@media (max-width:640px){.paper{padding:12px}.paper td.k{width:44%}}
+@page{size:A4;margin:12mm}
+@media print{
+  html,body{background:#fff !important}
+  body>header{display:none !important}
+  main>*:not(#resultsSec){display:none !important}
+  #resultsSec>*:not(#reportHost){display:none !important}
+  main.wrap{padding:0 !important;max-width:none !important}
+  #reportHost .nonprint{display:none !important}
+  .paper{box-shadow:none;border-radius:0;max-width:none;margin:0;padding:0;page-break-after:always;break-after:page}
+  .paper:last-child{page-break-after:auto;break-after:auto}
+  .paper table.f td{padding:3.2px 8px !important;font-size:11.2px !important;line-height:1.38 !important}
+  .paper td.k small{font-size:9.3px !important}
+  .paper .hdr{margin-bottom:5px}
+  .paper table.t tr,.paper table.f tr{break-inside:avoid;page-break-inside:avoid}
+  .paper h2{break-after:avoid;page-break-after:avoid}
+  .paper table.t td,.paper table.t th{font-size:10.8px}
+  .paper td.k,.paper table.t th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper .draft{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); pointer-events: none; user-select: none; }
+#authCover, .authCover2 { position: fixed; inset: 0; z-index: 3200; background: rgba(8,16,28,.96); display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.authCover2 { background: rgba(8,16,28,.88); z-index: 3100; }   /* מסך הכניסה (3200) תמיד מעל חלון פתוח, כדי שאפשר להתחבר מחדש באמצע שליחה */
+.authBox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(420px, 100%); color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
+.linkBtn { background: none; border: 0; color: #7cc4ff; text-decoration: underline; cursor: pointer; padding: 6px 0; font-size: 13px; min-height: 0; }
+.authBox.wide { width: min(860px, 100%); display: block; max-height: 92vh; overflow: auto; }
+.admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
+.userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.userBar button { min-height: 30px; padding: 3px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="back" href="../">← חזרה למפה</a>
+    <h1>בקשות טיסה — <span>סגירה אווירית</span> · נספח ג׳ לפמ״ת א-11</h1>
+    <div class="sub">כל שדות הטופס חובה. אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML, הדמיות ותצ״א — ושומרת אותה בדרייב בלחיצה.</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<div id="syncBanner" class="banner no" style="display:none" role="alert"></div>
+<div id="selftestBanner" class="banner warn" style="display:none"></div>
+
+<section class="card" id="inputs">
+  <h2>1 · מה מבקשים</h2>
+  <div class="grid">
+    <label class="f"><b>נקודת מרכז (קו רוחב, קו אורך)</b>
+      <input type="text" id="coord" inputmode="decimal" placeholder="32.099128, 34.816617" autocomplete="off" dir="ltr">
+      <span class="hint">אפשר להקליד, להדביק מ-Google Maps, או ללחוץ על המפה.</span>
+      <span class="err" id="e_coord"></span></label>
+    <label class="f"><b>חיפוש מקום (אופציונלי)</b>
+      <span class="row" style="flex-wrap:nowrap"><input type="text" id="q" placeholder="למשל: גבעת המופעים" autocomplete="off"><button type="button" id="qBtn">חפש</button></span>
+      <span class="hint" id="qMsg"></span></label>
+    <label class="f"><b>רדיוס (מטר)</b>
+      <input type="number" id="radius" min="10" max="5000" step="10" value="100">
+      <span class="hint">ירוק = הרדיוס · כתום = אותו מרחק שוב (עד פי 2) · אדום = אזורי איסור (א-17)</span>
+      <span class="err" id="e_radius"></span></label>
+    <label class="f"><b>גובה טיסה מרבי (מטר, מעל הקרקע)</b>
+      <input type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
+      <span class="hint" id="ftHint"></span>
+      <span class="err" id="e_height"></span></label>
+    <label class="f"><b>מתאריך</b><input type="date" id="dateFrom"><span class="err" id="e_dateFrom"></span></label>
+    <label class="f"><b>עד תאריך</b><input type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
+    <label class="f"><b>משעה (שעון מקומי)</b><input type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
+    <label class="f"><b>עד שעה (שעון מקומי)</b><input type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
+    <label class="f"><b>מהות הפעילות</b><select id="purpose"></select><span class="err" id="e_purpose"></span></label>
+    <label class="f"><b>קשר עין (VLOS)</b><select id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
+    <label class="f"><b>ישוב / אתר (ימולא אוטומטית, אפשר לערוך)</b>
+      <input type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
+      <span class="err" id="e_siteName"></span></label>
+  </div>
+  <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b>
+    <div class="checks" id="aircraft" style="margin-top:6px"></div><span class="err" id="e_aircraft"></span></div>
+
+  <details class="person" id="personBox" open>
+    <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה (לא באתר)</summary>
+    <div class="grid" style="margin-top:10px">
+      <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
+      <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
+      <label class="f"><b>אנשי קשר בשטח (שני שמות)</b><input type="text" id="contactNames" autocomplete="off"></label>
+      <label class="f"><b>טלפון אנשי הקשר</b><input type="tel" id="contactPhone" dir="ltr" autocomplete="off"></label>
+    </div>
+    <span class="err" id="e_requester"></span><span class="err" id="e_contacts"></span>
+    <div class="row" style="margin-top:8px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים לא נשלחים לשום שרת; הם נכנסים לטופס ולמייל בלבד.</span></div>
+  </details>
+</section>
+
+<section class="card">
+  <h2>2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
+  <div id="map"></div>
+  <div class="legend"><span><i style="background:#22c55e"></i>רדיוס הסגירה</span><span><i style="background:#ff9500"></i>עד פי 2 מהרדיוס</span>
+    <span class="row" style="gap:6px"><button type="button" id="baseSat" style="min-height:30px;padding:3px 10px;font-size:12px">צילום אוויר</button><button type="button" id="baseOsm" style="min-height:30px;padding:3px 10px;font-size:12px">מפת רחובות</button></span></div>
+  <div id="places"></div>
+</section>
+
+<section class="card">
+  <h2>3 · הרצת הבדיקות</h2>
+  <div class="row"><button type="button" class="primary" id="runBtn">הרץ את כל הבדיקות והכן את הבקשה</button>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px"><b style="font-size:12.5px;color:var(--muted)">רקע לתמונת המפה</b>
+      <select id="provider" style="width:auto"><option value="esri">צילום אוויר (Esri)</option><option value="osm">מפת רחובות (OSM)</option></select></label></div>
+  <ul id="progress"></ul>
+  <div class="err" id="e_run"></div>
+</section>
+
+<section id="resultsSec" style="display:none">
+  <div id="gate"></div>
+  <div id="staleBox"></div>
+  <div class="card nonprint" id="reviewBox">
+    <h2>4 · סקירה אנושית ותוספות</h2>
+    <p class="small">המערכת סורקת את פמ״ת א-17, רט״ג, מנחתים חקלאיים, נוטמים ו-OpenStreetMap, ומציגה את כל מה שנמצא (ראו "דף בדיקות" ו"מצאי לפי קבוצות"). מכשול חדש או זמני — עגורן, אנטנה, בלון, מתקן אירוע — עלול לא להופיע באף מקור. <b>עברו על התצ״א ועל הרשימה, והוסיפו כאן כל דבר שהמערכת לא מצאה.</b> הוספות נכנסות לטופס, למפה ול-KML.</p>
+    <div class="grid" style="margin-top:8px">
+      <label class="f"><b>מה (שם/תיאור)</b><input type="text" id="mName" placeholder="למשל: עגורן בנייה, אנטנה, בלון זמני"></label>
+      <label class="f"><b>נ״צ</b><input type="text" id="mCoord" dir="ltr" placeholder="32.0991, 34.8166"></label>
+      <label class="f"><b>גובה (מטר, אופציונלי)</b><input type="number" id="mHeight" min="1" step="1"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><button type="button" id="mPick">בחר מיקום מהמפה</button><button type="button" id="mAdd" class="primary">הוסף לבקשה</button><span class="err" id="e_manual"></span></div>
+    <ul id="manualList" class="st-list" style="margin-top:8px"></ul>
+    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
+  </div>
+  <div class="card nonprint" id="actions">
+    <h2>5 · הפקות</h2>
+    <div class="row">
+      <button type="button" class="primary" id="btnPrint">הדפס / שמור כ-PDF</button>
+      <button type="button" class="primary" id="btnDocx">הורד Word (ניתן לעריכה)</button>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
+      <button type="button" id="btnKml">הורד KML (Google Earth)</button>
+      <button type="button" id="btnPng">הורד הדמיה — תקריב (PNG)</button>
+      <button type="button" id="btnOverview">הורד הדמיה — מבט כללי (PNG)</button>
+      <button type="button" id="btnAerial">הורד תצ״א נקי (PNG)</button>
+      <button type="button" id="btnCopy">העתק טקסט מייל</button>
+      <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
+      <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
+      <a id="btnMail" href="#" role="button" style="text-decoration:none"><button type="button" tabindex="-1">פתח מייל</button></a>
+    </div>
+    <p class="small" style="margin-top:8px">את הקבצים (PDF, תמונת מפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
+    <p class="small" id="mailInfo"></p>
+    <p class="small" id="driveMsg" role="status"></p>
+    <p class="small" id="sendMsg" role="status"></p>
+  </div>
+  <div id="reportHost"><div id="report"></div></div>
+  <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (מוצג גם בדף הבדיקות)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
+</section>
+
+<details class="card" id="stBox">
+  <summary>בדיקה עצמית של המערכת</summary>
+  <p class="small" style="margin:8px 0">מריצה את החישובים על נתוני אמת שנשמרו מראש (נקודת הירקון) ומשווה לתוצאות שחושבו בנפרד. בכל טעינה של הדף היא רצה אוטומטית; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה.</p>
+  <button type="button" id="stRun">הרץ בדיקה עצמית</button>
+  <ul class="st-list" id="stList"></ul>
+</details>
+
+</main>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="js/auth.js?v=1"></script>
+<script src="js/sync.js?v=1"></script>
+<script src="js/core.js?v=3"></script>
+<script src="js/output.js?v=3"></script>
+<script src="js/docx.js?v=2"></script>
+<script src="js/mapimg.js?v=3"></script>
+<script src="js/ui.js?v=3"></script>
+</body>
+</html>
