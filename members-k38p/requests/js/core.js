@@ -71,6 +71,16 @@
   function fmtDist(d) { return d < 1000 ? Math.round(d) + " מ׳" : (d / 1000).toFixed(1) + " ק״מ"; }
   function trimNum(n, dec) { return Number(n.toFixed(dec)).toString(); }
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // ניקוי תווים שאסורים ב-XML 1.0 (תווי בקרה פרט לטאב/LF/CR, חצאי סרוגייט, U+FFFE ו-U+FFFF), אחרת הקובץ פגום ו-Word/Google Earth מסרבים לפתוח אותו.
+  // נפרד מ-esc, שמשותפת גם ל-HTML ולכן אינה משנה תווים. משמש את ה-KML (ב-docx.js יש עותק, כי הוא אינו תלוי ב-core.js)
+  const xmlClean = s => {
+    let o = "";
+    for (const ch of String(s == null ? "" : s)) {
+      const c = ch.codePointAt(0);
+      if (c === 9 || c === 10 || c === 13 || (c >= 0x20 && c <= 0xd7ff) || (c >= 0xe000 && c <= 0xfffd) || c >= 0x10000) o += ch;
+    }
+    return o;
+  };
 
   function altText(v, unit) { // כמו pmt-layer.js
     if (v === "UNL") return "ללא הגבלה";
@@ -656,14 +666,68 @@
     if (!inp.aircraft || !inp.aircraft.length) push("aircraft", "יש לבחור כלי טיס");
     if (!(inp.siteName || "").trim()) push("siteName", "חסר שם ישוב/אתר");
     if (!(inp.requesterName || "").trim() || !/\d{7,}/.test((inp.requesterPhone || "").replace(/\D/g, ""))) push("requester", "חסרים שם וטלפון של המבקש");
-    // נספח ג׳ שדה 12: "2 אנשי קשר + טלפונים" — נדרשים לפחות שני שמות; מספר טלפון אחד בלבד מוצג כאזהרה (ראו ui.js)
-    if (splitList(inp.contactNames).length < 2) push("contacts", "יש להזין שני אנשי קשר בשטח (שני שמות, מופרדים בפסיק או בנקודה-פסיק)");
-    else if (!splitList(inp.contactPhone).some(x => /\d{7,}/.test(x.replace(/\D/g, "")))) push("contacts", "חסר טלפון של אנשי הקשר בשטח");
+    // נספח ג׳ שדה 12: "2 אנשי קשר + טלפונים" — רשימת {name, phone}; נדרשים לפחות שני שמות ולפחות טלפון תקין אחד, וטלפון שהוזן חייב להיות תקין. טלפון חסר לאיש קשר מסוים הוא אזהרה בלבד (ראו ui.js)
+    const contacts = Array.isArray(inp.contacts) ? inp.contacts : [], named = contacts.filter(c => (c.name || "").trim());
+    if (named.length < 2) push("contacts", "יש להזין שני אנשי קשר בשטח (שם וטלפון לכל אחד)");
+    else if (contacts.some(c => !(c.name || "").trim() && (c.phone || "").trim())) push("contacts", "יש טלפון בלי שם — יש להוסיף שם או למחוק את השורה");
+    else if (named.some(c => (c.phone || "").trim() && !validPhone(c.phone))) push("contacts", "מספר טלפון של איש קשר אינו תקין");
+    else if (!named.some(c => validPhone(c.phone))) push("contacts", "חסר טלפון של אנשי הקשר בשטח");
+    if (contacts.length > MAX_PEOPLE || named.some(c => c.name.trim().length > 60)) push("contacts", "עד " + MAX_PEOPLE + " אנשי קשר, ושם עד 60 תווים");
+    // משתתפים נוספים בטיסה: אופציונלי. שורה שמולאה חלקית נדחית (שם פרטי, שם משפחה וטלפון תקין), שורה ריקה מתעלמים ממנה
+    const parts = Array.isArray(inp.participants) ? inp.participants : [];
+    if (parts.length > MAX_PEOPLE) push("participants", "עד " + MAX_PEOPLE + " משתתפים");
+    else {
+      const bad = parts.map(p => ({ f: (p.first || "").trim(), l: (p.last || "").trim(), ph: (p.phone || "").trim() })).find(p => (p.f || p.l || p.ph) && (!p.f || !p.l || !validPhone(p.ph) || p.f.length > 40 || p.l.length > 40));
+      // בלי מספר שורה: הממשק מסנן שורות ריקות לפני האימות, ולכן האינדקס כאן אינו מיקום השורה על המסך; הסימון האדום בממשק מראה איזו שורה
+      if (bad) push("participants", "יש משתתף עם פרטים חלקיים: יש להשלים שם פרטי, שם משפחה וטלפון תקין — או למחוק את השורה");
+    }
+    if (String(inp.knownObstacles || "").length > 1000) push("knownObstacles", "מכשולים שידועים למבקש: עד 1,000 תווים");
+    // יותר מ-KO_MAX פריטים נדחה (שגיאה חוסמת), כדי שלא ייחתך בשקט פריט שלא הוצלב מול הסריקה
+    else if (knownSegments(inp.knownObstacles).length > KO_MAX) push("knownObstacles", "מכשולים שידועים למבקש: עד " + KO_MAX + " פריטים (מופרדים בפסיק או בשורה חדשה)");
+    if (String(inp.visitNotes || "").length > 3000) push("visitNotes", "הערות המבקש: עד 3,000 תווים");
+    if (inp.visitDate && !parseDate(inp.visitDate)) push("visitNotes", "תאריך הסיור באתר אינו חוקי");
     return errs;
   }
 
+  const MAX_PEOPLE = 20;
+  const validPhone = p => /\d{7,}/.test(String(p || "").replace(/\D/g, ""));
   // רשימה שהוזנה בשדה טקסט: מופרדת בפסיק, נקודה-פסיק, קו נטוי או שורה חדשה
   const splitList = t => String(t || "").split(/[;,\n\/|]+/).map(x => x.trim()).filter(Boolean);
+
+  /* ================= מכשולים שידועים למבקש: הצלבה מול הסריקה =================
+     הטקסט חופשי ואין בו מיקום, ולכן ההשוואה היא לפי מילים בשם הפריט בלבד ("התאמה אפשרית"). פריט שלא נמצא — המבקש אחראי להוסיפו ידנית (סעיף "סקירה אנושית"). */
+  const KO_MAX = 20;   // תקרת פריטים בשדה "מכשולים שידועים למבקש" — יותר מזה נדחה באימות (ולא נחתך בשקט)
+  // אותיות סופיות מנורמלות (ך ם ן ף ץ -> כ מ נ פ צ) בשני צדי ההשוואה, כדי ש"עגורנים" ו"עגורן" יגיעו לאותו שורש
+  const koFin = s => s.replace(/ך/g, "כ").replace(/ם/g, "מ").replace(/ן/g, "נ").replace(/ף/g, "פ").replace(/ץ/g, "צ");
+  const KO_STOP = new Set(["של", "על", "עם", "ליד", "מול", "בצד", "צד", "בקרבת", "קרוב", "קרובה", "מעל", "באזור", "אזור", "בתוך", "את", "או", "אל", "מן", "בין", "גם", "יש", "הוא", "היא", "זה", "זו", "לא", "כל", "עוד", "כי", "אם", "אשר", "כמו", "עד", "שם", "פה", "שלי", "בערך", "כ"].map(koFin));
+  const koTokens = s => koFin(String(s || "").toLowerCase()).split(/[^א-תa-z0-9]+/).filter(t => t.length >= 2 && !/^\d+$/.test(t) && !KO_STOP.has(t));
+  // נרדפים ברמת מילה בודדת (בצורה מנורמלת, ראו koFin). בכוונה בלי ביטויים כמו "מגדל תקשורת" — אחרת "אנטנה" תתאים גם לכל "מגדל מים"/"מגדל תצפית"
+  const KO_SYN = [["אנטנה", "תורנ", "תרנ"], ["עגורנ", "מנופ"], ["ארובה", "ארובת"]];
+  // צורות של מילה: היא עצמה, בלי אות יחס, בלי סיומת ריבוי (ים -> שורש; ות -> שורש ושורש+ה) וכל הנרדפים שלה.
+  // מילה שהיא (או שהיא בלי אות היחס) מילת קישור נפסלת כולה — "הקרוב" -> "קרוב" — ולכן מוחזר [] (ראו koWords)
+  function koForms(t) {
+    const base = t.length >= 4 && /^[והבכלמש]/.test(t) ? [t, t.slice(1)] : [t];
+    if (base.some(f => KO_STOP.has(f))) return [];
+    const out = new Set(base);
+    base.forEach(f => { if (f.length >= 5 && /(ימ|ות)$/.test(f)) { const stem = f.slice(0, -2); out.add(stem); if (f.endsWith("ות")) out.add(stem + "ה"); } });
+    KO_SYN.forEach(g => { if (g.some(w => out.has(w))) g.forEach(w => out.add(w)); });
+    return [...out];
+  }
+  const koWords = s => koTokens(s).map(koForms).filter(fs => fs.length);
+  // טקסט הפריט להשוואה: רק label ו-name. ה-title מעוטר ב-"(×N, הקרוב)" לפריטי מצאי מקובצים והקישוט אינו חלק משם הפריט
+  const koItemText = it => [it.label, it.name].filter(Boolean).join(" ") || String(it.title || "").replace(/\s*\(×\d+[^)]*\)/g, "");
+  const knownSegments = text => String(text || "").split(/[;\n,،]+/).map(x => x.trim()).filter(Boolean);
+  // מחזיר לכל פריט שהוזן: {text, found:[פריטי הטופס שהמילים שלהם מתאימות], census:[פריטי מצאי רחב בקרבה שאינם בטופס], none}
+  function matchKnownObstacles(text, nearScan) {
+    const prep = it => { const forms = new Set(); koWords(koItemText(it)).forEach(fs => fs.forEach(f => forms.add(f))); return { it, forms }; };
+    const items = ((nearScan && nearScan.items) || []).map(prep), census = ((nearScan && nearScan.censusOnly) || []).map(prep);
+    return knownSegments(text).slice(0, KO_MAX).map(seg => {   // ה-slice הגנתי בלבד: validateInput כבר דוחה יותר מ-KO_MAX פריטים
+      const toks = koWords(seg);
+      const rank = pool => pool.map(p => ({ it: p.it, score: toks.filter(fs => fs.some(f => p.forms.has(f))).length })).filter(x => x.score > 0).sort((a, b) => b.score - a.score || a.it.d - b.it.d).map(x => x.it);
+      const found = rank(items), cen = rank(census);
+      return { text: seg, found, census: cen, none: !found.length && !cen.length };
+    });
+  }
 
   /* ================= הרכבת התוצאה המלאה ================= */
   // inp: קלט המשתמש. data: {zones, inpa, agri, notams, notamFetchedIso, near, far, ext, reverse}. now: Date
@@ -718,9 +782,9 @@
 
   return {
     M2FT, NM, HEB_DAY, ZONE_KIND, REQUIRED_CHECKS, MIRRORS,
-    Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, altText, fmtHM,
+    Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, xmlClean, altText, fmtHM,
     altRange, notamQ, manualElements, groupOf, COVERAGE_GROUPS, buildQueries, overpass, elemGeoms, elemDist, heLabel, classify, analyzeNear, analyzeZones, analyzeAgri, analyzeAirfields,
     suggestSiteName, nearestPlaces, analyzeBorders, sunTimes, localToUtc, dayNightTable, workingDaysBefore, dayName, ddmmyyyy, parseDate, parseTime, hhmm,
-    ilToday, splitList, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate
+    ilToday, splitList, validPhone, matchKnownObstacles, knownSegments, KO_MAX, MAX_PEOPLE, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate
   };
 });

@@ -1,11 +1,21 @@
 /* ממשק "בקשת סגירה אווירית": קלט -> הרצת כל הבדיקות -> טופס, מפה, KML, מייל. כל כשל בבדיקה חוסם את "מוכן לשליחה". */
 (function () {
   "use strict";
-  const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, $ = id => document.getElementById(id);
-  const S = { cfg: null, data: {}, res: null, statuses: {}, map: null, overview: null, aerial: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "" };
-  const PERSON_KEY = "icd_req_person_v1";
+  const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, H = window.ReqHelp, $ = id => document.getElementById(id);
+  // rev: מונה גרסת הבקשה (מתקדם בכל שינוי בה, ב-clearOutcome); buildSeq/building: בניית ההדמיות ("האחרון מנצח"); pending: הדמיות ממתינות לעדכון (נגזר מטיימר עריכה ממתין או מבנייה רצה)
+  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false };
+  let rebuildTimer = null;   // טיימר העריכה הרכה (null = אין עדכון ממתין)
+  const PERSON_KEY = "icd_req_person_v1", AIRCRAFT_KEY = "icd_req_aircraft_v1";
+  const MAX_EXTRA_AC = 30;   // תקרת כלי הטיס הנוספים השמורים בדפדפן — נאכפת גם בהוספה וגם בטעינה (אחרת כלים מעל התקרה נשמרים ואז נעלמים בשקט)
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
   const esc = C.esc;
+  // ארבע התמונות המצורפות לכל בקשה (המפתחות קבועים בחוזה mapimg/output/ui): אפשרויות הציור, התווית בשם הקובץ, כפתור ההורדה והשם בחלון השליחה
+  const IMGS = [
+    { k: "aerial", opts: { view: "detail", provider: "esri" }, file: "תצ״א תקריב", btn: "btnAerial", send: "תצ״א — תקריב" },
+    { k: "street", opts: { view: "detail", provider: "osm" }, file: "מפת רחובות תקריב", btn: "btnStreet", send: "מפת רחובות — תקריב" },
+    { k: "overview", opts: { view: "overview", provider: "esri" }, file: "הדמיה מבט כללי", btn: "btnOverview", send: "הדמיה וסימונים — מבט כללי" },
+    { k: "region", opts: { view: "region", provider: "esri", labels: true }, file: "מפת אזור", btn: "btnRegion", send: "מפת אזור — מרוחק" }
+  ];
 
   /* ---------- עזרים ---------- */
   const ls = {
@@ -25,6 +35,7 @@
   const newRid = () => { const a = new Uint8Array(12); (window.crypto || window.msCrypto).getRandomValues(a); return [...a].map(x => x.toString(16).padStart(2, "0")).join(""); };
   // תוצאות שמירה/שליחה שייכות לבקשה שנשמרה; כשהבקשה משתנה או מורצת מחדש הן כבר לא נכונות ולא נשארות על המסך
   function clearOutcome() {
+    S.rev++;   // כל נתיב ששינה את הבקשה עובר כאן: שמירה בדרייב שהתחילה לפני השינוי תזהה אותו (persistToDrive)
     S.sent = null; S.driveUrl = "";
     ["driveMsg", "sendMsg"].forEach(id => { const e = $(id); if (e) { e.textContent = ""; e.className = "small"; } });
   }
@@ -101,19 +112,167 @@
     return syncBusy;
   }
 
+  /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהכפתור עושה בפועל בקוד ---------- */
+  const HELP = {
+    qBtn: "מחפש את המקום שהקלדתם בשדה החיפוש באתר Nominatim של OpenStreetMap (ישראל והשטחים) ומציג עד 6 תוצאות לבחירה. בחירת תוצאה קובעת אותה כמרכז הסגירה ומזיזה אליה את המפה; ואם כבר הורצו בדיקות, יש להריץ אותן שוב. החיפוש עצמו אינו מריץ בדיקות.",
+    baseSat: "מחליף את רקע מפת העבודה שלמעלה לצילום אוויר (Esri). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
+    baseOsm: "מחליף את רקע מפת העבודה שלמעלה למפת רחובות (OpenStreetMap). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
+    runBtn: "מריץ את כל הבדיקות לנקודה, לרדיוס, לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את הסקירה האנושית.",
+    mPick: "אחרי הלחיצה, לחיצה אחת על המפה שמעל מכניסה את הנ״צ שנלחץ לשדה ״נ״צ״ של התוספת הידנית. הלחיצה הזו אינה משנה את מרכז הסגירה.",
+    mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור הסקירה — יש לאשר אותה שוב.",
+    btnPrint: "פותח את חלון ההדפסה של הדפדפן, ומשם אפשר להדפיס או לשמור כ-PDF. מודפס הדוח בלבד: הטופס, ארבע התמונות, וכן דף הבדיקות אם ״כולל דף בדיקות״ מסומן.",
+    btnDocx: "מוריד קובץ Word לעריכה: טופס נספח ג׳, ארבע התמונות וטבלת המכשולים והתשתיות. דף הבדיקות נכלל רק אם ״כולל דף בדיקות״ מסומן.",
+    incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והשמירה בדרייב תתבצע מחדש.",
+    btnKml: "מוריד קובץ KML לפתיחה ב-Google Earth, עם מעגלי הסגירה, אזורי האיסור והמכשולים והתשתיות שנמצאו.",
+    btnAerial: "מוריד את תמונת התצ״א בתקריב (PNG), עם כל הסימונים — כפי שהיא מצורפת לבקשה.",
+    btnStreet: "מוריד את מפת הרחובות (OpenStreetMap) בתקריב (PNG), עם שמות הרחובות וכל הסימונים — כפי שהיא מצורפת לבקשה.",
+    btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
+    btnRegion: "מוריד את מפת האזור המרוחקת (PNG), בטווח של כ-10 ק״מ ומעלה, עם סמן וחץ שמצביעים על המיקום. הפריטים מסומנים בה בלי מספרים.",
+    btnCopy: "מעתיק ללוח את נוסח המייל המוכן (נמענים, נושא וגוף ההודעה) כדי להדביק בתוכנת המייל. לא שולח ולא שומר דבר.",
+    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בתיקייה בדרייב של הארגון, בלי לשלוח. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
+    btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בדרייב ושולח אותה במייל עם הקבצים. במצב בדיקה המייל נשלח רק לבעל המערכת; במצב חי הוא נשלח למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) ושליחה כזו אינה ניתנת לביטול.",
+    btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית.",
+    acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת) ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
+    addContact: "מוסיף שורה לאיש קשר נוסף בשטח (שם וטלפון), עד 20. נדרשים לפחות שני אנשי קשר עם שם, ולפחות טלפון תקין אחד (נספח ג׳ שדה 12). אנשי הקשר נשמרים בדפדפן הזה בלבד.",
+    addPart: "מוסיף שורה למשתתף נוסף בטיסה (שם פרטי, שם משפחה וטלפון), עד 20. הרשימה אופציונלית, ואין חובה לטוס יחד. משתתפים מלאים נכנסים לשדה 11 בטופס ולמייל; שורה שמולאה חלקית חוסמת את ההרצה. המשתתפים אינם נשמרים בדפדפן.",
+    wipePerson: "מוחק מהדפדפן הזה את שם וטלפון המבקש ואת אנשי הקשר השמורים, מנקה את השדות ומחזיר שתי שורות ריקות לאנשי הקשר; גם רשימת המשתתפים מתרוקנת. קבצים שכבר נשמרו בדרייב אינם משתנים.",
+    stRun: "מריץ מחדש את הבדיקה העצמית: מחשב את נקודת הירקון מנתוני אמת שנשמרו מראש ומשווה לתוצאות שחושבו בנפרד. הבדיקה רצה גם אוטומטית בכל טעינת דף; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה."
+  };
+  // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
+  const HELP_NAME = {
+    qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
+    incChecks: "כולל דף בדיקות", btnKml: "הורדת KML", btnAerial: "הורדת תצ״א תקריב", btnStreet: "הורדת מפת רחובות תקריב", btnOverview: "הורדת הדמיה במבט כללי", btnRegion: "הורדת מפת אזור", btnCopy: "העתקת טקסט מייל",
+    btnDrive: "שמירה בדרייב", btnSend: "שליחה למשרד נוטאם", btnMail: "פתיחת מייל", acAdd: "הוספת כלי טיס", addContact: "הוספת איש קשר", addPart: "הוספת משתתף", wipePerson: "מחיקת פרטים מהמכשיר", stRun: "בדיקה עצמית",
+    knownObs: "מכשולים שידועים למבקש", visitNotes: "הערות המבקש"
+  };
+  const HELP_FIELD = {
+    knownObs: "מכשולים שאתם מכירים באתר, עד " + (C.KO_MAX || 20) + " פריטים, מופרדים בפסיק, בנקודה-פסיק או בשורה חדשה (יותר מזה חוסם את ההרצה). כל פריט מושווה לסריקה לפי מילים בלבד (בלי מיקום): התאמה אפשרית מוצגת בדף הבדיקות, ופריט שלא נמצא מופיע כאזהרה מעל הדוח וגם בדף הבדיקות. ההשוואה אינה מחליפה סימון ידני בסעיף 4. הטקסט נכנס לשדה 8 בטופס ולמייל כלשונו.",
+    visitNotes: "מלל חופשי, למשל ממצאי סיור באתר. ההערות, ותאריך הסיור אם הוזן, מופיעים בדף הבדיקות (בסעיף ״הנקודה״) ובקובץ ה-Word בלבד — לא בשדות הטופס ולא בנוסח המייל. כל שינוי בהן מוחק את ההודעות ״נשמר״ ו״נשלח״."
+  };
+  function wrapHelp(el, text, name) {
+    if (!el || !H || el.closest(".hw")) return;
+    const w = document.createElement("span"); w.className = "hw";
+    el.parentNode.insertBefore(w, el); w.appendChild(el); w.insertAdjacentHTML("beforeend", H.btn(text, name));
+  }
+  function attachHelp() {
+    Object.keys(HELP).forEach(id => { const el = $(id); if (el) wrapHelp(id === "incChecks" ? el.closest("label") : el, HELP[id], HELP_NAME[id]); });
+    Object.keys(HELP_FIELD).forEach(id => { const el = $(id), h = el && el.parentNode.querySelector(".flh"); if (h && H) h.insertAdjacentHTML("beforeend", H.btn(HELP_FIELD[id], HELP_NAME[id])); });
+  }
+
+  /* ---------- כלי טיס נוספים (נשמרים בדפדפן) ---------- */
+  // ניקוי: בלי תווי בקרה, רווחים מכווצים ו-trim, עד 60 תווים. השוואת כפילויות לא תלויה ברישיות
+  const cleanAircraft = t => String(t == null ? "" : t).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const acKey = t => cleanAircraft(t).toLowerCase();
+  function loadExtraAircraft() {
+    let a = []; try { a = JSON.parse(ls.get(AIRCRAFT_KEY) || "[]"); } catch (e) { a = []; }
+    const seen = new Set((S.cfg.aircraft || []).map(acKey)), out = [];
+    (Array.isArray(a) ? a : []).forEach(x => { const n = cleanAircraft(x); if (n && !seen.has(acKey(n)) && out.length < MAX_EXTRA_AC) { seen.add(acKey(n)); out.push(n); } });
+    return out;
+  }
+  const saveExtraAircraft = () => ls.set(AIRCRAFT_KEY, JSON.stringify(S.extraAc));
+  const checkedAc = () => new Set([...document.querySelectorAll('input[name="ac"]:checked')].map(i => acKey(i.value)));
+  // keep: קבוצת המפתחות המסומנים כרגע (שומרת את הסימון בעת רינדור מחדש); בלי keep — ברירת מחדל: הכלי הראשון בהגדרות בלבד
+  function renderAircraft(keep) {
+    const on = (name, dflt) => keep ? keep.has(acKey(name)) : dflt;
+    $("aircraft").innerHTML = S.cfg.aircraft.map((a, i) => '<label><input type="checkbox" name="ac" value="' + esc(a) + '"' + (on(a, i === 0) ? " checked" : "") + "> " + esc(a) + "</label>").join("") +
+      S.extraAc.map((a, i) => '<span class="acx"><label><input type="checkbox" name="ac" value="' + esc(a) + '"' + (on(a, false) ? " checked" : "") + "> " + esc(a) + '</label><button type="button" class="xbtn" data-acrm="' + i + '" title="הסר מהרשימה השמורה" aria-label="' + esc("הסר את " + a + " מהרשימה השמורה") + '">×</button></span>').join("");
+  }
+  function addAircraft() {
+    const name = cleanAircraft($("acNew").value), msg = $("acMsg");
+    msg.textContent = "";
+    if (!name) { msg.textContent = "יש להקליד שם כלי טיס."; return; }
+    const k = acKey(name), have = S.cfg.aircraft.concat(S.extraAc).find(a => acKey(a) === k), keep = checkedAc();
+    if (!have && S.extraAc.length >= MAX_EXTRA_AC) { msg.textContent = "ניתן לשמור עד " + MAX_EXTRA_AC + " כלי טיס נוספים — הסירו כלי כדי להוסיף."; return; }   // בלי הוספה; השם נשאר בשדה
+    if (!have) { S.extraAc.push(name); saveExtraAircraft(); }
+    keep.add(k);   // כלי שכבר קיים (גם קבוע, בכל רישיות) — רק מסמנים אותו, בלי כפילות
+    renderAircraft(keep);
+    $("acNew").value = "";
+    if (have) msg.textContent = "״" + have + "״ כבר ברשימה — סומן.";
+    onSoftInputChange();
+  }
+  function removeAircraft(i) {
+    const keep = checkedAc(), gone = S.extraAc.splice(i, 1)[0];
+    if (gone == null) return;
+    keep.delete(acKey(gone)); saveExtraAircraft(); renderAircraft(keep);
+    onSoftInputChange();
+  }
+
+  /* ---------- אנשי קשר ומשתתפים: שורות ב-DOM (ה-DOM הוא המצב; שורה ריקה לגמרי נזרקת בקריאה) ---------- */
+  // cols: [שדה, תווית, מחלקה, סוג input, אורך מרבי]
+  const LISTS = {
+    contacts: { el: "contactList", add: "addContact", min: 2, label: "איש קשר", cls: "cont", cols: [["name", "שם", "pn", "text", 60], ["phone", "טלפון", "pp", "tel", 30]] },
+    participants: { el: "partList", add: "addPart", min: 0, label: "משתתף", cls: "part", cols: [["first", "שם פרטי", "pn", "text", 40], ["last", "שם משפחה", "pn", "text", 40], ["phone", "טלפון", "pp", "tel", 30]] }
+  };
+  const rowsOf = kind => [...$(LISTS[kind].el).querySelectorAll("[data-row]")];
+  const cellOf = (row, f) => row.querySelector('[data-f="' + f + '"]');
+  const cellVal = (row, f) => (cellOf(row, f).value || "").trim();
+  function rowHtml(kind, v) {
+    const L = LISTS[kind];
+    return '<div class="prow ' + L.cls + '" data-row>' + L.cols.map(([f, ph, cls, type, max]) =>
+      '<input type="' + type + '" class="' + cls + '" data-f="' + f + '" placeholder="' + esc(ph) + '" aria-label="' + esc(L.label + " — " + ph) + '" maxlength="' + max + '" autocomplete="off"' + (type === "tel" ? ' dir="ltr"' : "") + ' value="' + esc((v && v[f]) || "") + '">').join("") +
+      '<button type="button" class="xbtn" data-rm title="הסר שורה" aria-label="' + esc("הסר " + L.label) + '">×</button></div>';
+  }
+  // × מוסתר כשנשארו רק השורות המינימליות (שתי אנשי קשר); כפתור ההוספה נחסם בתקרה
+  function syncRows(kind) {
+    const L = LISTS[kind], rows = rowsOf(kind);
+    rows.forEach(r => { r.querySelector("[data-rm]").hidden = L.min > 0 && rows.length <= L.min; });
+    $(L.add).disabled = rows.length >= C.MAX_PEOPLE;
+  }
+  function setRows(kind, arr) {
+    const L = LISTS[kind], rows = (arr || []).slice(0, C.MAX_PEOPLE);
+    while (rows.length < L.min) rows.push({});
+    $(L.el).innerHTML = rows.map(r => rowHtml(kind, r)).join("");
+    syncRows(kind);
+  }
+  function addRow(kind) {
+    if (rowsOf(kind).length >= C.MAX_PEOPLE) return;
+    $(LISTS[kind].el).insertAdjacentHTML("beforeend", rowHtml(kind, {}));
+    syncRows(kind);
+    const rows = rowsOf(kind); rows[rows.length - 1].querySelector("input").focus();
+    savePerson(); onSoftInputChange();
+  }
+  function removeRow(btn) {
+    const row = btn.closest("[data-row]"); if (!row) return;
+    const kind = row.parentNode.id === LISTS.contacts.el ? "contacts" : "participants";
+    if (rowsOf(kind).length <= LISTS[kind].min) return;
+    row.remove(); syncRows(kind);
+    savePerson(); onSoftInputChange();
+  }
+  function readRows(kind) {
+    return rowsOf(kind).map(r => { const o = {}; LISTS[kind].cols.forEach(([f]) => { o[f] = cellVal(r, f); }); return o; }).filter(o => Object.values(o).some(Boolean));
+  }
+
   /* ---------- בקרי הטופס ---------- */
   function buildControls() {
     $("purpose").innerHTML = '<option value="">בחרו…</option>' + S.cfg.purposes.map(p => '<option>' + esc(p) + "</option>").join("");
-    $("aircraft").innerHTML = S.cfg.aircraft.map((a, i) => '<label><input type="checkbox" name="ac" value="' + esc(a) + '"' + (i === 0 ? " checked" : "") + "> " + esc(a) + "</label>").join("");
+    S.extraAc = loadExtraAircraft(); renderAircraft(null);
     $("radius").value = S.cfg.defaults.radius_m; $("radius").min = S.cfg.defaults.min_radius_m; $("radius").max = S.cfg.defaults.max_radius_m;
     $("mailTo").textContent = S.cfg.mail.to.join(", ");
-    try {
-      const p = JSON.parse(ls.get(PERSON_KEY) || "null");
-      if (p) { $("reqName").value = p.reqName || ""; $("reqPhone").value = p.reqPhone || ""; $("contactNames").value = p.contactNames || ""; $("contactPhone").value = p.contactPhone || ""; $("personBox").open = !(p.reqName && p.contactNames); }
-    } catch (e) { /* ignore */ }
+    loadPerson();
+  }
+  // פרטי המבקש ואנשי הקשר נשמרים בדפדפן; משתתפים והערות הסיור לא. פורמט ישן (contactNames/contactPhone) עובר מיגרציה לרשימה לפי אינדקס
+  function loadPerson() {
+    let p = null; try { p = JSON.parse(ls.get(PERSON_KEY) || "null"); } catch (e) { p = null; }
+    if (!p || typeof p !== "object") p = {};
+    let contacts = Array.isArray(p.contacts) ? p.contacts.filter(c => c && typeof c === "object").map(c => ({ name: String(c.name || ""), phone: String(c.phone || "") })) : null, migrated = false;
+    if (!contacts && (p.contactNames || p.contactPhone)) {
+      const names = C.splitList(p.contactNames), phones = C.splitList(p.contactPhone);
+      contacts = names.map((n, i) => ({ name: n, phone: phones[i] || "" })); migrated = true;
+    }
+    contacts = contacts || [];
+    $("reqName").value = String(p.reqName || ""); $("reqPhone").value = String(p.reqPhone || "");
+    setRows("contacts", contacts); setRows("participants", []);
+    $("personBox").open = !(p.reqName && contacts.filter(c => c.name.trim()).length >= 2);
+    if (migrated) savePerson();   // כותב בפורמט החדש ומסיר את המפתחות הישנים
   }
   function savePerson() {
-    ls.set(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, contactNames: $("contactNames").value, contactPhone: $("contactPhone").value }));
+    ls.set(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, contacts: readRows("contacts") }));
+  }
+  function wipePerson() {
+    ls.del(PERSON_KEY);
+    $("reqName").value = ""; $("reqPhone").value = "";
+    setRows("contacts", []); setRows("participants", []);
+    onSoftInputChange();
   }
   function readInputs() {
     const c = C.parseCoordInput($("coord").value) || S.center || {};
@@ -122,16 +281,41 @@
       dateFrom: $("dateFrom").value, dateTo: $("dateTo").value || $("dateFrom").value, timeFrom: $("timeFrom").value, timeTo: $("timeTo").value,
       purpose: $("purpose").value, aircraft: [...document.querySelectorAll('input[name="ac"]:checked')].map(i => i.value),
       vlos: $("vlos").value === "yes", siteName: $("siteName").value.trim(),
-      requesterName: $("reqName").value.trim(), requesterPhone: $("reqPhone").value.trim(), contactNames: $("contactNames").value.trim(), contactPhone: $("contactPhone").value.trim()
+      requesterName: $("reqName").value.trim(), requesterPhone: $("reqPhone").value.trim(),
+      contacts: readRows("contacts"), participants: readRows("participants"),
+      knownObstacles: $("knownObs").value, visitDate: $("visitDate").value || "", visitNotes: $("visitNotes").value
     };
   }
   const scanKeyOf = i => JSON.stringify([i.lat, i.lon, i.radius, i.heightM, i.dateFrom, i.dateTo, i.timeFrom, i.timeTo]);
   const scanKey = () => scanKeyOf(readInputs());
+  // מסמן ב-bad את השורות והשדות שגורמים לשגיאת אנשי הקשר / המשתתפים (אותם כללים כמו ב-C.validateInput)
+  function markPeople(errs) {
+    const has = f => errs.some(e => e.field === f), bad = el => { if (el) el.classList.add("bad"); };
+    if (has("contacts")) {
+      const all = rowsOf("contacts"), named = all.filter(r => cellVal(r, "name"));
+      all.forEach(r => { const n = cellVal(r, "name"), ph = cellVal(r, "phone"); if (!n && ph) bad(cellOf(r, "name")); if (ph && !C.validPhone(ph)) bad(cellOf(r, "phone")); });
+      if (named.length < 2) all.forEach(r => { if (!cellVal(r, "name")) bad(cellOf(r, "name")); });
+      else if (!named.some(r => C.validPhone(cellVal(r, "phone")))) named.forEach(r => bad(cellOf(r, "phone")));
+    }
+    if (has("participants")) rowsOf("participants").forEach(r => {
+      const f = cellVal(r, "first"), l = cellVal(r, "last"), ph = cellVal(r, "phone");
+      if (!(f || l || ph)) return;
+      if (!f || f.length > 40) bad(cellOf(r, "first")); if (!l || l.length > 40) bad(cellOf(r, "last")); if (!C.validPhone(ph)) bad(cellOf(r, "phone"));
+    });
+  }
   function showErrors(errs) {
     document.querySelectorAll(".err[id^=e_]").forEach(e => { if (e.id !== "e_run") e.textContent = ""; });
-    document.querySelectorAll("input.bad,select.bad").forEach(e => e.classList.remove("bad"));
-    const idMap = { coord: "coord", radius: "radius", height: "height", dateFrom: "dateFrom", dateTo: "dateTo", timeFrom: "timeFrom", timeTo: "timeTo", purpose: "purpose", aircraft: null, siteName: "siteName", requester: "reqName", contacts: "contactNames" };
-    errs.forEach(e => { const el = $("e_" + e.field); if (el) el.textContent = e.msg; const inp = idMap[e.field] && $(idMap[e.field]); if (inp) inp.classList.add("bad"); });
+    document.querySelectorAll("input.bad,select.bad,textarea.bad").forEach(e => e.classList.remove("bad"));
+    const idMap = { coord: "coord", radius: "radius", height: "height", dateFrom: "dateFrom", dateTo: "dateTo", timeFrom: "timeFrom", timeTo: "timeTo", purpose: "purpose", aircraft: null, siteName: "siteName", knownObstacles: "knownObs", visitNotes: "visitNotes" };
+    errs.forEach(e => {
+      const el = $("e_" + e.field); if (el) el.textContent = e.msg;
+      const dateErr = e.field === "visitNotes" && /תאריך/.test(e.msg);   // שגיאת תאריך הסיור מדווחת תחת הערות המבקש
+      const inp = !dateErr && idMap[e.field] && $(idMap[e.field]); if (inp) inp.classList.add("bad");
+      if (dateErr) $("visitDate").classList.add("bad");
+      if (e.field === "requester") { if (!$("reqName").value.trim()) $("reqName").classList.add("bad"); if (!C.validPhone($("reqPhone").value)) $("reqPhone").classList.add("bad"); }
+    });
+    markPeople(errs);
+    if (errs.some(e => e.field === "requester" || e.field === "contacts" || e.field === "participants")) $("personBox").open = true;   // השגיאה לא תוסתר בתוך תיבה סגורה
   }
 
   /* ---------- מפה חיה (Leaflet) ---------- */
@@ -178,10 +362,13 @@
   }
 
   /* ---------- שער "מוכן לשליחה" ---------- */
+  // pending נגזר ממה שבאמת ממתין: טיימר עריכה רכה שעוד לא פעל, או בנייה רצה של ההדמיות. אף בנייה (ובמיוחד לא בנייה מיושנת) לא מאפסת אותו "על דעת עצמה"
+  const syncPending = () => { S.pending = rebuildTimer !== null || S.building; };
   function refreshGate() {
     const box = $("gate"); if (!box) return;
     if (!S.res) { $("resultsSec").style.display = "none"; return; }
     $("resultsSec").style.display = "block";
+    syncPending();
     const g = C.gate(S.statuses);
     S.ready = g.ready && !S.stale && !S.pending;     // pending = הדמיות המפה נבנות מחדש אחרי עריכה — עד שהסתיימו אסור לשמור או לשלוח (התמונות עדיין של הגרסה הקודמת)
     const w = warnings();
@@ -192,7 +379,7 @@
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     box.innerHTML = html;
-    ["btnPrint", "btnDocx", "btnKml", "btnPng", "btnOverview", "btnAerial", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
+    ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
     $("btnMail").querySelector("button").disabled = !S.ready;
     $("btnMail").style.pointerEvents = S.ready ? "" : "none";
     if (S.report) renderReport();
@@ -206,9 +393,15 @@
     const sites = r.nearScan.near; if (sites.length) out.push("<b>אתרים ותשתיות בקרבת האזור (" + sites.length + "):</b> " + esc(sites.map(O.itemText).join("; ")) + ".");
     const a17in = r.zones.inside.filter(z => z.src === "a17"), b09in = r.zones.inside.filter(z => z.src === "b09"), b09near = r.zones.near.filter(z => z.src === "b09");
     const rl = id => ((S.data.zones && S.data.zones.rules09 && S.data.zones.rules09.rules) || []).find(x => x.id === id);
-    if ((r.inp.aircraft || []).length > 1) out.push("<b>נבחרו כמה כלי טיס בבקשה אחת.</b> " + ["2ד", "5ד"].map(rl).filter(Boolean).map(x => esc(x.ref) + ": ״" + esc(x.text) + "״").join(" ") + " המערכת אינה קובעת אם הטיסה בכלי הטיס תהיה במקביל או ברצף, ואם הסעיפים חלים על הבקשה.");
-    if (!r.inp.vlos) { const r3 = ((S.data.zones && S.data.zones.rules09 && S.data.zones.rules09.rules) || []).find(x => x.id === "3ג"); out.push("<b>הבקשה מציינת טיסה ללא קשר עין.</b> " + (r3 ? esc(r3.ref) + ": ״" + esc(r3.text) + "״ " : "") + "המערכת אינה יכולה לאמת אם הדבר מצוין בתעודת כושר הטיסה של כלי הטיס או באישור המנהל."); }
-    if (C.splitList(r.inp.contactPhone).filter(x => /\d{7,}/.test(x.replace(/\D/g, ""))).length < 2) out.push("בנספח ג׳ שדה 12 נדרשים 2 אנשי קשר <b>וטלפונים</b> — הוזן טלפון אחד בלבד; מומלץ להוסיף טלפון לכל איש קשר (מופרדים בפסיק).");
+    if (!r.inp.vlos) { const r3 = rl("3ג"); out.push("<b>הבקשה מציינת טיסה ללא קשר עין.</b> " + (r3 ? esc(r3.ref) + ": ״" + esc(r3.text) + "״ " : "") + "המערכת אינה יכולה לאמת אם הדבר מצוין בתעודת כושר הטיסה של כלי הטיס או באישור המנהל."); }
+    // איש קשר בלי טלפון תקין: אזהרה בלבד (האימות דורש שני שמות וטלפון תקין אחד לפחות) — לכל איש קשר בנפרד
+    (r.inp.contacts || []).filter(c => (c.name || "").trim() && !C.validPhone(c.phone)).forEach(c => out.push("איש הקשר ״" + esc(c.name.trim()) + "״ — חסר מספר טלפון תקין. בנספח ג׳ שדה 12 נדרשים 2 אנשי קשר וטלפונים."));
+    // מכשולים שהמבקש הזין: מה שלא נמצא בסריקה, ומה שנמצא רק במצאי הרחב ואינו ברשימת הטופס (פריט שנמצא בטופס — בלי אזהרה, מוצג בדף הבדיקות)
+    { const km = C.matchKnownObstacles(r.inp.knownObstacles, r.nearScan), q = t => "״" + esc(t) + "״";
+      const none = km.filter(k => k.none);
+      if (none.length) out.push("<b>מכשול שהוזן ולא נמצא בסריקה:</b> " + none.map(k => q(k.text)).join(", ") + ". ייתכן שאינו ממופה ב-OpenStreetMap או שהוא מחוץ לטווח הסריקה — אם הוא בטווח, הוסיפו אותו ידנית בסעיף 4.");
+      const cen = km.filter(k => !k.found.length && k.census.length);
+      if (cen.length) out.push("<b>נמצא בסריקה בקרבה אך אינו ברשימת הטופס:</b> " + cen.map(k => q(k.text) + " (" + k.census.slice(0, 3).map(c => esc(c.title + " — " + O.dLabel(c.d))).join("; ") + (k.census.length > 3 ? "; ועוד " + (k.census.length - 3) : "") + ")").join(", ") + "."); }
     if (a17in.length) out.push("<b>הסגירה המבוקשת חופפת לאזור איסור/הגבלה:</b> " + esc(a17in.map(z => z.label).join("; ")) + ". בקשה לחריגה: א-11 סעיף 3(ג) וא-17 סעיף 5 — <span dir='ltr'>caai-charigot@mot.gov.il</span> (הלשון המלאה בדף הבדיקות).");
     if (b09in.length) out.push("<b>הסגירה המבוקשת חופפת (חלקית או כולה) לאזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09in.map(z => z.label + " (" + z.alt + ")").join("; ")) + ". יש לעיין בהערות האזור ובתיאום הנדרש (דף הבדיקות).");
     if (b09near.length) out.push("<b>בקרבת אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09near.map(z => z.label + " — " + C.fmtDist(z.edge) + " מקצה הסגירה (" + C.fmtDist(z.d) + " מהנקודה)").join("; ")) + ". סעיף 7(ג): מרחק של לפחות 500 מ׳ מגבול אזור הפעילות שאושר (דף הבדיקות).");
@@ -239,12 +432,14 @@
     const steps = [
       { k: "osm_near", t: "מכשולים ותשתיות בסביבה (OpenStreetMap)" }, { k: "osm_far", t: "שדות תעופה, מנחתים וישובים (OpenStreetMap)" },
       { k: "osm_ext", t: "גבולות מדינה ושטחי טבע (OpenStreetMap)" }, { k: "reverse", t: "שם המקום (Nominatim)" },
-      { k: "calc", t: "חישוב מרחקים ובדיקת א-17, רט״ג, מנחתים ונוטמים" }, { k: "map", t: "תמונת מפה עם רקע" }
+      { k: "calc", t: "חישוב מרחקים ובדיקת א-17, רט״ג, מנחתים ונוטמים" }, { k: "map", t: "ארבע תמונות מפה עם רקע (תצ״א, מפת רחובות, הדמיה, מפת אזור)" }
     ].map(x => Object.assign(x, { s: "wait", m: "" }));
     const upd = () => progress(steps.map(x => ({ s: x.s, t: x.t, m: x.m })));
     const st = (k, s, m) => { const x = steps.find(y => y.k === k); x.s = s; x.m = m || ""; upd(); };
     upd();
-    S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.map = null; S.overview = null; S.aerial = null; clearOutcome();
+    // ניתוח חדש בדרך: בנייה שרצה על הניתוח הקודם הופכת למיושנת (buildSeq), ועריכה רכה שממתינה לא תפעל על תוצאה שנמחקת (clearTimeout) — ואז אין טיימר שיזרוק על S.res=null
+    S.buildSeq++; S.building = false; clearTimeout(rebuildTimer); rebuildTimer = null; S.pending = false;
+    S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.imgs = {}; S.imgSite = null; clearOutcome();
     { const ck = inp0.lat + "," + inp0.lon; if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "לא אושרה סקירה" };
     ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
@@ -269,7 +464,7 @@
         if (!rr.ok) throw new Error("HTTP " + rr.status);
         data.reverse = await rr.json(); st("reverse", "ok", data.reverse.display_name || "");
       } catch (e) { data.reverse = null; st("reverse", "ok", "לא התקבל שם מ-Nominatim — השם נגזר משכבות OpenStreetMap או מהקלדה"); }
-      // שדות הסריקה (נקודה, רדיוס, גובה, מועדים) נלקחים מרגע הלחיצה — עליהם נשלפו נתוני OSM; שדות "רכים" (שם, מטרה, אנשי קשר) עשויים להשתנות בזמן ההרצה
+      // שדות הסריקה (נקודה, רדיוס, גובה, מועדים) נלקחים מרגע הלחיצה — עליהם נשלפו נתוני OSM; שדות "רכים" (שם, מטרה, אנשי קשר, משתתפים, הערות) עשויים להשתנות בזמן ההרצה
       const inp = Object.assign(readInputs(), { lat: inp0.lat, lon: inp0.lon, radius: inp0.radius, heightM: inp0.heightM, dateFrom: inp0.dateFrom, dateTo: inp0.dateTo, timeFrom: inp0.timeFrom, timeTo: inp0.timeTo, manualItems: S.manual });
       const res = C.analyze(inp, data, S.cfg, new Date());
       S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };   // לפי הנתונים שהניתוח השתמש בהם, לא לפי מה שנטען בינתיים
@@ -294,15 +489,40 @@
       if (S.res) { S.report = true; renderAll(); } else { $("resultsSec").style.display = "none"; }
     } finally { S.running = false; $("runBtn").disabled = false; }
   }
+  // ארבע התמונות במקביל (aerial, street, overview, region); השער נסגר בהצלחה רק כשכולן עם רקע אמיתי ובלי קנבס "מזוהם".
+  // "האחרון מנצח": כל בנייה לוכדת בתחילתה מספר רץ (S.buildSeq) ואת ניתוח הבקשה (res). תוצאה שהוחלפה — בבנייה חדשה יותר, בהרצה חדשה או בהוספה ידנית (res אחר) — נזרקת: היא אינה נוגעת
+  // ב-S.imgs, בשם האתר שצויר (S.imgSite), בסטטוס map ובדגל ההמתנה. שם האתר נקבע ברגע הציור עצמו (ההמשך של render בלי מעבר בין משימות), לא ברגע שהבנייה מסתיימת.
+  let lastBuild = null;
   async function buildMapImage(steps, st) {
-    try {
-      const prov = $("provider").value;
-      const [det, ovw, pl] = await Promise.all([M.render(S.res, { provider: prov, view: "detail" }), M.render(S.res, { provider: prov, view: "overview" }), M.render(S.res, { provider: prov, view: "detail", plain: true })]);
-      S.map = det; S.overview = ovw; S.aerial = pl;
-      const all = [det, ovw, pl];
-      if (all.every(x => x.background)) { st && st("map", "ok", "הרקע נטען (" + det.tiles + " אריחים לתקריב)"); setStatus("map", true, ""); }
-      else { const why = all.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : all.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why); }
-    } catch (e) { S.map = null; S.overview = null; S.aerial = null; st && st("map", "no", e.message); setStatus("map", false, e.message); }
+    const res = S.res, seq = ++S.buildSeq;
+    S.building = true; syncPending();
+    const stale = () => seq !== S.buildSeq || res !== S.res;
+    const job = (async () => {
+      try {
+        const out = await Promise.all(IMGS.map(m => M.render(res, m.opts).then(x => { x.site = (res.inp.siteName || "").trim(); return x; })));
+        if (stale()) return false;
+        const imgs = {}; IMGS.forEach((m, i) => { imgs[m.k] = out[i]; });
+        const sites = [...new Set(out.map(x => x.site))];   // יותר משם אחד = השם שונה באמצע הציור; לא אמור לקרות (עריכה כזו מחליפה את הבנייה), ואם קרה — נכשל סגור
+        S.imgs = imgs; S.imgSite = sites.length === 1 ? sites[0] : null;
+        if (sites.length === 1 && out.every(x => x.background && !x.tainted)) { st && st("map", "ok", "הרקע נטען (" + imgs.aerial.tiles + " אריחים לתקריב)"); setStatus("map", true, ""); }
+        else { const why = sites.length > 1 ? "שם האתר שונה בזמן ציור התמונות" : out.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : out.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why); }
+        return true;
+      } catch (e) {
+        if (stale()) return false;
+        S.imgs = {}; S.imgSite = null; st && st("map", "no", e.message); setStatus("map", false, e.message);
+        return true;
+      } finally { if (seq === S.buildSeq) { S.building = false; syncPending(); } }
+    })();
+    lastBuild = job;
+    const applied = await job;
+    // בניית ההרצה הוחלפה בעדכנית יותר: מחכים לה ומדווחים בהתקדמות את התוצאה שלה (שלב "תמונות" לא נשאר תלוי על "…")
+    if (!applied && st) {
+      let p = lastBuild;
+      while (p && p !== job) { await p; if (lastBuild === p) break; p = lastBuild; }
+      const m = S.statuses.map;
+      st("map", m && m.ok ? "ok" : "no", m && m.ok ? "עודכן לפי השינוי האחרון בטופס" : (m && m.msg) || "");
+    }
+    return applied;
   }
 
   /* ---------- שינויי קלט אחרי הרצה ---------- */
@@ -310,66 +530,85 @@
     $("ftHint").textContent = isFinite(parseFloat($("height").value)) ? "= " + (parseFloat($("height").value) * C.M2FT).toFixed(1) + " רגל" : "";
     if (S.res && S.scanKey !== scanKey()) { S.stale = true; clearOutcome(); refreshGate(); }
   }
-  let rebuildTimer = null;
+  // שדות "רכים": משנים את הטופס והדוח אך לא את הניתוח. כל שינוי בהם מבטל את תוצאות השמירה/השליחה (הם נכנסים ל-Word) ומרנדר את הדוח מחדש
+  const SOFT_KEYS = ["siteName", "purpose", "aircraft", "vlos", "requesterName", "requesterPhone", "contacts", "participants", "knownObstacles", "visitDate", "visitNotes"];
   function onSoftInputChange() {
     if (!S.res) return;
     clearOutcome();
-    S.pending = true; refreshGate();
     clearTimeout(rebuildTimer);
-    rebuildTimer = setTimeout(async () => {
+    const t = rebuildTimer = setTimeout(async () => {
+      if (!S.res) { if (rebuildTimer === t) rebuildTimer = null; syncPending(); return; }   // הרצה חדשה אפסה את התוצאה אחרי העריכה (run מנקה את הטיימר; זו רשת ביטחון)
       try {
         const i = readInputs();
-        ["siteName", "purpose", "aircraft", "vlos", "requesterName", "requesterPhone", "contactNames", "contactPhone"].forEach(k => { S.res.inp[k] = i[k]; });
+        SOFT_KEYS.forEach(k => { S.res.inp[k] = i[k]; });
         const errs = C.validateInput(S.res.inp, S.cfg); showErrors(errs);
         setStatus("input", errs.length === 0, errs.map(e => e.msg).join(" · "));
-        if (S.scanKey === scanKey()) { await buildMapImage(null, null); }
-      } finally { S.pending = false; renderAll(); }
+        // התמונות תלויות רק בשם האתר (כותרת הקנבס): מציירים מחדש כששם האתר השתנה, כשהציור הקודם נכשל/חסר, או כשבנייה רצה כעת (ייתכן שצוירה עם שם ביניים — היא מוחלפת בעדכנית)
+        const imgsOk = IMGS.every(m => S.imgs[m.k]) && S.statuses.map && S.statuses.map.ok;
+        const building = S.scanKey === scanKey() && (S.building || !imgsOk || S.imgSite !== (S.res.inp.siteName || "").trim()) ? buildMapImage(null, null) : null;
+        if (rebuildTimer === t) rebuildTimer = null;   // מכאן "ממתין" נגזר מהבנייה (S.building, שהתחילה מיד) — ובנייה מיושנת שעוד רצה לא תחזיק את השער סגור
+        if (building) await building;
+      } finally {
+        if (rebuildTimer === t) rebuildTimer = null;
+        if (S.res && !S.running) renderAll(); else { syncPending(); if (S.res) refreshGate(); }   // באמצע הרצה: run מרנדר בסיומה
+      }
     }, 450);
+    syncPending(); refreshGate();
   }
 
   /* ---------- הדוח ---------- */
-  function renderAll() { S.report = true; refreshGate(); renderLimits(); const m = O.mail(S.res, S.cfg); $("btnMail").href = m.mailto; $("mailInfo").textContent = "נושא: " + m.subject; }
+  function renderAll() { if (!S.res) return; S.report = true; refreshGate(); renderLimits(); const m = O.mail(S.res, S.cfg); $("btnMail").href = m.mailto; $("mailInfo").textContent = "נושא: " + m.subject; }
   function renderLimits() { $("limits").innerHTML = O.sourceNotes(S.res, S.data.zones ? { zones: S.data.zones, inpa: S.data.inpa } : {}, S.cfg).map(x => "<li>" + esc(x) + "</li>").join(""); }
   const reportData = () => ({ zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near });
   const reviewText = () => S.reviewAt ? "המבקש אישר ב-" + S.reviewAt.toLocaleString("he-IL") + " שעבר על התצ״א, על רשימת המצאי ועל המפה, ושאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוסיף אותה ידנית)." : "";
+  // אפשרויות משותפות למסך ול-Word: שם ספק הרקע בכל תמונה (לכותרות), טקסט אישור הסקירה, והאם לכלול דף בדיקות
+  function modelOpts(images) {
+    const pn = {}; IMGS.forEach(m => { const x = S.imgs[m.k]; pn[m.k] = x ? ((M.PROVIDERS[x.provider] || {}).name || "") : ""; });
+    return { images: images || {}, providerName: (M.PROVIDERS.esri || {}).name || "", providerNames: pn, includeChecks: $("incChecks").checked, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו" };
+  }
+  // מבנה הדוח על המסך זהה לזה שב-Word: הכול נבנה מאותו מודל (O.docxModel) — טופס, ארבעה עמודי תמונה, ודף בדיקות עם כותרות סעיף ממוספרות ברצף
   function renderReport() {
     const res = S.res, cfg = S.cfg; if (!res) return;
-    const data = reportData();
-    const rows = O.buildForm(res, cfg), draft = !S.ready;
-    const rowsHtml = rows.map(r => "<tr><td class='k'>" + r.n + ". " + esc(r.label) + (r.sub ? "<small>" + esc(r.sub) + "</small>" : "") + "</td><td>" + r.html + "</td></tr>").join("");
+    const data = reportData(), mdl = O.docxModel(res, data, cfg, modelOpts({})), draft = !S.ready;
+    const rowsHtml = mdl.rows.map(r => "<tr><td class='k'>" + r.n + ". " + esc(r.label) + (r.sub ? "<small>" + esc(r.sub) + "</small>" : "") + "</td><td>" + r.html + "</td></tr>").join("");
     const draftBanner = draft ? "<div class='draft'>טיוטה — לא מוכן לשליחה: " + (S.stale ? "הנתונים השתנו מאז הרצת הבדיקות" : "יש בדיקות שלא הושלמו") + ".</div>" : "";
     const now = new Date();
-    const p1 = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>פמ״ת פנים ארצי א-11 — נספח ג׳</span><span>טופס בקשה לסגירה אווירית</span></div><table class='f'>" + rowsHtml + "</table>" +
-      "<p style='margin-top:8px'><b>חובה לצרף מפה/תצ״א</b> — מצורפות: הדמיה בתקריב ומבט כללי (עמודים 2–3) ותצ״א נקי (עמוד 4).<br>*את הבקשה יש להגיש לכתובות המייל: <span dir='ltr'>" + esc(cfg.mail.to.join(", ")) + "</span></p>" +
+    const p1 = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>" + esc(mdl.title) + "</span><span>" + esc(mdl.subtitle) + "</span></div><table class='f'>" + rowsHtml + "</table>" +
+      "<p style='margin-top:8px'>" + O.attachmentsLine() + "<br>*את הבקשה יש להגיש לכתובות המייל: <span dir='ltr'>" + esc(cfg.mail.to.join(", ")) + "</span></p>" +
       "<div class='foot'><span>" + esc(cfg.form) + "</span><span>הופק " + esc(now.toLocaleDateString("he-IL")) + "</span></div></div>";
-    const items = res.nearScan.items;
-    const legend = items.length ? "<h2>מכשולים, אתרים ותשתיות המסומנים במפה</h2><table class='t'><tr><th>#</th><th>מה</th><th>מרחק מהנקודה</th><th>איפה</th></tr>" +
-      items.map(i => "<tr><td>" + i.n + "</td><td>" + esc(i.title) + (i.height ? " · גובה " + C.trimNum(i.height, 0) + " מ׳" : "") + "</td><td>" + esc(O.dLabel(i.d)) + "</td><td>" + esc(O.whereOf(i)) + "</td></tr>").join("") + "</table>" : "";
+    // ארבעה עמודי תמונה: תצ״א, מפת רחובות, מבט כללי (+ טבלת הפריטים) ומפת אזור. מקרא הצבעים מתחת לתצ״א הראשונה
     const imgOf = (m, alt) => m && m.dataUrl ? "<img class='mapimg' alt='" + alt + "' src='" + (m.jpegUrl || m.dataUrl) + "'>" : "<div class='draft'>התמונה לא נוצרה.</div>";
-    const pname = (M.PROVIDERS[S.map ? S.map.provider : "esri"] || {}).name || "";
-    const p2 = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>הדמיה מצורפת לבקשה — תקריב</span><span>" + esc(pname) + "</span></div>" + imgOf(S.map, "הדמיה") + "<p class='muted' style='margin-top:6px'>ירוק: אזור הסגירה · כתום: עד פי 2 מהרדיוס · אדום: אזור אסור/מוגבל (א-17) · צהוב: מכשול · תכלת: אתר/תשתית קרקעית · סגול: אווירי · ירוק בהיר: אתר המונים/תשתית. המספרים תואמים לרשימה בשדה 8.</p></div>";
-    const p2o = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>הדמיה מצורפת לבקשה — מבט כללי (כל מה שמופיע בשדה 8)</span><span>" + esc(pname) + "</span></div>" + imgOf(S.overview, "מבט כללי") + legend + "</div>";
-    const p2b = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>תצ״א (צילום אוויר) של האזור — ללא סימון</span><span>" + esc(pname) + "</span></div>" + imgOf(S.aerial, "תצ״א") + "</div>";
-    const checks = O.buildChecks(res, data, cfg);
-    const chk = checks.map(r => "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td><td>" + r[2] + "</td></tr>").join("");
-    const cov = O.buildCoverage(res, data, cfg);
-    const covHtml = "<h2>דוח כיסוי — מה נסרק</h2><table class='t'>" + cov.sources.map(r => "<tr><td><b>" + esc(r[0]) + "</b></td><td>" + esc(r[1]) + "</td></tr>").join("") + "</table>" +
-      "<h2>מצאי לפי קבוצות (כל מה שנמצא בטווח החיפוש)</h2><table class='t'><tr><th>קבוצה</th><th>נמצאו</th><th>בתוך הסגירה</th><th>בטבעת הכתומה</th><th>בקרבה</th></tr>" +
+    const imgPage = (title, inner) => "<div class='paper'>" + draftBanner + "<div class='hdr'><span>" + esc(title) + "</span></div>" + inner + "</div>";
+    const items = mdl.items.length ? "<h2>מכשולים, אתרים ותשתיות המסומנים במפה</h2><table class='t'><tr><th>#</th><th>מה</th><th>מרחק מהנקודה</th><th>איפה</th></tr>" +
+      mdl.items.map(i => "<tr><td>" + esc(i.n) + "</td><td>" + esc(i.title) + "</td><td>" + esc(i.dist) + "</td><td>" + esc(i.where) + "</td></tr>").join("") + "</table>" : "";
+    const pImgs = imgPage(mdl.aerialTitle, imgOf(S.imgs.aerial, "תצ״א תקריב") + "<p class='muted' style='margin-top:6px'>" + esc(mdl.mapNote) + "</p>") +
+      imgPage(mdl.streetTitle, imgOf(S.imgs.street, "מפת רחובות תקריב")) +
+      imgPage(mdl.overviewTitle, imgOf(S.imgs.overview, "הדמיה וסימונים במבט כללי") + items) +
+      imgPage(mdl.regionTitle, imgOf(S.imgs.region, "מפת אזור מרוחקת"));
+    // דף בדיקות: כותרות סעיף ממוספרות במונה רץ — רק סעיפים שמוצגים
+    let sec = 0;
+    const secH = t => "<h2>" + (++sec) + ". " + esc(t) + "</h2>";
+    const chk = mdl.checks.map((r, k) => "<tr><td>" + (k + 1) + "</td><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td><td>" + r[2] + "</td></tr>").join("");
+    const cov = mdl.coverage;
+    // covHtml פונקציה: המונה רץ לפי סדר ההצגה, ולכן כותרת הסעיף נוצרת רק במקומה בדף
+    // "פריטים נוספים" היא תת-סעיף של המצאי: כותרת משנית "<מס' הסעיף>.1" (לא סעיף ממוספר נפרד, כדי שהמספור יישאר רצוף בלי חורים), כמו ב-Word
+    const covHtml = () => { const h = secH("מצאי לפי קבוצות"), n = sec; return h + "<table class='t'><tr><th>קבוצה</th><th>נמצאו</th><th>בתוך הסגירה</th><th>בטבעת הכתומה</th><th>בקרבה</th></tr>" +
       cov.groups.map(g => "<tr><td>" + esc(g.group) + "</td><td>" + g.found + "</td><td>" + g.inside + "</td><td>" + g.ring + "</td><td>" + g.near + "</td></tr>").join("") + "</table>" +
-      (cov.censusOnly.length ? "<h2>פריטים נוספים שנמצאו בקרבה ואינם בטופס</h2><p>" + cov.censusOnly.map(i => esc(i.title + " — " + O.dLabel(i.d))).join("; ") + (cov.censusMore ? "; ועוד " + cov.censusMore + " פריטים" : "") + ".</p>" : "");
-    const dn = res.sun.map(r => "<tr><td>יום " + esc(r.dayName) + " " + C.ddmmyyyy(r.date) + "</td><td>" + r.sunrise + "</td><td>" + r.sunset + "</td><td>" + C.fmtHM(r.dayMin) + "</td><td>" + C.fmtHM(r.nightMin) + "</td></tr>").join("");
-    const rv = reviewText();
+      (cov.censusOnly.length ? "<h3>" + n + ".1 פריטים נוספים שנמצאו בקרבה ואינם בטופס</h3><p>" + cov.censusOnly.map(i => esc(i.title + " — " + i.dist)).join("; ") + (cov.censusMore ? "; ועוד " + cov.censusMore + " פריטים" : "") + ".</p>" : ""); };
+    const dn = mdl.dayNight.map(r => "<tr>" + r.map(c => "<td>" + esc(c) + "</td>").join("") + "</tr>").join("");
+    const rv = reviewText(), visitNote = O.visitNoteHtml(res);   // הערות המבקש / ממצאי סיור: HTML מוכן (escaped) או ""
     const p3 = "<div class='paper checks'><div class='hdr'><span>דף בדיקות</span><span>לא חלק מהטופס הרשמי</span></div>" +
-      "<h2>הנקודה</h2><p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>" +
-      "<h2>הבדיקות שבוצעו</h2><table class='t ck'><tr><th>בדיקה</th><th>מקור</th><th>תוצאה</th></tr>" + chk + "</table>" + covHtml +
-      "<h2>יום ולילה בחלון הפעילות</h2><table class='t'><tr><th>תאריך</th><th>זריחה</th><th>שקיעה</th><th>שעות יום בחלון</th><th>שעות לילה בחלון</th></tr>" + dn + "</table>" +
-      "<p class='muted'>זריחה ושקיעה לפי חישוב אסטרונומי לנקודה, לא לוח רשמי. ההתייחסות לגובה ולתנאים זהה ביום ובלילה.</p>" +
-      "<h2>הגשה</h2><p>" + O.submissionHtml(res, cfg, data) + "</p>" +
-      "<h2>מגבלות המקורות</h2><ul>" + O.sourceNotes(res, data, cfg).map(x => "<li>" + esc(x) + "</li>").join("") + "</ul>" +
-      (rv ? "<h2>אישור סקירה אנושית</h2><p>" + esc(rv) + "</p>" : "") +
-      "<div class='foot'><span>מקורות: " + esc((data.zones && data.zones.edition) || "") + " · פמ״ת א-11 עדכון 1/26 · OpenStreetMap · נוטמים</span><span>הופק " + esc(now.toLocaleString("he-IL")) + "</span></div></div>";
+      secH("הנקודה") + "<p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>" +
+      (visitNote ? "<p>" + visitNote + "</p>" : "") +
+      secH("הבדיקות שבוצעו") + "<table class='t ck'><tr><th>#</th><th>בדיקה</th><th>מקור</th><th>תוצאה</th></tr>" + chk + "</table>" + covHtml() +
+      (dn ? secH("יום ולילה בחלון הפעילות") + "<table class='t'><tr>" + mdl.dayNightHead.map(h => "<th>" + esc(h) + "</th>").join("") + "</tr>" + dn + "</table>" +
+        "<p class='muted'>זריחה ושקיעה לפי חישוב אסטרונומי לנקודה, לא לוח רשמי. ההתייחסות לגובה ולתנאים זהה ביום ובלילה.</p>" : "") +
+      secH("הגשה") + "<p>" + mdl.submission + "</p>" +
+      (mdl.notes.length ? secH("מגבלות והסתייגויות") + "<ol>" + mdl.notes.map(x => "<li>" + esc(x) + "</li>").join("") + "</ol>" : "") +
+      (rv ? secH("אישור סקירה אנושית") + "<p>" + esc(rv) + "</p>" : "") +
+      "<div class='foot'><span>" + esc(mdl.footer) + "</span></div></div>";
     $("report").className = $("incChecks").checked ? "" : "nochecks";
-    $("report").innerHTML = p1 + p2 + p2o + p2b + p3;
+    $("report").innerHTML = p1 + pImgs + p3;
     const style = document.getElementById("nochecksStyle") || Object.assign(document.createElement("style"), { id: "nochecksStyle" });
     style.textContent = ".nochecks .paper.checks{display:none !important}"; document.head.appendChild(style);
     S.reportHtml = true;
@@ -388,8 +627,9 @@
     const prev = S.res; S.res = C.analyze(inp, data, S.cfg, new Date());
     S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — יש לאשר מחדש" }; clearOutcome();
-    S.pending = true; refreshGate();
-    try { await buildMapImage(null, null); } finally { S.pending = false; renderAll(); }
+    const building = buildMapImage(null, null);   // מתחילה מיד ומסמנת "ממתין" (נגזר מהבנייה הרצה ומטיימר עריכה, לא מדגל שבנייה מיושנת מאפסת)
+    refreshGate();
+    try { await building; } finally { renderAll(); }
   }
   function addManual() {
     const name = $("mName").value.trim(), c = C.parseCoordInput($("mCoord").value), h = parseFloat($("mHeight").value);
@@ -415,15 +655,19 @@
   const baseName = () => O.fileBase(S.res);
   const b64ToBytes = u => { const bin = atob(u.split(",")[1]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
   async function docxBytes() {
-    const pname = (M.PROVIDERS[S.map ? S.map.provider : "esri"] || {}).name || "";
     const img = m => m && m.jpegUrl ? { bytes: b64ToBytes(m.jpegUrl), w: m.canvas.width, h: m.canvas.height } : null;
-    const model = O.docxModel(S.res, reportData(), S.cfg, { images: { map: img(S.map), overview: img(S.overview), aerial: img(S.aerial) }, includeChecks: $("incChecks").checked, providerName: pname, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו" });
-    return window.ReqDocx.build(model);
+    const images = {}; IMGS.forEach(m => { images[m.k] = img(S.imgs[m.k]); });
+    return window.ReqDocx.build(O.docxModel(S.res, reportData(), S.cfg, modelOpts(images)));
   }
   const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   async function downloadDocx() {
     const bytes = await docxBytes();
     download(baseName() + " — בקשה לסגירה אווירית.docx", DOCX_MIME, new Blob([bytes], { type: DOCX_MIME }));
+  }
+  // הורדת אחת מארבע התמונות (PNG) בשם לפי החוזה: "<מקום — תאריך> — <תווית>.png"
+  async function downloadImg(m) {
+    const x = S.imgs[m.k]; if (!x || !x.dataUrl) return;
+    download(baseName() + " — " + m.file + ".png", "image/png", await (await fetch(x.dataUrl)).blob());
   }
 
   /* ---------- שמירה אוטומטית בדרייב (דרך שרת ההתחברות) ---------- */
@@ -432,7 +676,7 @@
   const MAX_B64 = 8.5 * 1024 * 1024;   // תקרת השרת לקובץ אחד היא 9MB אחרי קידוד
   // הנתונים שהוזנו (בלי שמות וטלפונים) — מאפשרים להריץ את הבדיקות שוב על אותה בקשה
   function inputsForRecord() {
-    const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester)/i.test(k)) o[k] = S.res.inp[k]; });
+    const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester|participant)/i.test(k)) o[k] = S.res.inp[k]; });
     return { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", inputs: o,
       zones: [...S.res.zones.inside, ...S.res.zones.near].map(z => ({ id: z.id, d: Math.round(z.d) })), items: S.res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })) };
   }
@@ -445,6 +689,7 @@
   // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל.
   // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
   async function persistToDrive(progress) {
+    const rev0 = S.rev;   // גרסת הבקשה שממנה נבנים הקבצים; עריכה בזמן השמירה מקדמת אותה (clearOutcome) והקבצים בדרייב כבר אינם מעודכנים
     const A = window.ReqAuth, i0 = S.res.inp, key = JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo]);
     if (!S.rid || (S.ridKey && S.ridKey !== key)) S.rid = newRid();
     S.ridKey = key;
@@ -455,7 +700,7 @@
     const files = [
       { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
       { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
-      imageFile(S.map, "הדמיה תקריב"), imageFile(S.overview, "הדמיה מבט כללי"), imageFile(S.aerial, "תצ״א"),
+      ...IMGS.map(m => imageFile(S.imgs[m.k], m.file)),
       { name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }
     ].filter(Boolean);
     let n = 0;
@@ -465,8 +710,12 @@
       if (!r.ok) throw new Error(f.name + ": " + A.msg(r));
     }
     // השרת מסמן את הבקשה "מוכנה" רק כאן, אחרי שכל הקבצים נשמרו, והדפדפן מצהיר שכל הבדיקות עברו — ורק בקשה מסומנת תישלח
-    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready });
+    // הבקשה שונתה בזמן ההעלאה: saveEnd נשלח עם ready:false (הקבצים אינם הגרסה הנוכחית, ולכן לא תסומן מוכנה), ונזרקת שגיאה — בלי ״נשמרו״ ובלי תוצאה
+    const changedMsg = "הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב.";
+    const changed = S.rev !== rev0;
+    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed });
     if (!end.ok) throw new Error(A.msg(end));
+    if (changed || S.rev !== rev0) throw new Error(changedMsg);   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
     if (!end.ready) throw new Error("השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב");
     S.driveUrl = begin.url;
     return { folderId: begin.folderId, url: begin.url, name: begin.name, count: files.length };
@@ -504,8 +753,8 @@
     const serverTo = (A.getMailTo() || []).slice().sort().join(","), cfgTo = mail.to.slice().sort().join(",");
     // כתובות היעד קבועות בשרת; מוודאים שהן זהות לכתובות שמצוינות בנוהל (config.json) — אחרת לא שולחים
     if (serverTo !== cfgTo) { out.className = "small err"; out.textContent = "לא נשלח: כתובות היעד בשרת (" + serverTo + ") שונות מהכתובות בנוהל א-11 סעיף 6(א) שבהגדרות (" + cfgTo + "). יש לעדכן את השרת."; return; }
-    const names = ["טופס הבקשה (Word)" + ($("incChecks").checked ? " כולל דף בדיקות" : " בלי דף בדיקות"), "קובץ KML", "הדמיה — תקריב", "הדמיה — מבט כללי", "תצ״א נקי"];
-    const warn = warnings().filter(w => /ימי עבודה|נוטמים נמשכו/.test(w));
+    const names = ["טופס הבקשה (Word)" + ($("incChecks").checked ? " כולל דף בדיקות" : " בלי דף בדיקות"), "קובץ KML"].concat(IMGS.map(m => m.send));
+    const warn = warnings().filter(w => /ימי עבודה|נוטמים נמשכו|מכשול שהוזן ולא נמצא/.test(w));   // אזהרות שחשוב לראות ממש לפני השליחה
     const m = A.modal('<div class="sendBox"><h2>שליחה למשרד נוטאם</h2>' +
       (live ? '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> המייל יישלח באמת אל <span dir="ltr">' + esc(mail.to.join(", ")) + '</span>. עותק יישלח לחשבון הבעלים של המערכת, ותשובות המשרד יגיעו אליו (ולא אליך).</div>'
             : '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה:</b> המייל יישלח רק לחשבון הבעלים של המערכת (לא אליך) ולא יישלח למשרד נוטאם. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>') +
@@ -576,7 +825,7 @@
     const out = [], add = (name, ok, detail) => out.push({ name, ok, detail: detail || "" });
     try {
       const [exp, near, far, ext, rev, nsnap] = await Promise.all(["selftest/expected.json", "selftest/yarkon/near.json", "selftest/yarkon/far.json", "selftest/yarkon/ext.json", "selftest/yarkon/reverse.json", "selftest/notam-data.snap.json"].map(getJson));
-      const cfg = S.cfg, inp = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contactNames: "א; ב", contactPhone: "050-0000001" });
+      const cfg = S.cfg, inp = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
       const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: nsnap.notams, notamFetchedIso: nsnap.fetched_iso, near, far, ext, reverse: rev };
       const res = C.analyze(inp, data, cfg, new Date(exp.now));
       const near1 = (a, b, tol) => Math.abs(a - b) <= tol;
@@ -609,6 +858,7 @@
 
   /* ---------- אתחול ---------- */
   async function init() {
+    if (H) { H.wire(); attachHelp(); }   // לחצני ״!״ ליד כפתורי הדף (ההסברים ב-HELP)
     initMap();
     const okCfg = await loadStatic();
     document.addEventListener("req-auth", ev => {   // משתמש אחר באותו דף לא יורש תיקייה, מזהה בקשה או הודעות של קודמו
@@ -619,16 +869,19 @@
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); });
-    ["siteName", "purpose", "vlos", "reqName", "reqPhone", "contactNames", "contactPhone"].forEach(id => $(id).addEventListener("input", () => { if (id.startsWith("req") || id.startsWith("contact")) savePerson(); onSoftInputChange(); }));
+    ["siteName", "purpose", "vlos", "reqName", "reqPhone", "knownObs", "visitDate", "visitNotes"].forEach(id => (id === "visitDate" ? ["input", "change"] : ["input"]).forEach(ev => $(id).addEventListener(ev, () => { if (id.startsWith("req")) savePerson(); onSoftInputChange(); })));
+    // אנשי קשר ומשתתפים: מאזין אחד (delegation) לכל השורות; הוספה והסרה של שורות ב-click
+    $("personBox").addEventListener("input", ev => { if (ev.target.closest && ev.target.closest(".plist")) { savePerson(); onSoftInputChange(); } });
+    $("personBox").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-rm]"); if (b) removeRow(b); });
+    $("addContact").onclick = () => addRow("contacts"); $("addPart").onclick = () => addRow("participants");
     $("aircraft").addEventListener("change", onSoftInputChange);
+    $("aircraft").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-acrm]"); if (b) removeAircraft(+b.dataset.acrm); });
+    $("acAdd").onclick = addAircraft; $("acNew").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addAircraft(); } });
     $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); } });
-    $("provider").addEventListener("change", () => { if (S.res) { S.stale = true; clearOutcome(); refreshGate(); } });
     $("runBtn").onclick = run; $("qBtn").onclick = searchPlace; $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
     $("btnPrint").onclick = () => window.print();
     $("btnKml").onclick = () => download(baseName() + ".kml", "application/vnd.google-earth.kml+xml", O.kml(S.res, { zones: S.data.zones }, S.cfg));
-    $("btnPng").onclick = async () => { const b = await (await fetch(S.map.dataUrl)).blob(); download(baseName() + " — הדמיה תקריב.png", "image/png", b); };
-    $("btnOverview").onclick = async () => { const b = await (await fetch(S.overview.dataUrl)).blob(); download(baseName() + " — הדמיה מבט כללי.png", "image/png", b); };
-    $("btnAerial").onclick = async () => { const b = await (await fetch(S.aerial.dataUrl)).blob(); download(baseName() + " — תצ״א.png", "image/png", b); };
+    IMGS.forEach(m => { $(m.btn).onclick = () => downloadImg(m); });
     $("btnDocx").onclick = downloadDocx;
     $("mAdd").onclick = addManual;
     $("mPick").onclick = () => { S.pick = true; $("mPick").textContent = "לחצו על המפה למעלה…"; $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
@@ -636,7 +889,7 @@
     $("btnCopy").onclick = copyMail;
     $("btnDrive").onclick = saveToDrive;
     $("btnSend").onclick = sendToNotam;
-    $("wipePerson").onclick = () => { ls.del(PERSON_KEY); ["reqName", "reqPhone", "contactNames", "contactPhone"].forEach(id => { $(id).value = ""; }); };
+    $("wipePerson").onclick = wipePerson;
     $("stRun").onclick = selfTest;
     renderManual();
     setStatus("selftest", false, "טרם הורצה");

@@ -17,6 +17,25 @@
   };
   const msg = r => (r && (ERR[r.error] || r.message || r.error)) || "שגיאה לא ידועה";
 
+  /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהפעולה עושה בפועל בקוד (Code.gs ובקובץ הזה) ---------- */
+  const HELP = {
+    pass: "פותח חלון להחלפת הסיסמה שלך: מקלידים את הסיסמה הנוכחית ואת החדשה פעמיים (לפחות 10 תווים). אחרי ההחלפה כל ההתחברויות האחרות של המשתמש שלך מתבטלות, וההתחברות הנוכחית נשארת.",
+    admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): מצב השליחה, רשימת המשתמשים והפעולות עליהם, יומן הבקשות, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
+    out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה ומחזיר למסך הכניסה. אין בכך מחיקה של נתונים או של קבצים שנשמרו.",
+    mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק לבעל המערכת; במצב חי הוא נשלח למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) עם עותק לבעל המערכת. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
+    block: "חסום מבקשות: המשתמש לא יוכל להתחבר כלל, ולכן גם לא לשמור בדרייב או לשלוח. כל ההתחברויות הפעילות שלו מתבטלות מיד, וניסיון כניסה חדש (גם עם סיסמה נכונה) נדחה עד שתלחצו ״פתח מחדש את הבקשות״. הנתונים שלו והקבצים שכבר שמר אינם נמחקים. אי אפשר לחסום את עצמך.",
+    unblock: "פתח מחדש את הבקשות: מסיר את החסימה, והמשתמש יוכל להתחבר שוב עם הסיסמה שלו. ההתחברויות הקודמות שלו נשארות מבוטלות, ולכן עליו להתחבר מחדש. הפעולה אינה משנה את תוקף המנוי (מי שהמנוי שלו הסתיים עדיין לא יוכל להתחבר) ואינה מוחקת דבר. חשבון שנחסם אוטומטית בגלל הזמנה שבוטלה עלול להיחסם שוב בבדיקה היומית כל עוד ההזמנה מבוטלת.",
+    rst: "איפוס סיסמה (בשורת המשתמש): ממלא את שם המשתמש בטופס ״איפוס סיסמה״ שבתחתית החלון ומעביר אליו את הסמן. הסיסמה עצמה נקבעת שם, בלחיצה על ״אפס״.",
+    exp: "שינוי תוקף: שואל תאריך סיום מנוי (YYYY-MM-DD) למשתמש; תאריך ריק = ללא הגבלה. אחרי התאריך המשתמש לא יוכל להיכנס עד חידוש המנוי. השינוי גם מאפס את תזכורות סיום המנוי שנשלחו.",
+    del: "מוחק את המשתמש לצמיתות, אחרי אישור. כרטיסי הרכישה ששויכו אליו ומייל ההרשמה שלו משתחררים, וניתן להירשם איתם מחדש. קבצי הבקשות שלו בדרייב וביומן הבקשות אינם נמחקים. אי אפשר למחוק את עצמך.",
+    add: "מוסיף משתמש חדש עם שם משתמש וסיסמה זמנית (לפחות 10 תווים). ״מנהל״ מוסיף גם הרשאת ניהול. למשתמש שנוסף כך אין תאריך סיום מנוי עד שתקבעו אחד ב״שינוי תוקף״.",
+    reset: "קובע למשתמש הנבחר סיסמה חדשה (לפחות 10 תווים). כל ההתחברויות הקיימות שלו מתבטלות, והוא צריך להיכנס מחדש עם הסיסמה החדשה.",
+    wix: "בודק מול אתר הארגון (Wix) אילו הזמנות ששולמו קיימות לכתובת המייל שהוקלדה, ולכל הזמנה אם היא כבר נוצלה להרשמה ועל ידי מי, ואם היא זכאית להרשמה. פעולת אבחון בלבד — אינה משנה דבר."
+  };
+  // לחצן ״!״ מוכן; אם help.js לא נטען — כלום (הממשק ממשיך לעבוד). name = שם קצר סטטי לקורא מסך (aria-label="הסבר על: <שם>"); נקבע בכל אתר קריאה ולא נקרא מתווית הכפתור, שעשויה להשתנות (#admMode)
+  const hb = (t, name) => (window.ReqHelp ? window.ReqHelp.btn(t, name) : "");
+  const withHelp = (html, t, name) => '<span class="hw">' + html + hb(t, name) + "</span>";
+
   function save() { try { sessionStorage.setItem(KEY, JSON.stringify({ token: A.token, user: A.user, role: A.role, exp: A.exp })); } catch (e) { /* ignore */ } }
   function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
   function restore() { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (s && s.token && s.exp > Date.now()) { A.token = s.token; A.user = s.user; A.role = s.role; A.exp = s.exp; return true; } } catch (e) { /* ignore */ } return false; }
@@ -126,7 +145,7 @@
     const daysLeft = A.until ? Math.ceil((A.until - Date.now()) / 86400000) : null;
     bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : "") + '</span> ' +
       (A.until ? '<span id="ubSub">מנוי עד ' + esc(fmtD(A.until)) + (daysLeft <= 30 ? ' — <b>מסתיים בעוד ' + daysLeft + ' ימים</b>' + renewLink() : "") + '</span> ' : "") +
-      '<button type="button" id="ubPass">החלפת סיסמה</button>' + (A.role === "admin" ? ' <button type="button" id="ubAdmin">ניהול משתמשים</button>' : "") + ' <button type="button" id="ubOut">התנתק</button>';
+      withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
     $("ubPass").onclick = openPassword; $("ubOut").onclick = logout;
     if (A.role === "admin") $("ubAdmin").onclick = openAdmin;
   }
@@ -168,21 +187,30 @@
       const logWarn = r.logError ? '<div class="err" style="margin:0 0 8px"><b>יומן הבקשות לא נקרא:</b> ' + esc(r.logError) + " — השליחה והשמירה נעצרות עד שיטופל (אפשר עדיין לחסום משתמשים).</div>" : "";
       const fmt = t => t ? new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
       const modeLive = A.mailMode === "live";
+      // ארבעת כפתורי הפעולה בשורת משתמש, כל אחד עם ״!״ משלו. בחסימה/פתיחה ההסבר נבחר לפי u.blocked (הכפתור משנה תווית): HELP.block מול HELP.unblock, כפי ש-setBlocked בשרת מתנהג בכל כיוון
+      const actCell = u => {
+        const un = u.blocked, q = esc(u.user);
+        return withHelp('<button type="button" class="' + (un ? "unblock" : "block") + '" data-blk="' + q + '" data-to="' + (un ? 0 : 1) + '">' + (un ? "✔ פתח מחדש את הבקשות" : "🚫 חסום מבקשות") + '</button>', un ? HELP.unblock : HELP.block, (un ? "פתיחה מחדש של בקשות" : "חסימת בקשות") + " — " + u.user) +
+          withHelp('<button type="button" data-rst="' + q + '">איפוס סיסמה</button>', HELP.rst, "איפוס סיסמה — " + u.user) +
+          withHelp('<button type="button" data-exp="' + q + '">שינוי תוקף</button>', HELP.exp, "שינוי תוקף — " + u.user) +
+          withHelp('<button type="button" data-del="' + q + '">מחק</button>', HELP.del, "מחיקת משתמש — " + u.user);
+      };
       body.innerHTML = logWarn +
         '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק אליך") + '</b> ' +
-        '<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button></div>' +
+        withHelp('<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button>', HELP.mode, "מצב שליחה") + '</div>' +
         '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +
+        '<div class="small admHelp"><span>הסבר על הפעולות בעמודה האחרונה (גם ליד כל כפתור בשורה):</span>' + [["חסום מבקשות", HELP.block], ["פתח מחדש את הבקשות", HELP.unblock], ["איפוס סיסמה", HELP.rst], ["שינוי תוקף", HELP.exp], ["מחק", HELP.del]].map(([l, t]) => withHelp(esc(l), t, l)).join("") + '</div>' +
         '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>מייל</th><th>תוקף מנוי</th><th>בקשות שנשמרו</th><th>נשלחו למשרד נוטאם</th><th>בקשה אחרונה</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
         r.users.map(u => '<tr' + (u.blocked ? ' class="blocked"' : "") + '><td dir="ltr"><a href="#" data-flt="' + esc(u.user) + '">' + esc(u.user) + '</a></td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td><td>' + (u.blocked ? '<b class="err">חסום מבקשות</b>' + (u.blockedWhy ? ' <span class="small">(' + esc(u.blockedWhy) + ')</span>' : "") : "פעיל") + '</td><td dir="ltr">' + esc(u.email || "—") + '</td><td>' + (u.until ? (u.until < Date.now() ? '<b class="err">' + esc(fmtD(u.until)) + ' (הסתיים)</b>' : esc(fmtD(u.until))) : "ללא הגבלה") + '</td><td>' + u.requests + '</td><td>' + u.sent + '</td><td>' + esc(fmt(u.lastRequest)) + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td class="acts">' +
-          (u.user === A.user ? "—" : '<button type="button" class="' + (u.blocked ? "unblock" : "block") + '" data-blk="' + esc(u.user) + '" data-to="' + (u.blocked ? 0 : 1) + '">' + (u.blocked ? "✔ פתח מחדש את הבקשות" : "🚫 חסום מבקשות") + '</button> <button type="button" data-rst="' + esc(u.user) + '">איפוס סיסמה</button> <button type="button" data-exp="' + esc(u.user) + '">שינוי תוקף</button> <button type="button" data-del="' + esc(u.user) + '">מחק</button>') + '</td></tr>').join("") + "</table>" +
+          (u.user === A.user ? "—" : actCell(u)) + '</td></tr>').join("") + "</table>" +
         '<h3 style="margin:14px 0 6px">יומן בקשות' + (filter ? ' של <span dir="ltr">' + esc(filter) + '</span> <a href="#" id="admAll">(הצג את כולם)</a>' : " — כל המשתמשים") + '</h3>' +
         (rq.ok && rq.requests.length ? '<table class="admTbl"><tr><th>נשמרה</th><th>משתמש</th><th>בקשה</th><th>סטטוס</th><th>תיקייה</th></tr>' +
           rq.requests.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td><td>' + esc(x.name) + '</td><td>' +
             (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : x.sentTest ? "נשלחה לבדיקה בלבד" : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
           : '<div class="small">' + (rq.ok ? "אין בקשות ביומן." : esc(msg(rq))) + "</div>") +
-        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label><button class="primary" type="submit">הוסף</button></form>' +
-        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><button type="submit">אפס</button></form><div class="err" id="admErr"></div>' +
-        '<h3 style="margin:14px 0 6px">בדיקת כרטיס באתר (אבחון)</h3><form id="wxForm" class="row"><input id="wxE" type="email" placeholder="מייל הרכישה" dir="ltr" autocomplete="off" style="flex:1 1 220px"><button type="submit">בדוק</button></form><div class="small" id="wxOut"></div>';
+        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form>' +
+        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px">' + withHelp('<button type="submit">אפס</button>', HELP.reset, "קביעת סיסמה חדשה") + '</form><div class="err" id="admErr"></div>' +
+        '<h3 style="margin:14px 0 6px">בדיקת כרטיס באתר (אבחון)</h3><form id="wxForm" class="row"><input id="wxE" type="email" placeholder="מייל הרכישה" dir="ltr" autocomplete="off" style="flex:1 1 220px">' + withHelp('<button type="submit">בדוק</button>', HELP.wix, "בדיקת כרטיס באתר") + '</form><div class="small" id="wxOut"></div>';
       const fail = rr => { $("admErr").textContent = msg(rr); };
       body.querySelectorAll("[data-blk]").forEach(b => b.onclick = async () => { const rr = await call("setBlocked", { target: b.dataset.blk, blocked: b.dataset.to === "1" }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-exp]").forEach(b => b.onclick = async () => {
