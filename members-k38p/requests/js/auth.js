@@ -165,9 +165,10 @@
       const body = $("admBody"); if (!body) return;
       if (!r.ok) { body.innerHTML = '<div class="err">' + esc(msg(r)) + "</div>"; return; }
       A.mailMode = r.mailMode || A.mailMode;
+      const logWarn = r.logError ? '<div class="err" style="margin:0 0 8px"><b>יומן הבקשות לא נקרא:</b> ' + esc(r.logError) + " — השליחה והשמירה נעצרות עד שיטופל (אפשר עדיין לחסום משתמשים).</div>" : "";
       const fmt = t => t ? new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
       const modeLive = A.mailMode === "live";
-      body.innerHTML =
+      body.innerHTML = logWarn +
         '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק אליך") + '</b> ' +
         '<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button></div>' +
         '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +

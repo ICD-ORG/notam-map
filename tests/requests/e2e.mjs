@@ -101,6 +101,7 @@ async function newPage(browser, opts) {
       const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "selftest", "notam-data.snap.json"), "utf8"));
       d.fetched_iso = page._notamIso; d.fetched_at = d.fetched_iso; d.listed = d.count = d.notams.length; d.failed = [];
       if (opts.notamIncomplete) { d.listed += 2; d.failed = ["C0001/26", "C0002/26"]; }
+      if (opts.notamEmpty) { d.notams = []; d.count = 0; d.listed = 0; d.failed = []; }
       r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) });
     });
     await page.route(/server\.arcgisonline\.com|tile\.openstreetmap\.org/, r => { calls.tiles++; if (opts.failTiles) return r.abort(); r.fulfill({ status: 200, contentType: "image/png", headers: CORS, body: tilePng(calls.tiles) }); });
@@ -432,8 +433,17 @@ try {
       const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
       check("סימון 'נשלח (בדיקה)' נוצר בתיקייה בדרייב", folder.files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folder.files.map(f => f.name).join(" | ").slice(0, 200));
       const sm = await page.textContent("#sendMsg"); check("ההודעה בעמוד מציינת שליחה לבדיקה בלבד", /בדיקה/.test(sm), sm.slice(0, 120));
-      // הודעות 'נשלח'/'נשמר' שייכות לבקשה שנשלחה — כשהבקשה משתנה הן נמחקות ולא מטעות לגבי הבקשה החדשה
+      // בקשה שלא השתנתה נשלחת שוב מאותה תיקייה בדרייב (בלי שמירה כפולה); שינוי בנוסח ה-Word מחייב שמירה מחדש
+      const sendAgainTest = async () => { await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk"); await page.click("#sendGo"); await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 }); await page.click("#mdClose"); };
       await page.click("#mdClose");
+      const nBegin = () => page._calls.actions.filter(a => a === "saveBegin").length, b0 = nBegin();
+      await sendAgainTest();
+      check("בקשה שלא השתנתה: שליחה חוזרת (בדיקה) משתמשת בתיקייה השמורה — בלי saveBegin נוסף", nBegin() === b0 && page._env.mails.length === 2, "saveBegin " + b0 + "→" + nBegin() + ", מיילים " + page._env.mails.length);
+      await page.click("#incChecks");                                   // משנה את קובץ ה-Word
+      await sendAgainTest();
+      check("אחרי שינוי שמשפיע על הקבצים: נשמר מחדש לפני השליחה (saveBegin נוסף)", nBegin() === b0 + 1 && page._env.mails.length === 3, "saveBegin " + nBegin() + ", מיילים " + page._env.mails.length);
+      // הודעות 'נשלח'/'נשמר' שייכות לבקשה שנשלחה — כשהבקשה משתנה הן נמחקות ולא מטעות לגבי הבקשה החדשה
+      await page.evaluate(() => { document.getElementById("sendMsg").textContent = "x"; });
       await page.fill("#siteName", "שם אחר לגמרי");
       await page.waitForFunction(() => document.querySelector("#sendMsg").textContent === "" && document.querySelector("#driveMsg").textContent === "", null, { timeout: 5000 });
       check("שינוי בבקשה אחרי שליחה מוחק את הודעות 'נשלח' ו'נשמר בדרייב'", true, "");
@@ -450,7 +460,7 @@ try {
       const env = page._env, adminTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
       env.call({ action: "setMailMode", token: adminTok, mode: "live" });          // המנהל משנה בזמן שהחלון פתוח
       await page.check("#sendOk"); await page.click("#sendGo");
-      await page.waitForFunction(() => /מצב חי/.test((document.querySelector(".sendBox") || {}).textContent || ""), null, { timeout: 60000 });
+      await page.waitForFunction(() => /מצב השליחה בשרת השתנה/.test(document.querySelector("#sendMsg").textContent) && /אינה ניתנת לביטול/.test((document.querySelector(".sendBox") || {}).textContent || ""), null, { timeout: 60000 });   // לא מספיק לחכות ל"מצב חי" — המילים מופיעות גם בחלון הבדיקה
       check("מצב השליחה השתנה בשרת: לא נשלח מייל ולא נוצרה תיקייה בדרייב", env.mails.length === 0 && Object.values(env.folders).filter(f => f.parent === "ROOT").length === 0, env.mails.length + " מיילים");
       check("החלון נפתח מחדש במצב חי, עם אזהרה ועם אישור שיש לסמן שוב", /אינה ניתנת לביטול/.test(await page.textContent(".sendBox")) && (await page.isDisabled("#sendGo")) && /מצב השליחה בשרת השתנה/.test(await page.textContent("#sendMsg")), "");
       await page.check("#sendOk"); await page.click("#sendGo");
@@ -689,6 +699,16 @@ try {
       check("נוטמים בני 80 שעות: הבקשה אינה מוכנה, ההודעה מציינת גיל ומה לעשות, ושליחה חסומה", /אינה מוכנה לשליחה/.test(g) && /נתוני הנוטמים ישנים \(80 שעות/.test(g) && /Run workflow/.test(g) && (await page.isDisabled("#btnSend")) && (await page.isDisabled("#btnDrive")), g.replace(/\s+/g, " ").slice(0, 200));
       await ctx.close();
     }
+    // 6ה0: קובץ נוטמים ריק (listed=0, count=0, בלי נוטמים) — לא מתקבל כ"אין סגירות": ההרצה נעצרת
+    {
+      const { ctx, page } = await newPage(browser, { notamEmpty: true });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await fillExample(page); await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#e_run").textContent.length > 0, null, { timeout: 15000 });
+      const g = await page.textContent("#e_run");
+      check("קובץ נוטמים ריק: ההרצה נעצרת עם הסבר, ואין בקשה מוכנה", /נוטמים אינם תקינים/.test(g) && /ריק או חסר/.test(g) && !(await page.isVisible("#resultsSec")), g.slice(0, 200));
+      await ctx.close();
+    }
     // 6ה: קובץ נוטמים חלקי -> הבדיקה נכשלת ולא מוכן לשליחה
     {
       const { ctx, page } = await newPage(browser, { notamIncomplete: true });
@@ -700,7 +720,7 @@ try {
       await ctx.close();
     }
   }
-  check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 50 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
+  check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();
 }

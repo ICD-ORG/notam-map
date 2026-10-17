@@ -487,7 +487,7 @@ test("ב-09: KML — אזור כטב״ם בסגנון כחול ולא אדום",
 
 test("ב-09: חוקי סעיפים 3(ג) ו-7 נטענו מהקובץ המאומת עם הפניה לעמוד ועדכון", () => {
   assert.deepEqual(rules09.rules.map(r => r.id), ["2ד", "3ג", "4א", "5ד", "5ה1", "6ד", "7ב", "7ג", "7ד", "7ה", "7ח", "A11-3ג", "A17-5"]);
-  for (const r of rules09.rules) assert.match(r.ref, /עמ' \d+(–\d+)?, עדכון 1\/2[56]/);
+  for (const r of rules09.rules) assert.match(r.ref, /עמ' \d+(–\d+)?, עדכון 1\/2[3-6]/);
   const r7c = rules09.rules.find(r => r.id === "7ג");
   assert.match(r7c.text, /500 מטר/); assert.match(r7c.text, /רדיוס הסגירה/);
   assert.match(rules09.rules.find(r => r.id === "3ג").text, /סגירה ייעודית מחייבת שמירת קשר עין/);
@@ -555,7 +555,7 @@ test("קשר עין (ב-09 3(ג)): בקשה 'ללא קשר עין' מציגה ב
   const row = res => O.buildChecks(res, data, cfg).find(r => /קשר עין בסגירה ייעודית/.test(r[0]));
   assert.ok(row(no) && row(yes));
   const t = O.toText(row(no)[2]);
-  assert.match(t, /ללא קשר עין/); assert.match(t, /סגירה ייעודית מחייבת שמירת קשר עין בין המטיס לכטב.ם/); assert.match(t, /עמ' 2, עדכון 1\/25/); assert.match(t, /אינה יכולה לוודא/);
+  assert.match(t, /ללא קשר עין/); assert.match(t, /סגירה ייעודית מחייבת שמירת קשר עין בין המטיס לכטב.ם/); assert.match(t, /עמ' 2, עדכון 1\/25/); assert.match(t, /אינה יכולה לוודא/); assert.ok(!/תקינה רק אם|יש לצרף את האישור/.test(t), "אין טענות שאינן בפמ״ת");
   assert.match(O.toText(row(yes)[2]), /קיים קשר עין/); assert.ok(!/אינה יכולה לוודא/.test(O.toText(row(yes)[2])));
 });
 
@@ -622,13 +622,14 @@ test("נוטמים: חלון תוקף — נוטם שפג לפני הפעילו�
   assert.deepEqual(run({ id: "C5/26", raw: "C5/26 NOTAMN\nE) CLSD" }).skipped, ["C5/26"], "בלי חלון תוקף — מדווח כמדולג, לא נבלע");
 });
 
-test("נוטמים: שלילה לפי גובה — רצפה מעל הגובה המבוקש + 9,500 רגל נשללת; מתחת לכך נשארת", () => {
-  const top = 262.5, edge = top + 9500;                  // 9,762.5 רגל
-  const r = (fl) => run(polyNotam("C6/26", fl, "400", "2610200000", "2610232359"));
-  assert.equal(r("090").hits.length, 1, "FL090 = 9,000 רגל < סף — נשאר");
-  const above = r("100");                                // 10,000 רגל > סף
-  assert.equal(above.hits.length, 0); assert.equal(above.excluded[0].reason, "above"); assert.equal(above.excluded[0].lowerFt, 10000);
-  assert.ok(edge > 9000 && edge < 10000);
+test("נוטמים: שלילה לפי גובה — רצפה מעל הגובה המבוקש + 9,500 רגל נשללת; סף מדויק (9,762.5 רגל לגובה 262.5)", () => {
+  const r = fl => run(polyNotam("C6/26", fl, "400", "2610200000", "2610232359"));
+  assert.equal(r("097").hits.length, 1, "FL097 = 9,700 רגל < 9,762.5 — נשאר");
+  const above = r("098");                                  // 9,800 רגל > 9,762.5
+  assert.equal(above.hits.length, 0); assert.equal(above.excluded[0].reason, "above"); assert.equal(above.excluded[0].lowerFt, 9800);
+  // הסף עולה עם הגובה המבוקש: אותו נוטם (FL098) נשאר כשהסגירה גבוהה ב-100 רגל
+  const higher = C.analyzeNotams(at, 100, [polyNotam("C6/26", "098", "400", "2610200000", "2610232359")], win[0], win[1], 362.5, 10000, 1000);
+  assert.equal(higher.hits.length, 1);
 });
 
 test("נוטמים: סגירה רחוקה (מעבר ל-10 ק״מ מהקצה) נשללת כ'far', ונוטם בלי גיאומטריה נשמר לבדיקה ידנית", () => {
@@ -649,4 +650,20 @@ test("אזור שנשרטט בקירוב נבדק בשולי ביטחון נוס
   const near = run2(mk(true), 750).near;
   assert.equal(near.length, 1, "בקירוב + שוליים — נכלל כ'בקרבה'"); assert.ok(near[0].d > 1100 && near[0].d < 1400, "d=" + near[0].d);
   assert.equal(cfg.thresholds.approx_margin_m, 750);
+});
+
+test("הפניית A11-3ג מצוינת לפי השוליים של הדף עצמו (עדכון 1/23), ושורת ההגשה מציגה את שני הסעיפים הסותרים בלי להכריע", () => {
+  assert.match(rules09.rules.find(r => r.id === "A11-3ג").ref, /עמ' 4, עדכון 1\/23/);
+  assert.match(rules09.rules.find(r => r.id === "A17-5").ref, /עמ' 12, עדכון 1\/26/);
+  const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), t = O.toText(O.submissionHtml(res, cfg, { zones }));
+  assert.match(t, /3\.ד\.4/); assert.match(t, /6\(ד\)/); assert.match(t, /אינה מכריעה/);
+});
+
+test("כותרת 'בקרבת הסגירה' מציינת את הטווח המורחב של אזורים שנשרטטו בקירוב", () => {
+  const z = zones.zones.find(x => x.id === "LLR24"), c = centroid(z), data = mkData(fixture("yarkon"));
+  const res = C.analyze(Object.assign({}, baseInput, { lat: c[0], lon: c[1] }), data, cfg, now);
+  const t = O.toText(JSON.stringify(O.buildChecks(res, data, cfg)));
+  assert.ok(cfg.thresholds.approx_margin_m > 0);
+  if (res.zones.near.some(x => x.src === "a17")) assert.match(t, /אזור שנשרטט בקירוב — עד/);
+  assert.match(O.sourceNotes(res, data, cfg).join(" "), /אזורי LLR: אין בפמ״ת קואורדינטות/);
 });

@@ -13,7 +13,7 @@ export function makeEnv() {
   const props = {}, cache = {}, logs = [];
   // השעון המדומה מתחיל בזמן אמיתי: הדפדפן בבדיקות e2e משווה אותו (פקיעת אסימון) לשעון שלו
   let clock = Date.now();
-  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0 };
+  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0, logWrite: false };
   // Wix מדומה (Events orders): env.wix.orders = [{orderNumber,status,created,email,firstName,memberId,tickets,eventId}], נבדקים הכותרות והסינון כמו ב-API האמיתי
   const wix = { orders: [], calls: [], eventId: "fbcb2cc1-4dc7-4545-b9d5-08febf9f8153", siteId: "29dca6d8-08d4-4679-a6e5-c5f4f3317d90" };
   const triggers = [];
@@ -41,7 +41,7 @@ export function makeEnv() {
   const mails = [];
   const fileApi = file => ({
     getId: () => file.id, getUrl: () => "https://drive/file/" + file.id, getName: () => file.name, getSize: () => file.bytes.length,
-    setTrashed: t => { file.trashed = t; }, setContent: c => { file.bytes = Buffer.from(String(c), "utf8"); },
+    setTrashed: t => { file.trashed = t; }, setContent: c => { if (fail.logWrite && file.name.startsWith("_")) throw new Error("drive write failed"); file.bytes = Buffer.from(String(c), "utf8"); },
     getBlob: () => ({ bytes: file.bytes, mime: file.mime, name: file.name, getDataAsString: () => file.bytes.toString("utf8") }),
   });
   const mkFolder = f => ({

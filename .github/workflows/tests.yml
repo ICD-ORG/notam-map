@@ -45,6 +45,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: האם zones.json שבמאגר תואם למפה (אזהרה בלבד — הבדיקות עצמן רצות על ייצוא טרי)
+        run: node scripts/export-zones.mjs --check || echo "::warning::zones.json במאגר אינו תואם למפה — הייצוא האוטומטי ירענן אותו אחרי המיזוג"
       - name: ייצוא מחדש של zones.json מהמפה (בסביבת הבדיקה בלבד)
         run: node scripts/export-zones.mjs   # בבקשת מיזוג שמשנה את המפה הקובץ שבמאגר ישן עד המיזוג; הייצוא האוטומטי ירענן אותו אחריו
       - name: בדיקות Node (אזורים, סנכרון, שרת Apps Script, ליבת הבקשות)

@@ -293,13 +293,15 @@ function readLog_() {
 // שליחה "פעילה" = לא נכשלה (כולל שליחה שהתחילה ולא ידוע אם הסתיימה — לכן שמרנית)
 function sentOk_(s) { return s.st !== 'failed'; }
 function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (s.mode === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
-function trimLog_(arr) {
+// גיזום: מוחקים קודם את הישנות ביותר שלא נשלחו חי. לעולם לא נמחקת רשומה עם שליחה חיה, ולא הרשומה שזה עתה נכתבה (keepId) —
+// כשהיומן מלא ברשומות כאלה הוא פשוט גדל מעבר ל-LOG_MAX.
+function trimLog_(arr, keepId) {
   var drop = arr.length - CFG.LOG_MAX, out = [];
   if (drop <= 0) return arr;
-  arr.forEach(function (e) { if (drop > 0 && !liveSentAt_(e)) { drop--; return; } out.push(e); });   // רשומה עם שליחה חיה לעולם לא נמחקת
+  arr.forEach(function (e) { if (drop > 0 && e.id !== keepId && !liveSentAt_(e)) { drop--; return; } out.push(e); });
   return out;
 }
-function writeLog_(arr) { logFile_().setContent(JSON.stringify(trimLog_(arr))); }
+function writeLog_(arr, keepId) { logFile_().setContent(JSON.stringify(trimLog_(arr, keepId))); }
 function findByRid_(log, rid) { for (var i = 0; i < log.length; i++) if (log[i].rid === rid) return log[i]; return null; }
 function findById_(log, id) { for (var i = 0; i < log.length; i++) if (log[i].id === id) return log[i]; return null; }
 // שם תיקייה ייחודי ליומן: בקשה אחרת באותו מקום ותאריך מקבלת סיומת (2), (3)…
@@ -316,14 +318,14 @@ function logSentBegin_(user, folderId, name, mode, to, sid) {
   if (!e) { e = { id: folderId, rid: '', name: name, user: user, created: t, saved: t, lastUser: user, ready: false, sent: [] }; log.push(e); }
   e.sent = e.sent || [];
   e.sent.push({ sid: sid, t: t, user: user, mode: mode, to: to, st: 'sending' });
-  writeLog_(log);
+  writeLog_(log, folderId);
   return t;
 }
 function logSentEnd_(folderId, sid, st) {
   var log = readLog_(), e = findById_(log, folderId);
   if (!e) return;
   (e.sent || []).forEach(function (x) { if (x.sid === sid) x.st = st; });
-  writeLog_(log);
+  writeLog_(log, folderId);
 }
 
 /* ---------- פעולות ---------- */
@@ -571,7 +573,7 @@ var ACTIONS = {
     }
     if (!entry) { entry = { id: folder.getId(), rid: rid, name: unique, user: a.name, created: t, sent: [] }; log.push(entry); }
     entry.id = folder.getId(); entry.name = unique; entry.base = name; entry.saved = t; entry.lastUser = a.name; entry.ready = false; entry.readyAt = 0;
-    writeLog_(log);
+    writeLog_(log, entry.id);
     return { ok: true, folderId: folder.getId(), url: folder.getUrl(), name: unique };
   },
 
@@ -585,7 +587,7 @@ var ACTIONS = {
     if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     var c = folderFiles_(folder);
     e.ready = !!r.ready && c.hasDocx && c.hasImage; e.readyAt = e.ready ? now_() : 0;
-    writeLog_(log);
+    writeLog_(log, e.id);
     return { ok: true, ready: e.ready };
   },
 
@@ -595,6 +597,12 @@ var ACTIONS = {
     if (!b64 || b64.length > CFG.MAX_FILE_B64) return { ok: false, error: 'bad_file' };
     var folder = requestFolder_(r.folderId);
     if (!folder) return { ok: false, error: 'bad_folder' };     // כתיבה רק לתוך תיקיית הבקשות
+    // כתיבה רק לבקשה שביומן, רק לבעליה (או מנהל), ולא לבקשה שכבר נשלחה חי. כתיבה לבקשה שסומנה "מוכנה" מבטלת את הסימון עד saveEnd.
+    var log = readLog_(), e = findById_(log, folder.getId());
+    if (!e) return { ok: false, error: 'bad_folder' };
+    if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
+    if (liveSentAt_(e)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(e) };
+    if (e.ready) { e.ready = false; e.readyAt = 0; writeLog_(log, e.id); }
     var fname = cleanFileName_(r.name), old = folder.getFilesByName(fname);
     while (old.hasNext()) old.next().setTrashed(true);           // גרסה חדשה מחליפה ישנה באותו שם
     var blob = Utilities.newBlob(Utilities.base64Decode(b64), String(r.mime || 'application/octet-stream'), fname);

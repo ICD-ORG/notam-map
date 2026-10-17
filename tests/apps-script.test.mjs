@@ -784,3 +784,95 @@ test("אבחון Wix מציג למה כרטיס לא זכאי (הרוכש אינ
   const chk = env.call({ action: "wixCheck", token, email: "pilot@example.com" });
   assert.equal(chk.requireMember, true); assert.equal(chk.orders[0].member, false); assert.equal(chk.orders[0].eligible, false);
 });
+
+/* ===== תיקוני סקירה עצמאית: כשל כתיבה ליומן, קריסה אחרי שליחה, בעלות על saveFile, גיזום, נעילה ===== */
+const readLogRaw = env => JSON.parse(env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes.toString());
+
+test("כשל בכתיבת רשומת 'השליחה התחילה' ליומן — המייל לא יוצא (נכשל סגור)", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token);
+  env.fail.logWrite = true;
+  const r = env.call(sendBody(env, token, b.folderId));
+  assert.equal(r.ok, false); assert.equal(r.error, "server");
+  assert.equal(env.mails.length, 0, "לא נשלח מייל כשאי אפשר לתעד");
+  env.fail.logWrite = false;
+  assert.ok(env.call(sendBody(env, token, b.folderId)).ok, "אחרי שהיומן חזר — נשלח כרגיל");
+});
+
+test("קריסה אחרי יציאת המייל (כתיבת הסיום ליומן נכשלת): התשובה 'נשלח', הרשומה נשארת 'sending' וממשיכה לחסום שליחה חוזרת", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token);
+  env.hooks.beforeMail = () => { env.fail.logWrite = true; };            // המייל יוצא, ואז כתיבת הסיום נכשלת
+  const r = env.call(sendBody(env, token, b.folderId));
+  env.hooks.beforeMail = null; env.fail.logWrite = false;
+  assert.ok(r.ok, JSON.stringify(r)); assert.equal(env.mails.length, 1);
+  assert.deepEqual(readLogRaw(env)[0].sent.map(x => x.st), ["sending"]);
+  assert.equal(env.call(sendBody(env, token, b.folderId)).error, "already_sent");
+  assert.equal(env.mails.length, 1);
+  assert.equal(env.call({ action: "listUsers", token }).users.find(u => u.user === "itzik").sent, 1, "נספרת כשליחה חיה");
+});
+
+test("יומן שאינו מערך (JSON תקין אבל לא רשימה) נכשל סגור ולא נדרס; קובץ ריק נחשב יומן ריק", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  const f = env.folders.ROOT.files.find(x => x.name === "_יומן בקשות.json");
+  f.bytes = Buffer.from('{"not":"an array"}');
+  assert.equal(env.call(sendBody(env, token, b.folderId)).error, "server");
+  assert.equal(f.bytes.toString(), '{"not":"an array"}');
+  f.bytes = Buffer.from("   ");
+  assert.equal(env.call({ action: "listRequests", token }).requests.length, 0);
+});
+
+test("השרת עסוק (נעילת הסקריפט): doPost מחזיר busy ולא מבצע פעולה", () => {
+  const { env, token } = bootstrapped();
+  env.fail.lockBusy = true;
+  assert.equal(env.call({ action: "me", token }).error, "busy");
+  env.fail.lockBusy = false;
+  assert.ok(env.call({ action: "me", token }).ok);
+});
+
+test("expectMode בכיוון ההפוך: השרת במצב בדיקה והלקוח מצפה ל'חי' — לא נשלח", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  const r = env.call({ action: "sendRequest", token, folderId: b.folderId, subject: "נ", body: "ג", expectMode: "live" });
+  assert.equal(r.error, "mode_changed"); assert.equal(r.mailMode, "test"); assert.equal(env.mails.length, 0);
+});
+
+test("מנהל שהוקם ב-bootstrap מקבל tv לפי זמן יצירה (לא קבוע) — כמו משתמש שנוסף", () => {
+  const { env } = bootstrapped();
+  assert.ok(Number(JSON.parse(env.props["U:itzik"]).tv) > 1e12);
+});
+
+test("גיזום היומן: רשומה חדשה נשמרת גם כשהיומן מלא ברשומות עם שליחה חיה, וניתנת לשליחה", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  vm.runInContext("CFG.LOG_MAX = 2", env.sandbox);
+  for (const n of ["א — 01.11.2026", "ב — 02.11.2026"]) assert.ok(env.call(sendBody(env, token, savedRequest(env, token, n).folderId)).ok);
+  const third = savedRequest(env, token, "ג — 03.11.2026");
+  assert.equal(readLogRaw(env).length, 3, "היומן גדל מעבר ל-LOG_MAX במקום למחוק שליחה חיה או את הרשומה החדשה");
+  assert.ok(readLogRaw(env).some(x => x.id === third.folderId));
+  assert.ok(env.call(sendBody(env, token, third.folderId)).ok);
+});
+
+test("saveFile: רק לבקשה שביומן, רק לבעלים או מנהל, לא לבקשה שנשלחה חי; כתיבה לבקשה 'מוכנה' מבטלת את הסימון עד saveEnd", () => {
+  const { env, token } = bootstrapped();
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  const mine = savedRequest(env, token, "של המנהל — 04.11.2026");
+  const put = (tok, folderId, name = "תוספת.png") => env.call({ action: "saveFile", token: tok, folderId, name, mime: "image/png", b64: b64("x") });
+  assert.equal(put(dave.token, mine.folderId).error, "forbidden");
+  env.folders.R2 = { id: "R2", name: "ידנית", parent: "ROOT", files: [] };
+  assert.equal(put(token, "R2").error, "bad_folder", "תיקייה שאינה ביומן");
+  // כתיבה לבקשה מוכנה מבטלת 'מוכנה'
+  assert.equal(env.call(sendBody(env, token, mine.folderId)).ok, true);
+  assert.ok(put(token, mine.folderId).ok);
+  assert.equal(env.call(sendBody(env, token, mine.folderId)).error, "not_ready");
+  assert.ok(env.call({ action: "saveEnd", token, folderId: mine.folderId, ready: true }).ready);
+  // אחרי שליחה חיה — נעולה
+  goLive(env, token);
+  const live = savedRequest(env, token, "חי — 05.11.2026");
+  assert.ok(env.call(sendBody(env, token, live.folderId)).ok);
+  assert.equal(put(token, live.folderId).error, "already_sent");
+  // מנהל רשאי לכתוב לבקשה של אחר (שלא נשלחה)
+  const his = savedRequest(env, dave.token, "של דייב — 06.11.2026");
+  assert.ok(put(token, his.folderId).ok);
+});
