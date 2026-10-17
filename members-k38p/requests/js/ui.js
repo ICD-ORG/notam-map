@@ -132,7 +132,7 @@
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     box.innerHTML = html;
-    ["btnPrint", "btnDocx", "btnKml", "btnPng", "btnOverview", "btnAerial", "btnCopy"].forEach(id => { $(id).disabled = !S.ready; });
+    ["btnPrint", "btnDocx", "btnKml", "btnPng", "btnOverview", "btnAerial", "btnCopy", "btnDrive"].forEach(id => { $(id).disabled = !S.ready; });
     $("btnMail").querySelector("button").disabled = !S.ready;
     $("btnMail").style.pointerEvents = S.ready ? "" : "none";
     if (S.report) renderReport();
@@ -157,6 +157,7 @@
   }
   async function run() {
     if (S.running) return;
+    if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
     $("e_run").textContent = "";
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
@@ -334,12 +335,60 @@
   }
   const baseName = () => O.fileBase(S.res);
   const b64ToBytes = u => { const bin = atob(u.split(",")[1]), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; };
-  async function downloadDocx() {
+  async function docxBytes() {
     const pname = (M.PROVIDERS[S.map ? S.map.provider : "esri"] || {}).name || "";
     const img = m => m && m.jpegUrl ? { bytes: b64ToBytes(m.jpegUrl), w: m.canvas.width, h: m.canvas.height } : null;
     const model = O.docxModel(S.res, reportData(), S.cfg, { images: { map: img(S.map), overview: img(S.overview), aerial: img(S.aerial) }, includeChecks: $("incChecks").checked, providerName: pname, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו" });
-    const bytes = await window.ReqDocx.build(model);
-    download(baseName() + " — בקשה לסגירה אווירית.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+    return window.ReqDocx.build(model);
+  }
+  const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  async function downloadDocx() {
+    const bytes = await docxBytes();
+    download(baseName() + " — בקשה לסגירה אווירית.docx", DOCX_MIME, new Blob([bytes], { type: DOCX_MIME }));
+  }
+
+  /* ---------- שמירה אוטומטית בדרייב (דרך שרת ההתחברות) ---------- */
+  const bytesToB64 = bytes => { let s = ""; const CH = 0x8000; for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH)); return btoa(s); };
+  const utf8B64 = t => bytesToB64(new TextEncoder().encode(t));
+  const MAX_B64 = 8.5 * 1024 * 1024;   // תקרת השרת לקובץ אחד היא 9MB אחרי קידוד
+  // הנתונים שהוזנו (בלי שמות וטלפונים) — מאפשרים להריץ את הבדיקות שוב על אותה בקשה
+  function inputsForRecord() {
+    const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester)/i.test(k)) o[k] = S.res.inp[k]; });
+    return { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", inputs: o,
+      zones: [...S.res.zones.inside, ...S.res.zones.near].map(z => ({ id: z.id, d: Math.round(z.d) })), items: S.res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })) };
+  }
+  function imageFile(m, label) {
+    if (!m) return null;
+    const png = m.dataUrl && m.dataUrl.split(",")[1];
+    if (png && png.length < MAX_B64) return { name: baseName() + " — " + label + ".png", mime: "image/png", b64: png };
+    return m.jpegUrl ? { name: baseName() + " — " + label + ".jpg", mime: "image/jpeg", b64: m.jpegUrl.split(",")[1] } : null;
+  }
+  async function saveToDrive() {
+    const out = $("driveMsg"), btn = $("btnDrive");
+    if (!S.ready) return;
+    if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
+    btn.disabled = true; out.className = "small"; out.textContent = "שומר בדרייב…";
+    try {
+      const begin = await window.ReqAuth.call("saveBegin", { folderName: baseName() });
+      if (!begin.ok) throw new Error(window.ReqAuth.msg(begin));
+      const files = [
+        { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
+        { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
+        imageFile(S.map, "הדמיה תקריב"), imageFile(S.overview, "הדמיה מבט כללי"), imageFile(S.aerial, "תצ״א"),
+        { name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }
+      ].filter(Boolean);
+      let n = 0;
+      for (const f of files) {
+        out.textContent = "שומר בדרייב… (" + (++n) + "/" + files.length + ") " + f.name;
+        const r = await window.ReqAuth.call("saveFile", { folderId: begin.folderId, name: f.name, mime: f.mime, b64: f.b64 });
+        if (!r.ok) throw new Error(f.name + ": " + window.ReqAuth.msg(r));
+      }
+      out.className = "small ok";
+      out.innerHTML = "✔ נשמרו " + files.length + " קבצים בדרייב, בתיקייה <b>" + esc(begin.name) + '</b> — <a href="' + esc(begin.url) + '" target="_blank" rel="noopener">פתח את התיקייה</a>';
+      S.driveUrl = begin.url;
+    } catch (e) {
+      out.className = "small err"; out.textContent = "השמירה בדרייב נכשלה: " + (e && e.message ? e.message : e);
+    } finally { btn.disabled = !S.ready; }
   }
   async function copyMail() {
     const m = O.mail(S.res, S.cfg), txt = "אל: " + m.to.join(", ") + "\nנושא: " + m.subject + "\n\n" + m.body;
@@ -388,6 +437,7 @@
   async function init() {
     initMap();
     const okCfg = await loadStatic();
+    window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); });
     ["siteName", "purpose", "vlos", "reqName", "reqPhone", "contactNames", "contactPhone"].forEach(id => $(id).addEventListener("input", () => { if (id.startsWith("req") || id.startsWith("contact")) savePerson(); onSoftInputChange(); }));
@@ -405,6 +455,7 @@
     $("mPick").onclick = () => { S.pick = true; $("mPick").textContent = "לחצו על המפה למעלה…"; $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
     $("reviewOk").addEventListener("change", onReviewChange);
     $("btnCopy").onclick = copyMail;
+    $("btnDrive").onclick = saveToDrive;
     $("wipePerson").onclick = () => { ls.del(PERSON_KEY); ["reqName", "reqPhone", "contactNames", "contactPhone"].forEach(id => { $(id).value = ""; }); };
     $("stRun").onclick = selfTest;
     renderManual();

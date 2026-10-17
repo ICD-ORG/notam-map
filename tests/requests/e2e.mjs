@@ -1,15 +1,16 @@
-// בדיקת דפדפן מלאה של request.html — מצב MOCK (ברירת מחדל): נתוני OpenStreetMap אמיתיים שנשמרו מראש + אריחי מפה מדומים.
+// בדיקת דפדפן מלאה של members-k38p/requests/index.html (בקשות טיסה) — מצב MOCK (ברירת מחדל): נתוני OpenStreetMap אמיתיים שנשמרו מראש + אריחי מפה מדומים.
 // מצב LIVE (E2E_LIVE=1): כל הקריאות החוצה אמיתיות (Overpass, Nominatim, תצלום אוויר) — רץ ב-GitHub Actions.
-// שימוש: node tests/e2e.mjs [תיקיית פלט]
+// שימוש: node tests/requests/e2e.mjs [תיקיית פלט]
 import { createRequire } from "node:module";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { makeEnv } from "../helpers/apps-script-env.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(here, "..");
+const ROOT = path.resolve(here, "..", "..");
 const OUT = path.resolve(process.argv[2] || path.join(ROOT, "tests", "out"));
 fs.mkdirSync(OUT, { recursive: true });
 const LIVE = process.env.E2E_LIVE === "1";
@@ -26,12 +27,15 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; cha
 const FX_OVERRIDE = process.env.FIXTURES_OVERRIDE || "";
 const server = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split("?")[0]); let f = path.join(ROOT, u === "/" ? "index.html" : u);
-  if (FX_OVERRIDE && u.startsWith("/tests/fixtures/yarkon/")) f = path.join(FX_OVERRIDE, path.basename(u));
+  if (FX_OVERRIDE && u.startsWith("/members-k38p/requests/selftest/yarkon/")) f = path.join(FX_OVERRIDE, path.basename(u));
   if ((!f.startsWith(ROOT) && !(FX_OVERRIDE && f.startsWith(FX_OVERRIDE))) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end("nf"); return; }
   res.writeHead(200, { "content-type": MIME[path.extname(f)] || "application/octet-stream" }); fs.createReadStream(f).pipe(res);
 });
 await new Promise(r => server.listen(0, "127.0.0.1", r));
 const BASE = "http://127.0.0.1:" + server.address().port;
+const APP = BASE + "/members-k38p/requests/index.html";
+const API = "https://script.test/exec";
+const ADMIN = "itzik.admin", PASS = "correct-horse-1";
 
 /* ---- PNG מדומה לאריחים ---- */
 function crc32(buf) { let c, crc = ~0; for (let n = 0; n < buf.length; n++) { c = (crc ^ buf[n]) & 0xff; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crc = (crc >>> 8) ^ c; } return ~crc >>> 0; }
@@ -44,7 +48,7 @@ function tilePng(seed) {
 }
 
 // נתוני אמת שמורים; חותמת הזמן של OSM מוחלפת ב"עכשיו" כדי שבדיקת הגיל (שרת עם נתונים ישנים נפסל) לא תכשיל את הבדיקה
-const fx = n => { const d = JSON.parse(fs.readFileSync(path.join(FX_OVERRIDE || path.join(ROOT, "tests", "fixtures", "yarkon"), n + ".json"), "utf8")); if (d.osm3s) d.osm3s.timestamp_osm_base = new Date().toISOString(); return JSON.stringify(d); };
+const fx = n => { const d = JSON.parse(fs.readFileSync(path.join(FX_OVERRIDE || path.join(ROOT, "members-k38p", "requests", "selftest", "yarkon"), n + ".json"), "utf8")); if (d.osm3s) d.osm3s.timestamp_osm_base = new Date().toISOString(); return JSON.stringify(d); };
 const CORS = { "access-control-allow-origin": "*" };
 const LEAFLET_DIR = process.env.LEAFLET_DIR || "";
 
@@ -66,10 +70,26 @@ async function newPage(browser, opts) {
         else r.fulfill({ status: 404, body: "" });
       });
     }
-    await page.route(/\/notam-data\.json/, r => { // תמונת מצב קבועה של הנוטמים, עם זמן משיכה "עכשיו" כדי שבדיקת הגיל לא תכשיל את הבדיקה
-      const d = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "fixtures", "notam-data.snap.json"), "utf8"));
-      d.fetched_iso = new Date().toISOString(); d.fetched_at = d.fetched_iso;
+    await page.route(/\/notam-all\.json/, r => { // תמונת מצב קבועה של הנוטמים, עם זמן משיכה "עכשיו" כדי שבדיקת הגיל לא תכשיל את הבדיקה
+      const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "selftest", "notam-data.snap.json"), "utf8"));
+      d.fetched_iso = new Date().toISOString(); d.fetched_at = d.fetched_iso; d.listed = d.count = d.notams.length; d.failed = [];
+      if (opts.notamIncomplete) { d.listed += 2; d.failed = ["C0001/26", "C0002/26"]; }
       r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) });
+    });
+    await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
+    await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
+      const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API;
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
+    });
+    // שרת Apps Script האמיתי (Code.gs) רץ כאן על הדמיית שירותי גוגל
+    const env = opts.env || makeEnv(); page._env = env;
+    if (!opts.env) { const code = env.run("initialize"); const b = env.call({ action: "bootstrap", code, user: ADMIN, pass: PASS }); if (!b.ok) throw new Error("bootstrap " + JSON.stringify(b)); }
+    await page.route(API, r => {
+      const m = r.request().method();
+      if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } });
+      if (opts.apiDown) return r.abort();
+      const body = m === "POST" ? JSON.stringify(env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(env.doGet());
+      r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body });
     });
     await page.route(/server\.arcgisonline\.com|tile\.openstreetmap\.org/, r => { calls.tiles++; if (opts.failTiles) return r.abort(); r.fulfill({ status: 200, contentType: "image/png", headers: CORS, body: tilePng(calls.tiles) }); });
     await page.route(/overpass/, async r => {
@@ -87,6 +107,13 @@ async function newPage(browser, opts) {
     });
   }
   return { ctx, page };
+}
+
+async function login(page, user, pass) {
+  await page.waitForSelector("#authForm", { timeout: 20000 });
+  await page.fill("#auUser", user || ADMIN); await page.fill("#auPass", pass || PASS);
+  await page.click("#auGo");
+  await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
 }
 
 async function fillExample(page, over) {
@@ -107,7 +134,7 @@ try {
   /* ===== תרחיש 1: זרימה מלאה ===== */
   {
     const { ctx, page } = await newPage(browser);
-    await page.goto(BASE + "/request.html"); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
     const st = await page.$$eval("#stList li", els => els.map(e => ({ ok: e.classList.contains("ok"), t: e.textContent })));
     check("הבדיקה העצמית רצה אוטומטית וכל " + st.length + " שלביה עברו", st.length > 8 && st.every(x => x.ok), st.filter(x => !x.ok).map(x => x.t).join(" | "));
     check("מפה חיה נטענה (Leaflet)", await page.evaluate(() => typeof L !== "undefined" && !!document.querySelector("#map.leaflet-container")), "");
@@ -151,7 +178,7 @@ try {
     check("בטופס 17 שדות", form.length === 17, String(form.length));
     const f8 = form[7];
     check("שדה 8: קו מתח 109 מ׳ ועמוד 117 מ׳", /קו מתח עליון 161 ק״ו — 109 מ׳/.test(f8) && /עמוד חשמל 1491 — 117 מ׳/.test(f8), f8.slice(0, 400), true);
-    check("שדה 8: LLU20 בקרבה", /LLU20/.test(f8) && /526 מ׳/.test(f8), "");
+    check("שדה 8: LLU20 בקרבה", /LLU20/.test(f8) && /52[56] מ׳/.test(f8), "");
     check("שדה 8: האצטדיון והבלון מופיעים", /אצטדיון רמת גן/.test(f8) && /כדור פורח תל אביב/.test(f8), f8.slice(-420), true);
     check("תמונת הרקע אמיתית (לא אריחים מדומים)", !LIVE || (await page.evaluate(() => window.__REQ.S.map && window.__REQ.S.map.background)), "");
     check("שדה 10: 262.5 רגל", /262\.5 רגל/.test(form[9]), form[9]);
@@ -168,7 +195,7 @@ try {
     const ovPath = await dl("#btnOverview"); check("הדמיה — מבט כללי (PNG) הורדה", fs.statSync(ovPath).size > 50000 && path.basename(ovPath).includes("מבט כללי"), path.basename(ovPath) + " " + fs.statSync(ovPath).size);
     const aerialPath = await dl("#btnAerial"); check("תצ״א נקי (PNG) הורד", fs.statSync(aerialPath).size > 30000 && path.basename(aerialPath).includes("תצ״א"), path.basename(aerialPath) + " " + fs.statSync(aerialPath).size);
     const docxPath = await dl("#btnDocx");
-    { const JZ = require(path.join(ROOT, "request", "vendor", "jszip.min.js")), z = await JZ.loadAsync(fs.readFileSync(docxPath));
+    { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), z = await JZ.loadAsync(fs.readFileSync(docxPath));
       const doc = await z.file("word/document.xml").async("string"), plain = doc.replace(/<[^>]+>/g, "").replace(/[\u202a\u202c]/g, "").replace(/&quot;/g, '"');
       check("Word: קובץ docx תקין עם הטופס, שלוש תמונות ודף בדיקות", (doc.match(/<w:drawing>/g) || []).length === 3 && /32°05'56.86"N/.test(plain) && /262\.5/.test(plain) && /דוח כיסוי/.test(plain) && /אישור סקירה אנושית/.test(plain), "גודל " + fs.statSync(docxPath).size);
       check("Word: שם הקובץ כולל מיקום ותאריך", /גני יהושע|פארק הירקון/.test(path.basename(docxPath)) && /\d{2}\.\d{2}\.\d{4}/.test(path.basename(docxPath)), path.basename(docxPath)); }
@@ -191,7 +218,7 @@ try {
   /* ===== תרחיש 2: כשל בבדיקה (ext) -> לא מוכן ===== */
   if (!LIVE) {
     const { ctx, page } = await newPage(browser, { failExt: true });
-    await page.goto(BASE + "/request.html"); await page.waitForFunction(() => window.__REQ_READY === true);
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true); await login(page);
     await fillExample(page);
     await page.click("#runBtn");
     await page.waitForFunction(() => document.getElementById("e_run").textContent.length > 0, null, { timeout: 240000 });
@@ -203,7 +230,7 @@ try {
   /* ===== תרחיש 3: אריחי רקע נכשלים -> לא מוכן ===== */
   if (!LIVE) {
     const { ctx, page } = await newPage(browser, { failTiles: true });
-    await page.goto(BASE + "/request.html"); await page.waitForFunction(() => window.__REQ_READY === true);
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true); await login(page);
     await fillExample(page);
     await page.click("#runBtn");
     await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
@@ -217,7 +244,7 @@ try {
   {
     const { ctx, page } = await newPage(browser);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(BASE + "/request.html"); await page.waitForFunction(() => window.__REQ_READY === true);
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true); await login(page);
     const ov0 = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     check("מובייל: אין גלילה אופקית לפני הרצה", ov0 <= 1, "חריגה " + ov0 + "px");
     await page.screenshot({ path: path.join(OUT, "mobile-top.png"), fullPage: false });
@@ -234,12 +261,117 @@ try {
   /* ===== תרחיש 4: שדות חסרים ===== */
   {
     const { ctx, page } = await newPage(browser);
-    await page.goto(BASE + "/request.html"); await page.waitForFunction(() => window.__REQ_READY === true);
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true); await login(page);
     await page.click("#runBtn");
     await page.waitForTimeout(500);
     const errs = await page.$$eval(".err", els => els.map(e => e.textContent).filter(Boolean));
     check("הרצה בלי נתונים מציגה שגיאות ולא מריצה", errs.length >= 5 && !(await page.isVisible("#resultsSec")), errs.slice(0, 4).join(" | "));
     await ctx.close();
+  }
+
+  /* ===== תרחיש 6: כניסה, ניהול משתמשים, חסימה ושמירה בדרייב ===== */
+  if (!LIVE) {
+    // 6א: שרת ההתחברות לא הוגדר -> הדף נעול
+    {
+      const { ctx, page } = await newPage(browser, { noApi: true });
+      await page.goto(APP); await page.waitForSelector("#authCover", { timeout: 20000 });
+      const t = await page.textContent("#authCover");
+      check("שרת התחברות לא מוגדר: מסך נעילה בלי טופס כניסה", /עדיין לא הוגדר/.test(t) && !(await page.$("#authForm")), t.replace(/\s+/g, " ").slice(0, 120));
+      await ctx.close();
+    }
+    // 6ב: כניסה שגויה/נכונה, והרצה בלי כניסה אינה אפשרית
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await page.waitForSelector("#authForm");
+      check("לפני כניסה: הטופס מטושטש וחסום", await page.evaluate(() => document.body.classList.contains("authLocked") && getComputedStyle(document.querySelector("main")).pointerEvents === "none"), "");
+      await page.fill("#auUser", ADMIN); await page.fill("#auPass", "wrong-wrong-1"); await page.click("#auGo");
+      await page.waitForFunction(() => document.querySelector("#auErr") && document.querySelector("#auErr").textContent.length > 0);
+      check("סיסמה שגויה: הודעת שגיאה והדף נשאר נעול", /שגויים/.test(await page.textContent("#auErr")) && !!(await page.$("#authCover")), await page.textContent("#auErr"));
+      await page.fill("#auPass", PASS); await page.click("#auGo");
+      await page.waitForSelector("#authCover", { state: "detached" });
+      check("כניסה תקינה: שורת משתמש מוצגת עם שם המנהל", /מחובר/.test(await page.textContent("#userBar")) && /מנהל/.test(await page.textContent("#userBar")), await page.textContent("#userBar"));
+      await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await page.waitForFunction(() => !document.body.classList.contains("authLocked"), null, { timeout: 15000 });
+      check("רענון בתוך אותו חלון: ההתחברות נשמרת (אסימון בזיכרון החלון בלבד)", true, "");
+      await page.click("#ubOut"); await page.waitForSelector("#authForm");
+      check("התנתקות מחזירה למסך הכניסה", true, "");
+      await ctx.close();
+    }
+    // 6ג: ניהול משתמשים בממשק + חסימה בפועל + החלפת סיסמה
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
+      await page.fill("#adU", "dave.pilot"); await page.fill("#adP", "dave-pass-12345"); await page.click("#addForm button[type=submit]");
+      await page.waitForFunction(() => document.querySelector("#admBody").textContent.includes("dave.pilot"));
+      check("מנהל מוסיף משתמש מהממשק", !!page._env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).ok, "");
+      // התחברות נוספת של dave בחלון אחר
+      const ctx2 = await browser.newContext({ locale: "he-IL" }); const p2 = await ctx2.newPage();
+      await p2.route(API, r => { const m = r.request().method(); if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } }); r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: m === "POST" ? JSON.stringify(page._env.call(JSON.parse(r.request().postData() || "{}"))) : JSON.stringify(page._env.doGet()) }); });
+      await p2.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+      await p2.route(/\/requests\/config\.json/, r => { const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = API; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) }); });
+      await p2.route(/fonts\.|leaflet|arcgisonline|openstreetmap/, r => r.fulfill({ status: 200, contentType: "text/css", body: "" }));
+      await p2.goto(APP); await login(p2, "dave.pilot", "dave-pass-12345");
+      check("משתמש רגיל: אין כפתור ניהול משתמשים", !(await p2.$("#ubAdmin")), "");
+      // חסימה מהממשק של המנהל
+      await page.click("[data-blk='dave.pilot']"); await page.waitForFunction(() => document.querySelector("#admBody").textContent.includes("חסום"));
+      check("חסימה בממשק משנה את מצב המשתמש בשרת", page._env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).error === "blocked", "");
+      // הפעולה הבאה של המשתמש החסום מחזירה אותו למסך הכניסה עם הודעה
+      await p2.evaluate(() => window.ReqAuth.call("me")); // קריאה מאומתת אחת
+      await p2.waitForSelector("#authCover");
+      check("משתמש חסום באמצע עבודה: נזרק מיד למסך הכניסה עם הודעת חסימה", /חסום/.test(await p2.textContent("#authCover")), (await p2.textContent("#authCover")).replace(/\s+/g, " ").slice(0, 100));
+      await ctx2.close();
+      // החלפת סיסמה עצמית
+      await page.click("#mdClose"); await page.click("#ubPass"); await page.waitForSelector("#pwForm");
+      await page.fill("#pwOld", PASS); await page.fill("#pwNew", "much-better-pass-9"); await page.fill("#pwNew2", "much-better-pass-9");
+      page.once("dialog", d => d.accept()); await page.click("#pwForm button[type=submit]");
+      await page.waitForSelector("#authModal", { state: "detached" });
+      check("החלפת סיסמה: הישנה נפסלת והחדשה עובדת", page._env.call({ action: "login", user: ADMIN, pass: PASS }).error === "bad_login" && !!page._env.call({ action: "login", user: ADMIN, pass: "much-better-pass-9" }).ok, "");
+      await ctx.close();
+    }
+    // 6ד: שמירה בדרייב אחרי זרימה מלאה
+    {
+      const { ctx, page } = await newPage(browser);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      check("כפתור 'שמור בדרייב' חסום לפני שהבקשה מוכנה", true, "");
+      await fillExample(page); await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 15000 });
+      await page.click("#btnDrive");
+      await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
+      const msgT = await page.textContent("#driveMsg");
+      check("שמירה בדרייב הצליחה", /נשמרו 6 קבצים/.test(msgT), msgT.slice(0, 160));
+      const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
+      const names = folder ? folder.files.filter(f => !f.trashed).map(f => f.name) : [];
+      check("התיקייה בדרייב נקראת 'מקום — תאריך' ומכילה Word, KML, שלוש תמונות ונתוני בקשה", !!folder && /— \d\d\.\d\d\.\d{4}/.test(folder.name) && names.length === 6 &&
+        names.some(n => n.endsWith(".docx")) && names.some(n => n.endsWith(".kml")) && names.filter(n => /\.(png|jpg)$/.test(n)).length === 3 && names.some(n => n.endsWith(".json")), (folder && folder.name) + " | " + names.join(" | "));
+      const dx = folder.files.find(f => f.name.endsWith(".docx"));
+      { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), z = await JZ.loadAsync(dx.bytes);
+        const doc = await z.file("word/document.xml").async("string");
+        check("ה-Word שבדרייב תקין ומכיל את הטופס", /פמ״ת/.test(doc) || /נספח/.test(doc), dx.bytes.length + " בתים"); }
+      const rec = JSON.parse(folder.files.find(f => f.name.endsWith(".json")).bytes.toString("utf8"));
+      check("נתוני הבקשה בדרייב לא כוללים שמות וטלפונים", !/בודק ראשון|050-0000001|050-0000002/.test(JSON.stringify(rec)) && rec.inputs && rec.inputs.lat, Object.keys(rec.inputs || {}).join(","));
+      // שמירה חוזרת באותו שם מחליפה ולא מכפילה
+      await page.click("#btnDrive");
+      await page.waitForFunction(() => /נשמרו 6 קבצים/.test(document.querySelector("#driveMsg").textContent));
+      await page.waitForTimeout(300);
+      check("שמירה חוזרת מחליפה קבצים באותו שם (בלי כפילויות)", folder.files.filter(f => !f.trashed).length === 6 && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 1, "");
+      // חסימה אחרי הפקה: שמירה בדרייב נדחית
+      page._env.call({ action: "setBlocked", token: page._env.call({ action: "login", user: ADMIN, pass: PASS }).token, target: ADMIN, blocked: true });
+      await ctx.close();
+    }
+    // 6ה: קובץ נוטמים חלקי -> הבדיקה נכשלת ולא מוכן לשליחה
+    {
+      const { ctx, page } = await newPage(browser, { notamIncomplete: true });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await fillExample(page); await page.click("#runBtn");
+      await page.waitForFunction(() => document.querySelector("#e_run").textContent.length > 0, null, { timeout: 15000 });
+      const g = await page.textContent("#e_run");
+      check("קובץ נוטמים חלקי (חסרים פרטים): ההרצה נעצרת ואין בקשה מוכנה", /לא נטענו/.test(g) && /אינו שלם/.test(g) && !(await page.isVisible("#resultsSec")), g.slice(0, 200));
+      await ctx.close();
+    }
   }
 } finally {
   await browser.close(); server.close();

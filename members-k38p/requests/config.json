@@ -1,71 +1,73 @@
 {
-  "version": "1.0",
-  "form": "פמ\"ת פנים ארצי א-11 · נספח ג' · בקשה לסגירה אווירית · עדכון 1/26",
-  "org": {
-    "name": "הארגון הישראלי לרב להב",
-    "registration": "ICD",
-    "callsign": "לא רלוונטי"
-  },
-  "fixed": {
-    "balloon": "לא רלוונטי",
-    "crane": "לא רלוונטי",
-    "warning_markings": "קיים אור על הרחפן, כולל נצנץ (מהבהב) הנראה למרחק 3 ק״מ ביום ו-5 ק״מ בלילה.",
-    "sprayers_note": "כניסת מרססים בתיאום 15 דקות מראש מהיב״א",
-    "notam_notam_field": "ימולא ע״י משרד נוטאם"
-  },
-  "purposes": [
-    "לצורך צילום אירוע תקשורתי",
-    "לצורך מיפוי ומחקר חקלאי",
-    "לצורך מידול תשתיות"
+ "version": "1.0",
+ "form": "פמ\"ת פנים ארצי א-11 · נספח ג' · בקשה לסגירה אווירית · עדכון 1/26",
+ "org": {
+  "name": "הארגון הישראלי לרב להב",
+  "registration": "ICD",
+  "callsign": "לא רלוונטי"
+ },
+ "fixed": {
+  "balloon": "לא רלוונטי",
+  "crane": "לא רלוונטי",
+  "warning_markings": "קיים אור על הרחפן, כולל נצנץ (מהבהב) הנראה למרחק 3 ק״מ ביום ו-5 ק״מ בלילה.",
+  "sprayers_note": "כניסת מרססים בתיאום 15 דקות מראש מהיב״א",
+  "notam_notam_field": "ימולא ע״י משרד נוטאם"
+ },
+ "purposes": [
+  "לצורך צילום אירוע תקשורתי",
+  "לצורך מיפוי ומחקר חקלאי",
+  "לצורך מידול תשתיות"
+ ],
+ "aircraft": [
+  "DJI Matrice 350 RTK",
+  "DJI Mavic 4 Pro",
+  "DJI Agras T100"
+ ],
+ "mail": {
+  "to": [
+   "notamoffice@iaa.gov.il",
+   "nofm@iaa.gov.il"
   ],
-  "aircraft": [
-    "DJI Matrice 350 RTK",
-    "DJI Mavic 4 Pro",
-    "DJI Agras T100"
-  ],
-  "mail": {
-    "to": [
-      "notamoffice@iaa.gov.il",
-      "nofm@iaa.gov.il"
-    ],
-    "fpl": "fpl@iaa.gov.il"
+  "fpl": "fpl@iaa.gov.il"
+ },
+ "defaults": {
+  "radius_m": 100,
+  "min_radius_m": 10,
+  "max_radius_m": 5000
+ },
+ "thresholds": {
+  "near_zone_m": 1000,
+  "site_near_m": 1000,
+  "airfield_near_m": 1000,
+  "airfield_scan_m": 15000,
+  "place_scan_m": 3000,
+  "border_scan_m": 7000,
+  "notam_max_age_h": 72,
+  "notam_near_m": 10000,
+  "osm_max_age_h": 72,
+  "notam_warn_age_h": 24,
+  "min_working_days": 7,
+  "agri_near_m": 3000
+ },
+ "borders": {
+  "EG": {
+   "name": "מצרים",
+   "km": 3
   },
-  "defaults": {
-    "radius_m": 100,
-    "min_radius_m": 10,
-    "max_radius_m": 5000
+  "SY": {
+   "name": "סוריה",
+   "km": 6
   },
-  "thresholds": {
-    "near_zone_m": 1000,
-    "site_near_m": 1000,
-    "airfield_near_m": 1000,
-    "airfield_scan_m": 15000,
-    "place_scan_m": 3000,
-    "border_scan_m": 7000,
-    "notam_max_age_h": 72,
-    "notam_near_m": 10000,
-    "osm_max_age_h": 72,
-    "notam_warn_age_h": 24,
-    "min_working_days": 7,
-    "agri_near_m": 3000
-  },
-  "borders": {
-    "EG": {
-      "name": "מצרים",
-      "km": 3
-    },
-    "SY": {
-      "name": "סוריה",
-      "km": 6
-    },
-    "LB": {
-      "name": "לבנון",
-      "km": 3
-    }
-  },
-  "sources": {
-    "a17": "פמ״ת פנים ארצי א-17",
-    "a11": "פמ״ת פנים ארצי א-11",
-    "b09": "פמ״ת פנים ארצי ב-09"
+  "LB": {
+   "name": "לבנון",
+   "km": 3
   }
+ },
+ "sources": {
+  "a17": "פמ״ת פנים ארצי א-17",
+  "a11": "פמ״ת פנים ארצי א-11",
+  "b09": "פמ״ת פנים ארצי ב-09"
+ },
+ "api_url": "",
+ "drive_folder_url": "https://drive.google.com/drive/folders/1UvfFhmCau9P_mbfhSFP2AmOHMbvkVbtL"
 }
