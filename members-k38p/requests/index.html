@@ -14,6 +14,7 @@
 <style>
 :root{--bg:#0b1220;--panel:#121c2e;--panel-2:#0f1726;--line:#22304a;--ink:#e9eff9;--muted:#8fa0ba;--amber:#ffb84d;--red:#ff3b3b;--green:#4ade80;--cyan:#67d8e8;--radius:14px}
 *{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none !important}
 html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,'Segoe UI',Arial,sans-serif;overflow-x:hidden;max-width:100%}
 a{color:var(--cyan)}
 .wrap{max-width:1180px;margin:0 auto;padding:0 18px;width:100%}
@@ -26,11 +27,14 @@ main{padding:16px 0 40px}
 .card h2{font-size:15px;font-weight:700;color:var(--amber);margin-bottom:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
 label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:500}
-label.f b{color:var(--ink);font-weight:700;font-size:13px}
+label.f b,.fld b{color:var(--ink);font-weight:700;font-size:13px}
+.fld{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:500}
+.flh{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 input,select,textarea,button{font-family:inherit;font-size:14.5px}
-input[type=text],input[type=password],input[type=number],input[type=date],input[type=time],input[type=tel],select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;min-height:40px}
-input:focus,select:focus{outline:2px solid var(--cyan);outline-offset:1px}
-input.bad,select.bad{border-color:var(--red)}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=time],input[type=tel],input[type=email],select,textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;min-height:40px}
+textarea{min-height:76px;resize:vertical;line-height:1.6}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--cyan);outline-offset:1px}
+input.bad,select.bad,textarea.bad{border-color:var(--red)}
 .hint{color:var(--muted);font-size:12px;line-height:1.6}
 .checks{display:flex;flex-wrap:wrap;gap:8px 14px}
 .checks label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)}
@@ -56,6 +60,22 @@ button:disabled{opacity:.45;cursor:not-allowed}
 details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-weight:700;font-size:13.5px}
 .small{font-size:12.5px;color:var(--muted);line-height:1.7}
 .person{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:12px}
+.plh{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:14px;font-size:13px}
+.plist{display:grid;gap:6px;margin-top:6px}
+.prow{display:flex;gap:6px;align-items:center}
+.prow input{min-width:0;flex:1 1 0}
+.prow input.pp{flex:0 1 150px}
+.prow button.xbtn,button.xbtn{min-height:34px;width:34px;padding:0;font-size:18px;line-height:1;flex:none}
+.acx{display:inline-flex;align-items:center;gap:4px}
+.acx button.xbtn{min-height:24px;width:24px;font-size:15px;border-radius:50%}
+@media (max-width:640px){
+  /* משתתף: שני שדות שם בשורה, טלפון ו-× מתחת; כל משתתף בכרטיס משלו (מסגרת ורקע) כדי שיהיה ברור לאיזה שם שייך כל טלפון */
+  .prow.part{flex-wrap:wrap;border:1px solid #34486b;border-radius:10px;padding:8px;background:rgba(255,255,255,.045)}
+  #partList{gap:10px}
+  .prow.part input{flex:1 1 40%}.prow.part input.pp{flex:1 1 40%}
+  /* איש קשר: השם ברוחב מלא (אחרת מתכווץ לכמה תווים בטלפון צר), הטלפון ו-× מתחתיו */
+  .prow.cont{flex-wrap:wrap}.prow.cont input.pn{flex:1 1 100%}.prow.cont input.pp{flex:1 1 0}
+}
 .st-list{list-style:none;display:grid;gap:3px;margin-top:6px;font-size:13px}
 .st-list .ok{color:var(--green)}.st-list .no{color:var(--red)}
 #places{display:flex;flex-direction:column;gap:4px;margin-top:6px}
@@ -75,11 +95,30 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .paper table.t{width:100%;border-collapse:collapse;margin:4px 0 10px}
 .paper table.t th,.paper table.t td{border:1px solid #999;padding:5px 7px;text-align:right;vertical-align:top}
 .paper table.t th{background:#eee}
-.paper table.ck th:nth-child(1){width:20%}.paper table.ck th:nth-child(2){width:16%}
+.paper table.ck th:nth-child(1){width:4%}.paper table.ck th:nth-child(2){width:18%}.paper table.ck th:nth-child(3){width:15%}
+.paper table.ck td:nth-child(1),.paper table.ck th:nth-child(1){text-align:center;padding-left:3px;padding-right:3px}
+.paper table.ck td:nth-child(1),.paper table.ck th:nth-child(1){white-space:nowrap}
+.paper table.ck td:nth-child(n+2),.paper table.ck th:nth-child(n+2){overflow-wrap:anywhere}
 .paper img.mapimg{width:100%;display:block;border:1px solid #555}
+.paper .ph{white-space:nowrap}   /* מספר טלפון בשדות 11 ו-12 לא נשבר באמצע בעמודת הערך הצרה (output.js מוסיף class="ph" לטלפונים) */
+.paper h3{font-size:13px;margin:10px 0 4px;color:#111}   /* כותרת משנית בדף הבדיקות: "3.1 פריטים נוספים…" */
 .paper .foot{margin-top:8px;font-size:10.5px;color:#555;border-top:1px solid #000;padding-top:3px;display:flex;justify-content:space-between}
-.paper ul{margin:4px 18px}
+.paper ul{margin:4px 18px}.paper ol{margin:4px 22px}
+.paper.checks{display:block}   /* דף הבדיקות נושא את המחלקה checks (כמו קבוצת תיבות הסימון, שהיא flex) — בלי זה כותרות קצרות נדחפות לשורה אחת עם הפסקה שלפניהן */
 @media (max-width:640px){.paper{padding:12px}.paper td.k{width:44%}}
+/* דף הבדיקות בטלפון: ארבע עמודות צרות שוברות מילים באמצע, ולכן כל שורה הופכת לכרטיס (כותרת הבדיקה עם המספר, מקור ותוצאה ברוחב מלא). מסך בלבד — ההדפסה וה-Word נשארים טבלה */
+@media screen and (max-width:640px){
+  .paper table.ck, .paper table.ck tbody{display:block;width:auto}
+  .paper table.ck tr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px;border:1px solid #aaa;border-radius:6px;background:#fafafa;padding:7px 9px;margin:0 0 8px}
+  .paper table.ck tr:first-child{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}   /* שורת הכותרת מוסתרת חזותית אך נשארת בעץ הנגישות */
+  .paper table.ck td{display:block;border:0;padding:0;text-align:right;min-width:0;white-space:normal}
+  .paper table.ck td:nth-child(1){grid-column:1;padding:0;text-align:right;white-space:nowrap;font-weight:700;color:#555}
+  .paper table.ck td:nth-child(1)::before{content:"#"}
+  .paper table.ck td:nth-child(2){grid-column:2;font-weight:700}
+  .paper table.ck td:nth-child(n+3){grid-column:1 / -1}
+  .paper table.ck td:nth-child(3)::before{content:"מקור: ";font-weight:700}
+  .paper table.ck td:nth-child(4)::before{content:"תוצאה: ";font-weight:700}
+}
 @page{size:A4;margin:12mm}
 @media print{
   html,body{background:#fff !important}
@@ -90,7 +129,7 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
   #reportHost .nonprint{display:none !important}
   .paper{box-shadow:none;border-radius:0;max-width:none;margin:0;padding:0;page-break-after:always;break-after:page}
   .paper:last-child{page-break-after:auto;break-after:auto}
-  .paper table.f td{padding:3.2px 8px !important;font-size:11.2px !important;line-height:1.38 !important}
+  .paper table.f td{padding:2px 8px !important;font-size:10.4px !important;line-height:1.3 !important}   /* מוקטן כדי שטופס עם 3 אנשי קשר, 3 משתתפים ו-2 מכשולים ידועים ייכנס לעמוד אחד (ולא יישפכו למשרד עמוד כמעט ריק) */
   .paper td.k small{font-size:9.3px !important}
   .paper .hdr{margin-bottom:5px}
   .paper table.t tr,.paper table.f tr{break-inside:avoid;page-break-inside:avoid}
@@ -109,6 +148,21 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 .admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
 .userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .userBar button { min-height: 30px; padding: 3px 10px; font-size: 12px; }
+.admHelp { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }   /* מקרא ההסברים מעל הטבלה (כתוספת; ה-! שליד כל כפתור בשורה הוא העיקר) */
+.admTbl td.acts { vertical-align: top; }
+.admTbl td.acts .hw { display: flex; margin: 0 0 4px; }   /* כפתורי השורה בעמודה אחת מוערמת, כדי שהטבלה לא תתרחב */
+.admTbl td.acts .hw:last-child { margin-bottom: 0; }
+.admTbl td.acts button:not(.hbtn) { min-height: 30px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+
+/* ===== לחצן "!" עם הסבר (js/help.js) ===== */
+.hw { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; max-width: 100%; }
+button.hbtn, .userBar button.hbtn, .authBox button.hbtn { width: 21px; height: 21px; min-width: 21px; min-height: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--amber); background: transparent; color: var(--amber); font-size: 13px; font-weight: 900; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+button.hbtn:hover:not(:disabled), button.hbtn[aria-expanded=true] { background: var(--amber); color: #1a1204; border-color: var(--amber); }
+button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (pointer: coarse) { .hw { gap: 8px; } button.hbtn, .userBar button.hbtn, .authBox button.hbtn { width: 32px; height: 32px; min-width: 32px; font-size: 15px; } }   /* מגע: אזור לחיצה גדול יותר (הכפתור עצמו, בלי שטח שחופף את הכפתור שלידו) */
+.hbubble { position: fixed; z-index: 3400; background: #fff8e6; color: #1f1608; border: 1px solid var(--amber); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.65; font-weight: 500; text-align: right; box-shadow: 0 8px 28px rgba(0,0,0,.5); max-height: calc(100vh - 20px); overflow: auto; width: max-content; }
+.hbubble[hidden] { display: none; }
+@media print { .hbubble, button.hbtn { display: none !important; } }
 </style>
 </head>
 <body>
@@ -116,7 +170,7 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
   <div class="wrap">
     <a class="back" href="../">← חזרה למפה</a>
     <h1>בקשות טיסה — <span>סגירה אווירית</span> · נספח ג׳ לפמ״ת א-11</h1>
-    <div class="sub">כל שדות הטופס חובה. אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML, הדמיות ותצ״א — ושומרת אותה בדרייב בלחיצה.</div>
+    <div class="sub">כל שדות הטופס חובה. אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושומרת אותה בדרייב בלחיצה.</div>
   </div>
 </header>
 
@@ -154,18 +208,32 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
       <span class="err" id="e_siteName"></span></label>
   </div>
   <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b>
-    <div class="checks" id="aircraft" style="margin-top:6px"></div><span class="err" id="e_aircraft"></span></div>
+    <div class="checks" id="aircraft" style="margin-top:6px"></div><span class="err" id="e_aircraft"></span>
+    <div class="row" style="margin-top:8px"><input type="text" id="acNew" maxlength="60" placeholder="כלי טיס נוסף (שם הדגם)" aria-label="שם כלי טיס נוסף" autocomplete="off" style="flex:1 1 220px;max-width:340px"><button type="button" id="acAdd">➕ הוסף כלי טיס</button></div>
+    <span class="hint" id="acMsg" role="status"></span></div>
+
+  <div class="fld" style="margin-top:12px">
+    <span class="flh"><label for="knownObs"><b>מכשולים שידועים למבקש</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
+    <textarea id="knownObs" rows="3" placeholder="למשל: עגורן ליד הכניסה, אנטנה על גג הבניין, קו חשמל מעל החניון — מופרדים בפסיק או בשורה חדשה"></textarea>
+    <span class="hint">עד 20 פריטים, מופרדים בפסיק או בשורה חדשה. כל פריט נבדק מול הסריקה לפי מילים בלבד (בלי מיקום). פריט שלא נמצא יוצג כאזהרה — ואז יש להוסיף אותו ידנית בסעיף 4.</span>
+    <span class="err" id="e_knownObstacles"></span></div>
 
   <details class="person" id="personBox" open>
     <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה (לא באתר)</summary>
     <div class="grid" style="margin-top:10px">
       <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
       <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
-      <label class="f"><b>אנשי קשר בשטח (שני שמות)</b><input type="text" id="contactNames" autocomplete="off"></label>
-      <label class="f"><b>טלפון אנשי הקשר</b><input type="tel" id="contactPhone" dir="ltr" autocomplete="off"></label>
     </div>
-    <span class="err" id="e_requester"></span><span class="err" id="e_contacts"></span>
-    <div class="row" style="margin-top:8px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים לא נשלחים לשום שרת; הם נכנסים לטופס ולמייל בלבד.</span></div>
+    <span class="err" id="e_requester"></span>
+    <div class="plh"><b>אנשי קשר בשטח</b><span class="hint">נספח ג׳ שדה 12 — לפחות שניים, עם שם וטלפון לכל אחד</span></div>
+    <div class="plist" id="contactList"></div>
+    <div class="row" style="margin-top:6px"><button type="button" id="addContact">➕ הוסף איש קשר</button></div>
+    <span class="err" id="e_contacts"></span>
+    <div class="plh"><b>משתתפים נוספים בטיסה</b><span class="hint">אופציונלי — לא חייבים לטוס יחד, והרשימה יכולה להישאר ריקה. שורה שמולאה חלקית (שם פרטי, שם משפחה וטלפון) חוסמת את ההרצה; אפשר למחוק אותה ב-×.</span></div>
+    <div class="plist" id="partList"></div>
+    <div class="row" style="margin-top:6px"><button type="button" id="addPart">➕ הוסף משתתף</button></div>
+    <span class="err" id="e_participants"></span>
+    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים לא נשלחים לשום שרת; הם נכנסים לטופס ולמייל בלבד. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
   </details>
 </section>
 
@@ -179,9 +247,7 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 
 <section class="card">
   <h2>3 · הרצת הבדיקות</h2>
-  <div class="row"><button type="button" class="primary" id="runBtn">הרץ את כל הבדיקות והכן את הבקשה</button>
-    <label class="f" style="flex-direction:row;align-items:center;gap:8px"><b style="font-size:12.5px;color:var(--muted)">רקע לתמונת המפה</b>
-      <select id="provider" style="width:auto"><option value="esri">צילום אוויר (Esri)</option><option value="osm">מפת רחובות (OSM)</option></select></label></div>
+  <div class="row"><button type="button" class="primary" id="runBtn">הרץ את כל הבדיקות והכן את הבקשה</button></div>
   <ul id="progress"></ul>
   <div class="err" id="e_run"></div>
 </section>
@@ -199,6 +265,14 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
     </div>
     <div class="row" style="margin-top:8px"><button type="button" id="mPick">בחר מיקום מהמפה</button><button type="button" id="mAdd" class="primary">הוסף לבקשה</button><span class="err" id="e_manual"></span></div>
     <ul id="manualList" class="st-list" style="margin-top:8px"></ul>
+    <div class="grid" style="margin-top:14px">
+      <label class="f"><b>תאריך סיור באתר (אופציונלי)</b><input type="date" id="visitDate"></label>
+    </div>
+    <div class="fld" style="margin-top:10px">
+      <span class="flh"><label for="visitNotes"><b>הערות המבקש / ממצאי סיור באתר</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
+      <textarea id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
+      <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף "הנקודה") ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
+      <span class="err" id="e_visitNotes"></span></div>
     <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
   </div>
   <div class="card nonprint" id="actions">
@@ -208,21 +282,22 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
       <button type="button" class="primary" id="btnDocx">הורד Word (ניתן לעריכה)</button>
       <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
       <button type="button" id="btnKml">הורד KML (Google Earth)</button>
-      <button type="button" id="btnPng">הורד הדמיה — תקריב (PNG)</button>
-      <button type="button" id="btnOverview">הורד הדמיה — מבט כללי (PNG)</button>
-      <button type="button" id="btnAerial">הורד תצ״א נקי (PNG)</button>
+      <button type="button" id="btnAerial">הורד תצ״א — תקריב (PNG)</button>
+      <button type="button" id="btnStreet">הורד מפת רחובות — תקריב (PNG)</button>
+      <button type="button" id="btnOverview">הורד הדמיה וסימונים — מבט כללי (PNG)</button>
+      <button type="button" id="btnRegion">הורד מפת אזור — מרוחק (PNG)</button>
       <button type="button" id="btnCopy">העתק טקסט מייל</button>
       <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
       <a id="btnMail" href="#" role="button" style="text-decoration:none"><button type="button" tabindex="-1">פתח מייל</button></a>
     </div>
-    <p class="small" style="margin-top:8px">את הקבצים (PDF, תמונת מפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
+    <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
     <p class="small" id="mailInfo"></p>
     <p class="small" id="driveMsg" role="status"></p>
     <p class="small" id="sendMsg" role="status"></p>
   </div>
   <div id="reportHost"><div id="report"></div></div>
-  <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (מוצג גם בדף הבדיקות)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
+  <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (לעיון על המסך בלבד — אינן חלק מהדוח, מהטופס או מקובץ ה-Word)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
 </section>
 
 <details class="card" id="stBox">
@@ -236,12 +311,13 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
-<script src="js/auth.js?v=1"></script>
+<script src="js/help.js?v=1"></script>
+<script src="js/auth.js?v=2"></script>
 <script src="js/sync.js?v=1"></script>
-<script src="js/core.js?v=3"></script>
-<script src="js/output.js?v=3"></script>
-<script src="js/docx.js?v=2"></script>
-<script src="js/mapimg.js?v=3"></script>
-<script src="js/ui.js?v=3"></script>
+<script src="js/core.js?v=4"></script>
+<script src="js/output.js?v=4"></script>
+<script src="js/docx.js?v=3"></script>
+<script src="js/mapimg.js?v=4"></script>
+<script src="js/ui.js?v=4"></script>
 </body>
 </html>

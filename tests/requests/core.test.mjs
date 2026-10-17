@@ -6,6 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import os from "node:os";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -17,7 +19,7 @@ const zones = J("members-k38p/data/zones.json"), rules09 = J("members-k38p/data/
 zones.rules09 = rules09;
 const snap = J("members-k38p/requests/selftest/notam-data.snap.json");
 const fixture = n => ({ near: J(`members-k38p/requests/selftest/${n}/near.json`), far: J(`members-k38p/requests/selftest/${n}/far.json`), ext: J(`members-k38p/requests/selftest/${n}/ext.json`), reverse: J(`members-k38p/requests/selftest/${n}/reverse.json`) });
-const baseInput = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contactNames: "א; ב", contactPhone: "050-0000001" });
+const baseInput = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
 const mkData = fx => Object.assign({ zones, inpa, agri, notams: snap.notams, notamFetchedIso: snap.fetched_iso }, fx);
 const now = new Date(exp.now);
 
@@ -379,22 +381,25 @@ function wellFormed(xml) { // בדיקת איזון תגיות מינימלית
 test("Word: קובץ docx תקין עם הטופס, תמונות, ודף בדיקות", async () => {
   const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now);
   const jpeg = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
-  const model = O.docxModel(res, mkData(fixture("yarkon")), cfg, { images: { map: { bytes: jpeg, w: 1280, h: 960 }, overview: { bytes: jpeg, w: 1280, h: 960 }, aerial: { bytes: jpeg, w: 1280, h: 960 } }, includeChecks: true, review: "אושר", providerName: "בדיקה" });
+  const img = { bytes: jpeg, w: 1280, h: 960 };
+  const model = O.docxModel(res, mkData(fixture("yarkon")), cfg, { images: { aerial: img, street: img, overview: img, region: img }, includeChecks: true, review: "אושר", providerName: "בדיקה" });
   const bytes = await D.build(model);
   assert.equal(bytes[0], 0x50); assert.equal(bytes[1], 0x4b); // PK
   const z = await JSZipNode.loadAsync(bytes);
-  for (const f of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml", "word/media/map.jpeg", "word/media/overview.jpeg", "word/media/aerial.jpeg"]) assert.ok(z.file(f), "חסר " + f);
+  for (const f of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml", "word/media/aerial.jpeg", "word/media/street.jpeg", "word/media/overview.jpeg", "word/media/region.jpeg"]) assert.ok(z.file(f), "חסר " + f);
+  assert.ok(!z.file("word/media/map.jpeg"), "אין עוד תמונת map");
   const doc = await z.file("word/document.xml").async("string");
   for (const f of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml"]) assert.ok(wellFormed(await z.file(f).async("string")), "XML לא תקין: " + f);
-  const plain = doc.replace(/<[^>]+>/g, "").replace(/[\u202a\u202c]/g, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  const plain = doc.replace(/<[^>]+>/g, "").replace(new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g"), "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
   assert.ok(plain.includes(exp.dmsLat) && plain.includes(exp.dmsLon), "קואורדינטות DMS");
   assert.ok(plain.includes("262.5") && plain.includes("ICD") && plain.includes("אצטדיון רמת גן") && plain.includes("כדור פורח תל אביב") && plain.includes("LLU20"));
-  assert.ok(plain.includes("דוח כיסוי") && plain.includes("אישור סקירה אנושית"));
+  assert.ok(plain.includes("אישור סקירה אנושית") && plain.includes("מצאי לפי קבוצות"));
+  assert.ok(!plain.includes("דוח כיסוי"), "אין עוד טבלת דוח כיסוי — מה נסרק");
   assert.equal((doc.match(/<w:tbl>/g) || []).length, (doc.match(/<\/w:tbl>/g) || []).length);
-  assert.equal((doc.match(/<w:drawing>/g) || []).length, 3);
+  assert.equal((doc.match(/<w:drawing>/g) || []).length, 4);
   assert.ok(doc.includes("<w:bidi/>") && doc.includes("<w:bidiVisual/>"));
   const noChecks = await JSZipNode.loadAsync(await D.build(Object.assign({}, model, { includeChecks: false })));
-  assert.ok(!(await noChecks.file("word/document.xml").async("string")).includes("דוח כיסוי"));
+  assert.ok(!(await noChecks.file("word/document.xml").async("string")).includes("הבדיקות שבוצעו"));
 });
 
 test("שם קובץ/תיקייה: מיקום + תאריך, בלי תווים אסורים", () => {
@@ -463,8 +468,15 @@ test("ב-09: דף הבדיקות מציג תמיד שורת ב-09; בפנים �
   const row = O.buildChecks(res, data, cfg).find(r => /פרק ב-09/.test(r[0]));
   assert.match(row[2], /הסגירה בתוך אזור טיסה לכטב״ם/);
   assert.match(row[2], /כרמל מרכז/);
-  assert.match(row[2], /לשון הפמ״ת \(עמ' 10 בפרק ב-09, עדכון 1\/26\)/);
-  assert.match(row[2], /מרחק שלא יפחת מ-500 מטר מגבול אזור הפעילות/);
+  assert.ok(z.pmtRef && row[1].startsWith(rules09.edition) && row[1].includes(z.pmtRef), "מקור: מהדורת ב-09 ואחריה ההפניה של האזור — " + row[1]);
+  assert.ok(!row[2].includes(z.pmtRef) && !/לשון/.test(row[2]), "ההפניה והמילה 'לשון' לא בתוצאה");
+  assert.match(O.toText(row[2]), new RegExp("״[^״]*" + z.pmt.slice(0, 12).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "ציטוט האזור (z.pmt) בתוך ״…״");
+  const rowsAll = O.buildChecks(res, data, cfg);
+  const intro = rowsAll.find(r => r[0] === "אזורי טיסה לכטב״ם — הגדרה כללית");
+  assert.ok(intro, "הגדרה כללית כשיש אזור ב-09"); assert.equal(intro[1], zones.general.B09.intro.ref); assert.equal(O.toText(intro[2]), "״" + zones.general.B09.intro.text + "״");
+  assert.ok(!O.buildChecks(res0, mkData(fixture("yarkon")), cfg).some(r => r[0] === "אזורי טיסה לכטב״ם — הגדרה כללית"), "בלי אזור — אין שורת הגדרה");
+  const rule7c = rowsAll.find(r => r[0] === "מרחק מגבול אזור הפעילות שאושר");
+  assert.match(O.toText(rule7c[2]), /מרחק שלא יפחת מ-500 מטר מגבול אזור הפעילות/);
 });
 
 test("ב-09: כיסוי — שורה נפרדת עם 42 אזורים; מגבלות המקורות מזכירות את אזורי הקירוב; הגשה מצטטת 7(ח)", () => {
@@ -538,24 +550,49 @@ test("סריקת גבול: הרדיוס גדל עם הסגירה (R+7 ק״מ), �
 /* ===== תיקוני סקירה: אנשי קשר, קשר עין, הערת שוליים, ניסוחים ===== */
 test("נספח ג׳ שדה 12: נדרשים שני אנשי קשר; שם אחד נדחה, שני שמות בכל מפריד מתקבלים, וחייב להיות לפחות טלפון אחד", () => {
   const v = o => C.validateInput(Object.assign({}, baseInput, o), cfg).filter(e => e.field === "contacts");
+  const c2 = (a, b) => [{ name: a[0], phone: a[1] }, { name: b[0], phone: b[1] }];
   assert.equal(v({}).length, 0);
-  assert.equal(v({ contactNames: "אחד בלבד" }).length, 1);
-  assert.equal(v({ contactNames: "אחד;" }).length, 1);
-  assert.equal(v({ contactNames: "  " }).length, 1);
-  for (const sep of [";", ",", " / ", "\n"]) assert.equal(v({ contactNames: "דנה כהן" + sep + "יוסי לוי" }).length, 0, JSON.stringify(sep));
-  assert.equal(v({ contactPhone: "" }).length, 1);
-  assert.equal(v({ contactPhone: "12345" }).length, 1);
-  assert.equal(v({ contactPhone: "050-0000001, 052-0000002" }).length, 0);
+  assert.equal(v({ contacts: [{ name: "אחד בלבד", phone: "050-0000001" }] }).length, 1);
+  assert.equal(v({ contacts: [{ name: "אחד", phone: "050-0000001" }, { name: "  ", phone: "" }] }).length, 1);
+  assert.equal(v({ contacts: [] }).length, 1);
+  assert.equal(v({ contacts: undefined }).length, 1);
+  assert.equal(v({ contacts: c2(["דנה כהן", "050-0000001"], ["יוסי לוי", ""]) }).length, 0, "טלפון חסר לאחד מהם הוא אזהרה בלבד");
+  assert.equal(v({ contacts: c2(["דנה כהן", ""], ["יוסי לוי", ""]) }).length, 1, "אין אף טלפון");
+  assert.equal(v({ contacts: c2(["דנה כהן", "12345"], ["יוסי לוי", "050-0000001"]) }).length, 1, "טלפון שהוזן חייב להיות תקין");
+  assert.equal(v({ contacts: [{ name: "דנה", phone: "050-0000001" }, { name: "יוסי", phone: "050-0000002" }, { name: "", phone: "050-0000003" }] }).length, 1, "טלפון בלי שם");
+  assert.equal(v({ contacts: Array.from({ length: 21 }, (_, i) => ({ name: "איש" + i, phone: "050-000000" + (i % 10) })) }).length, 1, "יותר מ-20");
+  assert.equal(C.validPhone("050-000 0001"), true); assert.equal(C.validPhone("123"), false);
+  // משתתפים נוספים: אופציונלי; שורה ריקה מתעלמים, שורה חלקית נדחית
+  const pv = o => C.validateInput(Object.assign({}, baseInput, o), cfg).filter(e => e.field === "participants");
+  assert.equal(pv({}).length, 0); assert.equal(pv({ participants: [] }).length, 0);
+  assert.equal(pv({ participants: [{ first: "", last: "", phone: "" }] }).length, 0);
+  assert.equal(pv({ participants: [{ first: "נועה", last: "אברהם", phone: "050-9998877" }, { first: "אלון", last: "שמעוני", phone: "053-4445566" }, { first: "גל", last: "בר", phone: "052-1112222" }] }).length, 0, "שלושה ומעלה");
+  assert.equal(pv({ participants: [{ first: "נועה", last: "", phone: "050-9998877" }] }).length, 1);
+  assert.equal(pv({ participants: [{ first: "נועה", last: "אברהם", phone: "" }] }).length, 1);
+  assert.equal(pv({ participants: [{ first: "נועה", last: "אברהם", phone: "12" }] }).length, 1);
+  assert.equal(pv({ participants: Array.from({ length: 21 }, () => ({ first: "א", last: "ב", phone: "050-0000001" })) }).length, 1);
+  // n=16: ההודעה בלי מספר שורה — הממשק מסנן שורות ריקות לפני האימות, ולכן אינדקס כאן אינו מיקום השורה על המסך (הסימון האדום מראה איזו שורה)
+  const PART_MSG = "יש משתתף עם פרטים חלקיים: יש להשלים שם פרטי, שם משפחה וטלפון תקין — או למחוק את השורה", okP = { first: "נועה", last: "אברהם", phone: "050-9998877" };
+  assert.deepEqual(pv({ participants: [{ first: "דנה", last: "", phone: "" }] }).map(e => e.msg), [PART_MSG]);
+  assert.deepEqual(pv({ participants: [okP, okP, { first: "דנה", last: "", phone: "" }] }).map(e => e.msg), [PART_MSG], "משתתף חלקי אחרי שורות תקינות — אותה הודעה");
+  assert.deepEqual(pv({ participants: [{ first: "", last: "", phone: "" }, { first: "דנה", last: "", phone: "" }] }).map(e => e.msg), [PART_MSG], "שורה ריקה לפניו — אותה הודעה, בלי מספר שגוי");
+  assert.ok(!/משתתף \d|\d/.test(PART_MSG), "בלי מספר");
+  assert.equal(C.validateInput(Object.assign({}, baseInput, { knownObstacles: "x".repeat(1001) }), cfg).filter(e => e.field === "knownObstacles").length, 1);
+  assert.equal(C.validateInput(Object.assign({}, baseInput, { visitNotes: "x".repeat(3001) }), cfg).filter(e => e.field === "visitNotes").length, 1);
+  assert.equal(C.validateInput(Object.assign({}, baseInput, { visitDate: "לא תאריך" }), cfg).filter(e => e.field === "visitNotes").length, 1);
+  assert.equal(C.validateInput(Object.assign({}, baseInput, { visitDate: "2026-10-15", visitNotes: "ביקרתי" }), cfg).length, 0);
   assert.deepEqual(C.splitList("א; ב ,ג\nד"), ["א", "ב", "ג", "ד"]);
 });
 
-test("קשר עין (ב-09 3(ג)): בקשה 'ללא קשר עין' מציגה בדף הבדיקות את הסעיף בלשון הפמ״ת; עם קשר עין — שורה קצרה", () => {
+test("קשר עין (ב-09 3(ג)): בקשה 'ללא קשר עין' מציגה בדף הבדיקות את ציטוט הפמ״ת (ההפניה בעמודת המקור); עם קשר עין — שורה קצרה", () => {
   const data = mkData(fixture("yarkon"));
   const no = C.analyze(Object.assign({}, baseInput, { vlos: false }), data, cfg, now), yes = C.analyze(baseInput, data, cfg, now);
   const row = res => O.buildChecks(res, data, cfg).find(r => /קשר עין בסגירה ייעודית/.test(r[0]));
   assert.ok(row(no) && row(yes));
   const t = O.toText(row(no)[2]);
-  assert.match(t, /ללא קשר עין/); assert.match(t, /סגירה ייעודית מחייבת שמירת קשר עין בין המטיס לכטב.ם/); assert.match(t, /עמ' 2, עדכון 1\/25/); assert.match(t, /אינה יכולה לוודא/); assert.ok(!/תקינה רק אם|יש לצרף את האישור/.test(t), "אין טענות שאינן בפמ״ת");
+  assert.match(t, /ללא קשר עין/); assert.match(t, /״[^״]*סגירה ייעודית מחייבת שמירת קשר עין בין המטיס לכטב.ם[^״]*״/); assert.match(t, /אינה יכולה לוודא/); assert.ok(!/תקינה רק אם|יש לצרף את האישור/.test(t), "אין טענות שאינן בפמ״ת");
+  assert.match(row(no)[1], /עמ' 2, עדכון 1\/25/, "ההפניה בעמודת המקור"); assert.ok(!/עמ' 2, עדכון|לשון/.test(t), "ההפניה לא בתוצאה");
+  assert.deepEqual(row(no)[2].split("<br>").map(l => l.slice(0, 3)), ["1. ", "2. ", "3. "], "שלוש שורות ממוספרות: ההצהרה, הציטוט וההסתייגות");
   assert.match(O.toText(row(yes)[2]), /קיים קשר עין/); assert.ok(!/אינה יכולה לוודא/.test(O.toText(row(yes)[2])));
 });
 
@@ -570,11 +607,12 @@ test("הערת שוליים ¹ של נספח ב׳-1 מצוטטת במלואה כ
   assert.ok(!/1500 רגל אנכית/.test(O.buildForm(none, cfg).find(r => r.n === 8).text));
 });
 
-test("נוסח המייל: מבחין בין הדמיות מסומנות לתצ״א נקי; שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
+test("נוסח המייל: ארבע התמונות (בלי תצ״א נקי); שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
   const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), m = O.mail(res, cfg);
-  assert.match(m.body, /הדמיות עם סימון האזור על רקע תצ״א, תצ״א נקי של האזור/); assert.ok(!/תצ״א עם סימון/.test(m.body));
+  assert.match(m.body, /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\), ארבע תמונות — תצ״א בתקריב, מפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת עם סימון המיקום \(המפה\/התצ״א הנדרשים בנספח ג׳\), וקובץ KML\./);
+  assert.ok(!/תצ״א נקי|תצ״א עם סימון|הדמיות עם סימון/.test(m.body));
   const long = C.analyze(Object.assign({}, baseInput, { siteName: "מקום ארוך מאוד ".repeat(20) }), mkData(fixture("yarkon")), cfg, now), base = O.fileBase(long);
-  for (const tail of [" — בקשה לסגירה אווירית.docx", " — הדמיה מבט כללי.png", " — הדמיה תקריב.png", " — נתוני הבקשה.json"]) assert.ok((base + tail).length <= 110, tail + " " + (base + tail).length);
+  for (const tail of [" — בקשה לסגירה אווירית.docx", " — תצ״א תקריב.png", " — מפת רחובות תקריב.png", " — הדמיה מבט כללי.png", " — מפת אזור.png", " — נתוני הבקשה.json"]) assert.ok((base + tail).length <= 110, tail + " " + (base + tail).length);
 });
 
 test("ימי עבודה: הניסוח אינו טוען שחגים נוכו; אזהרת המערכת מציינת זאת", () => {
@@ -583,26 +621,37 @@ test("ימי עבודה: הניסוח אינו טוען שחגים נוכו; א�
   assert.ok(!/בלי חגים/.test(t)); assert.match(t, /אינה מנכה חגים/);
 });
 
-test("כללי ב-09 הכלליים מוצגים בדף הבדיקות בלשון הפמ״ת בכל בקשה (גם בלי אזור ב-09 בקרבה), בלי לחשב עבור המבקש", () => {
-  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now);
-  const row = O.buildChecks(res, data, cfg).find(r => /כללי פרק ב-09 החלים/.test(r[0]));
-  assert.ok(row, "שורת הכללים חסרה");
-  const t = O.toText(row[2]);
-  for (const frag of ["4(א)", "5(ה)(1)", "6(ד)", "7(ב)", "7(ג)", "7(ד)", "7(ה)", "7(ח)"]) assert.ok(t.includes(frag), frag);
-  assert.match(t, /במרחק אנכי שלא יפחת מ-200 רגל מתקרת הסגירה שאושרה ובמרחק אופקי שלא יפחת מ-250 מטר מרדיוס הסגירה שאושרה/);   // 5(ה)(1)(ד), מילולי
-  assert.match(t, /אינה מחשבת עבור המבקש/);
-  assert.ok(!/2\(ד\)|5\(ד\)/.test(t), "2(ד) ו-5(ד) רק כשנבחרו כמה כלי טיס");
+test("כללי ב-09 מוצגים בדף הבדיקות כל כלל בשורה נפרדת: ההפניה בעמודת המקור, הציטוט כלשונו בתוצאה, בלי לחשב עבור המבקש", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), rows = O.buildChecks(res, data, cfg);
+  const RULES = [["4א", "הפעלה במרחב מבוקר אזרחית"], ["5ה1", "הפרדות מופחתות לכטב״ם בקשר עין"], ["6ד", "תכנית טיסה ואישור יחידת הנת״א בסגירה מאושרת"], ["7ב", "הודעה ליחידת הנת״א"], ["7ג", "מרחק מגבול אזור הפעילות שאושר"], ["7ד", "הפעלה באזור פיקוח שדה תעופה או בתחום אווירי של מנחת"], ["7ה", "הפעלה בקשר עין ללא סגירה אווירית"], ["7ח", "הפעלה שמחייבת בקשת סגירה אווירית"]];
+  const at = RULES.map(([, title]) => rows.findIndex(r => r[0] === title));
+  assert.ok(at.every(i => i >= 0), "כל כלל בשורה משלו: " + at.join());
+  assert.deepEqual(at, at.slice().sort((x, y) => x - y), "הסדר: 4א, 5ה1, 6ד, 7ב, 7ג, 7ד, 7ה, 7ח");
+  RULES.forEach(([id], k) => {
+    const rule = rules09.rules.find(r => r.id === id), row = rows[at[k]];
+    assert.equal(row[1], rule.ref, id + ": ההפניה בעמודת המקור"); assert.ok(!row[2].includes(rule.ref), id + ": ההפניה לא בתוצאה");
+    assert.equal(O.toText(row[2]), "״" + rule.text + "״", id + ": הציטוט כלשונו, בתוך ״…״");
+  });
+  assert.match(O.toText(rows[at[1]][2]), /במרחק אנכי שלא יפחת מ-200 רגל מתקרת הסגירה שאושרה ובמרחק אופקי שלא יפחת מ-250 מטר מרדיוס הסגירה שאושרה/);   // 5(ה)(1)(ד), מילולי
+  const resp = rows[at[7] + 1]; assert.equal(resp[0], "אחריות המבקש לגבי כללי פרק ב-09"); assert.equal(resp[1], "—"); assert.match(resp[2], /אינה מחשבת עבור המבקש/);
+  assert.ok(!rows.some(r => /כללי פרק ב-09 החלים/.test(r[0])), "אין עוד שורה אחת מרוכזת");
+  // 2(ד) ו-5(ד) נמחקו לגמרי מהדף — גם כשנבחרו כמה כלי טיס
   const multi = C.analyze(Object.assign({}, baseInput, { aircraft: cfg.aircraft.slice(0, 2) }), data, cfg, now);
-  const tm = O.toText(O.buildChecks(multi, data, cfg).find(r => /כללי פרק ב-09 החלים/.test(r[0]))[2]);
-  assert.match(tm, /2\(ד\)/); assert.match(tm, /5\(ד\)/); assert.match(tm, /יותר מכטב.ם אחד בעת ובעונה אחת/);
+  const all = r => r.map(x => x[0] + " " + x[1] + " " + O.toText(x[2])).join("\n");
+  for (const t of [all(rows), all(O.buildChecks(multi, data, cfg))]) { assert.ok(!/סעיף 2\(ד\)|סעיף 5\(ד\)/.test(t)); assert.ok(!/יותר מכטב.ם אחד בעת ובעונה אחת/.test(t)); assert.ok(!/איסור פעילות שני כלי טיס/.test(t)); }
 });
 
-test("חפיפה/קרבה לאזור א-17: מוצגת הפנייה לבקשת חריגה (א-11 3(ג), א-17 סעיף 5) בלשון הפמ״ת; בלי אזור כזה — לא", () => {
+test("חפיפה/קרבה לאזור א-17: שתי שורות הפנייה לבקשת חריגה (א-11 3(ג), א-17 סעיף 5) — ההפניה בעמודת המקור והציטוט בתוצאה; בלי אזור כזה — לא", () => {
   const z = zones.zones.find(x => x.id === "LLR24"), c = centroid(z), data = mkData(fixture("yarkon"));
   const hit = C.analyze(Object.assign({}, baseInput, { lat: c[0], lon: c[1] }), data, cfg, now);
-  const row = O.buildChecks(hit, data, cfg).find(r => /בקשת חריגה מאזור אסור/.test(r[0]));
-  assert.ok(row); const t = O.toText(row[2]);
-  assert.match(t, /caai-charigot@mot\.gov\.il/); assert.match(t, /ANS 4\.7\.004/); assert.match(t, /לא נדרש גם אישור רת"א/); assert.match(t, /אינה קובעת אם נדרשת חריגה/);
+  const rows = O.buildChecks(hit, data, cfg).filter(r => /בקשת חריגה מאזור אסור/.test(r[0]));
+  assert.equal(rows.length, 2); assert.match(rows[0][0], /הנחיית א-11/); assert.match(rows[1][0], /הנחיית א-17/);
+  assert.equal(rows[0][1], rules09.rules.find(r => r.id === "A11-3ג").ref); assert.equal(rows[1][1], rules09.rules.find(r => r.id === "A17-5").ref);
+  const t11 = O.toText(rows[0][2]), t17 = O.toText(rows[1][2]);
+  assert.equal(t11, "״" + rules09.rules.find(r => r.id === "A11-3ג").text + "״", "הציטוט בלבד");
+  assert.match(t11, /caai-charigot@mot\.gov\.il/); assert.match(t11, /ANS 4\.7\.004/); assert.match(t17, /לא נדרש גם אישור רת"א/);
+  assert.match(t17, /\n2\. המערכת אינה קובעת אם נדרשת חריגה — ההחלטה והפנייה לרת״א הן של המבקש\.$/, "ההסתייגות בשורה נפרדת אחרי הציטוט");
+  assert.ok(!/אינה קובעת/.test(t11));
   const none = C.analyze(Object.assign({}, baseInput, { lat: 31.55, lon: 34.95 }), data, cfg, now);   // אין אזור א-17 בקרבה
   assert.equal(none.zones.inside.concat(none.zones.near).filter(x => x.src === "a17").length, 0);
   assert.ok(!O.buildChecks(none, data, cfg).some(r => /בקשת חריגה מאזור אסור/.test(r[0])));
@@ -666,4 +715,399 @@ test("כותרת 'בקרבת הסגירה' מציינת את הטווח המור
   assert.ok(cfg.thresholds.approx_margin_m > 0);
   if (res.zones.near.some(x => x.src === "a17")) assert.match(t, /אזור שנשרטט בקירוב — עד/);
   assert.match(O.sourceNotes(res, data, cfg).join(" "), /אזורי LLR: אין בפמ״ת קואורדינטות/);
+});
+
+test("מכשולים שידועים למבקש: הצלבה לפי מילים מול פריטי הסריקה (התאמה אפשרית / בקרבה בלבד / לא נמצא)", () => {
+  const scan = {
+    items: [{ n: 1, title: "עמוד חשמל", label: "עמוד חשמל", d: 90 }, { n: 2, title: "מגדל סלולרי", label: "מגדל סלולרי", d: 150 }, { n: 3, title: "מגדל מים", label: "מגדל מים", d: 60 }],
+    censusOnly: [{ title: "בית חולים ״איכילוב״", label: "בית חולים", name: "איכילוב", d: 800 }]
+  };
+  const m = t => C.matchKnownObstacles(t, scan);
+  assert.deepEqual(m(""), []); assert.deepEqual(m("  ;\n, "), []);
+  const crane = m("עגורן בנייה בצד המזרחי");
+  assert.equal(crane.length, 1); assert.equal(crane[0].none, true); assert.equal(crane[0].found.length, 0); assert.equal(crane[0].text, "עגורן בנייה בצד המזרחי");
+  const tw = m("המגדל הסלולרי ליד בית הספר")[0];   // קידומת ה׳ מוסרת; "בית הספר" לא קיים בסריקה אבל מילה אחת מספיקה
+  assert.equal(tw.none, false); assert.equal(tw.found[0].n, 2, "התאמה של שתי מילים קודמת להתאמה של מילה אחת");
+  assert.deepEqual(m("מגדל")[0].found.map(i => i.n).sort(), [2, 3], "מילה כללית מחזירה את כל המועמדים");
+  const hos = m("בית חולים")[0]; assert.equal(hos.found.length, 0); assert.equal(hos.census.length, 1); assert.equal(hos.none, false);
+  assert.equal(m("ליד על")[0].none, true, "מילות קישור בלבד אינן התאמה");
+  assert.equal(m("35")[0].none, true, "מספר בלבד אינו התאמה");
+  const two = m("חשמל; עגורן, מגדל מים"); assert.equal(two.length, 3); assert.deepEqual(two.map(x => x.none), [false, true, false]);
+  assert.equal(m("x".repeat(30) + ";".repeat(2) + Array.from({ length: 40 }, (_, i) => "פריט" + i).join(";")).length, 20, "matchKnownObstacles חותכת ל-20 רק כהגנה פנימית — validateInput דוחה יותר מ-20 (ראו הבדיקה 'אינה חותכת בשקט')");
+  assert.deepEqual(C.matchKnownObstacles("מגדל", null), [{ text: "מגדל", found: [], census: [], none: true }]);
+});
+
+/* ===== טופס, מייל ודף בדיקות לפי הנוסח החדש (אנשי קשר/משתתפים/מכשולים שידועים, ארבע תמונות, דף בדיקות ממוספר) ===== */
+const people = { contacts: [{ name: "דנה כהן", phone: "050-1112233" }, { name: "יוסי לוי", phone: "" }], participants: [{ first: "נועה", last: "אברהם", phone: "050-9998877" }, { first: "", last: "", phone: "" }, { first: "אלון", last: "שמעוני", phone: "053-4445566" }] };
+const ltrSpan = t => "<span dir='ltr' class='ph'>" + t + "</span>";   // טלפון: class='ph' (nowrap ב-index.html) כדי שלא יישבר באמצע
+const E = C.esc;
+
+test("טופס שדות 8, 11, 12: מכשולים שידועים (טקסט כלשונו, escaped), משתתפים נוספים ממוספרים בלי הערה, אנשי קשר ממוספרים ('ללא טלפון'), ו-17 שדות", () => {
+  const data = mkData(fixture("yarkon"));
+  const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה <b>x</b>\n  קו מתח  \n\nמגדל מים & אחר" }), data, cfg, now), f = O.buildForm(res, cfg);
+  assert.equal(f.length, 17);
+  // שדה 8: בסוף השורה, שורות חדשות כ-"; ", בלי תוצאות הצלבה, ו-HTML מנוטרל
+  assert.ok(f[7].html.endsWith("<br>מכשולים שידועים למבקש: עגורן בנייה &lt;b&gt;x&lt;/b&gt;; קו מתח; מגדל מים &amp; אחר"), f[7].html.slice(-160));
+  assert.ok(!/<b>x<\/b>/.test(f[7].html)); assert.ok(!/התאמה אפשרית|לא נמצא בסריקה/.test(f[7].text));
+  // שדה 11: מבקש + משתתפים נוספים (שורה ריקה מתעלמים), כל אחד בשורה ממוספרת, הטלפון ב-ltr, בלי הערה
+  assert.equal(f[10].html, "בודק, " + ltrSpan("050-0000000") + "<br><b>משתתפים נוספים בטיסה:</b><br>1. נועה אברהם, " + ltrSpan("050-9998877") + "<br>2. אלון שמעוני, " + ltrSpan("053-4445566"));
+  assert.equal(f[10].text, "בודק, 050-0000000\nמשתתפים נוספים בטיסה:\n1. נועה אברהם, 050-9998877\n2. אלון שמעוני, 053-4445566");
+  // שדה 12: כל איש קשר בשורה ממוספרת; בלי טלפון — "ללא טלפון"; הסימון נשאר
+  assert.equal(f[11].html, "1. דנה כהן — " + ltrSpan("050-1112233") + "<br>2. יוסי לוי — ללא טלפון");
+  assert.equal(f[11].sub, "2 אנשי קשר + טלפונים");
+  // n=19: כל span של טלפון (מבקש, משתתפים, אנשי קשר) נושא class='ph'; span הקואורדינטות בשדה 8 לא
+  assert.equal((f[10].html.match(/class='ph'/g) || []).length, 3); assert.equal((f[11].html.match(/class='ph'/g) || []).length, 1);
+  assert.ok(!/<span dir='ltr'>/.test(f[10].html + f[11].html), "טלפון בלי class ph"); assert.ok(/<span dir='ltr'>/.test(f[7].html) && !/class='ph'/.test(f[7].html), "קואורדינטות: בלי ph");
+  // בלי משתתפים ובלי מכשולים שידועים: אין כותרת משתתפים ואין שורת מכשולים
+  const plain = O.buildForm(C.analyze(Object.assign({}, baseInput, { participants: [{ first: "", last: "", phone: "" }, { first: "חלקי", last: "", phone: "050-1" }] }), data, cfg, now), cfg);
+  assert.ok(!/משתתפים נוספים/.test(plain[10].html)); assert.ok(!/מכשולים שידועים למבקש/.test(plain[7].text));
+  assert.equal(plain[11].text, "1. א — 050-0000001\n2. ב — 050-0000002");
+  assert.ok(!/contactNames|contactPhone|undefined/.test(JSON.stringify(plain)), "אין שאריות מההסדר הישן");
+});
+
+test("הזרקת HTML בשדות אנשי הקשר, המשתתפים והמכשולים מנוטרלת בטופס ובדף הבדיקות", () => {
+  const data = mkData(fixture("yarkon")), evil = "<img src=x onerror=alert(1)>";
+  const res = C.analyze(Object.assign({}, baseInput, { contacts: [{ name: evil, phone: "050-1112233" }, { name: "<b>ב</b>", phone: "<i>0</i>" }], participants: [{ first: evil, last: "<u>ל</u>", phone: "050-1" }], knownObstacles: evil, visitNotes: evil }), data, cfg, now);
+  const html = O.buildForm(res, cfg).map(r => r.html).join("\n") + O.buildChecks(res, data, cfg).map(r => r[2]).join("\n") + O.visitNoteHtml(res);
+  assert.ok(!/<img|<u>|<i>|<b>ב<\/b>/.test(html), "תג שלא מהמערכת נכנס ל-HTML");
+  assert.ok(/&lt;img src=x onerror=alert\(1\)&gt;/.test(html));
+});
+
+test("מייל: אנשי קשר כל אחד בשורה ממוספרת, משתתפים נוספים, מכשולים שידועים, בלי הערות סיור, ושורת ארבע התמונות", () => {
+  const data = mkData(fixture("yarkon"));
+  const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה\nקו מתח", visitDate: "2026-10-15", visitNotes: "ממצא סיור פנימי" }), data, cfg, now), body = O.mail(res, cfg).body, lines = body.split("\n");
+  const at = t => lines.indexOf(t);
+  assert.ok(at("אנשי קשר בשטח:") > 0);
+  assert.deepEqual(lines.slice(at("אנשי קשר בשטח:") + 1, at("אנשי קשר בשטח:") + 3), ["1. דנה כהן — 050-1112233", "2. יוסי לוי — ללא טלפון"]);
+  assert.deepEqual(lines.slice(at("משתתפים נוספים בטיסה:") + 1, at("משתתפים נוספים בטיסה:") + 3), ["1. נועה אברהם, 050-9998877", "2. אלון שמעוני, 053-4445566"]);
+  assert.ok(lines.includes("מכשולים שידועים למבקש: עגורן בנייה; קו מתח"));
+  assert.ok(at("אנשי קשר בשטח:") < at("משתתפים נוספים בטיסה:") && at("משתתפים נוספים בטיסה:") < lines.findIndex(l => /^מכשולים שידועים למבקש/.test(l)));
+  assert.ok(!/ממצא סיור פנימי|הערות המבקש|סיור/.test(body), "הערות הסיור אינן במייל");
+  assert.ok(lines.some(l => l.startsWith("מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), ארבע תמונות")));
+  // בלי משתתפים ובלי מכשולים: השורות האלה לא מופיעות
+  const bare = O.mail(C.analyze(baseInput, data, cfg, now), cfg).body;
+  assert.ok(!/משתתפים נוספים|מכשולים שידועים/.test(bare)); assert.ok(/אנשי קשר בשטח:\n1\. א — 050-0000001\n2\. ב — 050-0000002\n/.test(bare));
+  assert.ok(!/contactNames|undefined/.test(bare));
+});
+
+test("O.attachmentsLine ו-O.visitNoteHtml: שורת המצורפים, הערות המבקש עם תאריך / בלי תאריך / ריקות / עם HTML", () => {
+  assert.equal(O.attachmentsLine(), "<b>חובה לצרף מפה/תצ״א</b> — מצורפות ארבע תמונות: תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי, ומפת אזור מרוחקת עם סימון המיקום.");
+  assert.ok(!/עמוד/.test(O.attachmentsLine()), "בלי מספרי עמודים");
+  const R = o => C.analyze(Object.assign({}, baseInput, o), mkData(fixture("yarkon")), cfg, now);
+  assert.equal(O.visitNoteHtml(R({ visitDate: "2026-10-15", visitNotes: "ביקור בשטח" })), "<b>הערות המבקש (סיור באתר ב-15.10.2026):</b> ביקור בשטח");
+  assert.equal(O.visitNoteHtml(R({ visitDate: "", visitNotes: "ביקור בשטח" })), "<b>הערות המבקש:</b> ביקור בשטח");
+  assert.equal(O.visitNoteHtml(R({ visitNotes: "  \n " })), ""); assert.equal(O.visitNoteHtml(R({})), "");
+  // n=3/12: תאריך תקין בלי הערות לא נבלע — מוצג כשורה לבדה; בלי הערות ובלי תאריך תקין — כלום
+  assert.equal(O.visitNoteHtml(R({ visitDate: "2026-10-15", visitNotes: "" })), "<b>סיור באתר ב-15.10.2026</b>", "תאריך בלי הערות — שורת תאריך בלבד");
+  assert.equal(O.visitNoteHtml(R({ visitDate: "2026-10-15", visitNotes: " \n  " })), "<b>סיור באתר ב-15.10.2026</b>", "הערות של רווחים בלבד = בלי הערות");
+  assert.equal(O.visitNoteHtml(R({ visitDate: "לא תאריך", visitNotes: "" })), "", "תאריך לא תקין ובלי הערות — כלום");
+  assert.equal(O.visitNoteHtml(R({ visitNotes: "שורה א\r\nשורה <ב> & \"ג\"" })), "<b>הערות המבקש:</b> שורה א<br>שורה &lt;ב&gt; &amp; &quot;ג&quot;");
+});
+
+test("דף הבדיקות: אין 'לשון הפמ״ת' ואין קידומת 'לשון ' באף שורה; ההפניות בעמודת המקור בלבד; תאים מרובי שורות ממוספרים", () => {
+  const data = mkData(fixture("yarkon")), outside = t => t.replace(/״[^״]*״/g, "");
+  const cases = [baseInput, Object.assign({}, baseInput, { vlos: false, knownObstacles: "עגורן; מגדל; מבצע קדש" })];
+  for (const id of ["LLR24", "LLP01"]) { const c = centroid(zones.zones.find(x => x.id === id)); cases.push(Object.assign({}, baseInput, { lat: c[0], lon: c[1] })); }
+  for (const id of ["כרמל מרכז", "401 א"]) { const c = centroid(z09(id)); cases.push(Object.assign({}, baseInput, { lat: c[0], lon: c[1], aircraft: cfg.aircraft.slice(0, 2) })); }
+  const lluZone = zones.zones.find(x => x.cat === "LLU"); cases.push(Object.assign({}, baseInput, { lat: centroid(lluZone)[0], lon: centroid(lluZone)[1] }));
+  let withFootnote = 0, withLlu = 0;
+  cases.forEach((inp, k) => {
+    const res = C.analyze(inp, data, cfg, now), rows = O.buildChecks(res, data, cfg);
+    if (res.b09Footnote) withFootnote++;
+    rows.forEach((r, i) => {
+      assert.equal(r.length, 3, "הצורה [name, source, html] נשארת");
+      const label = "מקרה " + k + " שורה " + (i + 1) + " " + r[0];
+      assert.ok(!/לשון/.test(outside(r[0] + " " + O.toText(r[1]) + " " + O.toText(r[2]))), label + " — 'לשון' מחוץ לציטוט");
+      assert.ok(!/עמ' \d|, עדכון \d\/\d\d/.test(outside(O.toText(r[2]))), label + " — הפניה לסעיף/עמוד/עדכון בתוצאה");
+      assert.ok(!/undefined|NaN|\[object/.test(r.join(" ")), label);
+      // תא מרובה שורות ממוספר "1. …", "2. …" — חוץ מסריקת הסביבה ושורת מכשולים שידועים (כותרות מודגשות / פריטים שכבר ממוספרים לפי מפה, ושורה אפורה אחרונה)
+      const lines = r[2].split("<br>");
+      if (lines.length > 1 && !/^סריקת סביבה|^מכשולים שידועים/.test(r[0])) lines.forEach((l, j) => assert.ok(l.startsWith((j + 1) + ". "), label + " — שורה " + (j + 1) + " לא ממוספרת: " + l.slice(0, 60)));
+    });
+    const lluRow = rows[0][2]; if (/הגדרת LLU: ״/.test(lluRow)) { withLlu++; assert.ok(rows[0][1].includes(zones.general.LLU.ref), "הסעיף של LLU בעמודת המקור"); assert.ok(!lluRow.includes(zones.general.LLU.ref)); }
+  });
+  assert.ok(withFootnote >= 1 && withLlu >= 1, `כיסוי המקרים: הערת שוליים ${withFootnote}, LLU ${withLlu}`);
+  // אזורי א-17: מקור = מהדורת א-17 ואחריה ההפניות הייחודיות של האזורים המוצגים
+  const c24 = centroid(zones.zones.find(x => x.id === "LLR24")), r24 = C.analyze(Object.assign({}, baseInput, { lat: c24[0], lon: c24[1] }), data, cfg, now), row = O.buildChecks(r24, data, cfg)[0];
+  const refs = [...new Set([...r24.zones.inside, ...r24.zones.near].filter(z => z.src === "a17").map(z => z.pmtRef).filter(Boolean))];
+  assert.ok(refs.length >= 1 && row[1].startsWith(zones.edition) && refs.every(x => row[1].includes(x)), row[1]);
+  assert.match(O.toText(row[2]), /^1\. (חפיפה לסגירה המבוקשת|בקרבת הסגירה): LLR24 /);
+  assert.match(O.toText(row[2]), /״ד\. LLR24[^״]*בכל גובה[^״]*״/, "טקסט הפמ״ת של האזור בתוך ״…״");
+  // בלי אזור א-17: שורה אחת "אין"
+  const far = C.analyze(Object.assign({}, baseInput, { lat: 31.55, lon: 34.95 }), data, cfg, now), rowFar = O.buildChecks(far, data, cfg)[0];
+  assert.ok(!rowFar[2].includes("<br>") && /^אין אזור א-17/.test(rowFar[2]), rowFar[2]);
+});
+
+test("דף הבדיקות: שורות שמורות/מנחתים/סריקה/גבולות/נוטמים — פריט בשורה, סריקת הסביבה עם כותרות מודגשות ושורה אפורה אחרונה, נוטמים ממוספרים", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), rows = O.buildChecks(res, data, cfg);
+  const scan = rows.find(r => /^סריקת סביבה/.test(r[0])), scanLines = scan[2].split("<br>");
+  assert.equal(scanLines[0], "<b>בתוך 200 מ׳:</b>"); assert.equal(scanLines[1], E(O.itemText(res.nearScan.inside[0])));
+  assert.ok(scanLines.includes("<b>בקרבת האזור (עד 400 מ׳):</b>")); assert.ok(scanLines.some(l => /^<b>אתרים ותשתיות נוספים \(עד 1\.2 ק״מ מהנקודה\):<\/b>$/.test(l)));
+  assert.ok(!scanLines.some(l => /^\d+\. \d+\. /.test(l)), "אין מספור כפול — הפריטים ממוספרים לפי המפה");
+  assert.ok(/^<b>בלון:<\/b> .*כדור פורח תל אביב/.test(scanLines.find(l => /^<b>בלון:/.test(l))));
+  assert.ok(/^<span class='muted'>\(מכשולים — עד 400 מ׳ מהנקודה/.test(scanLines[scanLines.length - 1]), "שורה אחרונה אפורה — היקף הסריקה");
+  const nt = rows.find(r => /^סגירות אוויריות בנוטמים/.test(r[0]));
+  assert.match(nt[2], /^1\. <b>C0431\/26<\/b> — /); assert.ok(nt[2].split("<br>").every((l, j) => l.startsWith((j + 1) + ". ")));
+  const air = rows.find(r => /^שדות תעופה ומנחתים בסביבה/.test(r[0])); assert.ok(air[2].split("<br>").length >= 3 && air[2].startsWith("1. <b>שדה תעופה:</b>"));
+  // שמורת טבע בחפיפה / אזור מ-INPA: שורה לאזור
+  const s = inpa.sites.find(x => x.rings && x.rings[0].length > 6), ctr = s.rings[0].reduce((a, p) => [a[0] + p[0] / s.rings[0].length, a[1] + p[1] / s.rings[0].length], [0, 0]);
+  const rN = C.analyze(Object.assign({}, baseInput, { lat: ctr[0], lon: ctr[1] }), data, cfg, now), nr = O.buildChecks(rN, data, cfg).find(r => r[0] === "שמורות טבע וגנים לאומיים");
+  assert.ok(/(חפיפה|בקרבת הסגירה):<\/b> /.test(nr[2]) && !/^אין שמורת/.test(nr[2]), nr[2].slice(0, 120));
+  assert.ok(rows.find(r => r[0] === "שמורות טבע וגנים לאומיים")[2].startsWith("אין שמורת טבע או גן לאומי בחפיפה לסגירה"));
+});
+
+test("דף הבדיקות: שורת מכשולים שידועים למבקש — ריק / נמצא (עד 5 ו'ועוד N') / רק מצאי רחב בקרבה / לא נמצא", () => {
+  const data = mkData(fixture("yarkon")), row = inp => O.buildChecks(C.analyze(Object.assign({}, baseInput, inp), data, cfg, now), data, cfg).find(r => r[0] === "מכשולים שידועים למבקש");
+  const empty = row({});
+  assert.equal(empty[2], "המבקש לא הזין מכשולים נוספים."); assert.equal(empty[1], "הוזן ע״י המבקש; הצלבה מול סריקת הסביבה (לפי מילים בלבד)");
+  assert.equal(row({ knownObstacles: " \n ; " })[2], "המבקש לא הזין מכשולים נוספים.");
+  const res = C.analyze(Object.assign({}, baseInput, { knownObstacles: "עמוד חשמל; מבצע קדש; עגורן בנייה" }), data, cfg, now), m = C.matchKnownObstacles("עמוד חשמל; מבצע קדש; עגורן בנייה", res.nearScan);
+  assert.deepEqual(m.map(x => [x.found.length > 0, x.census.length > 0, x.none]), [[true, false, false], [false, true, false], [false, false, true]], "תנאי המבחן: נמצא / מצאי רחב בלבד / לא נמצא");
+  const lines = O.buildChecks(res, data, cfg).find(r => r[0] === "מכשולים שידועים למבקש")[2].split("<br>"), t = lines.map(O.toText);
+  assert.equal(lines.length, 4);
+  assert.ok(t[0].startsWith("1. ״עמוד חשמל״ — התאמה אפשרית (מספרי הפריטים לפי המפה): ") && t[0].includes(O.itemText(m[0].found[0])), t[0]);
+  assert.ok(t[1].startsWith("2. ״מבצע קדש״ — נמצא בסריקה בקרבה (אינו ברשימת הטופס ואינו ממוספר במפה): " + m[1].census[0].title + " — " + O.dLabel(m[1].census[0].d)), t[1]);
+  assert.equal(t[2], "3. ״עגורן בנייה״ — לא נמצא בסריקה (מכשולים נסרקים עד 400 מ׳ מהנקודה ואתרים עד 1.2 ק״מ). ייתכן שאינו ממופה ב-OpenStreetMap או שהוא מחוץ לטווח; אם הוא בטווח, יש להוסיפו ידנית בסעיף ״סקירה אנושית ותוספות״.");
+  assert.equal(lines[3], "<span class='muted'>ההצלבה לפי מילים בלבד, בלי מיקום — אינה תחליף לסימון ידני.</span>");
+  // יותר מ-5 התאמות: מציגים 5 והשאר "ועוד N"
+  const many = Array.from({ length: 8 }, (_, i) => ({ n: i + 1, title: "מגדל " + (i + 1), label: "מגדל", name: "", d: 50 + i, zone: "in" }));
+  const fake = Object.assign({}, res, { inp: Object.assign({}, res.inp, { knownObstacles: "מגדל" }), nearScan: Object.assign({}, res.nearScan, { items: many, inside: many, ring: [], near: [], censusOnly: [] }) });
+  const mt = O.toText(O.buildChecks(fake, data, cfg).find(r => r[0] === "מכשולים שידועים למבקש")[2]);
+  assert.ok(/התאמה אפשרית \(מספרי הפריטים לפי המפה\): 1\. מגדל 1 — 50 מ׳; 2\. .*; 5\. מגדל 5 — 54 מ׳; ועוד 3\n/.test(mt), mt);
+  // טקסט משתמש עם HTML — מנוטרל
+  assert.ok(!/<img/.test(row({ knownObstacles: "<img src=x>" })[2]));
+});
+
+test("Word: ארבע תמונות בסדר העמודים, כותרות סעיף ממוספרות ברצף בדף הבדיקות, עמודת #, הערות הסיור, בלי 'דוח כיסוי' ובלי שורת מקורות", async () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(Object.assign({}, baseInput, people, { visitDate: "2026-10-15", visitNotes: "תצפית מהגג" }), data, cfg, now);
+  const jpeg = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64"), img = { bytes: jpeg, w: 1280, h: 960 };
+  const BIDI = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");   // LRE, PDF ו-RLM (נוסף אחרי כל PDF — ראו runsOf)
+  const build = async o => {
+    const model = O.docxModel(res, data, cfg, Object.assign({ images: { aerial: img, street: img, overview: img, region: img }, includeChecks: true, review: "אושר", providerName: "Esri" }, o));
+    const z = await JSZipNode.loadAsync(await D.build(model)), doc = await z.file("word/document.xml").async("string");
+    const lines = doc.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").split("\n");
+    return { model, z, doc, lines, plain: lines.join("\n") };
+  };
+  const full = await build({}), m = full.model;
+  // המודל לפי החוזה
+  assert.ok(!("mapTitle" in m)); assert.equal(m.attachLine, O.attachmentsLine()); assert.equal(m.visitNote, O.visitNoteHtml(res));
+  assert.deepEqual(Object.keys(m.coverage).sort(), ["censusMore", "censusOnly", "groups"]);
+  assert.match(m.footer, /^הופק /); assert.ok(!/מקורות/.test(m.footer));
+  assert.equal(m.aerialTitle, "הדמיה מצורפת — תצ״א תקריב — Esri"); assert.match(m.streetTitle, /^הדמיה מצורפת — מפת רחובות תקריב/);
+  assert.match(m.overviewTitle, /^הדמיה מצורפת — הדמיה וסימונים \(מבט כללי/); assert.match(m.regionTitle, /^הדמיה מצורפת — מפת אזור \(מרוחק\)/);
+  // ארבע תמונות, קבצי מדיה לפי הסדר, וכותרות העמודים בסדר: תצ״א, רחובות, מבט כללי (+ טבלת פריטים), אזור
+  assert.equal((full.doc.match(/<w:drawing>/g) || []).length, 4);
+  const rels = await full.z.file("word/_rels/document.xml.rels").async("string");
+  assert.deepEqual([...rels.matchAll(/Target="media\/([a-z]+)\.jpeg"/g)].map(x => x[1]), ["aerial", "street", "overview", "region"]);
+  const pos = t => { const i = full.plain.indexOf(t); assert.ok(i >= 0, "חסר: " + t); return i; };
+  const order = [m.title, m.aerialTitle, m.streetTitle, m.overviewTitle, "מכשולים, אתרים ותשתיות המסומנים במפה", m.regionTitle, "דף בדיקות — לא חלק מהטופס הרשמי"].map(pos);
+  assert.deepEqual(order, order.slice().sort((a, b) => a - b), "סדר העמודים");
+  assert.ok(pos(m.mapNote.slice(0, 40)) > pos(m.aerialTitle) && pos(m.mapNote.slice(0, 40)) < pos(m.streetTitle), "מקרא הצבעים מתחת לתצ״א");
+  assert.ok(full.plain.includes(O.toText(O.attachmentsLine())), "שורת המצורפים בטופס"); assert.ok(!/עמודים 2–3|תצ״א נקי/.test(full.plain));
+  // דף הבדיקות: כותרות סעיף ממוספרות ברצף
+  const HEADS = ["הנקודה", "הבדיקות שבוצעו", "מצאי לפי קבוצות", "יום ולילה בחלון הפעילות", "הגשה", "אישור סקירה אנושית"];
+  const heads = lines => lines.map(l => /^(\d+)\. (.+)$/.exec(l)).filter(x => x && HEADS.includes(x[2])).map(x => x[1] + ". " + x[2]);
+  assert.deepEqual(heads(full.lines), HEADS.map((h, i) => (i + 1) + ". " + h));
+  // הערות הסיור בסעיף 1, מיד אחרי הנקודה ולפני סעיף 2
+  const note = full.lines.findIndex(l => l.startsWith("הערות המבקש (סיור באתר ב-15.10.2026):")); assert.ok(note > full.lines.indexOf("1. הנקודה") && note < full.lines.indexOf("2. הבדיקות שבוצעו"));
+  assert.ok(full.lines[note].endsWith("תצפית מהגג"));
+  // טבלת הבדיקות: עמודה ראשונה "#" וממוספרת לפי השורה
+  const h2 = full.lines.indexOf("2. הבדיקות שבוצעו");
+  assert.deepEqual(full.lines.slice(h2 + 1, h2 + 6), ["#", "בדיקה", "מקור", "תוצאה", "1"]);
+  assert.ok(full.lines.includes(String(m.checks.length)), "מספר השורה האחרון");
+  const grid = /<w:tblGrid>((?:<w:gridCol w:w="\d+"\/>)+)<\/w:tblGrid>/.exec(full.doc.slice(full.doc.indexOf("הבדיקות שבוצעו")));
+  const cols = [...grid[1].matchAll(/w:w="(\d+)"/g)].map(x => +x[1]);
+  assert.equal(cols.length, 4); assert.ok(cols[0] <= 700 && cols[0] < cols[1] && cols[0] < cols[2], "העמודה הראשונה צרה"); assert.equal(cols.reduce((a, b) => a + b, 0), D.helpers.CONTENT_W, "רוחבי העמודות מתאימים לרוחב הדף");
+  // אין "דוח כיסוי — מה נסרק", אין שורת "מקורות:" בתחתית ואין סעיף מגבלות/מקורות (הוא נשאר בתיבה שעל המסך בלבד); אין רשימת "• "
+  assert.ok(!full.plain.includes("דוח כיסוי") && !full.plain.includes("מה נסרק") && !full.plain.includes("מקורות:") && !full.plain.includes("• "));
+  assert.match(full.lines.filter(Boolean).pop(), /^הופק /);
+  assert.ok(!full.plain.includes("מגבלות והסתייגויות") && !full.plain.includes("מקור האיסורים") && !full.plain.includes("מאגר ציבורי שנבנה על ידי מתנדבים"), "אין הצהרות על מקור הנתונים מחוץ לעמודת המקור");
+  assert.equal(m.notes, undefined, "המודל לא נושא רשימת מגבלות");
+  // המצאי נשאר: טבלת הקבוצות, והפריטים הנוספים בקרבה תחת סעיף המצאי
+  assert.ok(pos("פריטים נוספים שנמצאו בקרבה ואינם בטופס") > pos("3. מצאי לפי קבוצות") && pos("פריטים נוספים שנמצאו בקרבה ואינם בטופס") < pos("4. יום ולילה בחלון הפעילות"));
+  // n=26: הכותרת היא תת-סעיף "3.1" (לפי מונה הסעיף הנוכחי), לא כותרת בלי מספר ולא סעיף חדש שדוחף את הסעיפים הבאים
+  assert.ok(full.lines.includes("3.1 פריטים נוספים שנמצאו בקרבה ואינם בטופס"), "3.1");
+  assert.ok(pos("3.1 פריטים נוספים שנמצאו בקרבה ואינם בטופס") > pos("3. מצאי לפי קבוצות") && pos("3.1 פריטים נוספים שנמצאו בקרבה ואינם בטופס") < pos("4. יום ולילה בחלון הפעילות"));
+  assert.ok(!full.lines.includes("פריטים נוספים שנמצאו בקרבה ואינם בטופס"), "אין עוד כותרת בלי מספר");
+  // רק סעיפים שמוצגים: בלי אישור סקירה ובלי הערות סיור — ממשיכים לספור ברצף, בלי סעיף 7; ובלי דף בדיקות — אין כותרות
+  const lean = await build({ review: "" }); assert.deepEqual(heads(lean.lines), HEADS.slice(0, 5).map((h, i) => (i + 1) + ". " + h));
+  const noChecks = await build({ includeChecks: false }); assert.deepEqual(heads(noChecks.lines), []); assert.ok(!noChecks.plain.includes("הבדיקות שבוצעו"));
+  // תמונה חסרה: העמוד שלה לא נוצר ושאר התמונות נשארות (גם אם חסרה הראשונה)
+  const part = await build({ images: { aerial: null, street: img, overview: img, region: null } });
+  assert.equal((part.doc.match(/<w:drawing>/g) || []).length, 2); assert.ok(!part.plain.includes(part.model.aerialTitle) && !part.plain.includes(part.model.regionTitle) && part.plain.includes(part.model.streetTitle));
+  assert.ok(part.plain.indexOf(part.model.mapNote.slice(0, 40)) > part.plain.indexOf(part.model.streetTitle) && part.plain.indexOf(part.model.mapNote.slice(0, 40)) < part.plain.indexOf(part.model.overviewTitle), "המקרא מתחת לתמונה הראשונה שקיימת");
+  assert.equal(part.plain.split(part.model.mapNote.slice(0, 40)).length, 2, "המקרא מופיע פעם אחת");
+  assert.ok(wellFormed(part.doc) && wellFormed(full.doc));
+});
+
+/* ===== תיקוני סקירה עצמאית (סוכן 1): הצלבת מכשולים שידועים, הגדרת LLU במלואה, XML תקין ב-Word וב-KML, סדר דו-כיווני ב-Word ===== */
+test("מכשולים שידועים: ריבוי, אותיות סופיות ונרדפים ברמת מילה (מגדלים, עגורנים, אנטנות, תרנים) — בלי התאמה בין ביטויים", () => {
+  const it = (n, label, d) => ({ n, title: label, label, name: "", d });
+  const scan = { items: [it(1, "מגדל תקשורת", 10), it(2, "מגדל תצפית", 20), it(3, "תורן", 30), it(4, "עגורן", 40), it(5, "ארובה", 50), it(6, "מגדל מים", 60), it(7, "עמוד חשמל", 70)], censusOnly: [] };
+  const found = t => C.matchKnownObstacles(t, scan)[0].found.map(i => i.n).sort((a, b) => a - b);
+  assert.deepEqual(found("מגדלים"), [1, 2, 6], "ריבוי ים: מגדלים -> מגדל תקשורת/תצפית/מים");
+  assert.deepEqual(found("המגדלים"), [1, 2, 6], "ריבוי עם אות יחס");
+  assert.deepEqual(found("עגורנים"), [4], "אות סופית: עגורנים -> עגורן");
+  assert.deepEqual(found("עגורן"), [4]);
+  assert.deepEqual(found("עמודים"), [7]);
+  assert.deepEqual(found("ארובות"), [5], "ריבוי ות -> ה");
+  assert.deepEqual(found("מנוף"), [4], "נרדף: מנוף = עגורן");
+  for (const t of ["אנטנה", "אנטנות סלולריות", "תרנים", "תורנים", "תרן"]) assert.deepEqual(found(t), [3], t + " -> תורן בלבד (לא מגדל תקשורת/מים)");
+  // בלי תורן ועגורן בסריקה: הנרדפים אינם מתאימים לפריטים אחרים (מילה במילה, לא ביטויים), ו"עגורן בנייה" נשאר none
+  const noMast = { items: scan.items.filter(i => i.n !== 3 && i.n !== 4), censusOnly: [] };
+  for (const t of ["עגורן בנייה", "עגורנים", "מנוף", "אנטנה", "אנטנות סלולריות", "תרנים"]) assert.equal(C.matchKnownObstacles(t, noMast)[0].none, true, t + " — אין תורן/עגורן בסריקה");
+  // פיקסצ'ר הירקון: "מגדלים" מתאים ל"מגדל תקשורת"; ואחרי הוספת תורן (21 מ׳) ועגורן (35 מ׳) ל-OSM "אנטנה"/"תרנים"/"עגורנים" מתאימים, וכשאין עגורן "עגורן בנייה" נשאר none
+  const res0 = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), m0 = C.matchKnownObstacles("מגדלים", res0.nearScan)[0];
+  assert.equal(m0.none, false); assert.ok(m0.found.some(i => i.label === "מגדל תקשורת"), m0.found.map(i => i.title).join("|"));
+  assert.equal(C.matchKnownObstacles("עגורן בנייה", res0.nearScan)[0].none, true);
+  const fx2 = fixture("yarkon"), node = (id, m, dm) => ({ type: "node", id, lat: baseInput.lat + dm / 111132, lon: baseInput.lon, tags: { man_made: m } });
+  fx2.near = Object.assign({}, fx2.near, { elements: fx2.near.elements.concat([node(9000001, "mast", 21), node(9000002, "crane", 35)]) });
+  const res1 = C.analyze(baseInput, mkData(fx2), cfg, now), f1 = t => C.matchKnownObstacles(t, res1.nearScan)[0];
+  for (const t of ["אנטנה", "אנטנות סלולריות", "תרנים"]) assert.ok(f1(t).found.some(i => i.label === "תורן"), t);
+  for (const t of ["עגורנים", "עגורן בנייה"]) assert.ok(f1(t).found.some(i => i.label === "עגורן"), t);
+});
+
+test("מכשולים שידועים: קישוט הפריט המקובץ '(×N, הקרוב)' ומילת 'הקרוב' אינם התאמה — ההצלבה לפי label ו-name בלבד", () => {
+  const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), scan = res.nearScan;
+  const decorated = scan.items.concat(scan.censusOnly).filter(i => /\(×\d+, הקרוב\)/.test(i.title));
+  assert.ok(decorated.length >= 2, "תנאי המבחן: פריטי מצאי מקובצים עם קישוט בפיקסצ'ר: " + decorated.length);
+  for (const t of ["עגורן הקרוב לכניסה", "בניין הקרוב", "הקרוב", "הקרובה", "קרוב"]) {
+    const r = C.matchKnownObstacles(t, scan)[0];
+    assert.equal(r.none, true, t + " — נמצא: " + r.found.concat(r.census).map(i => i.title).join(" | "));
+  }
+  // התאמה אמיתית לפי השם נשארת: גם לפריט מקובץ
+  const grouped = decorated[0], word = grouped.label.split(" ").pop();
+  assert.ok(C.matchKnownObstacles(word, scan)[0].found.concat(C.matchKnownObstacles(word, scan)[0].census).includes(grouped), "התאמה לפי שם הפריט המקובץ: " + word);
+  // פריט בלי label/name (title בלבד): הקישוט מוסר ולא נחשב
+  const syn = { items: [], censusOnly: [{ title: "אזור תעשייה (×5, הקרוב)", label: "אזור תעשייה", name: "", d: 300 }, { title: "מגדל (×3, הקרוב)", d: 310 }] };
+  assert.equal(C.matchKnownObstacles("הקרוב", syn)[0].none, true); assert.equal(C.matchKnownObstacles("עגורן הקרובה", syn)[0].none, true);
+  assert.equal(C.matchKnownObstacles("תעשייה", syn)[0].census.length, 1); assert.equal(C.matchKnownObstacles("מגדל", syn)[0].census.length, 1);
+  // KO_STOP מוחל גם אחרי הסרת אות היחס ("הקרוב" -> "קרוב"), בשני הצדדים: גם אם "הקרוב" הוא חלק מ-label של פריט הוא אינו מילת התאמה
+  assert.equal(C.matchKnownObstacles("עגורן הקרוב", { items: [{ n: 1, title: "מגדל הקרוב", label: "מגדל הקרוב", name: "", d: 1 }], censusOnly: [] })[0].none, true);
+});
+
+test("מכשולים שידועים: knownSegments אינה חותכת בשקט, ו-validateInput דוחה יותר מ-20 פריטים בשגיאה חוסמת על השדה", () => {
+  const many = n => Array.from({ length: n }, (_, i) => "פריט" + i + "xyz");
+  const errs = ko => C.validateInput(Object.assign({}, baseInput, { knownObstacles: ko }), cfg).filter(e => e.field === "knownObstacles");
+  const MSG = "מכשולים שידועים למבקש: עד 20 פריטים (מופרדים בפסיק או בשורה חדשה)";
+  assert.equal(C.KO_MAX, 20);
+  assert.equal(C.knownSegments(many(25).join(", ")).length, 25, "כל הקטעים, בלי slice");
+  assert.equal(C.knownSegments(many(60).join("\n")).length, 60);
+  assert.equal(errs(many(20).join(", ")).length, 0, "20 פריטים מותרים");
+  assert.deepEqual(errs(many(21).join(", ")).map(e => e.msg), [MSG]);
+  assert.deepEqual(errs(many(25).join("\n")).map(e => e.msg), [MSG], "גם מופרדים בשורות חדשות");
+  assert.deepEqual(errs(many(45).join("; ")).map(e => e.msg), [MSG]);
+  assert.deepEqual(errs(many(20).join(", ") + ", , ;;\n").map(e => e.msg), [], "מפרידים ריקים אינם פריטים");
+  assert.equal(errs("א,".repeat(600)).length, 1, "מעל 1,000 תווים — שגיאה אחת בלבד (אורך), בלי כפילות");
+  assert.equal(C.validateInput(Object.assign({}, baseInput, { knownObstacles: many(25).join(", ") }), cfg).length, 1, "השגיאה היחידה בבקשה");
+  // matchKnownObstacles עצמה חותכת ל-20 רק כהגנה (הממשק חסום על ידי האימות)
+  assert.equal(C.matchKnownObstacles(many(25).join(", "), { items: [], censusOnly: [] }).length, 20);
+});
+
+test("דף הבדיקות: הגדרת LLU מצוטטת במלואה וכלשונה (כולל […], יצירת קשר עם שירות בתי הסוהר ואישור בכתב), בלי מרכאות ASCII עוטפות", () => {
+  const data = mkData(fixture("yarkon")), c = centroid(zones.zones.find(x => x.cat === "LLU"));
+  const res = C.analyze(Object.assign({}, baseInput, { lat: c[0], lon: c[1] }), data, cfg, now), row = O.buildChecks(res, data, cfg)[0];
+  const line = row[2].split("<br>").find(l => /הגדרת LLU: ״/.test(l)); assert.ok(line, "שורת הגדרת LLU");
+  const src = zones.general.LLU.text, full = src.trim().replace(/^"/, "").replace(/"$/, "");
+  assert.equal(O.toText(line).replace(/^\d+\. /, ""), "הגדרת LLU: ״" + full + "״", "הציטוט זהה מילה במילה ל-zones.json (בלי המרכאות העוטפות)");
+  const t = O.toText(line);
+  assert.ok(/שירות בתי הסוהר/.test(t) && /אישור בכתב/.test(t) && /מטה ארצי- 074-7833333/.test(t) && /ב\. אזורים שאינם תחת אחריות שירות בתי הסוהר/.test(t), "המשפט התפעולי וסעיף ב׳");
+  assert.equal((t.match(/\[…\]/g) || []).length, 2, "סימוני […] של המקור");
+  assert.ok(!/״"|"״/.test(t), "אין מרכאות כפולות עוטפות"); assert.ok(!line.includes(zones.general.LLU.ref), "ההפניה בעמודת המקור בלבד");
+});
+
+/* ---------- XML תקין: תווי בקרה אסורים (U+000B מהדבקה מ-Word, U+0001, U+FFFE, חצי סרוגייט) ---------- */
+const fcc = (...a) => String.fromCharCode(...a);
+const XML_BAD = new RegExp("[" + fcc(0) + "-" + fcc(8) + fcc(0xb, 0xc) + fcc(0xe) + "-" + fcc(0x1f) + fcc(0xd800) + "-" + fcc(0xdfff) + fcc(0xfffe, 0xffff) + "]");   // (חצאי סרוגייט נבדקים כיחידות קוד — בקלט הבדיקות אין תווים מחוץ ל-BMP)
+// xmllint מחזיר "" כשהקובץ תקין, הודעת שגיאה כשלא, ו-null כשאינו מותקן (אז נשארת בדיקת ה-RegExp בלבד)
+const xmllint = xml => { const r = spawnSync("xmllint", ["--noout", "-"], { input: xml, encoding: "utf8" }); return r.error ? null : r.status === 0 ? "" : String(r.stderr).slice(0, 300); };
+const dirty = w => "א" + fcc(0xb) + w + fcc(1) + "ב" + fcc(0xfffe) + fcc(0xd800) + "ג";   // אחרי הניקוי: "א" + w + "בג"
+const dirtyInput = Object.assign({}, baseInput, {
+  knownObstacles: dirty("עגורן") + "\n" + dirty("קו מתח"), visitDate: "2026-10-15", visitNotes: dirty("סיור") + "\n" + dirty("ממצא"),
+  contacts: [{ name: dirty("דנה"), phone: "050-111" + fcc(0xb) + "2233" }, { name: dirty("יוסי"), phone: "" }],
+  participants: [{ first: dirty("נועה"), last: dirty("לוי"), phone: "050-9998877" + fcc(1) }],
+  aircraft: [dirty("DJI")], siteName: dirty("אתר"), requesterName: dirty("בודק"), requesterPhone: "050-" + fcc(1) + "0000000"
+});
+
+test("Word: תווי בקרה אסורים ב-XML בכל שדה טקסט (הערות, מכשולים, שמות, כלי טיס, סקירה) — document.xml ו-core.xml נשארים XML תקין והטקסט נשמר", async () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(dirtyInput, data, cfg, now);
+  const jpeg = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
+  const model = O.docxModel(res, data, cfg, { images: { aerial: { bytes: jpeg, w: 1280, h: 960 } }, includeChecks: true, review: dirty("סקירה"), providerName: dirty("Esri"), draft: dirty("טיוטה") });   // התמונה: כדי שגם descr של התמונה (תכונת XML) תכלול טקסט מלוכלך
+  assert.ok(XML_BAD.test(model.rows.map(r => r.html).join("") + model.visitNote + model.checks.map(r => r.join("")).join("")), "תנאי המבחן: התווים האסורים נמצאים במודל");
+  const z = await JSZipNode.loadAsync(await D.build(model));
+  for (const f of ["word/document.xml", "docProps/core.xml", "word/_rels/document.xml.rels", "[Content_Types].xml"]) {
+    const xml = await z.file(f).async("string");
+    assert.ok(!XML_BAD.test(xml), f + " — תו אסור ב-XML");
+    const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", f + " — xmllint: " + lint);
+  }
+  const doc = await z.file("word/document.xml").async("string"), plain = doc.replace(/<[^>]+>/g, "");
+  for (const w of ["עגורן", "קו מתח", "סיור", "ממצא", "דנה", "יוסי", "נועה", "לוי", "אתר", "בודק", "סקירה", "טיוטה"]) assert.ok(plain.includes("א" + w + "בג"), "הטקסט נשמר (בלי התווים האסורים): " + w);
+  assert.ok(plain.includes("DJI") && plain.includes("050-1112233") && plain.includes("050-9998877"), "הלטיני והטלפונים נשמרים");
+  assert.ok((await z.file("docProps/core.xml").async("string")).includes("א אתר בג"), "כותרת המסמך (core.xml): safeName מחליף בקרה ברווח, esc מסיר FFFE/סרוגייט");
+  // esc של docx: טאב/LF/CR נשארים, תווים תקינים מחוץ ל-BMP לא נפגעים
+  const rt = D.runsOf("x\ty" + fcc(0xd83d, 0xde00) + "z");
+  assert.ok(rt.includes("\t") && rt.includes(fcc(0xd83d, 0xde00)) && !XML_BAD.test(rt.replace(fcc(0xd83d, 0xde00), "")));
+  assert.ok(!XML_BAD.test(D.runsOf("a" + fcc(0xb) + "b" + fcc(0) + fcc(0xfffe) + fcc(0xffff) + fcc(0xdc00) + "c")), "בקרה, FFFE, FFFF וסרוגייט בודד");
+});
+
+test("KML: תווי בקרה אסורים ב-XML (siteName ושמות) מנוקים, C.esc המשותפת ל-HTML אינה משתנה", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(dirtyInput, data, cfg, now), k = O.kml(res, data, cfg);
+  assert.ok(!XML_BAD.test(k), "תו אסור ב-KML"); assert.ok(k.includes("<name>בקשת סגירה אווירית — אאתרבג"), "שם המסמך נשמר מנוקה");
+  const lint = xmllint(k); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+  assert.equal(C.esc("a" + fcc(0xb) + "<"), "a" + fcc(0xb) + "&lt;", "C.esc אינה מסירה תווים (משותפת ל-HTML)");
+  assert.equal(C.xmlClean("a" + fcc(0xb) + "\t\n\rb" + fcc(0xfffe)), "a\t\n\rb");
+});
+
+/* ---------- סדר דו-כיווני ב-Word: LRE רק במקטע עם אות לטינית, RLM אחרי כל PDF, ספרות/סוגריים נשארים בריצת ה-RTL ---------- */
+const LRE = fcc(0x202a), PDF = fcc(0x202c), RLM = fcc(0x200f);
+const wTexts = xml => [...xml.matchAll(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g)].map(m => m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+test("Word runsOf/htmlRuns: מספור ומזהה נוטם — '1. ' נשאר ללא עטיפה, המזהה עטוף ב-LRE…PDF ואחריו RLM; ספרות וסוגריים בלבד אינם עטופים", () => {
+  assert.deepEqual(wTexts(D.htmlRuns("1. <b>C0010/26</b> — 1.5 ק״מ מקצה")), ["1. ", LRE + "C0010/26" + PDF + RLM, " — ", "1.5 ", "ק״מ מקצה"]);
+  assert.deepEqual(wTexts(D.runsOf("סעיף 7(ג)")), ["סעיף ", "7(", "ג)"], "7( בתוך ה-RTL, לא עטוף");
+  assert.deepEqual(wTexts(D.runsOf("(1) נ.צ")), ["(", "1) ", "נ.צ"]);
+  assert.deepEqual(wTexts(D.runsOf("1/26")), ["1/26"]); assert.deepEqual(wTexts(D.runsOf("27.10.2026")), ["27.10.2026"]);
+  assert.deepEqual(wTexts(D.runsOf("050-1234567")), ["050-1234567"]);
+  // מקטע עם אות לטינית (נ"צ DMS עם N/E, מייל, מזהה): עטוף, ו-RLM מיד אחרי ה-PDF לפני רווחי הסיום
+  assert.deepEqual(wTexts(D.runsOf("31°50'38.04\"N   34°56'48.12\"E (עשרוני)")), [LRE + "31°50'38.04\"N   34°56'48.12\"E (" + PDF + RLM, "עשרוני)"]);
+  assert.deepEqual(wTexts(D.runsOf("a@b.co ב")), [LRE + "a@b.co" + PDF + RLM + " ", "ב"]);
+  const all = wTexts(D.htmlRuns("<b>C0010/26</b> ו-ICD ו-LLU20, 3 מ׳ 7(ג) (1) a")).join("");
+  assert.equal((all.match(new RegExp(LRE, "g")) || []).length, (all.match(new RegExp(PDF, "g")) || []).length); assert.equal((all.match(new RegExp(PDF + RLM, "g")) || []).length, (all.match(new RegExp(PDF, "g")) || []).length, "כל PDF ואחריו RLM");
+});
+
+// בדיקת ההצגה בפועל: ממירים את ה-docx ל-PDF ב-LibreOffice וקוראים את סדר המילים החזותי (pdftotext -bbox). מדלג אם הכלים אינם מותקנים
+test("Word + LibreOffice: בשורת נוטם המספור בתחילת השורה והסדר מזהה — מרחק לא מתהפך (מדלג בלי soffice/pdftotext)", async t => {
+  const has = (c, a) => { const r = spawnSync(c, a, { encoding: "utf8", timeout: 20000 }); return !r.error && r.status === 0; };
+  if (!has("soffice", ["--version"]) || !has("pdftotext", ["-v"])) return t.skip("soffice/pdftotext לא מותקנים");
+  const data = mkData(fixture("yarkon")), res = C.analyze(Object.assign({}, baseInput, { lat: 31.8439, lon: 34.9467 }), data, cfg, now);
+  assert.equal(res.notams.hits[0].id, "C0010/26", "תנאי המבחן: נוטם C0010/26 בטווח");
+  const bytes = await D.build(O.docxModel(res, data, cfg, { includeChecks: true })), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reqdocx-"));
+  try {
+    fs.writeFileSync(path.join(tmp, "r.docx"), bytes);
+    const cv = spawnSync("soffice", ["--headless", "-env:UserInstallation=file://" + path.join(tmp, "profile"), "--convert-to", "pdf", "--outdir", tmp, path.join(tmp, "r.docx")], { encoding: "utf8", timeout: 170000 });
+    if (!fs.existsSync(path.join(tmp, "r.pdf"))) return t.skip("LibreOffice לא הפיק PDF: " + (cv.error ? cv.error.message : String(cv.stderr).slice(0, 120)));
+    const bb = spawnSync("pdftotext", ["-bbox", path.join(tmp, "r.pdf"), path.join(tmp, "r.html")], { encoding: "utf8" });
+    assert.equal(bb.status, 0, "pdftotext");
+    const html = fs.readFileSync(path.join(tmp, "r.html"), "utf8"), re = /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="[\d.]+" yMax="[\d.]+">([^<]*)<\/word>/g;
+    let line = null;
+    for (const pg of html.split("<page ").slice(1)) {
+      const ws = [...pg.matchAll(re)].map(m => ({ x: +m[1], y: +m[2], t: m[3] })), id = ws.find(w => w.t === "C0010/26");
+      if (id) { line = ws.filter(w => Math.abs(w.y - id.y) < 2).sort((a, b) => a.x - b.x); break; }
+    }
+    assert.ok(line, "שורת הנוטם C0010/26 ב-PDF");
+    const x = tx => { const w = line.find(v => v.t === tx); assert.ok(w, "חסר בשורה: " + tx + " | " + line.map(v => v.t).join(" ")); return w.x; };
+    // הקריאה מימין לשמאל: "N. C0010/26 — 1.5 ק״מ" — כלומר חזותית משמאל לימין: ק״מ, 1.5, —, מזהה, ואז המספור (הספרה הכי ימנית)
+    assert.ok(x("1.5") < x("—") && x("—") < x("C0010/26"), "המזהה לפני המקף והמרחק (בקריאה מימין לשמאל): " + line.map(v => v.t).join(" "));
+    assert.ok(line.some(w => (w.t === "1" || w.t === "1.") && w.x > x("C0010/26")), "המספור 1. מימין למזהה, בתחילת השורה: " + line.map(v => v.t).join(" "));
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Word: תאריך סיור בלי הערות מופיע בסעיף 'הנקודה' (והערות עם תאריך — בנוסח הקיים)", async () => {
+  const data = mkData(fixture("yarkon")), BID = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
+  const lines = async inp => { const model = O.docxModel(C.analyze(Object.assign({}, baseInput, inp), data, cfg, now), data, cfg, { includeChecks: true }), z = await JSZipNode.loadAsync(await D.build(model)); return { model, lines: (await z.file("word/document.xml").async("string")).replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BID, "").split("\n") }; };
+  const dateOnly = await lines({ visitDate: "2026-10-15", visitNotes: "" });
+  assert.equal(dateOnly.model.visitNote, "<b>סיור באתר ב-15.10.2026</b>");
+  const i = dateOnly.lines.indexOf("1. הנקודה"); assert.ok(i >= 0 && dateOnly.lines[i + 2] === "סיור באתר ב-15.10.2026", dateOnly.lines.slice(i, i + 4).join(" | "));
+  assert.ok(!dateOnly.lines.some(l => /^הערות המבקש/.test(l)));
+  const none = await lines({ visitDate: "", visitNotes: "" }); assert.equal(none.model.visitNote, ""); assert.ok(!none.lines.some(l => /סיור באתר/.test(l)));
+  const both = await lines({ visitDate: "2026-10-15", visitNotes: "תצפית" }); assert.ok(both.lines.includes("הערות המבקש (סיור באתר ב-15.10.2026): תצפית"));
 });

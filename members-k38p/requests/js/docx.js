@@ -1,4 +1,4 @@
-/* הפקת קובץ Word (.docx) ניתן לעריכה מהבקשה: טופס נספח ג׳ (17 שדות), מפה/הדמיה, תצ״א נקי, ודף בדיקות.
+/* הפקת קובץ Word (.docx) ניתן לעריכה מהבקשה: טופס נספח ג׳ (17 שדות), ארבע תמונות (תצ״א תקריב, מפת רחובות תקריב, הדמיה במבט כללי, מפת אזור מרוחקת) ודף בדיקות.
    בלי תלות חיצונית מלבד JSZip (request/vendor/jszip.min.js). רץ בדפדפן וב-Node. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory(require("../vendor/jszip.min.js"));
@@ -6,9 +6,20 @@
 })(typeof self !== "undefined" ? self : this, function (JSZip) {
   "use strict";
 
-  const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // תווים שאסורים ב-XML 1.0 — בקרה פרט לטאב/LF/CR (למשל U+000B מהדבקה מ-Word), חצאי סרוגייט, U+FFFE ו-U+FFFF — מוסרים לפני ה-escape;
+  // אחרת document.xml לא תקין ו-Word מסרב לפתוח את הקובץ. esc משמשת את כל טקסט המשתמש: w:t, שמות/תיאורי תמונות ו-core.xml
+  const xmlClean = s => {
+    let o = "";
+    for (const ch of String(s == null ? "" : s)) {
+      const c = ch.codePointAt(0);
+      if (c === 9 || c === 10 || c === 13 || (c >= 0x20 && c <= 0xd7ff) || (c >= 0xe000 && c <= 0xfffd) || c >= 0x10000) o += ch;
+    }
+    return o;
+  };
+  const esc = s => xmlClean(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const decode = s => s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&amp;/g, "&");
   const FONT = '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial" w:eastAsia="Arial"/>';
+  const LRE = String.fromCharCode(0x202a), PDF = String.fromCharCode(0x202c), RLM = String.fromCharCode(0x200f), LATIN_LETTER = /[A-Za-z]/;
   const HEB = /[֐-׿יִ-ﭏ]/, LAT = /[A-Za-z0-9]/;
 
   // טקסט -> ריצות: עברית (rtl) מופרדת מלטינית/מספרים (ltr), תווים ניטרליים מצטרפים לריצה הקודמת
@@ -26,8 +37,9 @@
       const rtl = p.t !== "L" && p.t !== "N" ? "<w:rtl/>" : p.t === "N" ? "<w:rtl/>" : "";
       const rpr = "<w:rPr>" + FONT + (o.bold ? "<w:b/><w:bCs/>" : "") + (o.italic ? "<w:i/><w:iCs/>" : "") + (o.color ? '<w:color w:val="' + o.color + '"/>' : "") +
         '<w:sz w:val="' + size + '"/><w:szCs w:val="' + size + '"/>' + rtl + "</w:rPr>";
-      // מקטע לטיני/מספרי נעטף ב-LRE…PDF כדי שסימנים כמו ° ' " : – לא יתהפכו בתוך פסקה מימין לשמאל
-      const txt = p.t === "L" ? "\u202A" + p.s.replace(/\s+$/, "") + "\u202C" + (/\s+$/.test(p.s) ? p.s.match(/\s+$/)[0] : "") : p.s;
+      // מקטע שיש בו אות לטינית נעטף ב-LRE…PDF כדי שסימנים כמו ° ' " : – לא יתהפכו בתוך פסקה מימין לשמאל, ואחרי ה-PDF בא RLM כדי שהריצה הבאה לא תתחיל במצב "שמאל"
+      // ותתמזג עם הגוש הלטיני (אחרת המספור "1. " נדבק למזהה שאחריו והיחידה נפרדת מהמספר). מקטע של ספרות/סוגריים/פיסוק בלבד ("1. ", "7(", "(1") נשאר בתוך ריצת ה-RTL — עטיפה שלו הופכת סוגריים
+      const txt = p.t === "L" && LATIN_LETTER.test(p.s) ? LRE + p.s.replace(/\s+$/, "") + PDF + RLM + (/\s+$/.test(p.s) ? p.s.match(/\s+$/)[0] : "") : p.s;
       return "<w:r>" + rpr + '<w:t xml:space="preserve">' + esc(txt) + "</w:t></w:r>";
     }).join("");
   }
@@ -83,9 +95,9 @@
   const PAGE_W = 11906, PAGE_H = 16838, MARGIN = 1000, CONTENT_W = PAGE_W - 2 * MARGIN; // twips
   const CM = 360000; // EMU לסנטימטר
 
-  // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], mailLine, formFooter, mapTitle, mapNote, items:[{n,title,dist,where}],
-  //         images:{map:{bytes,w,h}, aerial:{bytes,w,h}}, aerialTitle, checks:[[name,source,html]], coverage:{sources,groups,censusOnly}, dayNight:[[...]], dayNightHead,
-  //         submission, notes:[], review, footer, includeChecks}
+  // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], attachLine, mailLine, formFooter, aerialTitle, streetTitle, overviewTitle, regionTitle, mapNote, items:[{n,title,dist,where}],
+  //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
+  //         submission, review, footer, includeChecks}
   async function build(m) {
     const body = [];
     // ----- עמוד 1: הטופס -----
@@ -98,64 +110,65 @@
     body.push(tableXml([wl, wv], m.rows.map(r => ({ cells: [
       cell(para(runsOf(r.n + ". " + r.label, { bold: true, size: 19 }), { after: r.sub ? 20 : 0 }) + (r.sub ? textPara(r.sub, { size: 14, color: "444444", after: 0 }) : ""), wl, { fill: "EFEFEF" }),
       cell(htmlPara(r.html, { size: 19, after: 0, line: 245 }), wv)] }))));
-    body.push(htmlPara("<b>חובה לצרף מפה/תצ״א</b> — מצורפות: הדמיה בתקריב ומבט כללי (עמודים 2–3) ותצ״א נקי (עמוד 4).<br>" + esc(m.mailLine || ""), { size: 20, before: 100 }));
+    body.push(htmlPara((m.attachLine || "<b>חובה לצרף מפה/תצ״א</b>") + "<br>" + esc(m.mailLine || ""), { size: 20, before: 100 }));
     body.push(textPara(m.formFooter || "", { size: 16, color: "555555" }));
 
-    // ----- עמוד 2: מפה והדמיה -----
+    // ----- עמודי התמונות: תצ״א, מפת רחובות, מבט כללי (+ טבלת הפריטים), מפת אזור -----
     const imgs = [];
     const addImg = (img, name, descr) => {
       const w = 16.6 * CM, h = w * img.h / img.w, rid = "rId" + (100 + imgs.length);
       imgs.push({ rid, bytes: img.bytes, name: name + ".jpeg" });
       return imageXml(rid, imgs.length, Math.round(w), Math.round(h), name, descr);
     };
-    body.push(textPara(m.mapTitle, { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
-    if (m.images && m.images.map) body.push(addImg(m.images.map, "map", m.mapTitle));
-    if (m.mapNote) body.push(textPara(m.mapNote, { size: 18, color: "444444" }));
-    if (m.images && m.images.overview) {
-      body.push(textPara(m.overviewTitle || "מבט כללי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
-      body.push(addImg(m.images.overview, "overview", m.overviewTitle || "מבט כללי"));
-    }
+    const im = m.images || {};
+    let noteDone = !m.mapNote;   // מקרא הצבעים מתחת לתמונה הראשונה (בדרך כלל התצ״א; אם היא חסרה — מתחת לראשונה שקיימת)
+    const imagePage = (key, title) => {
+      body.push(textPara(title, { bold: true, size: 26, pageBreakBefore: true, after: 80 })); body.push(addImg(im[key], key, title));
+      if (!noteDone) { noteDone = true; body.push(textPara(m.mapNote, { size: 18, color: "444444" })); }
+    };
+    if (im.aerial) imagePage("aerial", m.aerialTitle || "תצ״א תקריב");
+    if (im.street) imagePage("street", m.streetTitle || "מפת רחובות תקריב");
+    if (im.overview) imagePage("overview", m.overviewTitle || "מבט כללי");
     if (m.items && m.items.length) {
+      if (!im.overview) body.push(textPara(m.overviewTitle || "מבט כללי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
       body.push(heading("מכשולים, אתרים ותשתיות המסומנים במפה"));
       const w = [700, 4700, 1800, CONTENT_W - 7200];
       body.push(tableXml(w, [{ header: true, cells: ["#", "מה", "מרחק מהנקודה", "איפה"].map((t, i) => cell(textPara(t, { bold: true, size: 20, after: 0 }), w[i], { fill: "EEEEEE" })) }]
         .concat(m.items.map(it => ({ cells: [String(it.n), it.title, it.dist, it.where].map((t, i) => cell(textPara(t, { size: 20, after: 0 }), w[i])) })))));
     }
-    // ----- עמוד 3: תצ"א נקי -----
-    if (m.images && m.images.aerial) {
-      body.push(textPara(m.aerialTitle, { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
-      body.push(addImg(m.images.aerial, "aerial", m.aerialTitle));
-    }
-    // ----- דף בדיקות -----
+    if (im.region) imagePage("region", m.regionTitle || "מפת אזור (מרוחק)");
+    // ----- דף בדיקות: כותרות סעיף ממוספרות במונה רץ (רק סעיפים שמוצגים) -----
     if (m.includeChecks) {
+      let sec = 0;
+      const secHeading = t => heading(++sec + ". " + t);
       body.push(textPara("דף בדיקות — לא חלק מהטופס הרשמי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
+      body.push(secHeading("הנקודה"));
       body.push(textPara(m.checkPoint || "", { size: 20 }));
-      body.push(heading("הבדיקות שבוצעו"));
-      const cw = [CONTENT_W * 0.22 | 0, CONTENT_W * 0.16 | 0, CONTENT_W - (CONTENT_W * 0.22 | 0) - (CONTENT_W * 0.16 | 0)];
-      body.push(tableXml(cw, [{ header: true, cells: ["בדיקה", "מקור", "תוצאה"].map((t, i) => cell(textPara(t, { bold: true, size: 19, after: 0 }), cw[i], { fill: "EEEEEE" })) }]
-        .concat((m.checks || []).map(r => ({ cells: [cell(textPara(r[0], { size: 19, after: 0 }), cw[0], { valign: "top" }), cell(textPara(r[1], { size: 17, after: 0 }), cw[1], { valign: "top" }), cell(htmlPara(r[2], { size: 19, after: 0 }), cw[2], { valign: "top" })] })))));
+      if (m.visitNote) body.push(htmlPara(m.visitNote, { size: 20 }));
+      body.push(secHeading("הבדיקות שבוצעו"));
+      // עמודה ראשונה צרה "#" = מספר השורה; שאר העמודות: בדיקה / מקור / תוצאה
+      const nw = 560, cw = [nw, CONTENT_W * 0.20 | 0, CONTENT_W * 0.16 | 0, CONTENT_W - nw - (CONTENT_W * 0.20 | 0) - (CONTENT_W * 0.16 | 0)];
+      body.push(tableXml(cw, [{ header: true, cells: ["#", "בדיקה", "מקור", "תוצאה"].map((t, i) => cell(textPara(t, { bold: true, size: 19, after: 0 }), cw[i], { fill: "EEEEEE" })) }]
+        .concat((m.checks || []).map((r, k) => ({ cells: [cell(textPara(String(k + 1), { size: 19, after: 0 }), cw[0], { valign: "top" }), cell(textPara(r[0], { size: 19, after: 0 }), cw[1], { valign: "top" }), cell(textPara(r[1], { size: 17, after: 0 }), cw[2], { valign: "top" }), cell(htmlPara(r[2], { size: 19, after: 0 }), cw[3], { valign: "top" })] })))));
       if (m.coverage) {
-        body.push(heading("דוח כיסוי — מה נסרק"));
-        const sw = [CONTENT_W * 0.28 | 0, CONTENT_W - (CONTENT_W * 0.28 | 0)];
-        body.push(tableXml(sw, m.coverage.sources.map(r => ({ cells: [cell(textPara(r[0], { bold: true, size: 19, after: 0 }), sw[0], { fill: "F6F6F6" }), cell(textPara(r[1], { size: 19, after: 0 }), sw[1])] }))));
-        body.push(heading("מצאי לפי קבוצות (כל מה שנמצא בטווח החיפוש)"));
+        body.push(secHeading("מצאי לפי קבוצות"));
         const gw = [CONTENT_W * 0.40 | 0, 1200, 1400, 1400, CONTENT_W - (CONTENT_W * 0.40 | 0) - 4000];
         body.push(tableXml(gw, [{ header: true, cells: ["קבוצה", "נמצאו", "בתוך הסגירה", "בטבעת הכתומה", "בקרבה"].map((t, i) => cell(textPara(t, { bold: true, size: 19, after: 0 }), gw[i], { fill: "EEEEEE" })) }]
           .concat(m.coverage.groups.map(g => ({ cells: [g.group, String(g.found), String(g.inside), String(g.ring), String(g.near)].map((t, i) => cell(textPara(t, { size: 19, after: 0 }), gw[i])) })))));
         if (m.coverage.censusOnly && m.coverage.censusOnly.length) {
-          body.push(heading("פריטים נוספים שנמצאו בקרבה ואינם בטופס"));
+          // תת-סעיף של סעיף המצאי ("3.1"), לא סעיף חדש — כדי שמספור הסעיפים יישאר ברצף; הנוסח זהה לצד המסך (ui.js)
+          body.push(textPara(sec + ".1 פריטים נוספים שנמצאו בקרבה ואינם בטופס", { bold: true, size: 22, before: 100, after: 60, keepNext: true }));
           body.push(textPara(m.coverage.censusOnly.map(i => i.title + " — " + i.dist).join("; ") + (m.coverage.censusMore ? "; ועוד " + m.coverage.censusMore + " פריטים" : "") + ".", { size: 19 }));
         }
       }
       if (m.dayNight && m.dayNight.length) {
-        body.push(heading("יום ולילה בחלון הפעילות"));
+        body.push(secHeading("יום ולילה בחלון הפעילות"));
         const dw = [CONTENT_W * 0.28 | 0, 1500, 1500, 1800, CONTENT_W - (CONTENT_W * 0.28 | 0) - 4800];
         body.push(tableXml(dw, [{ header: true, cells: (m.dayNightHead || []).map((t, i) => cell(textPara(t, { bold: true, size: 19, after: 0 }), dw[i], { fill: "EEEEEE" })) }]
           .concat(m.dayNight.map(r => ({ cells: r.map((t, i) => cell(textPara(String(t), { size: 19, after: 0 }), dw[i])) })))));
       }
-      if (m.submission) { body.push(heading("הגשה")); body.push(htmlPara(m.submission, { size: 20 })); }
-      if (m.notes && m.notes.length) { body.push(heading("מגבלות המקורות")); m.notes.forEach(n => body.push(textPara("• " + n, { size: 19 }))); }
-      if (m.review) { body.push(heading("אישור סקירה אנושית")); body.push(textPara(m.review, { size: 20 })); }
+      if (m.submission) { body.push(secHeading("הגשה")); body.push(htmlPara(m.submission, { size: 20 })); }
+      if (m.review) { body.push(secHeading("אישור סקירה אנושית")); body.push(textPara(m.review, { size: 20 })); }
     }
     body.push(textPara(m.footer || "", { size: 16, color: "555555", before: 120 }));
 
