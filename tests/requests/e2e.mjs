@@ -543,7 +543,7 @@ try {
       check("אחרי ההרשמה: המשתמש מחובר, ובשורת המשתמש מוצג תוקף המנוי (12 חודשים)", /dana\.pilot/.test(await page.textContent("#userBar")) && /מנוי עד/.test(sub) && !/מסתיים בעוד/.test(sub), sub);
       check("המשתמש החדש הוא משתמש רגיל: אין ניהול משתמשים", !(await page.$("#ubAdmin")), "");
       // תפוגה: אחרי הסיום אי אפשר להיכנס, ויש הסבר וקישור לחידוש
-      const rec = JSON.parse(env.props["U:dana.pilot"]); rec.until = Date.now() - 1000; env.props["U:dana.pilot"] = JSON.stringify(rec);
+      const rec = JSON.parse(env.props["U:dana.pilot"]); rec.until = env.now() - 1000; env.props["U:dana.pilot"] = JSON.stringify(rec);   // שעון Apps Script המדומה (לא Date.now של המכונה)
       await page.click("#ubOut"); await page.waitForSelector("#authForm");
       await page.fill("#auUser", "dana.pilot"); await page.fill("#auPass", "dana-pass-1234"); await page.click("#auGo");
       await page.waitForFunction(() => document.querySelector("#auErr").textContent.length > 0);
@@ -621,7 +621,7 @@ try {
       check("ניהול: ליד כל משתמש (שאינו המנהל עצמו) כפתור 'חסום מבקשות'", (await page.$$("button.block[data-blk='dave.pilot']")).length === 1 && (await page.$$("button[data-blk='" + ADMIN + "']")).length === 0, "");
       const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => [...x.children].map(c => c.textContent.trim())));
       const adminRow = rows.find(c => c[0] === ADMIN);
-      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", !!adminRow && adminRow[3] === "1" && adminRow[4] === "2", JSON.stringify(adminRow));
+      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", !!adminRow && adminRow[5] === "1" && adminRow[6] === "2", JSON.stringify(adminRow));
       await page.click("button.block[data-blk='dave.pilot']"); await page.waitForSelector("button.unblock[data-blk='dave.pilot']");
       check("חסימה מהכפתור: מופיע 'פתח מחדש את הבקשות' והמשתמש חסום בשרת", /פתח מחדש את הבקשות/.test(await page.textContent("button.unblock[data-blk='dave.pilot']")) && env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).error === "blocked", "");
       await page.click("button.unblock[data-blk='dave.pilot']"); await page.waitForSelector("button.block[data-blk='dave.pilot']");
