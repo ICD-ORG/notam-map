@@ -62,26 +62,30 @@
   .ugbody{display:none; margin:2px 4px 6px 0; padding-inline-start:6px; border-inline-start:2px solid #4a5f80}
   .ugrp.open>.ugbody{display:block}
   .ugbody .grp{margin-inline:0}
+  .ugrp>button .lbl{flex:1 1 auto; min-width:0; overflow-wrap:anywhere}
+  .ugrp>button .cnt, .ugrp>button .vis{flex:none}
   #layEdit{width:100%; background:var(--panel2); border:1px solid #4a5f80; border-radius:6px; color:var(--text); font-size:12px; padding:6px 8px; cursor:pointer; text-align:center}
   .laying .fold-row, .laying #search, .laying #apxRow, .laying #placeBox, .laying #placeLive{display:none!important}
   .sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
   .org{padding:0 4px 18px}
   .org-bar{position:sticky; top:0; z-index:4; display:flex; gap:6px; flex-wrap:wrap; padding:8px 6px; background:var(--panel); border-bottom:1px solid var(--line)}
-  .org-bar button{flex:1 1 auto; min-height:40px; padding:0 10px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer}
+  .org-bar button{flex:1 1 0; min-width:0; white-space:nowrap; min-height:40px; padding:0 6px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--text); font-size:12.5px; cursor:pointer}
   .org-bar button.done{background:#a8c6e8; color:#0e1b2a; font-weight:700; border-color:#a8c6e8}
   .org-bar button.armed{background:#5a1f1a; border-color:#e0452f; color:#ffd6d0; font-weight:700}
   .org-help{font-size:11.5px; color:var(--dim); line-height:1.6; margin:8px 8px 4px}
   .org-warn{margin:6px 8px; padding:7px 10px; border:1px solid #6a5320; background:#211a08; color:#f5c46a; border-radius:8px; font-size:12px; line-height:1.5}
   .org-warn[hidden]{display:none}
+  .org-bar .org-warn{flex:1 1 100%; margin:0}
   .org-row{display:flex; align-items:center; gap:6px; min-height:46px; padding:0 4px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); margin:4px 0}
   .org-h{flex:none; width:40px; height:40px; background:none; border:0; color:var(--dim); font-size:19px; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none}
-  .org-n{flex:1 1 auto; min-width:0; font-size:13px; font-weight:700; line-height:1.3}
+  .org-n{flex:1 1 auto; min-width:0; font-size:13px; font-weight:700; line-height:1.3; color:var(--text); overflow-wrap:anywhere}
   .org-mv{flex:none; display:inline-flex; gap:2px}
-  .org-mv button, .org-del{width:38px; height:40px; background:none; border:1px solid var(--line); border-radius:6px; color:var(--text); font-size:14px; cursor:pointer}
+  .org-mv button, .org-del{flex:none; width:38px; height:40px; background:none; border:1px solid var(--line); border-radius:6px; color:var(--text); font-size:14px; cursor:pointer}
   .org-mv button:disabled{opacity:.25; cursor:default}
-  .org-del.armed{width:auto; padding:0 8px; background:#5a1f1a; border-color:#e0452f; color:#ffd6d0; font-size:12px; font-weight:700}
+  .org-del.armed{width:auto; padding:0 8px; background:#5a1f1a; border-color:#e0452f; color:#ffd6d0; font-size:12px; font-weight:700; white-space:nowrap}
   .org-sel{position:relative; flex:none; width:38px; height:40px; display:inline-flex; align-items:center; justify-content:center; font-size:16px; border:1px solid var(--line); border-radius:6px}
   .org-sel select{position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; font-size:16px}
+  .org-sel:focus-within{outline:2px solid #7fc0ff; outline-offset:2px}
   .org:not(:has(.org-grp)) .org-sel{display:none}
   .org-grp{margin:8px 0; padding:4px; border:1px solid #4a5f80; border-radius:10px; background:rgba(120,150,200,.07)}
   .org-grp>.org-grow{margin-top:0; background:var(--panel); border-color:#4a5f80}
@@ -92,10 +96,12 @@
   .org-empty[hidden]{display:none}
   .org-drag{outline:2px solid #7fc0ff; box-shadow:0 8px 22px rgba(0,0,0,.55); opacity:.92}
   .org-dragging{-webkit-user-select:none; user-select:none; cursor:grabbing}
-  .leaflet-control-layers .lc-grp{font-size:11px; font-weight:700; color:var(--dim); padding:6px 2px 2px; margin-top:4px; border-top:1px solid var(--line)}
+  .leaflet-control-layers .lc-grp{font-size:11px; font-weight:700; color:var(--dim); padding:6px 2px 2px; margin-top:4px; border-top:1px solid var(--line); overflow-wrap:anywhere}
+  .leaflet-control-layers label.lc-after{margin-top:4px; padding-top:4px; border-top:1px solid var(--line)}
   .leaflet-control-layers label.lc-in{padding-inline-start:10px}
   @media (max-width:760px), (max-height:520px){ .ugrp{margin:1px 6px} }
-  @media (max-width:760px), (pointer:coarse){ .ugrp>button{min-height:44px} #layEdit{min-height:44px} .org-bar button{min-height:44px} }
+  @media (max-width:760px), (pointer:coarse){ .ugrp>button{min-height:44px} #layEdit{min-height:44px} .org-bar button{min-height:44px} .org-h{width:44px; height:44px} .org-mv{gap:4px} .org-mv button{width:40px; height:44px} .org-del, .org-sel{width:44px; height:44px} .org-row{min-height:52px} }
+  @media (max-width:360px){ .org-bar button{font-size:11.5px; padding:0 2px; letter-spacing:-.1px} .org-bar{gap:4px; padding:8px 4px} }
   .item{display:flex; align-items:baseline; gap:8px; padding:5px 10px 5px 6px; border-radius:5px; cursor:pointer; font-size:12.5px}
   .item:hover{background:var(--panel2)}
   .item .code{font-family:Consolas,monospace; font-size:11px; color:var(--dim); direction:ltr; flex:none; min-width:56px}
@@ -510,10 +516,11 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
       <h1>אזורים אסורים, מוגבלים ומסוכנים לטיסה</h1>
       <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
       <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span>
-      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span>
+      <span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3.1 · 17 OCT 2026</span>
       <details style="margin-top:7px">
         <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
         <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
+          <b style="color:var(--text)">v2.3.1 · 17.10.2026</b> — תיקונים בסידור השכבות לפי בדיקות עצמאיות: שורה שהוזזה לא נעלמת מתחת לסרגל, נגיעה ב-☰ בלי תזוזה לא משנה כלום, "קפל/פתח הכול" חל גם על הקבוצות, שמות ארוכים לא גולשים, סרגל הכפתורים נכנס בשורה אחת בטלפון, שינוי שנשמר בלשונית אחרת לא נמחק, ועוד.<br>
           <b style="color:var(--text)">v2.3 · 16.10.2026</b> — סידור אישי של רשימת השכבות: כפתור "סדר את השכבות" בלשונית "שכבות" — הזזה בחצים או בגרירה, וקבוצות משלכם (שם, הכנסת שכבות, הצגה/הסתרה של קבוצה שלמה). הסידור נשמר במכשיר שלכם בלבד ויש כפתור חזרה לסדר המקורי.<br>
           <b style="color:var(--text)">v2.2 · 16.10.2026</b> — עודכנו קבצי הפמ"ת (פרקים א-17, א-11, ב-09). נוספה שכבת "אזורי טיסה לכטב\"ם" לפי פרק ב-09: כל האזורים שבנספחים ב'-1, ב'-2 וב'-3 (42 אזורים, כולל אזורי בראשית), כל אחד עם שורת הטבלה כלשונה, התוויות וההערות שבמפת נספח א'. ציטוטי פרק א-11 (טלפוני המתא\"מים) ופרק ב-09 (סעיפים 2, 4, 5, 7 במרחב שדות התעופה) הותאמו לנוסח ולחותמות המעודכנים.<br>
           <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
@@ -568,6 +575,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
     </div>
     <div class="fold-row" id="layEditRow"><button type="button" id="layEdit" title="סידור הרשימה לפי הצורך: הזזה, גרירה וקבוצות משלכם">⇅ סדר את השכבות · קבוצות משלי</button></div>
     <label id="apxRow" title="עיגולי נוט&quot;מים שמיקומם נלקח משורת Q בלבד (מקווקווים)"><input type="checkbox" id="apxToggle"><span>הצג מיקומים משוערים (נוט"מים)</span><span class="n" id="apxCnt"></span></label>
+    <div id="orgLive" class="sr-only" role="status" aria-live="polite"></div>
     <div id="groups"></div>
     </div><!-- /paneLayers -->
     <div id="paneNt" class="pane" role="tabpanel" aria-labelledby="tabNt">
@@ -587,11 +595,12 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
     <div id="foot">
       <div class="about-m">
         <div class="sub">פמ"ת פנים ארצי · פרק א'-17 · רשות התעופה האזרחית<br><b style="color:#a8c6e8">המפה מותאמת לכטב"מ, לרחפנים ולטיסנים.</b> לפי הפמ"ת: כל ההנחיות חלות גם על כטב"מים (כל המשקלים) וטיסנים נהוגי רדיו בהתאם לתקנה 180ז.(ג) לתקנות הטיס (הפעלת כלי טיס וכללי טיסה), אלא אם צוין אחרת</div>
-        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span>
+        <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3.1 · 17 OCT 2026</span>
         <details style="margin-top:7px">
           <summary style="cursor:pointer; font-size:11px; color:var(--dim)">היסטוריית גרסאות המפה</summary>
           <div style="font-size:10.5px; color:var(--dim); line-height:1.7; padding:5px 2px 0; direction:rtl">
-            <b style="color:var(--text)">v2.3 · 16.10.2026</b> — סידור אישי של רשימת השכבות: כפתור "סדר את השכבות" בלשונית "שכבות" — הזזה בחצים או בגרירה, וקבוצות משלכם (שם, הכנסת שכבות, הצגה/הסתרה של קבוצה שלמה). הסידור נשמר במכשיר שלכם בלבד ויש כפתור חזרה לסדר המקורי.<br>
+            <b style="color:var(--text)">v2.3.1 · 17.10.2026</b> — תיקונים בסידור השכבות לפי בדיקות עצמאיות: שורה שהוזזה לא נעלמת מתחת לסרגל, נגיעה ב-☰ בלי תזוזה לא משנה כלום, "קפל/פתח הכול" חל גם על הקבוצות, שמות ארוכים לא גולשים, סרגל הכפתורים נכנס בשורה אחת בטלפון, שינוי שנשמר בלשונית אחרת לא נמחק, ועוד.<br>
+          <b style="color:var(--text)">v2.3 · 16.10.2026</b> — סידור אישי של רשימת השכבות: כפתור "סדר את השכבות" בלשונית "שכבות" — הזזה בחצים או בגרירה, וקבוצות משלכם (שם, הכנסת שכבות, הצגה/הסתרה של קבוצה שלמה). הסידור נשמר במכשיר שלכם בלבד ויש כפתור חזרה לסדר המקורי.<br>
           <b style="color:var(--text)">v2.2 · 16.10.2026</b> — עודכנו קבצי הפמ"ת (פרקים א-17, א-11, ב-09). נוספה שכבת "אזורי טיסה לכטב\"ם" לפי פרק ב-09: כל האזורים שבנספחים ב'-1, ב'-2 וב'-3 (42 אזורים, כולל אזורי בראשית), כל אחד עם שורת הטבלה כלשונה, התוויות וההערות שבמפת נספח א'. ציטוטי פרק א-11 (טלפוני המתא\"מים) ופרק ב-09 (סעיפים 2, 4, 5, 7 במרחב שדות התעופה) הותאמו לנוסח ולחותמות המעודכנים.<br>
           <b style="color:var(--text)">v2.1 · 16.10.2026</b> — סגירות הכטב"מ/טיסן (LLU) מחולקות לשכבות לפי סוג: בתי כלא, משטרה ומג"ב, בסיסים צבאיים ומתקנים ביטחוניים/ממשלתיים/תשתיות — בצבעי ורוד-מגנטה בולטים, מעל השמורות, עם נקודה ושם מזום 10; כל שכבות הפמ"ת דלוקות כברירת מחדל. 16 אזורי LLR שהפמ"ת אינו מפרסם להם קואורדינטות (LLR24, 36, 82, 107, 120, 309, 500, 502, 504, 520, 589, 601, 618, 804, 805, 921) משורטטים בקירוב, בקו מקווקו, לפי מפת נספח א&#39; בפמ"ת; אינם הגבול הרשמי.<br>
           <b style="color:var(--text)">v2.0 · 16.10.2026</b> — בדיקה מחדש של כל הכרטיסים: בכל כרטיס מופיעה רק לשון הפמ"ת — שורת האזור, שורת הטבלה בנספח (גבהים, רדיוס וקואורדינטות), תווית המפה ופתיח הפרק — וכל ציטוט נושא את מספר העמוד וחותמת העדכון המודפסת בו. הוסרו הערות שלנו ושורות גובה שנגזרו; סעיף 2 מופיע רק בשטחי אש וסעיף 5 רק באזורי LLP/LLU/גבול; כשהפמ"ת אינו מציין גובה מוצגת הודעה קבועה; הוסר מנחת הבונים (לא מצוין בפמ"ת); לשונית "היום" מציגה את כל נוט"מי ישראל; ל-121 אתרי רט"ג שאין להם גבול אפשר לסמן נקודה משוערת לפי השם (אינה גבול), עם קישור לאתר רט"ג לבדיקת הפוליגון המדויק.<br>
@@ -640,7 +649,7 @@ details.xl>summary{cursor:pointer; font-size:11.5px; color:var(--dim)}
   <div class="m-sheet" role="dialog" aria-modal="true" aria-labelledby="infoTitle" tabindex="-1">
     <div class="m-head"><h2 id="infoTitle">מידע והוראות שימוש</h2><button type="button" class="m-x" id="infoClose" aria-label="סגור">✕</button></div>
     <div class="m-body" id="infoBody">
-      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3 · 16 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
+      <div style="margin:2px 0 8px"><span class="stamp" style="color:#8fd0a0; border-color:#2c5a3a; background:#0d2114">MAP v2.3.1 · 17 OCT 2026</span> <span class="stamp">UPDATE 1/26 · 06 AUG 2026</span></div>
       <div class="disclaim">⚠ השימוש בערכה זו באחריות המשתמש בלבד · המפה אינה מחליפה את הנוטמ הרשמי ומיועדת לעזרה בלבד · כלל אחריות ההטסה חלה על המטיס עצמו</div>
 
       <h3>מה זו המפה</h3>
@@ -2012,8 +2021,8 @@ const SHORT={K:'אזורי כטב"ם (ב-09)', KB:'אזורי בראשית (ב-0
 let INPA_UNMAPPED=[], INPA_EDITION=''; /* נטען בהמשך מ-data/inpa-zones.json */
 const groupsEl=document.getElementById('groups');
 /* ===== סידור אישי של רשימת השכבות — סדר וקבוצות משלי (נשמר במכשיר הזה בלבד) ===== */
-const LAY_KEY='icd-layers-layout-v1', LAY_MAXG=20, LAY_NAME=40;
-const LAY={editing:false, warn:false, gid:0};
+const LAY_KEY='icd-layers-layout-v1', LAY_MAXG=20, LAY_NAME=40, LAY_DEF_NAME='קבוצה חדשה';
+const LAY={editing:false, warn:false, gid:0, dirty:false};
 let layModel=null;     /* null = הסדר המקורי של המפה; אחרת {v:1, items:[מפתח שכבה | {id,n,o,c:[מפתחות]}]} — קבוצות בעומק אחד בלבד */
 const layDefault=()=>(compactMQ.matches?ORDER_C:ORDER).slice();
 const layName=s=>String(s==null?'':s).replace(/\s+/g,' ').trim().slice(0,LAY_NAME);
@@ -2036,11 +2045,12 @@ function layNorm(m){          /* מנקה שמירה ישנה/פגומה: מפת
 function layLoad(){ try{ const raw=localStorage.getItem(LAY_KEY); return raw?layNorm(JSON.parse(raw)):null; }catch(_){ return null; } }
 function laySave(){
   if(!layModel) return;
-  LAY.warn=false;
+  LAY.dirty=true; LAY.warn=false;
   try{ localStorage.setItem(LAY_KEY,JSON.stringify({v:1,items:layModel.items.map(it=>layIsG(it)?{n:it.n,o:it.o,c:it.c}:it)})); }catch(_){ LAY.warn=true; }
   try{ layersCtrl._update(); }catch(_){}
+  layWarnSync();
 }
-function layReset(){ layModel=null; try{ localStorage.removeItem(LAY_KEY); }catch(_){} LAY.warn=false; try{ layersCtrl._update(); }catch(_){} }
+function layReset(){ layModel=null; LAY.dirty=true; try{ localStorage.removeItem(LAY_KEY); }catch(_){} LAY.warn=false; try{ layersCtrl._update(); }catch(_){} }
 const layEnsure=()=>layModel||(layModel={v:1,items:layDefault()});
 layModel=layLoad();
 const layItems=()=>layModel?layModel.items:layDefault();
@@ -2065,6 +2075,13 @@ function layToGroup(k,gid){
   else layModel.items.splice(l.g?layModel.items.indexOf(l.g)+1:layModel.items.length,0,k);
 }
 const layCatLabel=k=>SHORT[k]||CATS[k].label;
+function layShow(el){        /* מגלגל כך שהשורה לא תיעלם מתחת לסרגל הדביק של מצב הסידור */
+  const sb=document.getElementById('sidebody'); if(!el||!sb) return;
+  const bar=document.querySelector('.org-bar'), sr=sb.getBoundingClientRect(), r=el.getBoundingClientRect();
+  const top=Math.max(sr.top,bar?bar.getBoundingClientRect().bottom:0)+4, bot=sr.bottom-4;
+  if(r.top<top) sb.scrollTop-=top-r.top; else if(r.bottom>bot) sb.scrollTop+=r.bottom-bot;
+}
+function layFocus(t){ if(!t) return; try{ t.focus({preventScroll:true}); }catch(_){} layShow(t.closest('.org-row')||t); }
 
 /* ---- הרשימה הרגילה: מניחים את שורות הקטגוריות לפי הסדר והקבוצות של המשתמש ---- */
 function layPlace(els,cnt,filter){
@@ -2106,14 +2123,30 @@ function syncVis(){      /* סנכרון עינית ההצגה במקרא עם �
     el.style.opacity=!n?.3:(n===g.c.length?1:.65);
   });
 }
+/* "קפל הכול" / "פתח הכול" חלים גם על הקבוצות של המשתמש */
+['collapseall','expandall'].forEach(id=>{
+  const open=id==='expandall';
+  document.getElementById(id).addEventListener('click',()=>{
+    if(!layModel||LAY.editing) return;
+    let ch=false; layModel.items.forEach(it=>{ if(layIsG(it)&&it.o!==open){ it.o=open; ch=true; } });
+    document.querySelectorAll('#groups .ugrp').forEach(g=>g.classList.toggle('open',open));
+    if(ch) laySave();
+  });
+});
+/* שינוי שנעשה בלשונית אחרת של הדפדפן — מתעדכנים (לא באמצע סידור) */
+window.addEventListener('storage',ev=>{
+  if((ev.key!==LAY_KEY&&ev.key!==null)||LAY.editing) return;
+  layModel=layLoad(); try{ layersCtrl._update(); }catch(_){}
+  renderList(curFilter());
+});
 
 /* ---- מצב סידור ---- */
 function laySay(t){ const l=document.getElementById('orgLive'); if(l) l.textContent=t; }
-function layWarnSync(){ const w=document.getElementById('orgWarn'); if(w) w.hidden=!LAY.warn; }
+function layWarnSync(){ const w=document.getElementById('orgWarn'); if(w&&w.dataset.cap!=='1') w.hidden=!LAY.warn; }
 function layRowCat(k,pos){
   const lab=layCatLabel(k), c=CATS[k].color;
   const r=document.createElement('div'); r.className='org-row'; r.dataset.k=k; r.setAttribute('role','listitem');
-  r.innerHTML='<button type="button" class="org-h" aria-label="גרירה להזזה: '+esc(lab)+'" title="גרור להזזה">☰</button><span class="swatch" style="background:'+c+'"></span><span class="org-n" style="color:'+c+'">'+esc(lab)+'</span>'+
+  r.innerHTML='<button type="button" class="org-h" tabindex="-1" aria-label="גרירה להזזה: '+esc(lab)+'" title="גרור להזזה">☰</button><span class="swatch" style="background:'+c+'"></span><span class="org-n">'+esc(lab)+'</span>'+
     '<span class="org-mv"><button type="button" class="org-up" data-a="up" aria-label="הזז למעלה: '+esc(lab)+'"'+(pos.first?' disabled':'')+'>▲</button><button type="button" class="org-dn" data-a="dn" aria-label="הזז למטה: '+esc(lab)+'"'+(pos.last?' disabled':'')+'>▼</button></span>'+
     '<span class="org-sel" title="העבר לקבוצה"><span aria-hidden="true">📁</span><select aria-label="העבר לקבוצה: '+esc(lab)+'"></select></span>';
   const sel=r.querySelector('select');
@@ -2124,7 +2157,7 @@ function layRowCat(k,pos){
 }
 function layRowGroup(g,pos){
   const w=document.createElement('div'); w.className='org-grp'; w.dataset.gid=g.id; w.setAttribute('role','listitem');
-  w.innerHTML='<div class="org-row org-grow"><button type="button" class="org-h" aria-label="גרירה להזזה: קבוצה '+esc(g.n)+'" title="גרור להזזה">☰</button><span aria-hidden="true">📁</span>'+
+  w.innerHTML='<div class="org-row org-grow"><button type="button" class="org-h" tabindex="-1" aria-label="גרירה להזזה: '+esc(g.n)+'" title="גרור להזזה">☰</button><span aria-hidden="true">📁</span>'+
     '<input type="text" class="org-name" maxlength="'+LAY_NAME+'" value="'+esc(g.n)+'" aria-label="שם הקבוצה" autocomplete="off" enterkeyhint="done">'+
     '<span class="org-mv"><button type="button" class="org-up" data-a="up" aria-label="הזז את הקבוצה למעלה: '+esc(g.n)+'"'+(pos.first?' disabled':'')+'>▲</button><button type="button" class="org-dn" data-a="dn" aria-label="הזז את הקבוצה למטה: '+esc(g.n)+'"'+(pos.last?' disabled':'')+'>▼</button></span>'+
     '<button type="button" class="org-del" aria-label="מחיקת הקבוצה: '+esc(g.n)+'" title="מחק קבוצה (השכבות נשארות ברשימה)">🗑</button></div>';
@@ -2134,25 +2167,29 @@ function layRowGroup(g,pos){
   body.appendChild(e); w.appendChild(body);
   return w;
 }
+function layHelp(){
+  return 'לחצו על ▲ ▼ או גררו את ☰ כדי לסדר. '+(layGroupsOf().length?'כפתור 📁 מכניס שכבה לקבוצה או מוציא אותה ממנה. מחיקת קבוצה לא מוחקת את השכבות. ':'רוצים קבוצות משלכם? לחצו על "קבוצה חדשה". ')+
+    'השינויים נשמרים אוטומטית <b>במכשיר הזה בלבד</b>. הסדר משפיע רק על הרשימה, לא על מה שמצויר מעל מה במפה.';
+}
 function layRenderEdit(focusSel){
+  layDragEnd();
   const M=layEnsure(); groupsEl.innerHTML='';
   const root=document.createElement('div'); root.className='org';
-  root.innerHTML='<div class="org-bar"><button type="button" id="orgNew">➕ קבוצה חדשה</button><button type="button" id="orgReset">↺ חזרה לסדר המקורי</button><button type="button" id="orgDone" class="done">✔ סיום</button></div>'+
-    '<div class="org-help">לחצו על ▲ ▼ או גררו את ☰ כדי לסדר. כפתור 📁 מעביר שכבה לקבוצה. השינויים נשמרים אוטומטית <b>במכשיר הזה בלבד</b>. הסדר משפיע על הרשימה, לא על מה שמצויר מעל מה במפה.</div>'+
-    '<div class="org-warn" id="orgWarn" hidden>⚠ הדפדפן חוסם שמירה במכשיר הזה — הסדר יחזור לברירת המחדל כשסוגרים את המפה.</div>';
+  root.innerHTML='<div class="org-bar"><button type="button" id="orgNew">➕ קבוצה חדשה</button><button type="button" id="orgReset">↺ סדר מקורי</button><button type="button" id="orgDone" class="done">✔ סיום</button>'+
+    '<div class="org-warn" id="orgWarn" role="alert" hidden>⚠ הדפדפן לא מאפשר לשמור כאן — הסדר יישאר רק עד שתסגרו או תרעננו את המפה.</div></div>'+
+    '<div class="org-help">'+layHelp()+'</div>';
   const list=document.createElement('div'); list.id='orgList'; list.setAttribute('role','list');
   M.items.forEach((it,i)=>{ const pos={first:i===0,last:i===M.items.length-1,gid:''}; list.appendChild(layIsG(it)?layRowGroup(it,pos):layRowCat(it,pos)); });
   root.appendChild(list);
-  const live=document.createElement('div'); live.id='orgLive'; live.className='sr-only'; live.setAttribute('role','status'); live.setAttribute('aria-live','polite'); root.appendChild(live);
   groupsEl.appendChild(root); layWarnSync();
   layWire(root,list);
-  if(focusSel){ const t=root.querySelector(focusSel); if(t){ try{ t.focus({preventScroll:true}); t.scrollIntoView({block:'nearest'}); }catch(_){} } }
+  if(focusSel) layFocus(root.querySelector(focusSel));
 }
 function layRefocus(ref,dir){      /* אחרי הזזה: ממשיכים מאותו כפתור כדי שאפשר ללחוץ שוב ושוב */
   const sel=typeof ref==='string'?'.org-row[data-k="'+ref+'"] ':'.org-grp[data-gid="'+ref.id+'"]>.org-row ';
   const root=document.getElementById('orgList'); if(!root) return;
   const a=root.querySelector(sel+(dir<0?'.org-up':'.org-dn')), b=root.querySelector(sel+(dir<0?'.org-dn':'.org-up'));
-  const t=(a&&!a.disabled)?a:b; if(t){ try{ t.focus({preventScroll:true}); t.scrollIntoView({block:'nearest'}); }catch(_){} }
+  layFocus((a&&!a.disabled)?a:b);
 }
 function layCommitDom(list){        /* קורא את הסדר מה-DOM אחרי גרירה; אם משהו לא מסתדר — לא נוגעים במודל */
   const items=[], flat=[];
@@ -2167,33 +2204,47 @@ function layCommitDom(list){        /* קורא את הסדר מה-DOM אחרי 
   if(flat.length!==ORDER.length||new Set(flat).size!==ORDER.length||flat.some(k=>!CATS[k])) return false;
   layModel.items=items; laySave(); return true;
 }
+/* ---- גרירה (עכבר / מגע): ה-DOM מסודר תוך כדי גרירה, והמודל נקבע בעזיבה; Esc מבטל ---- */
+let layDrag=null;
+function layDragEnd(){
+  const d=layDrag; if(!d) return null; layDrag=null;
+  cancelAnimationFrame(d.raf); d.unit.classList.remove('org-drag'); d.list.classList.remove('org-dragging');
+  try{ d.list.releasePointerCapture(d.pid); }catch(_){}
+  return d;
+}
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&layDrag){ layDragEnd(); layRenderEdit(); laySay('הגרירה בוטלה'); } });
 function layWire(root,list){
   let armed=null, armT=0;
   const disarm=()=>{ if(armed){ armed.classList.remove('armed'); armed.textContent=armed.dataset.t0; armed=null; } clearTimeout(armT); };
-  const arm=(b,txt)=>{ disarm(); armed=b; b.dataset.t0=b.textContent; b.textContent=txt; b.classList.add('armed'); armT=setTimeout(disarm,4000); };
+  const arm=(b,txt)=>{ disarm(); armed=b; b.dataset.t0=b.textContent; b.textContent=txt; b.classList.add('armed'); armT=setTimeout(disarm,4000); laySay(txt+' לחצו שוב לאישור'); };
   root.addEventListener('click',ev=>{
     const t=ev.target.closest&&ev.target.closest('button'); if(!t) return;
     if(t.id==='orgNew'){
       disarm();
-      if(layGroupsOf().length>=LAY_MAXG){ laySay('אפשר עד '+LAY_MAXG+' קבוצות.'); const w=document.getElementById('orgWarn'); if(w){ w.textContent='אפשר ליצור עד '+LAY_MAXG+' קבוצות. מחקו קבוצה כדי להוסיף אחרת.'; w.hidden=false; } return; }
-      const g={id:layNewId(),n:'קבוצה חדשה',o:true,c:[]}; layModel.items.unshift(g); laySave();
+      const first=layModel.items[0];
+      if(layIsG(first)&&!first.c.length&&first.n===LAY_DEF_NAME){      /* כבר יש קבוצה ריקה בשם ברירת המחדל — לא יוצרים עוד אחת בלחיצה כפולה */
+        layFocus(document.querySelector('.org-grp[data-gid="'+first.id+'"] .org-name')); return;
+      }
+      if(layGroupsOf().length>=LAY_MAXG){ const w=document.getElementById('orgWarn'); if(w){ w.dataset.cap='1'; w.textContent='אפשר ליצור עד '+LAY_MAXG+' קבוצות. מחקו קבוצה כדי להוסיף אחרת.'; w.hidden=false; } laySay('אפשר ליצור עד '+LAY_MAXG+' קבוצות.'); return; }
+      const g={id:layNewId(),n:LAY_DEF_NAME,o:true,c:[]}; layModel.items.unshift(g); laySave();
       document.getElementById('sidebody').scrollTop=0; layRenderEdit();
       const inp=document.querySelector('.org-grp[data-gid="'+g.id+'"] .org-name'); if(inp){ inp.focus(); inp.select(); }
       laySay('נוספה קבוצה חדשה. כתבו לה שם.'); return;
     }
     if(t.id==='orgDone'){ disarm(); layExit(); return; }
     if(t.id==='orgReset'){
-      if(armed!==t){ arm(t,'לאפס? לחצו שוב'); return; }
-      disarm(); layReset(); layRenderEdit(); laySay('הסדר חזר לברירת המחדל.'); return;
+      if(armed!==t){ arm(t,'לאפס הכול?'); return; }
+      disarm(); layReset(); layRenderEdit('#orgReset'); laySay('הכול חזר לברירת המחדל. הקבוצות נמחקו.'); return;
     }
     if(t.classList.contains('org-del')){
-      if(armed!==t){ arm(t,'למחוק? שוב'); return; }
+      if(armed!==t){ arm(t,'למחוק?'); return; }
       disarm();
       const w=t.closest('.org-grp'), g=layFindG(w.dataset.gid); if(!g) return;
-      const at=layModel.items.indexOf(g); layModel.items.splice(at,1,...g.c); laySave(); layRenderEdit(); laySay('הקבוצה נמחקה. השכבות שלה נשארו ברשימה.'); return;
+      const at=layModel.items.indexOf(g); layModel.items.splice(at,1,...g.c); laySave(); layRenderEdit('#orgNew'); laySay('הקבוצה נמחקה. השכבות שלה נשארו ברשימה.'); return;
     }
     if(t.dataset.a==='up'||t.dataset.a==='dn'){
       if(t.disabled) return;
+      disarm();
       const dir=t.dataset.a==='up'?-1:1, row=t.closest('.org-row'), ref=row.classList.contains('org-grow')?layFindG(row.parentNode.dataset.gid):row.dataset.k;
       if(!ref) return;
       layStep(ref,dir); laySave(); layRenderEdit(); layRefocus(ref,dir);
@@ -2203,25 +2254,33 @@ function layWire(root,list){
   list.addEventListener('change',ev=>{
     const s=ev.target; if(!(s&&s.tagName==='SELECT')) return;
     const k=s.closest('.org-row').dataset.k; layToGroup(k,s.value); laySave(); layRenderEdit();
-    const r=document.querySelector('.org-row[data-k="'+k+'"] select'); if(r){ try{ r.focus({preventScroll:true}); r.scrollIntoView({block:'nearest'}); }catch(_){} }
+    layFocus(document.querySelector('.org-row[data-k="'+k+'"] select'));
     laySay(s.value?'השכבה הועברה לקבוצה':'השכבה הוצאה מהקבוצה');
   });
   list.addEventListener('input',ev=>{
     const i=ev.target; if(!(i&&i.classList&&i.classList.contains('org-name'))) return;
     const g=layFindG(i.closest('.org-grp').dataset.gid); if(!g) return;
-    g.n=layName(i.value)||'קבוצה'; laySave(); layWarnSync();
+    g.n=layName(i.value)||'קבוצה'; laySave();
   });
   list.addEventListener('focusout',ev=>{        /* שם ריק/עם רווחים בלבד מתוקן ל"קבוצה" רק ביציאה מהשדה — כדי לא לקפוץ באמצע הקלדה */
     const i=ev.target; if(!(i&&i.classList&&i.classList.contains('org-name'))) return;
-    const g=layFindG(i.closest('.org-grp').dataset.gid); if(!g) return;
-    const n=layName(i.value)||'קבוצה'; if(i.value!==n) i.value=n; g.n=n; laySave(); layWarnSync();
+    const w=i.closest('.org-grp'); if(!w) return;
+    const g=layFindG(w.dataset.gid); if(!g) return;
+    const n=layName(i.value)||'קבוצה'; if(i.value!==n) i.value=n;
+    if(g.n!==n){ g.n=n; laySave(); }
+    [['.org-h','גרירה להזזה: '],['.org-up','הזז את הקבוצה למעלה: '],['.org-dn','הזז את הקבוצה למטה: '],['.org-del','מחיקת הקבוצה: ']].forEach(([q,tx])=>{ const e=w.querySelector(':scope>.org-row '+q); if(e) e.setAttribute('aria-label',tx+g.n); });
     list.querySelectorAll('select').forEach(s=>{ [...s.options].forEach(o=>{ if(o.value===g.id) o.textContent=g.n; }); });
   });
-  list.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.classList&&ev.target.classList.contains('org-name')){ ev.preventDefault(); ev.target.blur(); } });
-  /* ---- גרירה (עכבר / מגע): ה-DOM מסודר תוך כדי גרירה, והמודל נקבע בעזיבה ---- */
-  let d=null; const sb=document.getElementById('sidebody');
+  list.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'&&ev.target.classList&&ev.target.classList.contains('org-name')){
+      ev.preventDefault(); const w=ev.target.closest('.org-grp'); ev.target.blur();
+      if(w){ const b=w.querySelector(':scope>.org-row .org-dn:not(:disabled)')||w.querySelector(':scope>.org-row .org-up:not(:disabled)'); layFocus(b); }
+    }
+  });
+  const sb=document.getElementById('sidebody');
+  const fix=()=>{ list.querySelectorAll('.org-body').forEach(b=>{ const e=b.querySelector('.org-empty'); if(e) e.hidden=!!b.querySelector('.org-row'); }); };
   const over=()=>{
-    if(!d) return;
+    const d=layDrag; if(!d||d.list!==list) return;
     const {x,y,unit,grp}=d, t=document.elementFromPoint(x,y); if(!t||unit.contains(t)) return;
     const row=t.closest('.org-row'), body=t.closest('.org-body');
     const mid=el=>{ const r=el.getBoundingClientRect(); return r.top+r.height/2; };
@@ -2233,8 +2292,11 @@ function layWire(root,list){
       const W=row.parentNode; if(W===unit) return;
       const lower=y>mid(row);
       if(grp){ ref=W; after=lower; } else if(lower){ into=W.querySelector('.org-body'); first=true; } else { ref=W; after=false; }
-    }else if(body&&!grp){ into=body; }
-    else if(!row&&!body){
+    }else if(body&&!grp){
+      const rs=[...body.children].filter(c=>c.classList.contains('org-row')&&c!==unit), lr=rs[rs.length-1];
+      if(lr&&y<=lr.getBoundingClientRect().bottom) return;       /* רווח בין שורות בתוך הקבוצה: נשארים במקום */
+      into=body;
+    }else if(!row&&!body){
       const lr=list.lastElementChild, lb=list.getBoundingClientRect();
       if(lr&&lr!==unit&&y>lr.getBoundingClientRect().bottom&&x>=lb.left&&x<=lb.right){ list.appendChild(unit); fix(); }
       return;
@@ -2246,45 +2308,60 @@ function layWire(root,list){
       par.insertBefore(unit,nxt); fix();
     }
   };
-  const fix=()=>{ list.querySelectorAll('.org-body').forEach(b=>{ const e=b.querySelector('.org-empty'); if(e) e.hidden=!!b.querySelector('.org-row'); }); };
   const loop=()=>{
-    if(!d) return;
-    const r=sb.getBoundingClientRect(), edge=60; let dy=0;
-    if(d.y<r.top+edge) dy=-Math.ceil((r.top+edge-d.y)/4); else if(d.y>r.bottom-edge) dy=Math.ceil((d.y-(r.bottom-edge))/4);
-    if(dy){ sb.scrollTop+=Math.max(-18,Math.min(18,dy)); over(); }
+    const d=layDrag; if(!d||d.list!==list) return;
+    if(d.moved){
+      const r=sb.getBoundingClientRect(), bar=document.querySelector('.org-bar'), top=Math.max(r.top,bar?bar.getBoundingClientRect().bottom:0);
+      const edge=Math.min(60,Math.max(24,(r.bottom-top)*0.22)); let dy=0;
+      if(d.y<top+edge) dy=-Math.ceil((top+edge-d.y)/6); else if(d.y>r.bottom-edge) dy=Math.ceil((d.y-(r.bottom-edge))/6);
+      if(dy){ sb.scrollTop+=Math.max(-14,Math.min(14,dy)); over(); }
+    }
     d.raf=requestAnimationFrame(loop);
   };
   list.addEventListener('pointerdown',ev=>{
-    const h=ev.target.closest&&ev.target.closest('.org-h'); if(!h||(ev.pointerType==='mouse'&&ev.button>0)) return;
+    const h=ev.target.closest&&ev.target.closest('.org-h'); if(!h||(ev.pointerType==='mouse'&&ev.button>0)||layDrag) return;
     ev.preventDefault();
     const row=h.closest('.org-row'), unit=row.classList.contains('org-grow')?row.parentNode:row;
-    d={unit,grp:unit.classList.contains('org-grp'),pid:ev.pointerId,x:ev.clientX,y:ev.clientY,raf:0};
+    layDrag={list,unit,grp:unit.classList.contains('org-grp'),pid:ev.pointerId,x:ev.clientX,y:ev.clientY,sx:ev.clientX,sy:ev.clientY,moved:false,raf:0};
     try{ list.setPointerCapture(ev.pointerId); }catch(_){}
-    unit.classList.add('org-drag'); list.classList.add('org-dragging'); d.raf=requestAnimationFrame(loop);
+    unit.classList.add('org-drag'); list.classList.add('org-dragging'); layDrag.raf=requestAnimationFrame(loop);
   });
-  list.addEventListener('pointermove',ev=>{ if(!d||ev.pointerId!==d.pid) return; d.x=ev.clientX; d.y=ev.clientY; over(); });
-  const end=ev=>{
-    if(!d||ev.pointerId!==d.pid) return;
-    cancelAnimationFrame(d.raf); d.unit.classList.remove('org-drag'); list.classList.remove('org-dragging');
-    try{ list.releasePointerCapture(d.pid); }catch(_){}
-    d=null; const ok=layCommitDom(list); layRenderEdit(); laySay(ok?'הסדר עודכן':'');
+  list.addEventListener('pointermove',ev=>{
+    const d=layDrag; if(!d||d.list!==list||ev.pointerId!==d.pid) return;
+    d.x=ev.clientX; d.y=ev.clientY;
+    if(!d.moved&&Math.hypot(d.x-d.sx,d.y-d.sy)>8) d.moved=true;      /* נגיעה בלי תזוזה היא לא גרירה: בלי גלילה אוטומטית ובלי שינוי */
+    if(d.moved) over();
+  });
+  const finish=(ev,commit)=>{
+    const d=layDrag; if(!d||d.list!==list||ev.pointerId!==d.pid) return;
+    layDragEnd();
+    if(!d.moved) return;
+    if(!commit){ layRenderEdit(); laySay('הגרירה בוטלה'); return; }
+    const ok=layCommitDom(list), sel=d.grp?'.org-grp[data-gid="'+d.unit.dataset.gid+'"]>.org-row .org-h':'.org-row[data-k="'+d.unit.dataset.k+'"] .org-h';
+    layRenderEdit(ok?sel:''); laySay(ok?'הסדר עודכן':'');
   };
-  list.addEventListener('pointerup',end); list.addEventListener('pointercancel',end);
+  list.addEventListener('pointerup',ev=>finish(ev,true)); list.addEventListener('pointercancel',ev=>finish(ev,false));
   list.addEventListener('dragstart',ev=>ev.preventDefault());
 }
 function layEnter(){
-  LAY.editing=true; layEnsure(); document.getElementById('paneLayers').classList.add('laying');
+  LAY.editing=true; LAY.dirty=false;
+  layModel=layLoad(); layEnsure();      /* מתחילים מהמצב השמור העדכני (אולי נשמר בלשונית אחרת) */
+  document.getElementById('paneLayers').classList.add('laying');
   groupsEl.innerHTML=''; renderList(null); document.getElementById('sidebody').scrollTop=0;
   try{ document.getElementById('orgDone').focus({preventScroll:true}); }catch(_){}
 }
 function layExit(){
-  /* אם בסוף הסידור הכול זהה לסדר המקורי ובלי קבוצות — חוזרים למצב ברירת המחדל (בלי שמירה) */
-  if(layModel&&!layModel.items.some(layIsG)){ const dflt=layDefault(); if(layModel.items.length===dflt.length&&layModel.items.every((k,i)=>k===dflt[i])) layReset(); }
+  layDragEnd();
+  if(!LAY.dirty) layModel=layLoad();      /* יצאו בלי לשנות כלום — לא נוגעים במה שנשמר */
+  else if(layModel&&!layModel.items.some(layIsG)){ const dflt=layDefault(); if(layModel.items.length===dflt.length&&layModel.items.every((k,i)=>k===dflt[i])) layReset(); }   /* הסידור חזר להיות זהה לברירת המחדל — לא שומרים */
   LAY.editing=false; document.getElementById('paneLayers').classList.remove('laying');
-  renderList(curFilter()); document.getElementById('sidebody').scrollTop=0;
+  laySay(''); renderList(curFilter()); document.getElementById('sidebody').scrollTop=0;
   try{ const b=document.getElementById('layEdit'); if(b) b.focus({preventScroll:true}); }catch(_){}
 }
 document.getElementById('layEdit').onclick=layEnter;
+/* מעבר טלפון/מחשב באמצע סידור שלא שונה בו כלום: מציגים את ברירת המחדל של המצב החדש */
+(function(){ const f=()=>{ if(LAY.editing&&!LAY.dirty){ layModel=layLoad(); layEnsure(); layRenderEdit(); } };
+  if(compactMQ.addEventListener) compactMQ.addEventListener('change',f); else if(compactMQ.addListener) compactMQ.addListener(f); })();
 /* ---- גם בורר השכבות שעל המפה (מחשב) מציג את הסדר והקבוצות של המשתמש ---- */
 (function(){
   const ctl=layersCtrl, orig=ctl._update; if(typeof orig!=='function') return;
@@ -2296,12 +2373,13 @@ document.getElementById('layEdit').onclick=layEnter;
       const lab=new Map();
       [...list.children].forEach(lb=>{ const inp=lb.querySelector&&lb.querySelector('input'); if(inp&&inp.layerId!=null){ const k=keyOf.get(inp.layerId); if(k) lab.set(k,lb); } });
       if(lab.size<2) return;
-      const frag=document.createDocumentFragment();
+      const frag=document.createDocumentFragment(); let afterGroup=false;
       layModel.items.forEach(it=>{
-        if(!layIsG(it)){ if(lab.has(it)) frag.appendChild(lab.get(it)); return; }
+        if(!layIsG(it)){ if(lab.has(it)){ const lb=lab.get(it); if(afterGroup) lb.classList.add('lc-after'); afterGroup=false; frag.appendChild(lb); } return; }
         const ks=it.c.filter(k=>lab.has(k)); if(!ks.length) return;
         const h=document.createElement('div'); h.className='lc-grp'; h.textContent='📁 '+it.n; frag.appendChild(h);
         ks.forEach(k=>{ const lb=lab.get(k); lb.classList.add('lc-in'); frag.appendChild(lb); });
+        afterGroup=true;
       });
       list.appendChild(frag);
     }catch(_){}
