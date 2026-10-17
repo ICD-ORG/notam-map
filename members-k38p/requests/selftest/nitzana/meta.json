@@ -1,0 +1,24 @@
+{
+ "name": "nitzana",
+ "lat": 30.887,
+ "lon": 34.424,
+ "R": 100,
+ "fetched_utc": "2026-10-17T00:00:17.612Z",
+ "errors": [],
+ "near": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 4,
+  "osm_base": "2026-10-17T05:40:35Z"
+ },
+ "far": {
+  "mirror": "https://overpass-api.de/api/interpreter",
+  "elements": 15,
+  "osm_base": "2026-10-17T00:00:06Z"
+ },
+ "ext": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 4,
+  "osm_base": "2026-10-17T00:06:20Z"
+ },
+ "reverse": "ניצנה, מועצה אזורית רמת נגב, נפת באר שבע, מחוז הדרום, ישראל"
+}

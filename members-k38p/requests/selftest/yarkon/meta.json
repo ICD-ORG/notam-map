@@ -1,0 +1,24 @@
+{
+ "name": "yarkon",
+ "lat": 32.099128,
+ "lon": 34.816617,
+ "R": 200,
+ "fetched_utc": "2026-10-16T23:58:18.400Z",
+ "errors": [],
+ "near": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 241,
+  "osm_base": "2026-10-17T05:39:33Z"
+ },
+ "far": {
+  "mirror": "https://overpass-api.de/api/interpreter",
+  "elements": 62,
+  "osm_base": "2026-10-16T23:58:03Z"
+ },
+ "ext": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 0,
+  "osm_base": "2026-10-17T05:19:05Z"
+ },
+ "reverse": "שביל יונתן, תל־אביב–יפו, הגפן, רמת גן, נפת תל אביב, מחוז תל אביב, 5253527, ישראל"
+}

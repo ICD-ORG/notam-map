@@ -1,0 +1,18 @@
+{
+ "name": "golan",
+ "lat": 33.1,
+ "lon": 35.82,
+ "R": 100,
+ "fetched_utc": "2026-10-17T00:08:01.437Z",
+ "errors": [],
+ "ext": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 4,
+  "osm_base": "2026-10-17T00:06:20Z"
+ },
+ "near": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 5,
+  "osm_base": "2026-10-17T05:40:35Z"
+ }
+}

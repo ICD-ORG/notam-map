@@ -1,0 +1,29 @@
+name: אבחון תעודת TLS של אתר הנוטמים (חד־פעמי)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/iaa-cert-check.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: תעודת השרת והשרשרת
+        run: |
+          H=brin.iaa.gov.il
+          echo "== תאריך הריצה: $(date -u)"
+          echo | openssl s_client -connect $H:443 -servername $H -showcerts 2>/dev/null > /tmp/chain.txt || true
+          grep -E "^ *[0-9]+ s:|^ *i:|Verify return code|Verification" /tmp/chain.txt || true
+          echo "== תעודת העלה:"
+          awk '/BEGIN CERTIFICATE/{c++} c==1' /tmp/chain.txt | openssl x509 -noout -subject -issuer -dates 2>&1 || true
+          echo "== כל התעודות בשרשרת:"
+          awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++; f="/tmp/c" n ".pem"} n>0{print > f} /END CERTIFICATE/{close(f)}' /tmp/chain.txt
+          for f in /tmp/c*.pem; do echo "-- $f"; openssl x509 -in $f -noout -subject -issuer -dates 2>&1; done
+          echo "== curl עם אימות:"
+          curl -sS -m 30 -o /dev/null -w "http=%{http_code} ssl_verify=%{ssl_verify_result}\n" "https://$H/aeroinfo/AeroInfo.aspx?msgType=Notam" 2>&1 | tail -3 || true

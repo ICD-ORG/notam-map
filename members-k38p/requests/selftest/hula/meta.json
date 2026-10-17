@@ -1,0 +1,24 @@
+{
+ "name": "hula",
+ "lat": 33.09,
+ "lon": 35.6,
+ "R": 300,
+ "fetched_utc": "2026-10-17T00:01:32.026Z",
+ "errors": [],
+ "near": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 2,
+  "osm_base": "2026-10-17T05:40:35Z"
+ },
+ "far": {
+  "mirror": "https://overpass-api.de/api/interpreter",
+  "elements": 18,
+  "osm_base": "2026-10-17T00:01:02Z"
+ },
+ "ext": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 2,
+  "osm_base": "2026-10-17T00:06:20Z"
+ },
+ "reverse": "מועצה אזורית גליל עליון, נפת צפת, מחוז הצפון, 1210500, ישראל"
+}

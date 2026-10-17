@@ -1,0 +1,24 @@
+{
+ "name": "metula",
+ "lat": 33.279,
+ "lon": 35.578,
+ "R": 100,
+ "fetched_utc": "2026-10-17T00:04:08.388Z",
+ "errors": [],
+ "near": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 21,
+  "osm_base": "2026-10-17T05:40:35Z"
+ },
+ "far": {
+  "mirror": "https://overpass-api.de/api/interpreter",
+  "elements": 29,
+  "osm_base": "2026-10-17T00:03:07Z"
+ },
+ "ext": {
+  "mirror": "https://overpass.openstreetmap.fr/api/interpreter",
+  "elements": 23,
+  "osm_base": "2026-10-17T00:06:20Z"
+ },
+ "reverse": "אלסקה אין, הראשונים, מטולה, נפת צפת, מחוז הצפון, 1029200, ישראל"
+}
