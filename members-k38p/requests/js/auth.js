@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   const KEY = "icdReqSession";
-  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], busy: false, until: null };
+  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], email: "", copyTo: "", copyToIsOwner: false, features: [], busy: false, until: null };
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
@@ -16,13 +16,24 @@
     ticket_expired: "הכרטיס ישן מדי (מעבר לתקופת המנוי) — יש לרכוש כרטיס חדש.", not_configured: "ההרשמה עדיין לא הופעלה במערכת. יש לפנות למשרד הארגון.", wix_down: "לא ניתן לאמת כרגע את הכרטיס מול האתר — נסו שוב בעוד כמה דקות.", bad_date: "תאריך לא תקין (YYYY-MM-DD).", bad_name: "שם התיקייה אינו תקין.", bad_rid: "מזהה הבקשה אינו תקין — רעננו את הדף.", not_ready: "הבקשה לא נשמרה בשרת כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב.", mode_changed: "מצב השליחה בשרת השתנה.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
   };
   const msg = r => (r && (ERR[r.error] || r.message || r.error)) || "שגיאה לא ידועה";
+  // מצב השליחה והנמענים מתשובת השרת (login / regFinish / me / changePassword). full: מאפס קודם — תשובה בלי features היא שרת ישן, ולכן "שלח רק לעצמי" מושבת והלקוח לא שולח target.
+  // email = כתובת המבקש השמורה ("" אם אין); copyTo = לאן יישלחו עותקים (email, ובלי כתובת — כתובת הבעלים); copyToIsOwner = copyTo היא כתובת הבעלים כי אין למשתמש כתובת
+  function applyMail(r, full) {
+    if (full) { A.mailMode = "test"; A.mailTo = []; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; }
+    if (r.mailMode) A.mailMode = r.mailMode === "live" ? "live" : "test";
+    if (Array.isArray(r.mailTo)) A.mailTo = r.mailTo;
+    if (typeof r.email === "string") A.email = r.email;
+    if (typeof r.copyTo === "string") A.copyTo = r.copyTo;
+    if (r.copyToIsOwner === true || r.copyToIsOwner === false) A.copyToIsOwner = r.copyToIsOwner;
+    if (Array.isArray(r.features)) A.features = r.features.filter(x => typeof x === "string");
+  }
 
   /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהפעולה עושה בפועל בקוד (Code.gs ובקובץ הזה) ---------- */
   const HELP = {
     pass: "פותח חלון להחלפת הסיסמה שלך: מקלידים את הסיסמה הנוכחית ואת החדשה פעמיים (לפחות 10 תווים). אחרי ההחלפה כל ההתחברויות האחרות של המשתמש שלך מתבטלות, וההתחברות הנוכחית נשארת.",
     admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): מצב השליחה, רשימת המשתמשים והפעולות עליהם, יומן הבקשות, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
     out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה ומחזיר למסך הכניסה. אין בכך מחיקה של נתונים או של קבצים שנשמרו.",
-    mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק לבעל המערכת; במצב חי הוא נשלח למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) עם עותק לבעל המערכת. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
+    mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק למבקש עצמו (לכתובת שנרשמה בחשבונו; למשתמש בלי כתובת — לבעל המערכת). במצב חי המבקש בוחר: שליחה למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) עם עותק למבקש, והתשובות מגיעות אליו, או שליחה רק לעצמו. בכל שליחה מנהל המערכת מקבל עותק סמוי לצורכי תמיכה. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
     block: "חסום מבקשות: המשתמש לא יוכל להתחבר כלל, ולכן גם לא לשמור בדרייב או לשלוח. כל ההתחברויות הפעילות שלו מתבטלות מיד, וניסיון כניסה חדש (גם עם סיסמה נכונה) נדחה עד שתלחצו ״פתח מחדש את הבקשות״. הנתונים שלו והקבצים שכבר שמר אינם נמחקים. אי אפשר לחסום את עצמך.",
     unblock: "פתח מחדש את הבקשות: מסיר את החסימה, והמשתמש יוכל להתחבר שוב עם הסיסמה שלו. ההתחברויות הקודמות שלו נשארות מבוטלות, ולכן עליו להתחבר מחדש. הפעולה אינה משנה את תוקף המנוי (מי שהמנוי שלו הסתיים עדיין לא יוכל להתחבר) ואינה מוחקת דבר. חשבון שנחסם אוטומטית בגלל הזמנה שבוטלה עלול להיחסם שוב בבדיקה היומית כל עוד ההזמנה מבוטלת.",
     rst: "איפוס סיסמה (בשורת המשתמש): ממלא את שם המשתמש בטופס ״איפוס סיסמה״ שבתחתית החלון ומעביר אליו את הסמן. הסיסמה עצמה נקבעת שם, בלחיצה על ״אפס״.",
@@ -37,7 +48,7 @@
   const withHelp = (html, t, name) => '<span class="hw">' + html + hb(t, name) + "</span>";
 
   function save() { try { sessionStorage.setItem(KEY, JSON.stringify({ token: A.token, user: A.user, role: A.role, exp: A.exp })); } catch (e) { /* ignore */ } }
-  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
+  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
   function restore() { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (s && s.token && s.exp > Date.now()) { A.token = s.token; A.user = s.user; A.role = s.role; A.exp = s.exp; return true; } } catch (e) { /* ignore */ } return false; }
 
   async function post(body) {
@@ -83,7 +94,7 @@
         const body = boot ? { action: "bootstrap", code: $("auCode").value.trim(), user: $("auUser").value.trim(), pass: $("auPass").value } : { action: "login", user: $("auUser").value.trim(), pass: $("auPass").value };
         const r = await post(body);
         if (!r.ok) { if (r.error === "sub_expired") expiredNote(r); else $("auErr").textContent = msg(r); btn.disabled = false; return; }
-        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; A.until = r.until || null; A.mailMode = r.mailMode || "test"; A.mailTo = r.mailTo || []; save();
+        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; A.until = r.until || null; applyMail(r, true); save();
         hideCover(); renderBar();
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("auErr").textContent = "אין חיבור לשרת ההתחברות. נסו שוב."; btn.disabled = false; }
@@ -129,7 +140,7 @@
         const r = await post({ action: "regFinish", email: $("rgEmail").value.trim(), code: $("rgCode").value.trim(), user: $("rgUser").value.trim(), pass: $("rgPass").value });
         if (!r.ok) { $("rgErr").textContent = msg(r); return; }
         if (r.renewed) { showCover("המנוי חודש עד " + fmtD(r.until) + ". אפשר להיכנס."); return; }
-        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; A.until = r.until || null; A.mailMode = r.mailMode || "test"; A.mailTo = r.mailTo || []; save();
+        A.token = r.token; A.user = r.user; A.role = r.role; A.exp = r.exp; A.until = r.until || null; applyMail(r, true); save();
         hideCover(); renderBar();
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("rgErr").textContent = "אין חיבור לשרת. נסו שוב."; } finally { btn.disabled = false; }
@@ -170,7 +181,7 @@
       if ($("pwNew").value !== $("pwNew2").value) { $("pwErr").textContent = "הסיסמאות החדשות אינן זהות."; return; }
       const r = await call("changePassword", { oldPass: $("pwOld").value, newPass: $("pwNew").value });
       if (!r.ok) { $("pwErr").textContent = msg(r); return; }
-      A.token = r.token; A.exp = r.exp; A.mailMode = r.mailMode || A.mailMode; save(); closeModal();
+      A.token = r.token; A.exp = r.exp; applyMail(r, false); save(); closeModal();
       alert("הסיסמה הוחלפה. התחברויות אחרות של המשתמש נותקו.");
     };
   }
@@ -196,7 +207,7 @@
           withHelp('<button type="button" data-del="' + q + '">מחק</button>', HELP.del, "מחיקת משתמש — " + u.user);
       };
       body.innerHTML = logWarn +
-        '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק אליך") + '</b> ' +
+        '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק למבקש עצמו") + '</b> ' +
         withHelp('<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button>', HELP.mode, "מצב שליחה") + '</div>' +
         '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +
         '<div class="small admHelp"><span>הסבר על הפעולות בעמודה האחרונה (גם ליד כל כפתור בשורה):</span>' + [["חסום מבקשות", HELP.block], ["פתח מחדש את הבקשות", HELP.unblock], ["איפוס סיסמה", HELP.rst], ["שינוי תוקף", HELP.exp], ["מחק", HELP.del]].map(([l, t]) => withHelp(esc(l), t, l)).join("") + '</div>' +
@@ -206,7 +217,7 @@
         '<h3 style="margin:14px 0 6px">יומן בקשות' + (filter ? ' של <span dir="ltr">' + esc(filter) + '</span> <a href="#" id="admAll">(הצג את כולם)</a>' : " — כל המשתמשים") + '</h3>' +
         (rq.ok && rq.requests.length ? '<table class="admTbl"><tr><th>נשמרה</th><th>משתמש</th><th>בקשה</th><th>סטטוס</th><th>תיקייה</th></tr>' +
           rq.requests.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td><td>' + esc(x.name) + '</td><td>' +
-            (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : x.sentTest ? "נשלחה לבדיקה בלבד" : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
+            (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : (x.sentSelf || x.sentTest) ? [x.sentSelf ? "נשלחה לעצמו" : "", x.sentTest ? "נשלחה לבדיקה בלבד" : ""].filter(Boolean).join(" · ") : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
           : '<div class="small">' + (rq.ok ? "אין בקשות ביומן." : esc(msg(rq))) + "</div>") +
         '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form>' +
         '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px">' + withHelp('<button type="submit">אפס</button>', HELP.reset, "קביעת סיסמה חדשה") + '</form><div class="err" id="admErr"></div>' +
@@ -246,7 +257,7 @@
     if (A.cfg.api_url && restore()) {
       try {
         const r = await post({ action: "me", token: A.token });
-        if (r.ok) { A.user = r.user; A.role = r.role; A.until = r.until || null; A.mailMode = r.mailMode || "test"; A.mailTo = r.mailTo || []; hideCover(); renderBar(); document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } })); return; }
+        if (r.ok) { A.user = r.user; A.role = r.role; A.until = r.until || null; applyMail(r, true); hideCover(); renderBar(); document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } })); return; }
       } catch (e) { /* אין רשת — מציגים כניסה */ }
       clear();
     }
@@ -256,13 +267,19 @@
   A.loggedIn = () => !!A.token && A.exp > Date.now();
   A.getMailMode = () => A.mailMode;
   A.getMailTo = () => A.mailTo;
+  A.getRole = () => A.role;
+  A.getEmail = () => A.email;                  // כתובת המבקש השמורה בשרת ("" = אין)
+  A.getCopyTo = () => A.copyTo;                // לאן יישלחו העותקים ו"שלח רק לעצמי" (email, ובלי כתובת — כתובת הבעלים)
+  A.getCopyToIsOwner = () => A.copyToIsOwner;  // true = אין כתובת רשומה בחשבון, והעותק יישלח לבעל המערכת
+  A.getFeatures = () => A.features.slice();
+  A.hasFeature = f => A.features.indexOf(f) >= 0;
   A.setMailModeValue = m => { A.mailMode = m === "live" ? "live" : "test"; };
   A.setBusy = b => { A.busy = !!b; };
   // מרענן מהשרת את מצב השליחה והנמענים (ואת תקפות ההתחברות); נכשל סגור — בלי תשובה תקינה אין שליחה
   A.refresh = async () => {
     try {
       const r = await call("me");
-      if (r.ok) { A.mailMode = r.mailMode === "live" ? "live" : "test"; A.mailTo = r.mailTo || []; A.user = r.user; A.role = r.role; A.until = r.until || null; }
+      if (r.ok) { applyMail(r, true); A.user = r.user; A.role = r.role; A.until = r.until || null; }
       return r;
     } catch (e) { return { ok: false, error: "network", message: "אין חיבור לשרת" }; }
   };

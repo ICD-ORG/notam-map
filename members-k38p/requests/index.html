@@ -47,6 +47,30 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #map{height:min(420px,52vh);min-height:280px;border-radius:12px;border:1px solid var(--line);background:#060a12}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-left:5px;border:1px solid #fff3}
+/* ===== שכבות איסורים ונוטמים על מפת הבקשות + פס סיכום לנקודה (js/maplayers.js; תצוגה מקדימה בלבד — לא חלק מהדוח, מהטופס או מההדפסה) ===== */
+.lyrbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:8px}
+.lyrit{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:100%}
+.lyrchk{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;color:var(--ink);cursor:pointer;min-height:36px}
+.lyrchk input{width:18px;height:18px;accent-color:var(--cyan);flex:none}
+.lyrchk input:disabled{cursor:not-allowed}
+.lyrnote{font-size:12px;color:var(--muted);line-height:1.6;max-width:100%}
+.lyrkey{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--muted);flex-basis:100%}
+.lyrkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-left:5px;border:1px solid #fff3}
+.psum{margin-top:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.psum .pst{font-weight:700;color:var(--amber);font-size:12.5px;margin-bottom:2px}
+.psl b{color:var(--ink);font-weight:700}
+.psl.hit{color:#ffc2c2}.psl.near{color:#ffe0b0}.psl.ok{color:#bff5d3}.psl.warn{color:#ffd27a}.psl.last{color:var(--muted);font-size:12px;margin-top:3px;border-top:1px dashed var(--line);padding-top:3px}
+.lpop .leaflet-popup-content-wrapper{text-align:right;border-radius:10px}
+.lpop .leaflet-popup-content{margin:10px 12px;font-family:'Rubik',system-ui,'Segoe UI',Arial,sans-serif}
+.lp{direction:rtl;text-align:right;font-size:13px;line-height:1.55;color:#111}
+.lp-t{font-weight:900;border-bottom:1px solid #bbb;padding-bottom:3px;margin-bottom:3px}
+.lp-i{padding:5px 0;border-bottom:1px dashed #ccc}.lp-i:last-of-type{border-bottom:0}
+.lp-sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:6px;border:1px solid #0004}
+.lp-k{color:#555;font-size:12px}
+.lp-q{background:#f4f4f4;border-right:3px solid #999;padding:3px 7px;margin:3px 0;white-space:pre-line;font-size:12px}
+.lp-w{color:#8a1010;font-weight:700;font-size:12px;margin-top:2px}
+.lp-n{font-size:11.5px;color:#444;margin-top:3px;white-space:pre-line}
+.lp-more{color:#555;font-size:12px;padding-top:3px}
 .err{color:#ffb3b3;font-size:12.5px;margin-top:4px}
 #progress{list-style:none;margin-top:10px;display:grid;gap:5px;font-size:13.5px}
 #progress li{display:flex;gap:8px;align-items:baseline}
@@ -68,6 +92,8 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .prow button.xbtn,button.xbtn{min-height:34px;width:34px;padding:0;font-size:18px;line-height:1;flex:none}
 .acx{display:inline-flex;align-items:center;gap:4px}
 .acx button.xbtn{min-height:24px;width:24px;font-size:15px;border-radius:50%}
+.pux{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;font-size:13px;color:var(--ink);max-width:100%}   /* צ׳יפ של מהות פעילות שנוספה (עם × להסרה) */
+.pux>span{overflow-wrap:anywhere}
 @media (max-width:640px){
   /* משתתף: שני שדות שם בשורה, טלפון ו-× מתחת; כל משתתף בכרטיס משלו (מסגרת ורקע) כדי שיהיה ברור לאיזה שם שייך כל טלפון */
   .prow.part{flex-wrap:wrap;border:1px solid #34486b;border-radius:10px;padding:8px;background:rgba(255,255,255,.045)}
@@ -170,7 +196,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="wrap">
     <a class="back" href="../">← חזרה למפה</a>
     <h1>בקשות טיסה — <span>סגירה אווירית</span> · נספח ג׳ לפמ״ת א-11</h1>
-    <div class="sub">כל שדות הטופס חובה. אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושומרת אותה בדרייב בלחיצה.</div>
+    <div class="sub">כל שדות הטופס חובה (פרט לאות קריאה ולמס׳ רישום כלי הטיס). אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושולחת אותה במייל בלחיצה (למשרד נוטאם, או רק אליכם).</div>
   </div>
 </header>
 
@@ -201,7 +227,10 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <label class="f"><b>עד תאריך</b><input type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
     <label class="f"><b>משעה (שעון מקומי)</b><input type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
     <label class="f"><b>עד שעה (שעון מקומי)</b><input type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
-    <label class="f"><b>מהות הפעילות</b><select id="purpose"></select><span class="err" id="e_purpose"></span></label>
+    <div class="fld" id="puBox"><label for="purpose"><b>מהות הפעילות</b></label><select id="purpose"></select><span class="err" id="e_purpose"></span>
+      <div class="row"><input type="text" id="puNew" maxlength="80" placeholder="למשל: לצורך …" aria-label="מהות פעילות נוספת" autocomplete="off" style="flex:1 1 150px;min-width:0"><button type="button" id="puAdd">➕ הוסף מהות פעילות</button></div>
+      <span class="hint" id="puMsg" role="status"></span>
+      <div id="puSaved" hidden><span class="hint">שמורות בדפדפן הזה (× להסרה):</span><div class="checks" id="puList" style="margin-top:4px"></div></div></div>
     <label class="f"><b>קשר עין (VLOS)</b><select id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
     <label class="f"><b>ישוב / אתר (ימולא אוטומטית, אפשר לערוך)</b>
       <input type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
@@ -223,6 +252,9 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="grid" style="margin-top:10px">
       <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
       <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
+      <label class="f"><b>שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)</b><input type="text" id="reqOrg" autocomplete="off"><span class="hint">נספח ג׳ שדה 2 — חובה, עד 80 תווים. כל מבקש מקליד כאן את שמו; אין ברירת מחדל.</span><span class="err" id="e_requesterOrg"></span></label>
+      <label class="f"><b>אות קריאה (אופציונלי)</b><input type="text" id="reqCallsign" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 13 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_callsign"></span></label>
+      <label class="f"><b>מס׳ רישום כלי הטיס (אופציונלי)</b><input type="text" id="reqReg" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 14 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_registration"></span></label>
     </div>
     <span class="err" id="e_requester"></span>
     <div class="plh"><b>אנשי קשר בשטח</b><span class="hint">נספח ג׳ שדה 12 — לפחות שניים, עם שם וטלפון לכל אחד</span></div>
@@ -233,13 +265,22 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="plist" id="partList"></div>
     <div class="row" style="margin-top:6px"><button type="button" id="addPart">➕ הוסף משתתף</button></div>
     <span class="err" id="e_participants"></span>
-    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים לא נשלחים לשום שרת; הם נכנסים לטופס ולמייל בלבד. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
+    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים (כולל שם הגורם המבקש, אות הקריאה ומס׳ הרישום) נשמרים בדפדפן הזה בלבד; הם נשלחים רק כחלק מהבקשה עצמה — הטופס, קובץ ה-Word והמייל. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
   </details>
 </section>
 
 <section class="card">
   <h2>2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
+  <div class="lyrbar nonprint" id="layerBar">
+    <span class="lyrit"><label class="lyrchk"><input type="checkbox" id="lyrZones" checked> איסורים (פמ״ת)</label><span class="lyrnote" id="lyrZonesNote"></span></span>
+    <span class="lyrit"><label class="lyrchk"><input type="checkbox" id="lyrNotams" checked> נוטמים</label><span class="lyrnote" id="lyrNotamsNote"></span></span>
+    <div class="lyrkey" id="lyrKey">
+      <span data-lyr="zones"><i style="background:#ff3b30"></i>א-17 (אסור/מוגבל)</span><span data-lyr="zones"><i style="background:#3b82f6"></i>ב-09 (אזורי טיסה לכטב״ם)</span><span data-lyr="zones"><i style="background:#a855f7"></i>שמורות וגנים (רט״ג)</span><span data-lyr="zones">קו מקווקו = שרטוט בקירוב</span>
+      <span data-lyr="notams"><i style="background:#ffd400"></i>נוטמים</span>
+    </div>
+  </div>
   <div id="map"></div>
+  <div id="pointSummary" class="psum nonprint" role="status" aria-live="polite" aria-label="סיכום מקדים לנקודה שנבחרה"></div>
   <div class="legend"><span><i style="background:#22c55e"></i>רדיוס הסגירה</span><span><i style="background:#ff9500"></i>עד פי 2 מהרדיוס</span>
     <span class="row" style="gap:6px"><button type="button" id="baseSat" style="min-height:30px;padding:3px 10px;font-size:12px">צילום אוויר</button><button type="button" id="baseOsm" style="min-height:30px;padding:3px 10px;font-size:12px">מפת רחובות</button></span></div>
   <div id="places"></div>
@@ -312,12 +353,13 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/help.js?v=1"></script>
-<script src="js/auth.js?v=2"></script>
+<script src="js/auth.js?v=3"></script>
 <script src="js/sync.js?v=1"></script>
-<script src="js/core.js?v=4"></script>
-<script src="js/output.js?v=4"></script>
+<script src="js/core.js?v=5"></script>
+<script src="js/maplayers.js?v=1"></script>
+<script src="js/output.js?v=5"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=4"></script>
+<script src="js/ui.js?v=5"></script>
 </body>
 </html>

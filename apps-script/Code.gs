@@ -4,7 +4,8 @@
  *  - ניהול משתמשים: הוספה, חסימה/ביטול חסימה, איפוס סיסמה, החלפת סיסמה עצמית, מחיקה — הכול נאכף כאן, בשרת, בכל קריאה.
  *  - שמירת קבצי הבקשה (Word, KML, תמונות) בתיקייה בדרייב: תת-תיקייה בשם "<מקום> — <תאריך>".
  *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות) — המנהל רואה את כולם.
- *  - שליחה למשרד נוטאם במייל, עם הקבצים מהתיקייה, לכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד.
+ *  - שליחה במייל, עם הקבצים מהתיקייה: למשרד נוטאם (הכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד) או רק למבקש עצמו.
+ *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד); הבעלים מקבל תמיד עותק סמוי (BCC).
  * התקנה: ראו apps-script/README.md. הקוד אינו מכיל סיסמאות או מזהים סודיים; הם נשמרים ב-Script Properties בלבד.
  */
 
@@ -21,7 +22,9 @@ var CFG = {
   // notamoffice@iaa.gov.il, nofm@iaa.gov.il על גבי טופס כמפורט בנספח ג'". הנמענים קבועים כאן ואינם מתקבלים מהדפדפן.
   MAIL_TO: ['notamoffice@iaa.gov.il', 'nofm@iaa.gov.il'],
   SENDER_NAME: 'הארגון הישראלי לרב להב',
-  MAX_SENDS_PER_HOUR: 10,
+  MAX_SENDS_PER_HOUR: 10,        // לכל משתמש בנפרד (שליחה לעצמו נספרת גם היא) — מטיס אחד לא חוסם את האחרים
+  MAX_SENDS_PER_HOUR_ALL: 60,    // תקרה כוללת לכל המערכת: הגנה על מכסת המיילים היומית של גוגל
+  FEATURES: ['sendTarget'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי")
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
   LOG_MAX: 1000,           // מעבר לכך נמחקות הישנות ביותר שלא נשלחו; רשומה עם שליחה חיה נשמרת תמיד
@@ -63,8 +66,34 @@ function delUser_(name) { props_().deleteProperty(UP + name); }
 function countUsers_() { return Object.keys(users_()).length; }
 function secret_() { var s = props_().getProperty('SECRET'); if (!s) throw new Error('לא בוצעה אתחול — להריץ initialize()'); return s; }
 function ownerEmail_() { try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; } }
-// מצב שליחה: 'test' (ברירת מחדל) — המייל נשלח רק לבעלים; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
+// מצב שליחה: 'test' (ברירת מחדל) — "שלח למשרד" נשלח רק למבקש עצמו; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
 function mailMode_() { return props_().getProperty('MAIL_MODE') === 'live' ? 'live' : 'test'; }
+// כתובת המבקש = הכתובת ששמורה אצל המשתמש (נשמרת רק ברישום עם כרטיס, אחרי אימות קוד שנשלח אליה). אין שום קלט בבקשה שקובע אותה —
+// אחרת השרת היה הופך לממסר דואר זבל. נבדקת שוב בכל שימוש. משתמש בלי כתובת (נוצר ידנית ע"י המנהל, כולל המנהל עצמו) — מחזיר ''.
+function requesterEmail_(u) { return normEmail_(u && u.email); }
+// מה שהלקוח צריך לדעת על המייל: email = כתובת המבקש השמורה (או ''), copyTo = לאן יישלחו עותקים/"שלח לעצמי" (בלי כתובת — כתובת הבעלים).
+function mailInfo_(u) {
+  var email = requesterEmail_(u);
+  return { email: email, copyTo: email || ownerEmail_(), copyToIsOwner: !email, features: CFG.FEATURES.slice() };
+}
+function withMailInfo_(o, u) { var m = mailInfo_(u); for (var k in m) o[k] = m[k]; return o; }
+// מוסיף כתובת לרשימה אם אינה ריקה ועדיין לא נכללה (השוואה באותיות קטנות) — אותה כתובת לא מופיעה פעמיים באותה הודעה
+function addRcpt_(list, seen, addr) {
+  var a = String(addr || '').trim(), k = 'k:' + a.toLowerCase();
+  if (!a || seen[k]) return;
+  seen[k] = true; list.push(a);
+}
+// נמענים לפי מצב ויעד. תמיד: replyTo = המבקש, והבעלים ב-BCC (אלא אם הוא כבר ב-to/cc, כשהוא עצמו המבקש).
+//  חי + משרד: to = משרד נוטאם (קבוע בקוד), cc = המבקש.  בדיקה + משרד, או "לעצמי" (בכל מצב): to = המבקש בלבד.
+function mailPlan_(mode, target, requester, owner) {
+  var seen = {}, to = [], cc = [], bcc = [];
+  if (target === 'office' && mode === 'live') {
+    CFG.MAIL_TO.forEach(function (x) { addRcpt_(to, seen, x); });
+    addRcpt_(cc, seen, requester);
+  } else addRcpt_(to, seen, requester);
+  addRcpt_(bcc, seen, owner);
+  return { to: to, cc: cc, bcc: bcc, replyTo: requester };
+}
 
 /* ---------- אסימון חתום ---------- */
 function sign_(payload) {
@@ -114,8 +143,8 @@ function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסי�
   var base = cleanFolderName_(ext ? raw.slice(0, -ext.length) : raw).slice(0, 110).trim();
   return (base || 'file') + ext;
 }
-// נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה
-function cleanSubject_(s) { return String(s || '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
+// נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה — כולל תווי C1 (ביניהם NEL) ומפרידי השורה של יוניקוד
+function cleanSubject_(s) { return String(s || '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
 function cleanBody_(s) { return String(s || '').replace(/\r\n?/g, '\n').replace(/\r/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, 20000); }
 
 /* ---------- אתחול (פעם אחת, מהעורך) ---------- */
@@ -156,7 +185,8 @@ function doPost(e) {
 
 /* ---------- מנוי מטיס מסחרי: אימות כרטיס מול Wix ---------- */
 // המפתח (API key של Wix עם הרשאת "Read Basic Events Order Info") נשמר ב-Script Properties בשם WIX_API_KEY — לא בקוד ולא ביומן.
-function normEmail_(e) { e = String(e || '').trim().toLowerCase(); return (e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) ? e : ''; }
+// כתובת אחת בלבד: בלי פסיק/נקודה-פסיק/סוגריים/מירכאות — כתובת כזו יכלה להפוך נמען אחד לכמה נמענים כשהיא משמשת בשדה to/cc
+function normEmail_(e) { e = String(e || '').trim().toLowerCase(); return (e.length <= 120 && /^[^\s@,;:<>()\[\]"\\]+@[^\s@,;:<>()\[\]"\\]+\.[^\s@,;:<>()\[\]"\\]{2,}$/.test(e)) ? e : ''; }
 function addMonths_(ms, n) { var d = new Date(ms); d.setUTCMonth(d.getUTCMonth() + n); return d.getTime(); }
 // YYYY-MM-DD (או מספר מילישניות) -> סוף אותו יום בשעון ישראל (בקירוב: 21:00 UTC)
 function parseUntil_(v) {
@@ -292,7 +322,12 @@ function readLog_() {
 }
 // שליחה "פעילה" = לא נכשלה (כולל שליחה שהתחילה ולא ידוע אם הסתיימה — לכן שמרנית)
 function sentOk_(s) { return s.st !== 'failed'; }
-function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (s.mode === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
+// סוג שליחה ברשומת יומן: 'live' = נשלחה חי למשרד נוטאם; 'test' = מצב בדיקה (למבקש בלבד); 'self' = "שלח רק לעצמי" (target:'self').
+// שליחה לעצמו נרשמת עם mode:'self' (ולא 'live') — כך גם קוד שאינו מכיר את target לעולם לא יחשיב אותה כשליחה למשרד נוטאם.
+// רשומות ישנות (בלי target) הן שליחות למשרד נוטאם: 'live' או 'test' לפי mode.
+function sendKind_(s) { return (s.target === 'self' || s.mode === 'self') ? 'self' : (s.mode === 'live' ? 'live' : 'test'); }
+// רק שליחה חיה למשרד נוטאם נועלת עריכה וחוסמת שליחה כפולה; שליחה לעצמו/בדיקה לא
+function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (sendKind_(s) === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
 // גיזום: מוחקים קודם את הישנות ביותר שלא נשלחו חי. לעולם לא נמחקת רשומה עם שליחה חיה, ולא הרשומה שזה עתה נכתבה (keepId) —
 // כשהיומן מלא ברשומות כאלה הוא פשוט גדל מעבר ל-LOG_MAX.
 function trimLog_(arr, keepId) {
@@ -313,11 +348,11 @@ function uniqueName_(log, name, rid) {
   return u;
 }
 // "השליחה התחילה" נרשמת לפני שהמייל יוצא; בסיום מתעדכנת ל-sent, ובכשל ל-failed
-function logSentBegin_(user, folderId, name, mode, to, sid) {
+function logSentBegin_(user, folderId, name, mode, target, to, sid) {
   var log = readLog_(), t = now_(), e = findById_(log, folderId);
   if (!e) { e = { id: folderId, rid: '', name: name, user: user, created: t, saved: t, lastUser: user, ready: false, sent: [] }; log.push(e); }
   e.sent = e.sent || [];
-  e.sent.push({ sid: sid, t: t, user: user, mode: mode, to: to, st: 'sending' });
+  e.sent.push({ sid: sid, t: t, user: user, mode: mode, target: target, to: to, st: 'sending' });
   writeLog_(log, folderId);
   return t;
 }
@@ -359,7 +394,7 @@ var ACTIONS = {
 
   me: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
-    return { ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: a.user.until || null, renewUrl: CFG.RENEW_URL };
+    return withMailInfo_({ ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: a.user.until || null, renewUrl: CFG.RENEW_URL }, a.user);
   },
 
   changePassword: function (r) {
@@ -382,13 +417,13 @@ var ACTIONS = {
     log.forEach(function (e) {
       var s = st[e.user] || (st[e.user] = { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 });
       s.requests++; if (e.saved > s.lastRequest) s.lastRequest = e.saved;
-      (e.sent || []).forEach(function (x) { if (x.mode === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });
+      (e.sent || []).forEach(function (x) { if (sendKind_(x) === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });   // רק שליחות חיות למשרד נוטאם
     });
-    return { ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
+    return withMailInfo_({ ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
       return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
         email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '' };
-    }) };
+    }) }, a.user);
   },
 
   // יומן הבקשות: כל מי שהגיש בקשה (או רק משתמש מסוים), מהחדשה לישנה
@@ -398,10 +433,14 @@ var ACTIONS = {
     var rows = readLog_().filter(function (e) { return !who || e.user === who || e.lastUser === who || (e.sent || []).some(function (s) { return s.user === who; }); })
       .sort(function (x, y) { return y.saved - x.saved; }).slice(0, limit)
       .map(function (e) {
-        var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null;
+        // sentLive = שליחות חיות למשרד נוטאם; sentTest = מצב בדיקה (למבקש); sentSelf = "שלח רק לעצמי". כל שליחה נספרת באחד בלבד.
+        // lastSent = השליחה החיה האחרונה למשרד אם יש (כדי שהזמן שמוצג ליד "נשלחה למשרד נוטאם" לא יהיה של שליחה לעצמו); אחרת האחרונה מכל סוג.
+        var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null, lastLive = null;
+        sent.forEach(function (s) { if (sendKind_(s) === 'live' && sentOk_(s)) lastLive = s; });
+        var shown = lastLive || last, kinds = sent.filter(sentOk_).map(sendKind_);
         return { name: e.name, user: e.user, lastUser: e.lastUser, created: e.created, saved: e.saved, url: 'https://drive.google.com/drive/folders/' + e.id,
-          sentLive: sent.filter(function (s) { return s.mode === 'live' && sentOk_(s); }).length, sentTest: sent.filter(function (s) { return s.mode !== 'live' && sentOk_(s); }).length,
-          lastSent: last ? { t: last.t, user: last.user, mode: last.mode, st: last.st || 'sent' } : null, ready: !!e.ready };
+          sentLive: kinds.filter(function (k) { return k === 'live'; }).length, sentTest: kinds.filter(function (k) { return k === 'test'; }).length, sentSelf: kinds.filter(function (k) { return k === 'self'; }).length,
+          lastSent: shown ? { t: shown.t, user: shown.user, mode: shown.mode, target: sendKind_(shown) === 'self' ? 'self' : 'office', st: shown.st || 'sent' } : null, ready: !!e.ready };
       });
     return { ok: true, requests: rows };
   },
@@ -450,12 +489,12 @@ var ACTIONS = {
     return { ok: true };
   },
 
-  // מצב שליחה (מנהל בלבד): test = המייל נשלח רק לבעלים; live = למשרד נוטאם
+  // מצב שליחה (מנהל בלבד): test = "שלח למשרד" נשלח רק למבקש עצמו (והבעלים בעותק סמוי); live = למשרד נוטאם
   setMailMode: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
     var m = r.mode === 'live' ? 'live' : 'test';
     props_().setProperty('MAIL_MODE', m);
-    return { ok: true, mailMode: m };
+    return withMailInfo_({ ok: true, mailMode: m }, a.user);
   },
 
   // ----- הרשמה וחידוש מנוי (ללא התחברות): רק למי שרכש כרטיס "בקשת אישורי טיסה" ששולם בפועל -----
@@ -610,14 +649,19 @@ var ACTIONS = {
     return { ok: true, id: file.getId(), url: file.getUrl() };
   },
 
-  // שליחת הבקשה למשרד נוטאם. הנמענים קבועים (CFG.MAIL_TO); הקבצים נלקחים מהתיקייה שנשמרה בדרייב.
+  // שליחת הבקשה במייל. target: 'office' (ברירת מחדל; כמו בשרת הישן) = "שלח למשרד", 'self' = "שלח רק לעצמי"; כל ערך אחר => bad_target.
+  // הנמענים נקבעים בשרת בלבד (ראו mailPlan_): משרד נוטאם = CFG.MAIL_TO הקבוע (רק במצב חי + office), המבקש = כתובת המשתמש המחובר
+  // השמורה אצלו (או הבעלים, למשתמש בלי כתובת), והבעלים תמיד בעותק סמוי. שום שדה בבקשה לא קובע נמען.
   // תנאים שנאכפים כאן ולא רק בדפדפן: הבקשה ביומן ונשמרה כ"מוכנה" (saveEnd), רק בעליה או מנהל שולחים אותה,
-  // הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
-  // ושליחה חוזרת של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. במצב test המייל נשלח רק לבעלים.
+  // ב-office הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
+  // ושליחה חוזרת למשרד של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. שליחה לעצמו אינה נחשבת "נשלחה למשרד נוטאם":
+  // היא לא נועלת את הבקשה, לא חוסמת שליחה אמיתית ולא נבדקת מול expectMode — אבל נספרת בהגבלת הקצב וב"נשלח — ....txt".
   sendRequest: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
-    var mode = mailMode_();
-    if (r.expectMode !== mode) return { ok: false, error: 'mode_changed', mailMode: mode };
+    var target = r.target === undefined ? 'office' : r.target;      // חסר => office (לקוח ישן); null/ריק/מחרוזת אחרת => נדחה
+    if (target !== 'office' && target !== 'self') return { ok: false, error: 'bad_target' };
+    var mode = mailMode_(), toOffice = target === 'office';
+    if (toOffice && r.expectMode !== mode) return withMailInfo_({ ok: false, error: 'mode_changed', mailMode: mode }, a.user);
     var folder = requestFolder_(r.folderId);
     if (!folder) return { ok: false, error: 'bad_folder' };
     var subject = cleanSubject_(r.subject), body = cleanBody_(r.body);
@@ -627,7 +671,7 @@ var ACTIONS = {
     if (!entry) return { ok: false, error: 'bad_folder' };
     if (entry.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     if (!entry.ready) return { ok: false, error: 'not_ready', message: 'הבקשה לא נשמרה כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב' };
-    if (mode === 'live' && !r.again) {
+    if (toOffice && mode === 'live' && !r.again) {
       if (liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
       // אותו מקום ותאריך שכבר נשלחו חי מבקשה אחרת (למשל אחרי רענון הדף, כשמזהה הבקשה אבד) — גם זו כפילות אפשרית למשרד נוטאם
       var base = entry.base || entry.name, twin = 0;
@@ -635,32 +679,40 @@ var ACTIONS = {
       if (twin) return { ok: false, error: 'already_sent', sentAt: twin, similar: true };
     }
 
-    var cache = CacheService.getScriptCache(), hourKey = 'sends:' + Math.floor(now_() / 3600000), sends = Number(cache.get(hourKey)) || 0;
-    if (sends >= CFG.MAX_SENDS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי שליחות בשעה האחרונה' };
+    // הגבלת קצב: לכל משתמש בנפרד (כדי שמטיס אחד לא יחסום את האחרים — בפרט בשליחות לעצמו) ועוד תקרה כוללת למערכת
+    var cache = CacheService.getScriptCache(), hour = Math.floor(now_() / 3600000), allKey = 'sends:' + hour, userKey = 'sends:u:' + sha256Hex_(a.name).slice(0, 16) + ':' + hour;
+    var sendsAll = Number(cache.get(allKey)) || 0, sendsUser = Number(cache.get(userKey)) || 0;
+    if (sendsUser >= CFG.MAX_SENDS_PER_HOUR || sendsAll >= CFG.MAX_SENDS_PER_HOUR_ALL) return { ok: false, error: 'rate', message: 'יותר מדי שליחות בשעה האחרונה' };
 
     var c = folderFiles_(folder);
     if (!c.hasDocx || !c.hasImage) return { ok: false, error: 'missing_files', message: 'חסר קובץ Word או תמונת מפה/תצ"א בתיקייה' };   // א-11 נספח ג': חובה לצרף מפה/תצ"א
     if (c.total > CFG.MAX_MAIL_BYTES) return { ok: false, error: 'too_big' };
 
-    var owner = ownerEmail_(), to = mode === 'live' ? CFG.MAIL_TO.slice() : (owner ? [owner] : []);
-    if (!to.length) return { ok: false, error: 'no_owner' };
-    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), mode, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
-    cache.put(hourKey, String(sends + 1), 3600);
+    // המבקש = כתובת המשתמש המחובר (שמורה ומאומתת); בלי כתובת — הבעלים. הבעלים חייב להיות ידוע: הוא תמיד מקבל עותק סמוי (נכשל סגור)
+    var owner = ownerEmail_(), requester = requesterEmail_(a.user) || owner;
+    if (!owner || !requester) return { ok: false, error: 'no_owner' };
+    var plan = mailPlan_(mode, target, requester, owner), to = plan.to;
+    var prefix = !toOffice ? '[עותק לעצמי — לא נשלח למשרד נוטאם] ' : mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ';
+    // ביומן: שליחה לעצמו נרשמת כ-mode:'self' (ראו sendKind_) — לעולם לא כ"נשלחה חי"
+    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
+    cache.put(allKey, String(sendsAll + 1), 3600); cache.put(userKey, String(sendsUser + 1), 3600);
     try {
-      MailApp.sendEmail({
-        to: to.join(','), cc: mode === 'live' && owner ? owner : '', replyTo: owner || '', name: CFG.SENDER_NAME,
-        subject: (mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ') + subject, body: body, attachments: c.blobs
-      });
+      var opts = { to: to.join(','), replyTo: plan.replyTo, name: CFG.SENDER_NAME, subject: prefix + subject, body: body, attachments: c.blobs };
+      if (plan.cc.length) opts.cc = plan.cc.join(',');
+      if (plan.bcc.length) opts.bcc = plan.bcc.join(',');
+      MailApp.sendEmail(opts);
     } catch (err) {
       try { logSentEnd_(folder.getId(), sid, 'failed'); } catch (e2) { /* הרשומה נשארת "בשליחה" — שמרני */ }
       throw err;
     }
     try { logSentEnd_(folder.getId(), sid, 'sent'); } catch (e3) { /* המייל כבר יצא; הרשומה נשארת "בשליחה" וממשיכה לחסום כפילות */ }
     try {   // סימון בתוך תיקיית הבקשה, כדי שגם מי שפותח את התיקייה בדרייב יראה שנשלחה
-      folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (mode === 'live' ? '' : ' (בדיקה)') + '.txt',
-        ['נשלח ע"י: ' + a.name, 'מצב: ' + (mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — לבעלים בלבד'), 'אל: ' + to.join(', '), 'עותק: ' + (mode === 'live' ? owner : '—'), 'נושא: ' + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
+      var kindName = !toOffice ? 'עותק לעצמו — לא נשלח למשרד נוטאם' : mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — למבקש בלבד, לא נשלח למשרד נוטאם';
+      folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (!toOffice ? ' (לעצמו)' : mode === 'live' ? '' : ' (בדיקה)') + '.txt',
+        ['נשלח ע"י: ' + a.name, 'יעד: ' + (toOffice ? 'משרד' : 'לעצמו'), 'מצב: ' + kindName, 'אל: ' + to.join(', '), 'עותק: ' + (plan.cc.length ? plan.cc.join(', ') : '—'), 'עותק סמוי למנהל: כן', 'נושא: ' + prefix + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
     } catch (e4) { /* הסימון אינו חיוני */ }
-    return { ok: true, mode: mode, to: to, cc: mode === 'live' ? owner : '', files: c.names, sentAt: t };
+    // owner לא מוחזר ללקוח אלא כשהוא עצמו המבקש (to/cc מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר)
+    return { ok: true, mode: mode, target: target, to: to, cc: plan.cc, adminCopy: true, files: c.names, sentAt: t };
   }
 };
 
@@ -680,7 +732,7 @@ function folderFiles_(folder) {
 
 function loginOk_(name, u) {
   var t = makeToken_(name, u);
-  return { ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: u.until || null, renewUrl: CFG.RENEW_URL };
+  return withMailInfo_({ ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: u.until || null, renewUrl: CFG.RENEW_URL }, u);
 }
 function admin_(r) {
   var a = auth_(r.token);

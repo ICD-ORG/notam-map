@@ -393,7 +393,7 @@
       const reach = R + nearM + (z.approx ? approxM || 0 : 0);
       if (src === "b09" && topFt != null && z.minFt >= topFt + TERRAIN_MAX_FT && r.d <= reach) { out.excluded.push({ id: z.id, minFt: z.minFt, d: r.d }); return; }
       if (r.d > reach) return;
-      const rec = { id: z.id, name: z.name, cat: z.cat || src, src, kind: kindLabel, d: r.d, edge: Math.max(0, r.d - R), p: r.p, ll: P.ll(r.p[0], r.p[1]), alt: altTxt, note: z.note || "", approx: !!z.approx, pmt: z.pmt || "", pmtRef: z.pmtRef || "", coord: z.coord || "", needGroundFt: (src === "b09" && z.minFt > 0 && topFt != null) ? Math.max(0, Math.round(z.minFt - topFt)) : 0, label: (z.cat === "B09" || z.cat === "B09B") ? z.id : z.id + " ״" + z.name + "״", z };
+      const rec = { id: z.id, name: z.name, cat: z.cat || src, src, kind: kindLabel, d: r.d, edge: Math.max(0, r.d - R), p: r.p, ll: P.ll(r.p[0], r.p[1]), alt: altTxt, note: z.note || "", approx: !!z.approx, pmt: z.pmt || "", pmtRef: z.pmtRef || "", coord: z.coord || "", needGroundFt: (src === "b09" && z.minFt > 0 && topFt != null) ? Math.max(0, Math.round(z.minFt - topFt)) : 0, label: (z.cat === "B09" || z.cat === "B09B") ? z.id : (z.name ? z.id + " ״" + z.name + "״" : z.id), z };   // אזור בלי שם (LLR107/120/601) — בלי גרשיים ריקות; אותו כלל ב-maplayers.js
       (r.d <= R ? out.inside : out.near).push(rec);
     };
     (data.zones || []).forEach(z => {
@@ -494,8 +494,9 @@
     const noon = 720 - 4 * lon - eot, base = Date.UTC(y, m - 1, d);
     return { rise: new Date(base + (noon - 4 * ha) * 60000), set: new Date(base + (noon + 4 * ha) * 60000) };
   }
+  let tzFmt = null;   // מפיק אחד לשימוש חוזר: בנייה של Intl.DateTimeFormat בכל קריאה היא החלק היקר ב-localToUtc (ועוד פעמים רבות בטבלת יום/לילה)
   const tzParts = (ms) => {
-    const f = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const f = tzFmt || (tzFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     const o = {}; f.formatToParts(new Date(ms)).forEach(p => { o[p.type] = p.value; });
     return o;
   };
@@ -648,6 +649,49 @@
   }
 
   /* ================= אימות קלט ================= */
+  const PURPOSE_MAX = 80;   // תקרת אורך מהות הפעילות, בתווים (נקודות קוד — אמוג׳י אחד הוא תו אחד). אותו ערך ב-ui.js; שדה ההוספה מוגבל ל-4×PURPOSE_MAX (ui.js/index.html) כדי שהדבקה ארוכה תגיע לבדיקה ותידחה בהודעה ולא תיחתך בשקט
+  const purposeLen = p => [...String(p == null ? "" : p).trim()].length;
+  // תו שאסור במהות: בקרה (C0, DEL, C1), מפרידי שורה/פסקה U+2028/2029, חצי סרוגייט בודד ו-U+FFFE/FFFF. אלה אסורים ב-XML (Word), וחצי סרוגייט בודד גם גורם ל-encodeURIComponent של המייל לזרוק.
+  // לולאה על נקודות קוד (ולא regex עם escape של יוניקוד); זוג סרוגייט תקין (אמוג'י) מגיע כתו אחד ועובר
+  function purposeHasBadChar(p) {
+    for (const ch of p) { const c = ch.codePointAt(0); if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029 || (c >= 0xd800 && c <= 0xdfff) || c === 0xfffe || c === 0xffff) return true; }
+    return false;
+  }
+  // יש בטקסט לפחות תו גלוי אחד? תווים בלתי נראים — רווחים, בקרה/עיצוב/מפרידים (Cc, Cf, Z: RLM, ZWSP, LRM, WJ, SHY…) ועוד כמה שאינם באף אחת מהקטגוריות האלה: מילוי הנגול (U+115F, U+1160, U+3164, U+FFA0),
+  // בריילי ריק (U+2800), CGJ (U+034F), נקודות חיבור חמריות (U+17B4/5), מפרידי מונגולית (U+180B–180F), בוררי וריאציה (U+FE00–FE0F, U+E0100–E01EF). מהות שכולה כאלה נראית ריקה בטופס, ב-Word ובמייל. השוואה מספרית — בלי רצפי escape של יוניקוד
+  const INVIS_CAT = /[\p{Cc}\p{Cf}\p{Z}]/u;
+  function purposeHasVisible(p) {
+    for (const ch of String(p == null ? "" : p)) {
+      if (INVIS_CAT.test(ch) || /\s/.test(ch)) continue;
+      const c = ch.codePointAt(0);
+      if (c === 0x115f || c === 0x1160 || c === 0x3164 || c === 0xffa0 || c === 0x2800 || c === 0x34f || c === 0x17b4 || c === 0x17b5 || (c >= 0x180b && c <= 0x180f) || (c >= 0xfe00 && c <= 0xfe0f) || (c >= 0xe0100 && c <= 0xe01ef)) continue;
+      return true;
+    }
+    return false;
+  }
+  // מחזיר "" כשהמהות חוקית, אחרת הודעת השגיאה בעברית. הבדיקה על הערך כפי שהוא (לא אחרי ניקוי): מה שנכנס לטופס הוא מה שנבדק
+  function purposeProblem(p) {
+    if (typeof p !== "string" || !p.trim() || !purposeHasVisible(p)) return "יש לבחור מהות פעילות";   // גם מהות שכולה תווים בלתי נראים
+    if (purposeLen(p) > PURPOSE_MAX) return "מהות הפעילות: עד " + PURPOSE_MAX + " תווים";
+    if (purposeHasBadChar(p)) return "מהות הפעילות מכילה תווים לא תקינים (למשל תווי בקרה)";
+    return "";
+  }
+  // פרטי המבקש בנספח ג׳: שם הגורם המבקש (שדה 2) חובה ונקבע על ידי המבקש עצמו — אין עוד ברירת מחדל של הארגון; אות קריאה (שדה 13) ומס׳ רישום כלי הטיס (שדה 14) אופציונליים (ריק => "לא רלוונטי" בפלט).
+  // אותם כללי תווים כמו במהות (purposeHasBadChar): הערכים נכנסים לטופס, ל-Word (XML), ל-KML ולמייל. הבדיקה על הערך כפי שהוא, והאורך אחרי trim
+  const ORG_MAX = 80, ID_MAX = 40;
+  function requesterOrgProblem(v) {
+    if (typeof v !== "string" || !v.trim()) return "יש להזין את שם הגורם המבקש";
+    if (v.trim().length > ORG_MAX) return "שם הגורם המבקש: עד " + ORG_MAX + " תווים";
+    if (purposeHasBadChar(v)) return "שם הגורם המבקש מכיל תווים לא תקינים (למשל תווי בקרה)";
+    return "";
+  }
+  function optionalIdProblem(v, label) {
+    if (v == null || v === "") return "";
+    if (typeof v !== "string") return label + " אינו תקין";
+    if (v.trim().length > ID_MAX) return label + ": עד " + ID_MAX + " תווים";
+    if (purposeHasBadChar(v)) return label + " מכיל תווים לא תקינים (למשל תווי בקרה)";
+    return "";
+  }
   function validateInput(inp, cfg) {
     const errs = [], push = (k, m) => errs.push({ field: k, msg: m });
     if (!isFinite(inp.lat) || !isFinite(inp.lon)) push("coord", "יש להזין נקודת מרכז (או ללחוץ על המפה)");
@@ -662,10 +706,16 @@
     if (a && b && (Date.UTC(b.y, b.m - 1, b.d) - Date.UTC(a.y, a.m - 1, a.d)) / 86400000 > 60) push("dateTo", "טווח מעל 60 ימים");
     if (!parseTime(inp.timeFrom)) push("timeFrom", "שעת התחלה חסרה");
     if (!parseTime(inp.timeTo)) push("timeTo", "שעת סיום חסרה");
-    if (!cfg.purposes.includes(inp.purpose)) push("purpose", "יש לבחור מהות פעילות");
+    // מהות הפעילות: טקסט חופשי — המשתמש יכול להוסיף מהויות משלו (ui.js, נשמרות בדפדפן), ולכן אין עוד דרישה שתהיה ברשימת config.json (השרת אינו בודק מהות).
+    // חוקית = מחרוזת לא ריקה אחרי trim, עד PURPOSE_MAX תווים, בלי תווי בקרה (הם נכנסים לשדה 4 בטופס, למייל ול-Word); ערך שאינו מחרוזת נדחה
+    const pu = purposeProblem(inp.purpose);
+    if (pu) push("purpose", pu);
     if (!inp.aircraft || !inp.aircraft.length) push("aircraft", "יש לבחור כלי טיס");
     if (!(inp.siteName || "").trim()) push("siteName", "חסר שם ישוב/אתר");
     if (!(inp.requesterName || "").trim() || !/\d{7,}/.test((inp.requesterPhone || "").replace(/\D/g, ""))) push("requester", "חסרים שם וטלפון של המבקש");
+    { const p = requesterOrgProblem(inp.requesterOrg); if (p) push("requesterOrg", p); }
+    { const p = optionalIdProblem(inp.callsign, "אות הקריאה"); if (p) push("callsign", p); }
+    { const p = optionalIdProblem(inp.registration, "מס׳ הרישום של כלי הטיס"); if (p) push("registration", p); }
     // נספח ג׳ שדה 12: "2 אנשי קשר + טלפונים" — רשימת {name, phone}; נדרשים לפחות שני שמות ולפחות טלפון תקין אחד, וטלפון שהוזן חייב להיות תקין. טלפון חסר לאיש קשר מסוים הוא אזהרה בלבד (ראו ui.js)
     const contacts = Array.isArray(inp.contacts) ? inp.contacts : [], named = contacts.filter(c => (c.name || "").trim());
     if (named.length < 2) push("contacts", "יש להזין שני אנשי קשר בשטח (שם וטלפון לכל אחד)");
@@ -785,6 +835,6 @@
     Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, xmlClean, altText, fmtHM,
     altRange, notamQ, manualElements, groupOf, COVERAGE_GROUPS, buildQueries, overpass, elemGeoms, elemDist, heLabel, classify, analyzeNear, analyzeZones, analyzeAgri, analyzeAirfields,
     suggestSiteName, nearestPlaces, analyzeBorders, sunTimes, localToUtc, dayNightTable, workingDaysBefore, dayName, ddmmyyyy, parseDate, parseTime, hhmm,
-    ilToday, splitList, validPhone, matchKnownObstacles, knownSegments, KO_MAX, MAX_PEOPLE, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate
+    ilToday, splitList, validPhone, matchKnownObstacles, knownSegments, KO_MAX, MAX_PEOPLE, ORG_MAX, ID_MAX, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate, purposeHasVisible, purposeLen, PURPOSE_MAX
   };
 });

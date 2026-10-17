@@ -19,7 +19,7 @@ const zones = J("members-k38p/data/zones.json"), rules09 = J("members-k38p/data/
 zones.rules09 = rules09;
 const snap = J("members-k38p/requests/selftest/notam-data.snap.json");
 const fixture = n => ({ near: J(`members-k38p/requests/selftest/${n}/near.json`), far: J(`members-k38p/requests/selftest/${n}/far.json`), ext: J(`members-k38p/requests/selftest/${n}/ext.json`), reverse: J(`members-k38p/requests/selftest/${n}/reverse.json`) });
-const baseInput = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
+const baseInput = Object.assign({}, exp.input, { purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", requesterOrg: "חברת הבדיקה בע״מ", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
 const mkData = fx => Object.assign({ zones, inpa, agri, notams: snap.notams, notamFetchedIso: snap.fetched_iso }, fx);
 const now = new Date(exp.now);
 
@@ -212,8 +212,8 @@ test("נוטם שפג תוקפו או טרם החל — לא נכלל", () => {
 
 test("אימות קלט", () => {
   const ok = C.validateInput(baseInput, cfg); assert.deepEqual(ok, []);
-  const bad = C.validateInput(Object.assign({}, baseInput, { radius: 5, heightM: NaN, dateFrom: "", lat: NaN, aircraft: [], requesterName: "" }), cfg).map(e => e.field);
-  ["coord", "radius", "height", "dateFrom", "aircraft", "requester"].forEach(f => assert.ok(bad.includes(f), f));
+  const bad = C.validateInput(Object.assign({}, baseInput, { radius: 5, heightM: NaN, dateFrom: "", lat: NaN, aircraft: [], requesterName: "", requesterOrg: "" }), cfg).map(e => e.field);
+  ["coord", "radius", "height", "dateFrom", "aircraft", "requester", "requesterOrg"].forEach(f => assert.ok(bad.includes(f), f));
   assert.ok(C.validateInput(Object.assign({}, baseInput, { dateTo: "2026-10-19" }), cfg).some(e => e.field === "dateTo"));
 });
 
@@ -229,7 +229,8 @@ test("הטופס: 17 שדות, ערכים קבועים, ואין 'טרם נבד�
   const rows = O.buildForm(res, cfg); assert.equal(rows.length, 17);
   const t = rows.map(r => r.text).join("\n");
   assert.ok(!/טרם נבדק|לא נבדק|בדוק בעצמך/.test(t));
-  assert.equal(rows[1].text, cfg.org.name); assert.equal(rows[13].text, "ICD"); assert.equal(rows[12].text, "לא רלוונטי");
+  // שדה 2 הוא מה שהמבקש הקליד (אין ברירת מחדל של הארגון); שדות 13 ו-14 ריקים => "לא רלוונטי" (בעבר הוצג ״ICD״ קבוע)
+  assert.equal(rows[1].text, "חברת הבדיקה בע״מ"); assert.equal(rows[13].text, "לא רלוונטי"); assert.equal(rows[12].text, "לא רלוונטי");
   assert.ok(rows[15].text.includes("3 ק״מ ביום ו-5 ק״מ בלילה"));
   assert.ok(rows[8].text.startsWith("200 מטר") && rows[8].text.includes("0.108 מייל ימי"));
   assert.ok(rows[9].text.includes("262.5 רגל") && rows[9].text.includes("מעפ״ש (AGL)"));
@@ -263,9 +264,10 @@ test("מייל ו-KML", () => {
 });
 
 test("הזרקת HTML בשדות חופשיים מנוטרלת", () => {
-  const res = C.analyze(Object.assign({}, baseInput, { siteName: "<img src=x onerror=alert(1)>", requesterName: "<b>x</b>" }), mkData(fixture("yarkon")), cfg, now);
+  const res = C.analyze(Object.assign({}, baseInput, { siteName: "<img src=x onerror=alert(1)>", requesterName: "<b>x</b>", requesterOrg: "<u>ארגון</u>", callsign: "<i>c</i>", registration: "<s>r</s>" }), mkData(fixture("yarkon")), cfg, now);
   const rows = O.buildForm(res, cfg);
   assert.ok(!/<img|<b>x/.test(rows[5].html + rows[10].html));
+  assert.ok(!/<[ubis]>/.test(rows[1].html + rows[12].html + rows[13].html), "שדות 2, 13, 14: בלי HTML גולמי");
 });
 
 test("הירקון: האצטדיון והבלון מופיעים בטופס ובדף הבדיקות", () => {
@@ -392,7 +394,7 @@ test("Word: קובץ docx תקין עם הטופס, תמונות, ודף בדי�
   for (const f of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml"]) assert.ok(wellFormed(await z.file(f).async("string")), "XML לא תקין: " + f);
   const plain = doc.replace(/<[^>]+>/g, "").replace(new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g"), "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
   assert.ok(plain.includes(exp.dmsLat) && plain.includes(exp.dmsLon), "קואורדינטות DMS");
-  assert.ok(plain.includes("262.5") && plain.includes("ICD") && plain.includes("אצטדיון רמת גן") && plain.includes("כדור פורח תל אביב") && plain.includes("LLU20"));
+  assert.ok(plain.includes("262.5") && plain.includes("חברת הבדיקה בע״מ") && !plain.includes("ICD") && plain.includes("אצטדיון רמת גן") && plain.includes("כדור פורח תל אביב") && plain.includes("LLU20"));
   assert.ok(plain.includes("אישור סקירה אנושית") && plain.includes("מצאי לפי קבוצות"));
   assert.ok(!plain.includes("דוח כיסוי"), "אין עוד טבלת דוח כיסוי — מה נסרק");
   assert.equal((doc.match(/<w:tbl>/g) || []).length, (doc.match(/<\/w:tbl>/g) || []).length);
@@ -1110,4 +1112,161 @@ test("Word: תאריך סיור בלי הערות מופיע בסעיף 'הנק�
   assert.ok(!dateOnly.lines.some(l => /^הערות המבקש/.test(l)));
   const none = await lines({ visitDate: "", visitNotes: "" }); assert.equal(none.model.visitNote, ""); assert.ok(!none.lines.some(l => /סיור באתר/.test(l)));
   const both = await lines({ visitDate: "2026-10-15", visitNotes: "תצפית" }); assert.ok(both.lines.includes("הערות המבקש (סיור באתר ב-15.10.2026): תצפית"));
+});
+
+/* ---------- מהות הפעילות: טקסט חופשי (מהויות שהמשתמש מוסיף ב-ui.js ונשמרות בדפדפן), לא רק הרשימה שב-config.json ---------- */
+const puErrs = p => C.validateInput(Object.assign({}, baseInput, { purpose: p }), cfg).filter(e => e.field === "purpose");
+
+test("אימות מהות הפעילות: מהות מותאמת תקינה; ריקה, רווחים, לא-מחרוזת, 81 תווים ותווי בקרה נדחות", () => {
+  // לפני השינוי נדרשה מהות מתוך cfg.purposes; עכשיו כל מחרוזת תקינה מתקבלת (תנאי הבדיקה: המהות המותאמת אינה ברשימה)
+  const custom = ["לצורך הדרכת טייסים חדשים", "Survey of a roof", 'לצורך <b>x</b> & "y"', "  מהות עם רווחים בקצוות  ", "לצורך " + fcc(0xd83d, 0xde00)];
+  custom.forEach(p => assert.ok(!cfg.purposes.includes(p), p));
+  for (const p of cfg.purposes.concat(custom)) assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { purpose: p }), cfg), [], "בלי שום שגיאה: " + p);
+  // ריקה / רווחים בלבד / לא מחרוזת — נדחות בהודעה הקיימת, שגיאה אחת בשדה purpose
+  for (const p of ["", "   ", "\t\n", undefined, null, 0, 5, true, [], ["לצורך צילום"], {}, { toString: () => "לצורך צילום" }]) {
+    const e = puErrs(p); assert.equal(e.length, 1, JSON.stringify(p)); assert.equal(e[0].msg, "יש לבחור מהות פעילות");
+  }
+  // אורך: 80 תווים תקין, 81 נדחה; רווחי קצה אינם נספרים (הם נחתכים ב-trim לפני הבדיקה)
+  assert.equal(puErrs("א".repeat(80)).length, 0);
+  const long = puErrs("א".repeat(81)); assert.equal(long.length, 1); assert.match(long[0].msg, /80/);
+  assert.equal(puErrs(" " + "א".repeat(80) + " ").length, 0);
+  assert.equal(puErrs("א".repeat(40) + " ".repeat(10) + "ב".repeat(40)).length, 1, "רווחים פנימיים נספרים: 90 תווים");
+  // תווים אסורים: בקרה (NUL, טאב, שורה חדשה, CR, ESC), DEL, C1 (NEL), מפרידי שורה/פסקה, חצי סרוגייט בודד (שהיה גורם ל-encodeURIComponent של המייל לזרוק) ו-U+FFFE/FFFF
+  for (const c of [0, 9, 10, 13, 27, 0x7f, 0x85, 0x9f, 0x2028, 0x2029, 0xd800, 0xdc00, 0xfffe, 0xffff]) {
+    const e = puErrs("לצורך" + fcc(c) + "צילום"); assert.equal(e.length, 1, "U+" + c.toString(16)); assert.match(e[0].msg, /תווים לא תקינים/);
+  }
+  assert.equal(puErrs("לצורך צילום" + fcc(10)).length, 1, "תו בקרה בסוף נדחה גם כש-trim היה מסיר אותו");
+  assert.equal(puErrs(fcc(0xd800) + "לצורך").length, 1, "חצי סרוגייט בודד בתחילת המחרוזת");
+  assert.equal(puErrs("לצורך " + fcc(0xd83d, 0xde00)).length, 0, "זוג סרוגייט תקין (אמוג'י) מתקבל");
+  // הבקשה עם מהות מותאמת אינה מקבלת שגיאות אחרות, וכל השדות האחרים עדיין נבדקים
+  assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { purpose: "מהות חדשה", aircraft: [] }), cfg).map(e => e.field), ["aircraft"]);
+});
+
+
+test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל ול-Word כטקסט בלבד: escape ב-HTML, XML תקין, בלי הזרקה", async () => {
+  const data = mkData(fixture("yarkon")), BID = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
+  const hostile = ["<img src=x onerror=1>", "]]>", "</w:t>", "<script>alert(1)</script> & \"q\" 'r'", "&lt;b&gt;&amp;lt;", "<![CDATA[ x ]]> <?xml?>", "לצורך הדרכה " + fcc(0xd83d, 0xde00), "לצורך מיפוי חקלאי (מותאם)"];
+  for (const p of hostile) {
+    const inp = Object.assign({}, baseInput, { purpose: p });
+    assert.deepEqual(C.validateInput(inp, cfg), [], "מהות עוינת היא טקסט תקין: " + p);
+    const res = C.analyze(inp, data, cfg, now), row = O.buildForm(res, cfg)[3];
+    // שדה 4 בטופס: ה-HTML escaped (אין תו מסוכן גולמי), והטקסט הוא המהות כלשונה
+    assert.equal(row.label, "מהות הפעילות המבוקשת"); assert.equal(row.html, C.esc(p)); assert.ok(!/[<>"]/.test(row.html), "HTML גולמי: " + row.html);
+    assert.equal(row.text, p, "טקסט שדה 4");
+    // מייל: שורה אחת בגוף, וגם בקישור mailto (אחרי פענוח)
+    const m = O.mail(res, cfg);
+    assert.ok(m.body.split("\n").includes("מהות הפעילות: " + p), "גוף המייל: " + p);
+    assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");
+    // Word: XML מאוזן ותקין, ללא תגית מוזרקת, והטקסט נשמר כלשונו אחרי פענוח ה-entities
+    const model = O.docxModel(res, data, cfg, { includeChecks: true }), z = await JSZipNode.loadAsync(await D.build(model)), xml = await z.file("word/document.xml").async("string");
+    assert.ok(wellFormed(xml), "Word: XML מאוזן"); assert.ok(!XML_BAD.test(xml.replace(fcc(0xd83d, 0xde00), "")), "Word: תו אסור ב-XML");
+    assert.equal((xml.match(/<w:t[ >]/g) || []).length, (xml.match(/<\/w:t>/g) || []).length, "Word: כל <w:t> נסגר פעם אחת (אין הזרקת </w:t>)");
+    assert.ok(!/<img|<script|<!\[CDATA\[|<\?xml\?>/.test(xml.replace(/^<\?xml[^>]*\?>/, "")) && !xml.includes("]]>"), "Word: תגית מוזרקת");
+    const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+    const plain = xml.replace(/<[^>]+>/g, "").replace(BID, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    assert.ok(plain.includes(p), "Word: המהות כלשונה — " + p);
+    // KML אינו נושא מהות (אין לה שם בקובץ): לפחות אינו נשבר
+    const lintK = xmllint(O.kml(res, data, cfg)); if (lintK !== null) assert.equal(lintK, "", "KML: " + lintK);
+  }
+  // הגנה לעומק: גם אם תווי XML אסורים (U+FFFE, בקרה) היו מגיעים למהות (האימות דוחה אותם), ה-Word נשאר XML תקין
+  const dirtyP = "א" + fcc(0xfffe) + "ב" + fcc(0xb) + "ג", resD = C.analyze(Object.assign({}, baseInput, { purpose: dirtyP }), data, cfg, now);
+  const xmlD = await (await JSZipNode.loadAsync(await D.build(O.docxModel(resD, data, cfg, { includeChecks: false })))).file("word/document.xml").async("string");
+  assert.ok(!XML_BAD.test(xmlD) && xmlD.includes("אבג"), "Word: תווים אסורים במהות מנוקים");
+});
+
+/* ===== עצמאות המבקש: שם הגורם המבקש (שדה 2), אות קריאה (שדה 13) ומס׳ רישום (שדה 14) נקבעים על ידי המבקש — אין עוד ערכים קבועים של הארגון ===== */
+const ofErrs = (o, f) => C.validateInput(Object.assign({}, baseInput, o), cfg).filter(e => e.field === f);
+
+test("config.json: אין בלוק org (שם, רישום, אות קריאה); הנוסח ״לא רלוונטי״ של שדות 13 ו-14 הוא fixed.not_relevant", () => {
+  assert.equal(cfg.org, undefined, "הגדרות הארגון הוסרו");
+  assert.ok(!/הארגון הישראלי לרב להב|"ICD"/.test(JSON.stringify(cfg)), "אין שם ארגון קבוע בהגדרות");
+  assert.equal(cfg.fixed.not_relevant, "לא רלוונטי");
+});
+
+test("אימות שם הגורם המבקש (שדה 2): חובה; אחרי trim; עד 80 תווים; בלי תווי בקרה, חצי סרוגייט ותווים אסורים ב-XML", () => {
+  assert.deepEqual(C.validateInput(baseInput, cfg), [], "baseInput תקין עם גורם מבקש");
+  // חסר / רווחים / לא מחרוזת: שגיאה אחת בשדה requesterOrg
+  for (const v of [undefined, null, "", "   ", "\t \n", 0, 5, true, [], ["חברה"], {}, { toString: () => "חברה" }]) {
+    const e = ofErrs({ requesterOrg: v }, "requesterOrg"); assert.equal(e.length, 1, JSON.stringify(v)); assert.equal(e[0].msg, "יש להזין את שם הגורם המבקש");
+  }
+  // אורך אחרי trim: 80 תקין, 81 נדחה, רווחי קצה לא נספרים, רווחים פנימיים נספרים
+  assert.equal(ofErrs({ requesterOrg: "א".repeat(80) }, "requesterOrg").length, 0);
+  const long = ofErrs({ requesterOrg: "א".repeat(81) }, "requesterOrg"); assert.equal(long.length, 1); assert.match(long[0].msg, /80/);
+  assert.equal(ofErrs({ requesterOrg: "  " + "א".repeat(80) + "  " }, "requesterOrg").length, 0);
+  assert.equal(ofErrs({ requesterOrg: "א".repeat(40) + " ".repeat(10) + "ב".repeat(40) }, "requesterOrg").length, 1);
+  // תווים אסורים: בקרה, DEL, C1, מפרידי שורה/פסקה, חצי סרוגייט בודד, U+FFFE/FFFF — גם בקצה (trim לא מסתיר אותם)
+  for (const c of [0, 9, 10, 13, 27, 0x7f, 0x85, 0x9f, 0x2028, 0x2029, 0xd800, 0xdc00, 0xfffe, 0xffff]) {
+    const e = ofErrs({ requesterOrg: "חברת" + fcc(c) + "בדיקה" }, "requesterOrg"); assert.equal(e.length, 1, "U+" + c.toString(16)); assert.match(e[0].msg, /תווים לא תקינים/);
+  }
+  assert.equal(ofErrs({ requesterOrg: "חברה" + fcc(10) }, "requesterOrg").length, 1, "תו בקרה בסוף");
+  assert.equal(ofErrs({ requesterOrg: fcc(0xd800) + "חברה" }, "requesterOrg").length, 1, "חצי סרוגייט בתחילה");
+  // טקסט חופשי תקין: אותיות לטיניות, מספרים, מירכאות, גרשיים ואמוג'י (זוג סרוגייט תקין); גם תווי HTML/XML (נוטרלים בפלט — ראו הבדיקות למטה)
+  for (const v of ["Dana Levi Aerial Ltd.", "חברת ״הרחפן״ בע״מ", "מטיס פרטי — יוסי", 'א<ב>&"ג\'', "חברה " + fcc(0xd83d, 0xde00)]) assert.equal(ofErrs({ requesterOrg: v }, "requesterOrg").length, 0, v);
+  // האימות אינו נוגע בשאר השדות, וכל שדה אחר עדיין נבדק
+  assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { requesterOrg: "", aircraft: [] }), cfg).map(e => e.field).sort(), ["aircraft", "requesterOrg"]);
+  assert.equal(C.ORG_MAX, 80); assert.equal(C.ID_MAX, 40);
+});
+
+test("אימות אות קריאה ומס׳ רישום (שדות 13 ו-14): אופציונליים; עד 40 תווים; בלי תווים אסורים", () => {
+  for (const f of ["callsign", "registration"]) {
+    for (const v of [undefined, null, "", "   ", "4X-ABC", "ICD", "א".repeat(40), " " + "א".repeat(40) + " ", "Callsign " + fcc(0xd83d, 0xde00)]) assert.equal(ofErrs({ [f]: v }, f).length, 0, f + ": " + JSON.stringify(v));
+    const long = ofErrs({ [f]: "x".repeat(41) }, f); assert.equal(long.length, 1, f); assert.match(long[0].msg, /40/);
+    for (const c of [0, 9, 10, 0x7f, 0x85, 0x2028, 0xd800, 0xfffe, 0xffff]) { const e = ofErrs({ [f]: "ab" + fcc(c) + "cd" }, f); assert.equal(e.length, 1, f + " U+" + c.toString(16)); assert.match(e[0].msg, /תווים לא תקינים/); }
+    for (const v of [5, true, [], {}]) assert.equal(ofErrs({ [f]: v }, f).length, 1, f + ": ערך שאינו מחרוזת נדחה " + JSON.stringify(v));
+  }
+  // שגיאת אות הקריאה אינה מוצמדת לשדה אחר
+  assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { callsign: "x".repeat(41), registration: "y".repeat(41) }), cfg).map(e => e.field).sort(), ["callsign", "registration"]);
+});
+
+test("הטופס: שדה 2 = הגורם שהוקלד; שדות 13 ו-14 = מה שהוקלד, וריק/רווחים => ״לא רלוונטי״; אין שם ארגון או ״ICD״ קבועים באף פלט", async () => {
+  const data = mkData(fixture("yarkon")), org = "דנה לוי — צילום אווירי", res = C.analyze(Object.assign({}, baseInput, { requesterOrg: "  " + org + "  ", callsign: " רב-להב 7 ", registration: "4X-ABC" }), data, cfg, now);
+  const rows = O.buildForm(res, cfg);
+  assert.equal(rows[1].label, "שם/גורם המבקש"); assert.equal(rows[1].text, org, "שדה 2 אחרי trim");
+  assert.equal(rows[12].label, "אות קריאה"); assert.equal(rows[12].text, "רב-להב 7");
+  assert.equal(rows[13].label, "מס׳ רישום כלי הטיס"); assert.equal(rows[13].text, "4X-ABC");
+  // ריק / רווחים / חסר => ״לא רלוונטי״ (שינוי ברירת מחדל: בעבר שדה 14 היה ״ICD״ קבוע)
+  for (const v of [undefined, null, "", "   "]) { const r = O.buildForm(C.analyze(Object.assign({}, baseInput, { callsign: v, registration: v }), data, cfg, now), cfg); assert.equal(r[12].text, "לא רלוונטי", JSON.stringify(v)); assert.equal(r[13].text, "לא רלוונטי", JSON.stringify(v)); }
+  // ארגון אחר => שדה 2 אחר; שני מבקשים באותה מערכת אינם חולקים שום ערך קבוע
+  const other = O.buildForm(C.analyze(Object.assign({}, baseInput, { requesterOrg: "חברה אחרת" }), data, cfg, now), cfg);
+  assert.equal(other[1].text, "חברה אחרת"); assert.notEqual(other[1].text, rows[1].text);
+  // אין ברירת מחדל גם בלי הערך (הפלט לא ממציא ארגון); האימות הוא שחוסם
+  assert.ok(!/הארגון הישראלי|לרב להב|ICD/.test(O.buildForm(C.analyze(Object.assign({}, baseInput, { requesterOrg: "" }), data, cfg, now), cfg).map(r => r.text).join("\n")), "בלי ארגון קבוע");
+  // כל הפלטים כולם (טופס, דף בדיקות, מייל, KML, Word) נקיים מהשם הקבוע
+  const all = [rows.map(r => r.text).join("\n"), O.buildChecks(res, data, cfg).map(r => r.join(" ")).join("\n"), O.mail(res, cfg).body, O.kml(res, data, cfg), JSON.stringify(O.docxModel(res, data, cfg, { includeChecks: true }).rows)].join("\n");
+  assert.ok(!/הארגון הישראלי לרב להב|ICD/.test(all.replace(/ICD[A-Z0-9]/g, "")), "אין ״הארגון הישראלי לרב להב״ או ״ICD״ בשום פלט");
+});
+
+test("מייל: ״שם/גורם המבקש״ והחתימה לפי הגורם שהוקלד (בלי ארגון קבוע); mailto מקודד אותם במלואם", () => {
+  const data = mkData(fixture("yarkon")), org = 'חברת "אלפא" & בטא', res = C.analyze(Object.assign({}, baseInput, { requesterOrg: org, requesterName: "דנה לוי", requesterPhone: "050-1234567" }), data, cfg, now), m = O.mail(res, cfg), lines = m.body.split("\n");
+  assert.ok(lines.includes("שם/גורם המבקש: " + org), "שורת הגורם המבקש");
+  const i = lines.indexOf("בברכה,"); assert.ok(i > 0); assert.deepEqual(lines.slice(i, i + 4), ["בברכה,", "דנה לוי", org, "050-1234567"], "חתימה: שם, גורם, טלפון");
+  assert.ok(!/הארגון הישראלי|לרב להב/.test(m.body));
+  assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");
+  // כתובות היעד נשארות לפי הנוהל, בלי קשר לגורם המבקש (הנמענים בפועל נקבעים בשרת)
+  assert.deepEqual(m.to, ["notamoffice@iaa.gov.il", "nofm@iaa.gov.il"]);
+});
+
+test("Word: הגורם המבקש בשדה 2 ובמאפיין יוצר המסמך (core.xml); ערך עוין נשאר טקסט, ה-XML תקין ובלי הזרקה", async () => {
+  const data = mkData(fixture("yarkon")), BID = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
+  const build = async over => { const res = C.analyze(Object.assign({}, baseInput, over), data, cfg, now), model = O.docxModel(res, data, cfg, { includeChecks: true }), z = await JSZipNode.loadAsync(await D.build(model));
+    return { model, doc: await z.file("word/document.xml").async("string"), core: await z.file("docProps/core.xml").async("string") }; };
+  const plainOf = xml => xml.replace(/<[^>]+>/g, "").replace(BID, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  const ok = await build({ requesterOrg: "דנה לוי — צילום אווירי", callsign: "רב-להב 7", registration: "4X-ABC" });
+  assert.equal(ok.model.creator, "דנה לוי — צילום אווירי", "יוצר המסמך = הגורם המבקש (לא ארגון קבוע)");
+  assert.match(ok.core, /<dc:creator>דנה לוי — צילום אווירי<\/dc:creator>/);
+  const p = plainOf(ok.doc); assert.ok(p.includes("דנה לוי — צילום אווירי") && p.includes("רב-להב 7") && p.includes("4X-ABC") && !p.includes("ICD"));
+  // ערך עוין בשלושת השדות: escape ב-XML, בלי תגית מוזרקת, וה-XML מאוזן ועובר xmllint
+  const bad = "<img src=x onerror=1> & ]]> </w:t><w:t>";
+  const hostile = await build({ requesterOrg: bad, callsign: bad.slice(0, 30), registration: "<b>r</b>" });
+  for (const xml of [hostile.doc, hostile.core]) {
+    assert.ok(wellFormed(xml), "XML מאוזן"); assert.ok(!XML_BAD.test(xml), "תו אסור ב-XML");
+    const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+  }
+  assert.equal((hostile.doc.match(/<w:t[ >]/g) || []).length, (hostile.doc.match(/<\/w:t>/g) || []).length, "כל <w:t> נסגר פעם אחת");
+  assert.ok(!/<img|<w:t><w:t>/.test(hostile.doc) && !hostile.doc.includes("]]>"), "תגית מוזרקת");
+  assert.ok(plainOf(hostile.doc).includes(bad), "הטקסט העוין נשמר כלשונו כטקסט");
+  assert.ok(hostile.core.includes("&lt;img src=x onerror=1&gt; &amp; ]]&gt;"), "core.xml: escape");
+  // הגנה לעומק: תווים אסורים ב-XML שהיו מגיעים לשדה (האימות דוחה אותם) מנוקים ב-Word
+  const dirty = await build({ requesterOrg: "א" + fcc(0xfffe) + "ב" + fcc(0xb) + "ג", callsign: "ד" + fcc(1) + "ה", registration: "ו" + fcc(0xffff) + "ז" });
+  assert.ok(!XML_BAD.test(dirty.doc) && !XML_BAD.test(dirty.core) && plainOf(dirty.doc).includes("אבג") && plainOf(dirty.doc).includes("דה") && plainOf(dirty.doc).includes("וז"), "תווים אסורים מנוקים");
 });

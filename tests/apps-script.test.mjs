@@ -184,7 +184,8 @@ function savedRequest(env, token, name = "פי גלילות, תל אביב — 2
 }
 const goLive = (env, token) => assert.ok(env.call({ action: "setMailMode", token, mode: "live" }).ok);
 
-test("ברירת מחדל: מצב בדיקה — המייל נשלח רק לבעלים, עם קידומת בדיקה ובלי עותק למשרד נוטאם", () => {
+// עודכן לדרישת עצמאות המבקש: מצב בדיקה שולח לכתובת המבקש (ולא "לבעלים"); כאן המבקש הוא המנהל — משתמש בלי כתובת שמורה — ולכן הכתובת היא של הבעלים
+test("ברירת מחדל: מצב בדיקה — המייל נשלח רק לכתובת המבקש (מנהל בלי כתובת = הבעלים), עם קידומת בדיקה ובלי עותק למשרד נוטאם", () => {
   const { env, token } = bootstrapped();
   assert.equal(env.call({ action: "me", token }).mailMode, "test");
   const b = savedRequest(env, token);
@@ -193,11 +194,12 @@ test("ברירת מחדל: מצב בדיקה — המייל נשלח רק לבע
   assert.deepEqual(r.to, ["owner@icd.test"]);
   assert.equal(env.mails.length, 1);
   assert.equal(env.mails[0].to, "owner@icd.test");
+  assert.equal(env.mails[0].bcc, undefined, "הבעלים כבר ב-to — לא נשלח אליו פעמיים");
   assert.match(env.mails[0].subject, /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית/);
   assert.ok(!/iaa\.gov\.il/.test(JSON.stringify(env.mails[0])));
 });
 
-test("מצב חי: נמענים קבועים מפמ״ת א-11 סעיף 6(א) בלבד, עותק לבעלים, נושא ללא קידומת", () => {
+test("מצב חי: נמענים קבועים מפמ״ת א-11 סעיף 6(א) בלבד, עותק למבקש (כאן הבעלים, בלי כפילות ב-BCC), נושא ללא קידומת", () => {
   const { env, token } = bootstrapped(); goLive(env, token);
   const b = savedRequest(env, token);
   const r = env.call({ action: "sendRequest", expectMode: modeOf(env), token, folderId: b.folderId, subject: "בקשה לסגירה אווירית — פי גלילות", body: "שלום" });
@@ -206,8 +208,10 @@ test("מצב חי: נמענים קבועים מפמ״ת א-11 סעיף 6(א) ב�
   const m = env.mails[0];
   assert.equal(m.to, "notamoffice@iaa.gov.il,nofm@iaa.gov.il");
   assert.equal(m.cc, "owner@icd.test");
+  assert.equal(m.bcc, undefined, "הבעלים כבר ב-cc — לא נשלח אליו פעמיים");
   assert.equal(m.subject, "בקשה לסגירה אווירית — פי גלילות");
   assert.equal(m.replyTo, "owner@icd.test");
+  assert.deepEqual(r.cc, ["owner@icd.test"]); assert.equal(r.target, "office"); assert.equal(r.adminCopy, true);
 });
 
 test("הלקוח לא יכול לקבוע נמענים: שדות to/cc/bcc בבקשה מתעלמים", () => {
@@ -875,4 +879,315 @@ test("saveFile: רק לבקשה שביומן, רק לבעלים או מנהל, �
   // מנהל רשאי לכתוב לבקשה של אחר (שלא נשלחה)
   const his = savedRequest(env, dave.token, "של דייב — 06.11.2026");
   assert.ok(put(token, his.folderId).ok);
+});
+
+/* ===== עצמאות המבקש: נמענים לפי המבקש (לא לפי הבעלים), יעד office/self, עותק סמוי למנהל, הגבלת קצב לכל משתמש ===== */
+const OFFICE = ["notamoffice@iaa.gov.il", "nofm@iaa.gov.il"], OWNER = "owner@icd.test";
+// מטיס עצמאי: נרשם בכרטיס Wix + קוד במייל (כמו בפועל); הכתובת שלו נשמרת רק כך. מנקה את מייל הקוד מ-env.mails
+function pilotUser(env, email = "pilot@example.com", user = "dana.pilot") {
+  addOrder(env, { email });
+  assert.ok(env.call({ action: "regStart", email }).ok);
+  const r = env.call({ action: "regFinish", email, code: codeFrom(env), user, pass: "dana-pass-1234" });
+  assert.ok(r.ok, JSON.stringify(r));
+  env.mails.length = 0;
+  return r;
+}
+const sendTo = (env, token, folderId, extra) => env.call({ action: "sendRequest", expectMode: modeOf(env), token, folderId, subject: "בקשה — נושא", body: "גוף", ...extra });
+const rcpts = v => (v === undefined || v === "" ? [] : String(v).split(","));   // רשימת נמענים כפי שנמסרה ל-MailApp
+const SELF_PREFIX = "[עותק לעצמי — לא נשלח למשרד נוטאם] ", TEST_PREFIX = "[בדיקה — לא נשלח למשרד נוטאם] ";
+
+for (const [mode, target, want] of [
+  ["test", "office", { to: ["pilot@example.com"], cc: [], prefix: TEST_PREFIX }],
+  ["test", "self", { to: ["pilot@example.com"], cc: [], prefix: SELF_PREFIX }],
+  ["live", "office", { to: OFFICE, cc: ["pilot@example.com"], prefix: "" }],
+  ["live", "self", { to: ["pilot@example.com"], cc: [], prefix: SELF_PREFIX }],
+]) {
+  test(`נמענים — מצב ${mode} × יעד ${target}: to/cc/bcc/replyTo/נושא לפי המבקש (המטיס), הבעלים רק בעותק סמוי`, () => {
+    const { env, token } = withWix(); if (mode === "live") goLive(env, token);
+    const pilot = pilotUser(env);
+    const b = savedRequest(env, pilot.token, "אתר מטיס — 01.12.2026");
+    const r = sendTo(env, pilot.token, b.folderId, { target });
+    assert.ok(r.ok, JSON.stringify(r));
+    assert.equal(env.mails.length, 1);
+    const m = env.mails[0];
+    assert.deepEqual(rcpts(m.to), want.to, "to");
+    assert.deepEqual(rcpts(m.cc), want.cc, "cc");
+    assert.deepEqual(rcpts(m.bcc), [OWNER], "המנהל תמיד מקבל עותק סמוי");
+    assert.equal(m.replyTo, "pilot@example.com", "תשובות חוזרות למבקש ולא לבעלים");
+    assert.equal(m.subject, want.prefix + "בקשה — נושא");
+    assert.equal(m.attachments.length, 4);
+    // הבעלים לעולם לא ב-to/cc ולא מוחזר למטיס
+    assert.ok(![...rcpts(m.to), ...rcpts(m.cc)].includes(OWNER));
+    assert.equal(r.target, target); assert.equal(r.mode, mode); assert.equal(r.adminCopy, true);
+    assert.deepEqual(r.to, want.to); assert.deepEqual(r.cc, want.cc);
+    assert.ok(!JSON.stringify(r).includes(OWNER), "כתובת הבעלים לא נחשפת למטיס: " + JSON.stringify(r));
+    assert.ok(r.sentAt > 0 && r.files.length === 4);
+  });
+}
+
+test("המבקש הוא הבעלים (מנהל בלי כתובת, או נרשם עם כתובת הבעלים): אין כפילות כתובות בשום צירוף", () => {
+  const { env, token } = withWix();
+  const owner = pilotUser(env, "Owner@ICD.test", "owner.pilot");   // נרשם עם כתובת הבעלים (באותיות אחרות) — הכתובת נשמרת מנורמלת
+  const cases = [["admin", token], ["owner-as-pilot", owner.token]];
+  for (const [who, tok] of cases) for (const mode of ["test", "live"]) for (const target of ["office", "self"]) {
+    if (mode === "live") goLive(env, token); else env.call({ action: "setMailMode", token, mode: "test" });
+    const b = savedRequest(env, tok, who + " " + mode + " " + target + " — 02.12.2026");
+    const before = env.mails.length;
+    const r = sendTo(env, tok, b.folderId, { target });
+    assert.ok(r.ok, JSON.stringify(r));
+    const m = env.mails[before], all = [...rcpts(m.to), ...rcpts(m.cc), ...rcpts(m.bcc)].map(x => x.toLowerCase());
+    assert.equal(new Set(all).size, all.length, who + " " + mode + " " + target + ": כתובת כפולה " + all.join(","));
+    assert.ok(all.includes(OWNER), "הבעלים מקבל עותק (ב-to/cc כשהוא המבקש)");
+    assert.equal(m.bcc, undefined, "הבעלים כבר ב-to/cc");
+    assert.equal(m.replyTo.toLowerCase(), OWNER);
+    if (mode === "live" && target === "office") { assert.deepEqual(rcpts(m.to), OFFICE); assert.deepEqual(rcpts(m.cc).map(x => x.toLowerCase()), [OWNER]); }
+    else assert.deepEqual(rcpts(m.to).map(x => x.toLowerCase()), [OWNER]);
+  }
+});
+
+test("כתובת המבקש גם אחד מנמעני משרד נוטאם — לא נשלח פעמיים לאותה כתובת (נרמול אותיות)", () => {
+  const { env, token } = withWix(); goLive(env, token);
+  const odd = pilotUser(env, "NOFM@iaa.gov.il", "odd.pilot");
+  const r = sendTo(env, odd.token, savedRequest(env, odd.token, "כפילות — 03.12.2026").folderId);
+  assert.ok(r.ok, JSON.stringify(r));
+  const m = env.mails[0];
+  assert.deepEqual(rcpts(m.to), OFFICE); assert.equal(m.cc, undefined);
+  assert.deepEqual(rcpts(m.bcc), [OWNER]); assert.equal(m.replyTo, "nofm@iaa.gov.il");
+});
+
+test("משתמש בלי כתובת שמורה (נוצר ידנית) נופל לכתובת הבעלים; copyTo/email/features בכל תשובת כניסה", () => {
+  const { env, token } = bootstrapped();
+  env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
+  assert.equal(dave.email, ""); assert.equal(dave.copyTo, OWNER); assert.equal(dave.copyToIsOwner, true); assert.deepEqual(dave.features, ["sendTarget"]);
+  const b = savedRequest(env, dave.token, "דייב — 04.12.2026");
+  assert.ok(sendTo(env, dave.token, b.folderId, { target: "self" }).ok);
+  assert.equal(env.mails[0].to, OWNER); assert.equal(env.mails[0].replyTo, OWNER); assert.equal(env.mails[0].bcc, undefined);
+  // מנהל: אותו דבר
+  const adm = env.call({ action: "me", token });
+  assert.equal(adm.email, ""); assert.equal(adm.copyTo, OWNER); assert.equal(adm.copyToIsOwner, true); assert.deepEqual(adm.features, ["sendTarget"]);
+});
+
+test("תשובות login/me/changePassword/regFinish/listUsers/setMailMode מחזירות email, copyTo, copyToIsOwner ו-features (מטיס עם כתובת)", () => {
+  const { env, token } = withWix();
+  const reg = pilotUser(env);
+  const check = (r, what) => {
+    assert.ok(r.ok, what + " " + JSON.stringify(r));
+    assert.equal(r.email, "pilot@example.com", what); assert.equal(r.copyTo, "pilot@example.com", what);
+    assert.equal(r.copyToIsOwner, false, what); assert.deepEqual(r.features, ["sendTarget"], what);
+    assert.ok(!JSON.stringify(r).includes(OWNER), what + ": הבעלים לא נחשף");
+  };
+  check(reg, "regFinish");
+  const lg = env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }); check(lg, "login");
+  check(env.call({ action: "me", token: lg.token }), "me");
+  const cp = env.call({ action: "changePassword", token: lg.token, oldPass: "dana-pass-1234", newPass: "dana-new-pass-5678" }); check(cp, "changePassword");
+  // תשובות מנהל (listUsers / setMailMode) נושאות את פרטי המנהל עצמו
+  const lu = env.call({ action: "listUsers", token }), sm = env.call({ action: "setMailMode", token, mode: "live" });
+  for (const r of [lu, sm]) { assert.equal(r.email, ""); assert.equal(r.copyTo, OWNER); assert.equal(r.copyToIsOwner, true); assert.deepEqual(r.features, ["sendTarget"]); }
+  // וגם בשגיאת mode_changed (תשובה שמחזירה mailMode)
+  const b = savedRequest(env, cp.token, "מוד — 05.12.2026");
+  const mc = env.call({ action: "sendRequest", token: cp.token, folderId: b.folderId, subject: "נ", body: "ג", expectMode: "test" });
+  assert.equal(mc.error, "mode_changed"); assert.equal(mc.mailMode, "live"); assert.deepEqual(mc.features, ["sendTarget"]);
+});
+
+test("אין שום קלט שקובע נמען: to/cc/bcc/replyTo/email/requester/recipients/copyTo בבקשה מתעלמים, בכל יעד ומצב", () => {
+  const { env, token } = withWix(); const pilot = pilotUser(env);
+  const evil = "evil@example.com";
+  for (const mode of ["test", "live"]) for (const target of ["office", "self"]) {
+    if (mode === "live") goLive(env, token);
+    const b = savedRequest(env, pilot.token, "הזרקה " + mode + target + " — 06.12.2026");
+    const r = sendTo(env, pilot.token, b.folderId, { target, to: evil, cc: evil, bcc: evil, replyTo: evil, email: evil, requester: evil, copyTo: evil, recipients: [evil], from: evil, name: evil });
+    assert.ok(r.ok, JSON.stringify(r));
+  }
+  assert.equal(env.mails.length, 4);
+  assert.ok(!/evil@example/.test(JSON.stringify(env.mails)), "אף שדה של המייל לא כולל כתובת שהלקוח שלח");
+  // גם נושא עם כתובת/כותרת מוזרקת לא מייצר נמען: הנושא שורה אחת, בלי תווי בקרה
+  const b2 = savedRequest(env, pilot.token, "נושא — 07.12.2026");
+  sendTo(env, pilot.token, b2.folderId, { target: "self", subject: "נושא\r\nBcc: " + evil + "\nTo: " + evil });
+  const last = env.mails[env.mails.length - 1];
+  assert.ok(!/[\r\n]/.test(last.subject)); assert.equal(last.bcc, OWNER); assert.equal(last.to, "pilot@example.com");
+});
+
+test("כתובת שמורה פגומה (פסיק/כמה כתובות) לא הופכת לכמה נמענים: נפילה לבעלים; והרשמה עם כתובת כזו נדחית", () => {
+  const { env, token } = withWix(); const pilot = pilotUser(env);
+  const rec = JSON.parse(env.props["U:dana.pilot"]); rec.email = "a@example.com,victim@example.com"; env.props["U:dana.pilot"] = JSON.stringify(rec);
+  const lg = env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" });
+  assert.equal(lg.email, ""); assert.equal(lg.copyTo, OWNER); assert.equal(lg.copyToIsOwner, true);
+  const r = sendTo(env, lg.token, savedRequest(env, lg.token, "פגום — 08.12.2026").folderId, { target: "self" });
+  assert.ok(r.ok); assert.ok(!/victim|a@example/.test(JSON.stringify(env.mails[0])));
+  for (const bad of ["a,b@example.com", "a@example.com,b@example.com", "a;b@example.com", "<a@example.com>", "a b@example.com", '"a"@example.com', "a@b@example.com"])
+    assert.equal(env.call({ action: "regStart", email: bad }).error, "bad_email", bad);
+  assert.equal(env.call({ action: "wixCheck", token, email: "a,b@example.com" }).error, "bad_email");
+});
+
+test("target לא תקין נדחה (bad_target) בלי מייל ובלי רשומת יומן; חסר = office (שרת ישן/לקוח ישן)", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  for (const bad of ["", null, "OFFICE", "Self", "both", "owner", "x@y.com", 1, 0, true, false, ["self"], { a: 1 }]) {
+    const r = sendTo(env, token, b.folderId, { target: bad });
+    assert.equal(r.error, "bad_target", JSON.stringify(bad));
+  }
+  assert.equal(env.mails.length, 0);
+  assert.equal(readLogRaw(env)[0].sent.length, 0, "לא נרשמה שליחה");
+  const dflt = sendTo(env, token, b.folderId);
+  assert.ok(dflt.ok && dflt.target === "office", JSON.stringify(dflt));
+  // bad_target נבדק לפני expectMode ולפני כל גישה לתיקייה
+  assert.equal(env.call({ action: "sendRequest", token, folderId: "nope", subject: "נ", body: "ג", target: "zzz" }).error, "bad_target");
+  assert.equal(env.call({ action: "sendRequest", folderId: b.folderId, subject: "נ", body: "ג", target: "self" }).ok, false, "בלי אסימון נדחה");
+});
+
+test("שליחה לעצמו אינה 'נשלחה למשרד נוטאם': לא חוסמת שליחה חיה אחריה, לא נועלת עריכה, לא נבדקת מול expectMode; ובמצב חי office כן", () => {
+  const { env, token } = withWix(); goLive(env, token);
+  const pilot = pilotUser(env), rid = newRid();
+  const b = savedRequest(env, pilot.token, "אתר עצמי — 09.12.2026", null, rid);
+  // expectMode שגוי / חסר לא משפיע על self
+  for (const expectMode of ["test", undefined, "garbage"]) assert.ok(sendTo(env, pilot.token, b.folderId, { target: "self", expectMode }).ok);
+  assert.equal(env.mails.length, 3);
+  assert.equal(sendTo(env, pilot.token, b.folderId, { target: "office", expectMode: "test" }).error, "mode_changed", "office עדיין נבדק");
+  assert.equal(env.mails.length, 3);
+  // עדיין ניתנת לעריכה (לא נעולה) ולא נחשבת כפילות
+  assert.ok(env.call({ action: "saveBegin", token: pilot.token, folderName: "אתר עצמי — 09.12.2026", rid }).ok, "שליחה לעצמו לא נועלת עריכה");
+  assert.equal(env.call({ action: "saveEnd", token: pilot.token, folderId: b.folderId, ready: true }).ready, false, "אחרי saveBegin צריך לשמור מחדש (אין קבצים)");
+  const b2 = savedRequest(env, pilot.token, "אתר עצמי — 09.12.2026", null, rid);
+  const live = sendTo(env, pilot.token, b2.folderId, { target: "office" });
+  assert.ok(live.ok && live.mode === "live", JSON.stringify(live));
+  assert.deepEqual(rcpts(env.mails[3].to), OFFICE);
+  // אחרי שליחה חיה: הבקשה נעולה לעריכה וכפילות למשרד נחסמת — אבל שליחה לעצמו עדיין מותרת
+  assert.equal(sendTo(env, pilot.token, b2.folderId, { target: "office" }).error, "already_sent");
+  assert.equal(env.call({ action: "saveBegin", token: pilot.token, folderName: "אתר עצמי — 09.12.2026", rid }).error, "already_sent");
+  assert.ok(sendTo(env, pilot.token, b2.folderId, { target: "self" }).ok);
+  assert.equal(env.mails.length, 5);
+});
+
+test("שליחה לעצמו לא יוצרת 'דומה' (similar) ולא מונעת למשרד שליחה חיה של בקשה אחרת באותו מקום ותאריך", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const first = savedRequest(env, token, "אתר תאום — 10.12.2026");
+  assert.ok(sendTo(env, token, first.folderId, { target: "self" }).ok);
+  const second = savedRequest(env, token, "אתר תאום — 10.12.2026");
+  const r = sendTo(env, token, second.folderId);
+  assert.ok(r.ok && r.mode === "live", JSON.stringify(r));
+});
+
+test("יומן: שליחה לעצמו נרשמת עם target ו-mode='self' (לעולם לא 'live'); listRequests מסווג sentSelf/sentTest/sentLive; listUsers.sent לא סופר אותה", () => {
+  const { env, token } = withWix();
+  const pilot = pilotUser(env);
+  const b = savedRequest(env, pilot.token, "סיווג — 11.12.2026");
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "self" }).ok);
+  let log = readLogRaw(env);
+  assert.equal(log[0].sent[0].target, "self"); assert.equal(log[0].sent[0].mode, "self"); assert.deepEqual(log[0].sent[0].to, ["pilot@example.com"]);
+  let row = env.call({ action: "listRequests", token }).requests[0];
+  assert.deepEqual([row.sentLive, row.sentTest, row.sentSelf], [0, 0, 1]);
+  assert.equal(row.lastSent.target, "self"); assert.equal(row.lastSent.st, "sent");
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "office" }).ok);      // מצב בדיקה → sentTest
+  row = env.call({ action: "listRequests", token }).requests[0];
+  assert.deepEqual([row.sentLive, row.sentTest, row.sentSelf], [0, 1, 1]);
+  goLive(env, token);
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "office" }).ok);
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "self" }).ok);        // self אחרי החיה — lastSent נשאר השליחה החיה
+  row = env.call({ action: "listRequests", token }).requests[0];
+  assert.deepEqual([row.sentLive, row.sentTest, row.sentSelf], [1, 1, 2]);
+  assert.equal(row.lastSent.target, "office"); assert.equal(row.lastSent.mode, "live");
+  log = readLogRaw(env);
+  assert.deepEqual(log[0].sent.map(x => x.target), ["self", "office", "office", "self"]);
+  const u = env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot");
+  assert.equal(u.sent, 1, "רק השליחה החיה למשרד נספרת כהגשה");
+  // שליחה שנכשלה לא נספרת באף סיווג
+  env.fail.mail = true;
+  const b2 = savedRequest(env, pilot.token, "נכשלת — 12.12.2026");
+  assert.equal(sendTo(env, pilot.token, b2.folderId, { target: "self" }).ok, false);
+  env.fail.mail = false;
+  const r2 = env.call({ action: "listRequests", token }).requests.find(x => x.name === "נכשלת — 12.12.2026");
+  assert.deepEqual([r2.sentLive, r2.sentTest, r2.sentSelf], [0, 0, 0]);
+});
+
+test("תאימות לאחור ביומן: רשומת שליחה ישנה (בלי target) נחשבת שליחה למשרד — חיה חוסמת כפילות, בדיקה נספרת כבדיקה", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token, "ישן — 13.12.2026");
+  const f = env.folders.ROOT.files.find(x => x.name === "_יומן בקשות.json"), log = JSON.parse(f.bytes.toString());
+  log[0].sent = [{ sid: "a", t: Date.now() - 5000, user: "itzik", mode: "live", to: OFFICE, st: "sent" }, { sid: "b", t: Date.now() - 4000, user: "itzik", mode: "test", to: [OWNER], st: "sent" }];
+  f.bytes = Buffer.from(JSON.stringify(log));
+  assert.equal(sendTo(env, token, b.folderId).error, "already_sent");
+  const row = env.call({ action: "listRequests", token }).requests[0];
+  assert.deepEqual([row.sentLive, row.sentTest, row.sentSelf], [1, 1, 0]);
+  assert.equal(row.lastSent.target, "office");
+});
+
+test("סימון 'נשלח — ....txt' בתיקייה: יעד, מצב ועותק סמוי; לא מצורף למייל הבא", () => {
+  const { env, token } = withWix();
+  const pilot = pilotUser(env), b = savedRequest(env, pilot.token, "סימון — 14.12.2026");
+  const marks = () => env.folders[b.folderId].files.filter(f => /^נשלח — /.test(f.name));
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "self" }).ok);
+  assert.equal(marks().length, 1); assert.match(marks()[0].name, /\(לעצמו\)\.txt$/);
+  const t1 = marks()[0].bytes.toString();
+  assert.match(t1, /יעד: לעצמו/); assert.match(t1, /אל: pilot@example\.com/); assert.match(t1, /עותק סמוי למנהל: כן/); assert.match(t1, /לא נשלח למשרד נוטאם/);
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "office" }).ok);
+  assert.ok(marks().some(f => /\(בדיקה\)\.txt$/.test(f.name)));
+  goLive(env, token);
+  assert.ok(sendTo(env, pilot.token, b.folderId, { target: "office" }).ok);
+  const live = marks().find(f => !/\((לעצמו|בדיקה)\)/.test(f.name));
+  assert.ok(live, "סימון חי ללא סיומת"); assert.match(live.bytes.toString(), /יעד: משרד/); assert.match(live.bytes.toString(), /חי — למשרד נוטאם/); assert.match(live.bytes.toString(), /עותק: pilot@example\.com/);
+  assert.ok(env.mails.every(m => m.attachments.every(a => !/^נשלח/.test(a.name))));
+});
+
+test("הגבלת קצב: נספרת לכל משתמש בנפרד (גם שליחה לעצמו); מטיס אחד לא חוסם אחרים; יש תקרה כוללת; מתאפסת אחרי שעה", () => {
+  const { env, token } = withWix();
+  const a = pilotUser(env, "a@example.com", "pilot.a"), c = pilotUser(env, "c@example.com", "pilot.c");
+  const ba = savedRequest(env, a.token, "קצב א — 15.12.2026"), bc = savedRequest(env, c.token, "קצב ג — 15.12.2026");
+  for (let i = 0; i < 10; i++) assert.ok(sendTo(env, a.token, ba.folderId, { target: "self" }).ok, "i=" + i);
+  assert.equal(sendTo(env, a.token, ba.folderId, { target: "self" }).error, "rate", "שליחה 11 לעצמו");
+  assert.equal(sendTo(env, a.token, ba.folderId, { target: "office" }).error, "rate", "גם למשרד — אותה מכסה");
+  assert.equal(env.mails.length, 10);
+  assert.ok(sendTo(env, c.token, bc.folderId, { target: "office" }).ok, "מטיס אחר לא נחסם");
+  assert.ok(sendTo(env, token, savedRequest(env, token, "מנהל — 15.12.2026").folderId, { target: "self" }).ok, "המנהל לא נחסם");
+  env.advance(61 * 60000);
+  assert.ok(sendTo(env, a.token, ba.folderId, { target: "self" }).ok, "אחרי שעה");
+  // תקרה כוללת למערכת
+  vm.runInContext("CFG.MAX_SENDS_PER_HOUR_ALL = 3", env.sandbox);
+  env.advance(61 * 60000);
+  const d = pilotUser(env, "d@example.com", "pilot.d"), bd = savedRequest(env, d.token, "קצב ד — 15.12.2026");
+  const got = [a, c, d, token].map((u, i) => sendTo(env, u === token ? token : u.token, u === a ? ba.folderId : u === c ? bc.folderId : u === d ? bd.folderId : savedRequest(env, token, "מנהל ב — 15.12.2026").folderId, { target: "self" }));
+  assert.deepEqual(got.map(x => x.ok || x.error), [true, true, true, "rate"]);
+});
+
+test("שליחה: בלי כתובת בעלים ידועה (נכשל סגור) — לא נשלח, לא נרשמת שליחה; עם כתובת הבעלים — עותק סמוי לא נפגע", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  env.sandbox.Session = { getEffectiveUser: () => ({ getEmail: () => "" }) };
+  for (const target of ["office", "self"]) assert.equal(sendTo(env, token, b.folderId, { target }).error, "no_owner");
+  assert.equal(env.mails.length, 0); assert.equal(readLogRaw(env)[0].sent.length, 0);
+  env.sandbox.Session = { getEffectiveUser: () => ({ getEmail: () => OWNER }) };
+  assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok);
+});
+
+// תווים שאסור שיישארו בנושא: שורה חדשה, C1 (כולל NEL) ומפרידי שורה/פסקה של יוניקוד — נבנה בלי רצפי escape בקובץ
+const BAD_SUBJECT_CHARS = new RegExp("[\r\n" + [0x85, 0x9f, 0x2028, 0x2029].map(c => String.fromCharCode(c)).join("") + "]");
+test("הזרקת כותרות: גם תווי C1 (NEL ועוד) ומפרידי שורה בנושא מנוקים, בכל יעד; הנושא נשאר שורה אחת עם הקידומת", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  const nasty = "א" + String.fromCharCode(0x85) + "ב" + String.fromCharCode(0x9f) + "ג" + String.fromCharCode(0x2028) + "ד\r\nBcc: evil@example.com\nCc: evil@example.com";
+  for (const target of ["office", "self"]) assert.ok(sendTo(env, token, b.folderId, { target, subject: nasty }).ok);
+  for (const m of env.mails) {
+    assert.ok(!BAD_SUBJECT_CHARS.test(m.subject), JSON.stringify(m.subject));
+    assert.ok(!m.bcc || m.bcc === OWNER);
+    assert.ok(!/evil@example\.com/.test(JSON.stringify([m.to, m.cc, m.bcc, m.replyTo])));
+  }
+  assert.ok(env.mails[1].subject.startsWith(SELF_PREFIX + "א ב ג ד"));
+});
+
+test("עצמאות בין מטיסים: כל אחד שולח רק את הבקשות שלו, למבקש שלו; המנהל נכנס לתמונה רק כעותק סמוי ובתמיכה", () => {
+  const { env, token } = withWix(); goLive(env, token);
+  const p1 = pilotUser(env, "p1@example.com", "pilot.one"), p2 = pilotUser(env, "p2@example.com", "pilot.two");
+  const b1 = savedRequest(env, p1.token, "אתר 1 — 16.12.2026"), b2 = savedRequest(env, p2.token, "אתר 2 — 16.12.2026");
+  assert.equal(sendTo(env, p2.token, b1.folderId).error, "forbidden");
+  assert.equal(sendTo(env, p1.token, b2.folderId, { target: "self" }).error, "forbidden");
+  assert.equal(env.mails.length, 0);
+  assert.ok(sendTo(env, p1.token, b1.folderId).ok); assert.ok(sendTo(env, p2.token, b2.folderId).ok);
+  const [m1, m2] = env.mails;
+  assert.deepEqual([m1.cc, m1.replyTo, m1.bcc], ["p1@example.com", "p1@example.com", OWNER]);
+  assert.deepEqual([m2.cc, m2.replyTo, m2.bcc], ["p2@example.com", "p2@example.com", OWNER]);
+  assert.ok(!/p2@/.test(JSON.stringify(m1)) && !/p1@/.test(JSON.stringify(m2)));
+  // תמיכה: המנהל שולח בקשה של מטיס — המבקש הוא המנהל המחובר (כמו שהלקוח מציג ב-copyTo), לא המטיס
+  const sup = savedRequest(env, p1.token, "תמיכה — 16.12.2026");
+  assert.ok(sendTo(env, token, sup.folderId, { target: "self" }).ok);
+  assert.equal(env.mails[2].to, OWNER); assert.equal(env.mails[2].replyTo, OWNER);
 });
