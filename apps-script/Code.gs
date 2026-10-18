@@ -2,10 +2,11 @@
  * שרת בקשות הטיסה של הארגון הישראלי לרחפנים — Google Apps Script (רץ בחשבון של הבעלים).
  *  - התחברות נפרדת בשם משתמש וסיסמה (לא קשורה לשער חברי האתר).
  *  - ניהול משתמשים: הוספה, חסימה/ביטול חסימה, איפוס סיסמה, החלפת סיסמה עצמית, מחיקה — הכול נאכף כאן, בשרת, בכל קריאה.
- *  - שמירת קבצי הבקשה (Word, KML, תמונות) בתיקייה בדרייב: תת-תיקייה בשם "<מקום> — <תאריך>".
- *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות) — המנהל רואה את כולם.
+ *  - שמירת קבצי הבקשה (Word, KML, תמונות) בדרייב, בתיקייה "<מקום> — <תאריך>" שנפרדת לפי סוג החשבון: "הארגון" (בקשות הארגון), "מטיסים/<משתמש>" (בקשות מטיסים עצמאיים).
+ *  - הפרדה בין חשבון ארגוני (org=true: מנהלים, ומשתמשים שהמנהל הוסיף ידנית) לבין מטיס עצמאי (org=false: נרשם עם כרטיס): הארגון שולח בשם הארגון, מטיס שולח בשם הגורם שהצהיר עליו.
+ *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות), עם סוג כל בקשה (kind) — המנהל רואה את כולם.
  *  - שליחה במייל, עם הקבצים מהתיקייה: למשרד נוטאם (הכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד) או רק למבקש עצמו.
- *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד); הבעלים מקבל תמיד עותק סמוי (BCC).
+ *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד). כתובת הארגון (CFG.ADMIN_COPY_TO) מקבלת עותק: סמוי (BCC) ממטיס עצמאי, גלוי (CC) מחשבון ארגוני בשליחה חיה.
  * התקנה: ראו apps-script/README.md. הקוד אינו מכיל סיסמאות או מזהים סודיים; הם נשמרים ב-Script Properties בלבד.
  */
 
@@ -21,16 +22,28 @@ var CFG = {
   // פמ"ת פנים ארצי א-11 (עדכון 1/26), סעיף 6(א): "יש להגיש בקשה לסגירה אווירית למשרד נוטאם בכתובות המייל הבאות:
   // notamoffice@iaa.gov.il, nofm@iaa.gov.il על גבי טופס כמפורט בנספח ג'". הנמענים קבועים כאן ואינם מתקבלים מהדפדפן.
   MAIL_TO: ['notamoffice@iaa.gov.il', 'nofm@iaa.gov.il'],
-  SENDER_NAME: 'הארגון הישראלי לרב להב',
+  SENDER_NAME: 'הארגון הישראלי לרב להב',   // שם השולח במיילים של חשבון ארגוני (ובמיילי מערכת: קודי הרשמה, תזכורות)
+  // שם השולח במייל של מטיס עצמאי = שם הגורם המבקש שהצהיר עליו (מנוקה, עד SENDER_MAX תווים) + הסיומת הקבועה הזו, שנועדה למנוע התחזות לרשות או לגוף אחר.
+  // בלי שם בבקשה: displayName השמור (מ-Wix), ובלי גם אותו: SENDER_FALLBACK
+  SENDER_SUFFIX: ' — דרך מערכת בקשות הטיסה',
+  SENDER_FALLBACK: 'מטיס',
+  SENDER_MAX: 60,
+  // כתובת הארגון: מקבלת עותק מכל שליחה (סמוי ממטיס עצמאי, גלוי מחשבון ארגוני בשליחה חיה) והיא "המבקש" של חשבון ארגוני בלי כתובת שמורה. מפורשת — לא תלויה בבעל הסקריפט.
+  // ריקה/לא תקינה: נופלים לכתובת הבעלים (Session.getEffectiveUser). אם גם היא לא ידועה — השליחה נכשלת סגור (no_owner). לעולם לא מוחזרת ללקוח אלא לחשבון ארגוני.
+  ADMIN_COPY_TO: 'office@icd.org.il',
+  // תיקיות הדרייב החדשות מתחת ל-ROOT_FOLDER_ID: בקשות ארגוניות ב-ORG_FOLDER_NAME, בקשות מטיסים ב-PILOTS_FOLDER_NAME/<שם המשתמש>. נוצרות לפי דרישה; תיקיות בקשה ישנות (ישירות תחת התיקייה הראשית) נשארות במקומן
+  ORG_FOLDER_NAME: 'הארגון',
+  PILOTS_FOLDER_NAME: 'מטיסים',
   // הגבלת קצב שעתית בשני דליים נפרדים: 'o' = שליחה חיה למשרד נוטאם (בקשה אמיתית), 'c' = עותקים ("שלח רק לעצמי", וגם "שלח למשרד" במצב בדיקה שנשלח למבקש בלבד).
   // כך עיון בעותקים (הפעולה השכיחה ביותר) לא חוסם שליחה אמיתית — לא של אותו מטיס ולא של אחרים. אלה תקרות קצב בלבד; מכסת המיילים היומית של גוגל נבדקת בנפרד (MAIL_QUOTA_RESERVE).
+  // חשבון ארגוני (org) פטור מהתקרות הכוללות (..._ALL) ומהרזרבה — כדי שמטיסים לא ירעיבו את הארגון — אך לא מהתקרות האישיות; שליחותיו עדיין נספרות בסך הכול.
   MAX_OFFICE_PER_HOUR: 10,       // שליחות חיות למשרד נוטאם — לכל משתמש בנפרד
   MAX_OFFICE_PER_HOUR_ALL: 60,   // ... ובסך הכול לכל המערכת
   MAX_COPIES_PER_HOUR: 10,       // עותקים (לעצמו / בדיקה) — לכל משתמש בנפרד
   MAX_COPIES_PER_HOUR_ALL: 120,  // ... ובסך הכול לכל המערכת (לא נמוכה מ-60: עיון בעותקים הוא הפעולה השכיחה, ומאה מטיסים לא אמורים לחסום זה את זה)
   MAX_SEND_ATTEMPTS_PER_HOUR: 40, // ניסיונות שליחה שהגיעו עד MailApp (גם כושלים) לכל משתמש — שליחה שנכשלה אינה צורכת את הדליים למעלה, אבל לולאת ניסיונות לא תציף את היומן
   MAIL_QUOTA_RESERVE: 20,        // רזרבה במכסת המיילים היומית של גוגל (נמענים) שעותקים אינם צורכים — כדי שהשליחה האמיתית למשרד וקודי ההרשמה לא יורעבו
-  FEATURES: ['sendTarget'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי")
+  FEATURES: ['sendTarget', 'orgSplit'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי"; בלי orgSplit הלקוח גוזר את סוג החשבון מ-role ואינו שולח שם שולח)
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
   LOG_MAX: 2000,           // יעד רך: מעבר לכך נמחקות רק הישנות ביותר שלא נשלחו חי ולא נגעו בהן LOG_KEEP_DAYS ימים; כשהכול מוגן היומן פשוט גדל
@@ -99,15 +112,23 @@ function adminSummary_() {
 }
 function secret_() { var s = props_().getProperty('SECRET'); if (!s) throw new Error('לא בוצעה אתחול — להריץ initialize()'); return s; }
 function ownerEmail_() { try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; } }
+// כתובת הארגון (orgAddr): CFG.ADMIN_COPY_TO כשהיא כתובת תקינה אחת (normEmail_ דוחה פסיק/כמה כתובות), ואחרת כתובת הבעלים; '' כשאף אחת לא ידועה (נכשל סגור)
+function orgAddr_() { return normEmail_(CFG.ADMIN_COPY_TO) || normEmail_(ownerEmail_()); }
+// סוג חשבון: מנהל הוא תמיד ארגוני (גם אם מישהו ערך את הרשומה ב-Properties); אחרת לפי השדה org (רק true בדיוק). משתמש קיים בלי שדה — עצמאי
+function isOrg_(u) { return !!u && (u.role === 'admin' || u.org === true); }
+// סוג בקשה ביומן: 'pilot' רק כשנרשם כך ב-saveBegin; רשומה ישנה (בלי kind, בתיקייה ישירות תחת הראשית) נחשבת ארגונית
+function kindOf_(e) { return e && e.kind === 'pilot' ? 'pilot' : 'org'; }
 // מצב שליחה: 'test' (ברירת מחדל) — "שלח למשרד" נשלח רק למבקש עצמו; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
 function mailMode_() { return props_().getProperty('MAIL_MODE') === 'live' ? 'live' : 'test'; }
 // כתובת המבקש = הכתובת ששמורה אצל המשתמש (נשמרת רק ברישום עם כרטיס, אחרי אימות קוד שנשלח אליה). אין שום קלט בבקשה שקובע אותה —
 // אחרת השרת היה הופך לממסר דואר זבל. נבדקת שוב בכל שימוש. משתמש בלי כתובת (נוצר ידנית ע"י המנהל, כולל המנהל עצמו) — מחזיר ''.
 function requesterEmail_(u) { return normEmail_(u && u.email); }
-// מה שהלקוח צריך לדעת על המייל: email = כתובת המבקש השמורה (או ''), copyTo = לאן יישלחו עותקים/"שלח לעצמי" (בלי כתובת — כתובת הבעלים).
+// מה שהלקוח צריך לדעת על המייל: email = כתובת המבקש השמורה (או ''), org = חשבון ארגוני, copyTo = לאן יישלחו עותקים/"שלח לעצמי" (בלי כתובת — כתובת הארגון).
+// copyToIsOwner (שם ישן, לתאימות) = העותק יוצא לכתובת הארגון כי אין כתובת למשתמש. כתובת הארגון מוחזרת רק לחשבון ארגוני: מטיס עצמאי בלי כתובת שמורה
+// (נוצר ידנית עם org:false) מקבל copyTo ריק ו-false — לעולם לא את כתובת הארגון.
 function mailInfo_(u) {
-  var email = requesterEmail_(u);
-  return { email: email, copyTo: email || ownerEmail_(), copyToIsOwner: !email, features: CFG.FEATURES.slice() };
+  var email = requesterEmail_(u), org = isOrg_(u), oa = org ? orgAddr_() : '';
+  return { email: email, copyTo: email || oa, copyToIsOwner: !email && !!oa, org: org, features: CFG.FEATURES.slice() };
 }
 function withMailInfo_(o, u) { var m = mailInfo_(u); for (var k in m) o[k] = m[k]; return o; }
 // מוסיף כתובת לרשימה אם אינה ריקה ועדיין לא נכללה (השוואה באותיות קטנות) — אותה כתובת לא מופיעה פעמיים באותה הודעה
@@ -146,16 +167,33 @@ function rateErr_(scope, kind) {
 function rateRefund_(cache, key) {
   try { var n = Number(cache.get(key)) || 0; if (n > 0) cache.put(key, String(n - 1), 3600); } catch (e) { /* שמרני */ }
 }
-// נמענים לפי מצב ויעד. תמיד: replyTo = המבקש, והבעלים ב-BCC (אלא אם הוא כבר ב-to/cc, כשהוא עצמו המבקש).
-//  חי + משרד: to = משרד נוטאם (קבוע בקוד), cc = המבקש.  בדיקה + משרד, או "לעצמי" (בכל מצב): to = המבקש בלבד.
-function mailPlan_(mode, target, requester, owner) {
-  var seen = {}, to = [], cc = [], bcc = [];
-  if (target === 'office' && mode === 'live') {
-    CFG.MAIL_TO.forEach(function (x) { addRcpt_(to, seen, x); });
-    addRcpt_(cc, seen, requester);
-  } else addRcpt_(to, seen, requester);
-  addRcpt_(bcc, seen, owner);
+// נמענים לפי סוג החשבון, המצב והיעד. stored = כתובת המשתמש השמורה (או ''), orgA = כתובת הארגון; אותה כתובת (באותיות קטנות) לא מופיעה פעמיים (addRcpt_).
+//  ארגוני — חי + משרד: to = משרד נוטאם (קבוע בקוד), cc = כתובת הארגון (וגם כתובת המשתמש השמורה אם שונה), בלי BCC, replyTo = כתובת הארגון.
+//           בדיקה + משרד, או "לעצמי": to = כתובת המשתמש השמורה, ובלי — כתובת הארגון; בלי BCC; replyTo = כתובת הארגון.
+//  עצמאי — חי + משרד: to = משרד נוטאם, cc = המבקש (הכתובת השמורה), BCC = כתובת הארגון, replyTo = המבקש.
+//           בדיקה + משרד, או "לעצמי": to = המבקש, BCC = כתובת הארגון, replyTo = המבקש. (המבקש בלי כתובת שמורה = כתובת הארגון.)
+function mailPlan_(org, mode, target, stored, orgA) {
+  var seen = {}, to = [], cc = [], bcc = [], live = target === 'office' && mode === 'live', requester = stored || orgA;
+  if (live) CFG.MAIL_TO.forEach(function (x) { addRcpt_(to, seen, x); });
+  if (org) {
+    if (live) { addRcpt_(cc, seen, orgA); addRcpt_(cc, seen, stored); } else addRcpt_(to, seen, requester);
+    return { to: to, cc: cc, bcc: bcc, replyTo: orgA };
+  }
+  addRcpt_(live ? cc : to, seen, requester);
+  addRcpt_(bcc, seen, orgA);
   return { to: to, cc: cc, bcc: bcc, replyTo: requester };
+}
+// שם השולח (name של MailApp). ארגוני: CFG.SENDER_NAME. עצמאי: שם הגורם המבקש שהמטיס הצהיר עליו (fromName, מנוקה) + CFG.SENDER_SUFFIX הקבועה — כך אי אפשר להתחזות
+// לרשות ("משטרת ישראל — דרך מערכת בקשות הטיסה"). בלי שם אחרי הניקוי: displayName השמור, ובלי גם אותו: SENDER_FALLBACK. הסיומת נוספת בכל שלושת המקרים.
+// הניקוי מסיר בקרה/כיווניות/שורות חדשות, וגם <>"@ ולוכסן הפוך (שם תצוגה שנראה ככתובת מייל או שבורח ממירכאות), מכווץ רווחים וחותך ל-SENDER_MAX
+function cleanSender_(s) {
+  var t = (typeof s === 'string' ? s : '').replace(SENDER_BAD_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, CFG.SENDER_MAX), last = t.charCodeAt(t.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) t = t.slice(0, -1).trim();      // לא נחתכים באמצע זוג חלופי (אימוג'י)
+  return t;
+}
+function senderName_(u, fromName) {
+  if (isOrg_(u)) return CFG.SENDER_NAME;
+  return (cleanSender_(fromName) || cleanSender_(u && u.displayName) || CFG.SENDER_FALLBACK) + CFG.SENDER_SUFFIX;
 }
 
 /* ---------- אסימון חתום ---------- */
@@ -205,6 +243,7 @@ function validPass_(p) { return typeof p === 'string' && p.length >= CFG.MIN_PAS
 var HIDDEN_CHARS_ = [[0, 0x1f], [0x7f, 0x9f], [0x61c, 0x61c], [0x200b, 0x200f], [0x2028, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]]
   .map(function (r) { return String.fromCharCode(r[0]) + (r[1] > r[0] ? '-' + String.fromCharCode(r[1]) : ''); }).join('');
 var HIDDEN_RE_ = new RegExp('[' + HIDDEN_CHARS_ + ']', 'g');
+var SENDER_BAD_RE_ = new RegExp('[<>"@' + String.fromCharCode(92) + String.fromCharCode(92) + HIDDEN_CHARS_ + ']', 'g');   // לוכסן הפוך כפול: בתוך מחלקת תווים ברגקס הוא תו מילולי אחד
 function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|]/g, ' ').replace(HIDDEN_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
 function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסיומת (אחרת הקובץ לא יזוהה כ-Word/תמונה בשליחה)
   var raw = String(s || '').trim(), m = /\.[A-Za-z0-9]{1,5}$/.exec(raw), ext = m ? m[0].toLowerCase() : '';
@@ -396,7 +435,7 @@ function rotateFrom_(names, after) {
 }
 function dailyCheck() {
   var stat = { checked: 0, reminded: 0, blocked: 0, errors: 0, busy: 0 };
-  var us = users_(), now = now_(), calls = 0, cut = false, lastDone = '', owner = ownerEmail_(), jobs = [];
+  var us = users_(), now = now_(), calls = 0, cut = false, lastDone = '', orgA = orgAddr_(), jobs = [];
   rotateFrom_(Object.keys(us).sort(), props_().getProperty('DC_CURSOR')).forEach(function (name) {
     var u = us[name], job = { name: name, bad: '', remind: false };
     if (!u || !u.until) return;
@@ -426,7 +465,7 @@ function dailyCheck() {
       if (step) {
         try {
           var days = Math.ceil((u.until - now) / 86400000), rem = u.reminded || {}, m = subscriptionMail_(u, job.name, days, u.until);
-          MailApp.sendEmail({ to: u.email, subject: m.subject, body: m.body, name: CFG.SENDER_NAME, replyTo: owner || '' });
+          MailApp.sendEmail({ to: u.email, subject: m.subject, body: m.body, name: CFG.SENDER_NAME, replyTo: orgA || '' });
           rem[step] = now; if (step === 'd3') rem.d30 = rem.d30 || now;
           u.reminded = rem; changed = true; stat.reminded++;
         } catch (e) { stat.errors++; }
@@ -495,21 +534,21 @@ function trimLog_(arr, keepId) {
 function writeLog_(arr, keepId) { logFile_().setContent(JSON.stringify(trimLog_(arr, keepId))); }
 function findByRid_(log, rid) { for (var i = 0; i < log.length; i++) if (log[i].rid === rid) return log[i]; return null; }
 function findById_(log, id) { for (var i = 0; i < log.length; i++) if (log[i].id === id) return log[i]; return null; }
-// שם תיקייה ייחודי ליומן: בקשה אחרת באותו מקום ותאריך מקבלת סיומת (2), (3)…
-// owner (לא חובה): מתחשב רק בבקשות של אותו משתמש — כך מטיס אינו יכול ללמוד משם שקיבל (סיומת "(2)") שבקשה של מישהו אחר כבר קיימת
-function uniqueName_(log, name, rid, owner) {
+// שם תיקייה ייחודי בתוך תיקיית האב (parentId): בקשה אחרת באותו מקום ותאריך *באותה תיקיית אב* מקבלת סיומת (2), (3)… — בקשות ארגוניות בתיקיית "הארגון", ובקשות של מטיס בתיקייה האישית שלו
+// (רשומה ישנה בלי parent היא בתיקייה הראשית). owner (לא חובה): מתחשב רק בבקשות של אותו משתמש — כך מטיס אינו יכול ללמוד משם שקיבל (סיומת "(2)") שבקשה של מישהו אחר כבר קיימת
+function uniqueName_(log, name, rid, parentId, owner) {
   var taken = {};
-  log.forEach(function (e) { if (e.rid !== rid && (owner === undefined || e.user === owner)) taken[e.name] = true; });
+  log.forEach(function (e) { if (e.rid !== rid && (e.parent || CFG.ROOT_FOLDER_ID) === parentId && (owner === undefined || e.user === owner)) taken[e.name] = true; });
   var u = name, n = 1;
   while (taken[u]) u = name.slice(0, 112) + ' (' + (++n) + ')';
   return u;
 }
 // "השליחה התחילה" נרשמת לפני שהמייל יוצא; בסיום מתעדכנת ל-sent, ובכשל ל-failed
-function logSentBegin_(user, folderId, name, mode, target, to, sid) {
+function logSentBegin_(user, folderId, name, mode, target, to, sid, from) {
   var log = readLog_(), t = now_(), e = findById_(log, folderId);
   if (!e) { e = { id: folderId, rid: '', name: name, user: user, created: t, saved: t, lastUser: user, ready: false, sent: [] }; log.push(e); }
   e.sent = e.sent || [];
-  e.sent.push({ sid: sid, t: t, user: user, mode: mode, target: target, to: to, st: 'sending' });
+  e.sent.push({ sid: sid, t: t, user: user, mode: mode, target: target, to: to, from: from || '', st: 'sending' });
   trimSent_(e);
   writeLog_(log, folderId);
   return t;
@@ -539,7 +578,7 @@ var ACTIONS = {
     if (!validName_(r.user)) return { ok: false, error: 'bad_user' };
     if (!validPass_(r.pass)) return { ok: false, error: 'weak_pass' };
     if (getUser_(r.user)) return { ok: false, error: 'exists' };      // לא דורסים חשבון קיים (מטיס) בשם שנבחר למנהל
-    var salt = randHex_(24), u = { role: 'admin', blocked: false, tv: now_(), salt: salt, hash: hashPass_(salt, r.pass), created: now_(), changed: now_() };
+    var salt = randHex_(24), u = { role: 'admin', org: true, blocked: false, tv: now_(), salt: salt, hash: hashPass_(salt, r.pass), created: now_(), changed: now_() };
     putUser_(r.user, u);
     props_().deleteProperty('SETUP_CODE');
     return loginOk_(r.user, u);
@@ -577,19 +616,20 @@ var ACTIONS = {
     return loginOk_(a.name, u);
   },
 
-  // המנהל רואה את כל המשתמשים, וליד כל אחד: כמה בקשות שמר/שלח ומתי לאחרונה
+  // המנהל רואה את כל המשתמשים, וליד כל אחד: סוג חשבון (org), כמה בקשות שמר/שלח ומתי לאחרונה. totals = סיכומי היומן כולו לפי סוג הבקשה (kind), להפרדה בין הארגון למטיסים:
+  // { org: { requests, sent }, pilot: { requests, sent } } — requests = רשומות ביומן, sent = שליחות חיות למשרד נוטאם (כמו sent ליד כל משתמש). בקשה ישנה בלי kind נספרת כארגונית.
   listUsers: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
-    var us = users_(), log = [], st = {}, logError = '';
+    var us = users_(), log = [], st = {}, logError = '', totals = { org: { requests: 0, sent: 0 }, pilot: { requests: 0, sent: 0 } };
     try { log = readLog_(); } catch (err) { logError = String(err && err.message || err); }   // תקלת יומן לא מונעת מהמנהל לחסום משתמשים
     log.forEach(function (e) {
-      var s = st[e.user] || (st[e.user] = { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 });
-      s.requests++; if (e.saved > s.lastRequest) s.lastRequest = e.saved;
-      (e.sent || []).forEach(function (x) { if (sendKind_(x) === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });   // רק שליחות חיות למשרד נוטאם
+      var s = st[e.user] || (st[e.user] = { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 }), tk = totals[kindOf_(e)];
+      s.requests++; tk.requests++; if (e.saved > s.lastRequest) s.lastRequest = e.saved;
+      (e.sent || []).forEach(function (x) { if (sendKind_(x) === 'live' && sentOk_(x)) { s.sent++; tk.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });   // רק שליחות חיות למשרד נוטאם
     });
-    var out = withMailInfo_({ ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
+    var out = withMailInfo_({ ok: true, mailMode: mailMode_(), logError: logError, totals: totals, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
-      return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
+      return { user: k, role: u.role, org: isOrg_(u), blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
         email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '' };
     }) }, a.user);
     out.mailQuotaLeft = mailQuotaLeft_();      // מכסת המייל היומית שנותרה (נמענים), למנהל בלבד; null = לא ידוע
@@ -599,8 +639,8 @@ var ACTIONS = {
   // יומן הבקשות: כל מי שהגיש בקשה (או רק משתמש מסוים), מהחדשה לישנה
   listRequests: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
-    var limit = Math.max(1, Math.min(200, Number(r.limit) || 100)), who = r.user ? String(r.user) : '';
-    var rows = readLog_().filter(function (e) { return !who || e.user === who || e.lastUser === who || (e.sent || []).some(function (s) { return s.user === who; }); })
+    var limit = Math.max(1, Math.min(200, Number(r.limit) || 100)), who = r.user ? String(r.user) : '', only = (r.kind === 'org' || r.kind === 'pilot') ? r.kind : '';   // kind (לא חובה): רק בקשות ארגוניות / של מטיסים
+    var rows = readLog_().filter(function (e) { return (!only || kindOf_(e) === only) && (!who || e.user === who || e.lastUser === who || (e.sent || []).some(function (s) { return s.user === who; })); })
       .sort(function (x, y) { return y.saved - x.saved; }).slice(0, limit)
       .map(function (e) {
         // sentLive = שליחות חיות למשרד נוטאם; sentTest = מצב בדיקה (למבקש); sentSelf = "שלח רק לעצמי". כל שליחה נספרת באחד בלבד.
@@ -608,7 +648,7 @@ var ACTIONS = {
         var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null, lastLive = null;
         sent.forEach(function (s) { if (sendKind_(s) === 'live' && sentOk_(s)) lastLive = s; });
         var shown = lastLive || last, kinds = sent.filter(sentOk_).map(sendKind_);
-        return { name: e.name, user: e.user, lastUser: e.lastUser, created: e.created, saved: e.saved, url: 'https://drive.google.com/drive/folders/' + e.id,
+        return { name: e.name, kind: kindOf_(e), user: e.user, lastUser: e.lastUser, created: e.created, saved: e.saved, url: 'https://drive.google.com/drive/folders/' + e.id,
           sentLive: kinds.filter(function (k) { return k === 'live'; }).length, sentTest: kinds.filter(function (k) { return k === 'test'; }).length, sentSelf: kinds.filter(function (k) { return k === 'self'; }).length,
           lastSent: shown ? { t: shown.t, user: shown.user, mode: shown.mode, target: sendKind_(shown) === 'self' ? 'self' : 'office', st: shown.st || 'sent' } : null, ready: !!e.ready };
       });
@@ -620,8 +660,10 @@ var ACTIONS = {
     if (!validName_(r.newUser)) return { ok: false, error: 'bad_user' };
     if (!validPass_(r.newPass)) return { ok: false, error: 'weak_pass' };
     if (getUser_(r.newUser)) return { ok: false, error: 'exists' };
-    var salt = randHex_(24);
-    var nu = { role: r.role === 'admin' ? 'admin' : 'user', blocked: false, tv: now_(),   // tv=זמן יצירה: משתמש שנמחק ונוצר מחדש באותו שם לא מחייה אסימונים ישנים
+    // org: חשבון ארגוני (ברירת מחדל true — משתמש שהמנהל מוסיף ידנית הוא של הארגון) או false = מטיס עצמאי. מנהל הוא תמיד ארגוני. ערך שאינו בוליאני נדחה (לא מנחשים הרשאה)
+    if (r.org != null && typeof r.org !== 'boolean') return { ok: false, error: 'bad_org' };
+    var salt = randHex_(24), role = r.role === 'admin' ? 'admin' : 'user';
+    var nu = { role: role, org: role === 'admin' || r.org !== false, blocked: false, tv: now_(),   // tv=זמן יצירה: משתמש שנמחק ונוצר מחדש באותו שם לא מחייה אסימונים ישנים
       salt: salt, hash: hashPass_(salt, r.newPass), created: now_(), changed: now_(), source: 'manual' };
     if (r.until) { var ut = parseUntil_(r.until); if (!ut) return { ok: false, error: 'bad_date' }; nu.until = ut; }
     putUser_(r.newUser, nu);
@@ -636,6 +678,19 @@ var ACTIONS = {
     u.blocked = !!r.blocked; u.tv = (u.tv || 1) + 1;     // מבטל מיידית כל אסימון קיים
     putUser_(r.target, u);
     return { ok: true };
+  },
+
+  // מנהל: שינוי סוג חשבון (org: true = ארגוני, false = מטיס עצמאי). רק למשתמש שאינו מנהל — מנהל הוא תמיד ארגוני (is_admin). לא מבטל אסימונים: הסוג נקרא מהרשומה בכל קריאה.
+  // משפיע על שליחות ובקשות חדשות בלבד; בקשות קיימות נשארות במקומן ובסוגן (kind)
+  setOrg: function (r) {
+    var a = admin_(r); if (a.error) return { ok: false, error: a.error };
+    var u = getUser_(String(r.target || ''));
+    if (!u) return { ok: false, error: 'no_user' };
+    if (typeof r.org !== 'boolean') return { ok: false, error: 'bad_org' };
+    if (u.role === 'admin') return { ok: false, error: 'is_admin', message: 'חשבון מנהל הוא תמיד חשבון ארגוני' };
+    u.org = r.org;
+    putUser_(r.target, u);
+    return { ok: true, org: r.org };
   },
 
   resetPassword: function (r) {
@@ -716,14 +771,14 @@ var ACTIONS = {
       if (mode === 'exists') {
         // הודעת נימוס בלבד: פעם ב-REG_EXISTS_HOURS לכתובת (בלי להפריע לקודים), ומשאירה את הרזרבה של עותקים; אחרת מדלגים בשקט
         if (t0 - lastExists < CFG.REG_EXISTS_HOURS * 3600000 || !mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE)) return regOk_();
-        msg = { to: email, name: CFG.SENDER_NAME, replyTo: ownerEmail_() || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
-          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון (office@icd.org.il) ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
+        msg = { to: email, name: CFG.SENDER_NAME, replyTo: orgAddr_() || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
+          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון' + (orgAddr_() ? ' (' + orgAddr_() + ')' : '') + ' ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
       } else {
         if (codes >= CFG.REG_MAILS_PER_EMAIL_DAY) return regOk_();      // מכסת קודים יומית לכתובת: נדחה בשקט (אחרת התשובה הייתה מבדילה כתובת עם כרטיס)
         var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
         var carry = (prev && prev.fx > t0) ? { f: Number(prev.f) || 0, fx: prev.fx } : { f: 0, fx: 0 };   // מונה הכשלונות עובר לקוד החדש — לא מתאפס
         props_().setProperty(rk, JSON.stringify({ h: sha256Hex_(salt + ':' + code), s: salt, exp: t0 + CFG.CODE_TTL_MIN * 60000, tries: 0, f: carry.f, fx: carry.fx })); wroteReg = true;
-        msg = { to: email, name: CFG.SENDER_NAME, replyTo: ownerEmail_() || '', subject: (mode === 'renew' ? 'קוד לחידוש המנוי לבקשות טיסה' : 'קוד הרשמה לבקשות טיסה') + ': ' + code,
+        msg = { to: email, name: CFG.SENDER_NAME, replyTo: orgAddr_() || '', subject: (mode === 'renew' ? 'קוד לחידוש המנוי לבקשות טיסה' : 'קוד הרשמה לבקשות טיסה') + ': ' + code,
           body: 'שלום,\n\nהקוד שלך ' + (mode === 'renew' ? 'לחידוש המנוי' : 'להרשמה לבקשות טיסה') + ': ' + code + '\nהקוד תקף ל-' + CFG.CODE_TTL_MIN + ' דקות. אם לא ביקשת — אפשר להתעלם מהמייל.\n\nצוות הארגון הישראלי לרחפנים' };
       }
       MailApp.sendEmail(msg);
@@ -774,7 +829,7 @@ var ACTIONS = {
     if (getUser_(name)) return { ok: false, error: 'exists' };
     var until = applyOrders_(0, fresh);
     if (until <= t) { props_().deleteProperty(rk); return { ok: false, error: 'ticket_expired' }; }
-    var salt = randHex_(24), nu2 = { role: 'user', blocked: false, tv: t, salt: salt, hash: hashPass_(salt, pass), created: t, changed: t, source: 'ticket', email: email, displayName: fresh[0].name || '', until: until, orders: fresh.map(function (o) { return o.orderNumber; }), reminded: {}, lastLogin: t };
+    var salt = randHex_(24), nu2 = { role: 'user', org: false, blocked: false, tv: t, salt: salt, hash: hashPass_(salt, pass), created: t, changed: t, source: 'ticket', email: email, displayName: fresh[0].name || '', until: until, orders: fresh.map(function (o) { return o.orderNumber; }), reminded: {}, lastLogin: t };
     putUser_(name, nu2);
     props_().setProperty(emailKey_(email), name);
     fresh.forEach(function (o) { props_().setProperty(orderKey_(o.orderNumber), name); });
@@ -808,6 +863,7 @@ var ACTIONS = {
 
   // פותח (או ממשיך) תיקיית בקשה. rid = מזהה בקשה שהדפדפן יוצר: אותה בקשה חוזרת לאותה תיקייה, ובקשה אחרת — גם באותו מקום ותאריך —
   // מקבלת תיקייה נפרדת. בקשה שכבר נשלחה "חי" אינה נערכת מחדש (מתחילים בקשה חדשה).
+  // התיקייה נוצרת לפי סוג החשבון ברגע הפתיחה (kind נרשם ביומן): ארגוני ← "הארגון"; עצמאי ← "מטיסים/<שם המשתמש>" (ראו requestParent_). בקשה קיימת נשארת בתיקייה שלה.
   // התחלת שמירה מוחקת את קבצי הבקשה הקודמים בתיקייה ומאפסת את סימון ה"מוכנה"; רק saveEnd מסמן מוכנה.
   saveBegin: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
@@ -815,33 +871,40 @@ var ACTIONS = {
     if (!name) return { ok: false, error: 'bad_name' };
     var rid = String(r.rid || '');
     if (!/^[a-f0-9]{16,64}$/.test(rid)) return { ok: false, error: 'bad_rid' };
-    var log = readLog_(), entry = findByRid_(log, rid), folder = null, t = now_();
+    var log = readLog_(), entry = findByRid_(log, rid), folder = null, t = now_(), unique, parentId;
     if (entry) {
       if (entry.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
       if (liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
       try { folder = DriveApp.getFolderById(entry.id); if (folder.isTrashed()) folder = null; } catch (err) { folder = null; }
     }
-    var unique = uniqueName_(log, name, rid);
     if (!folder) {
       var cache = CacheService.getScriptCache(), nk = 'nf:' + sha256Hex_(a.name).slice(0, 16) + ':' + Math.floor(t / 3600000), made = Number(cache.get(nk)) || 0;
       if (made >= CFG.MAX_NEW_FOLDERS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי בקשות חדשות בשעה האחרונה' };
       // תקרת בקשות פתוחות למשתמש (לא נשלחו חי, ונגעו בהן בחודש האחרון): מטיס אחד לא מנפח את היומן ואת הדרייב. רק בקשה חדשה נבדקת (שמירה חוזרת לא), ומנהל פטור.
-      // בקשה שנשלחה חי, או שלא נגעו בה LOG_KEEP_DAYS ימים, אינה "פתוחה" — כך שימוש רגיל לעולם לא נתקע בתקרה
+      // בקשה שנשלחה חי, או שלא נגעו בה LOG_KEEP_DAYS ימים, אינה "פתוחה" — כך ששימוש רגיל לעולם לא נתקע בתקרה
       if (!entry && a.user.role !== 'admin' && openRequests_(log, a.name, t) >= CFG.MAX_OPEN_REQUESTS_PER_USER)
         return { ok: false, error: 'too_many_open', message: 'יש לכם יותר מדי בקשות שמורות שעדיין לא נשלחו (' + CFG.MAX_OPEN_REQUESTS_PER_USER + ') — שלחו או המתינו, ואם נדרש פנו לתמיכה' };
       cache.put(nk, String(made + 1), 3600);
-      folder = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID).createFolder(unique);
+      // סוג התיקייה לפי הבקשה (אם כבר ביומן: תיקייה שנמחקה נוצרת מחדש אצל בעליה, גם כשמנהל הוא שמשחזר), ואחרת לפי המשתמש שפותח. התיקיות העוטפות נוצרות רק כאן — אחרי כל הבדיקות
+      var kind = entry ? kindOf_(entry) : (isOrg_(a.user) ? 'org' : 'pilot'), parent = requestParent_(kind, entry ? entry.user : a.name, log);
+      parentId = parent.getId();
+      unique = uniqueName_(log, name, rid, parentId);
+      folder = parent.createFolder(unique);
+      if (!entry) { entry = { id: folder.getId(), rid: rid, name: unique, user: a.name, kind: kind, created: t, sent: [] }; log.push(entry); }
     } else {
+      parentId = entry.parent || CFG.ROOT_FOLDER_ID;
+      unique = uniqueName_(log, name, rid, parentId);
       if (folder.getName() !== unique) folder.setName(unique);
       var old = folder.getFiles();
       while (old.hasNext()) { var of = old.next(); if (REQ_FILE_RE_.test(of.getName())) of.setTrashed(true); }   // אין שאריות מגרסה קודמת (שם אחר) שיצורפו בטעות
     }
-    if (!entry) { entry = { id: folder.getId(), rid: rid, name: unique, user: a.name, created: t, sent: [] }; log.push(entry); }
-    entry.id = folder.getId(); entry.name = unique; entry.base = name; entry.saved = t; entry.lastUser = a.name; entry.ready = false; entry.readyAt = 0;
+    entry.id = folder.getId(); entry.name = unique; entry.base = name; entry.parent = parentId; entry.saved = t; entry.lastUser = a.name; entry.ready = false; entry.readyAt = 0;
     writeLog_(log, entry.id);
-    // השם בדרייב ייחודי גלובלית (כדי שהמנהל יבדיל בין תיקיות), אבל מטיס רגיל מקבל בחזרה שם שחושב מהבקשות שלו בלבד —
-    // סיומת "(2)" שנגרמה מבקשה של מישהו אחר הייתה מגלה לו שקיימת בקשה כזו
-    return { ok: true, folderId: folder.getId(), url: folder.getUrl(), name: a.user.role === 'admin' ? unique : uniqueName_(log, name, rid, a.name) };
+    // השם בדרייב ייחודי בתוך תיקיית האב, אבל מטיס רגיל מקבל בחזרה שם שחושב מהבקשות שלו בלבד — סיומת "(2)" שנגרמה מבקשה של מישהו אחר (למשל בעל קודם של אותו שם משתמש, שנמחק
+    // והתיקייה האישית שלו נשארה) הייתה מגלה לו שקיימת בקשה כזו. קישור התיקייה בדרייב מוחזר למנהל בלבד: למטיס אין גישה אליה
+    var out = { ok: true, folderId: folder.getId(), name: a.user.role === 'admin' ? unique : uniqueName_(log, name, rid, parentId, a.name) };
+    if (a.user.role === 'admin') out.url = folder.getUrl();
+    return out;
   },
 
   // סוף שמירה: מסמן את הבקשה "מוכנה לשליחה" רק אם הלקוח אישר שהיא מוכנה והתיקייה מכילה Word ותמונה
@@ -889,8 +952,9 @@ var ACTIONS = {
   },
 
   // שליחת הבקשה במייל. target: 'office' (ברירת מחדל; כמו בשרת הישן) = "שלח למשרד", 'self' = "שלח רק לעצמי"; כל ערך אחר => bad_target.
-  // הנמענים נקבעים בשרת בלבד (ראו mailPlan_): משרד נוטאם = CFG.MAIL_TO הקבוע (רק במצב חי + office), המבקש = כתובת המשתמש המחובר
-  // השמורה אצלו (או הבעלים, למשתמש בלי כתובת), והבעלים תמיד בעותק סמוי. שום שדה בבקשה לא קובע נמען.
+  // הנמענים נקבעים בשרת בלבד (ראו mailPlan_ — לפי סוג החשבון, המצב והיעד): משרד נוטאם = CFG.MAIL_TO הקבוע (רק במצב חי + office), המבקש = כתובת המשתמש המחובר
+  // השמורה אצלו (או כתובת הארגון, למשתמש בלי כתובת), וכתובת הארגון מקבלת עותק. שום שדה בבקשה לא קובע נמען. שם השולח (name) נקבע ב-senderName_: ארגוני — שם הארגון;
+  // עצמאי — fromName מהבקשה (הגורם שהמטיס הצהיר עליו) אחרי ניקוי ועם סיומת קבועה. fromName אינו משפיע על שום דבר חוץ משם השולח, ואינו נקרא מחשבון ארגוני.
   // תנאים שנאכפים כאן ולא רק בדפדפן: הבקשה ביומן ונשמרה כ"מוכנה" (saveEnd), רק בעליה או מנהל שולחים אותה,
   // ב-office הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
   // ושליחה חוזרת למשרד של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. שליחה לעצמו אינה נחשבת "נשלחה למשרד נוטאם":
@@ -899,7 +963,7 @@ var ACTIONS = {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
     var target = r.target === undefined ? 'office' : r.target;      // חסר => office (לקוח ישן); null/ריק/מחרוזת אחרת => נדחה
     if (target !== 'office' && target !== 'self') return { ok: false, error: 'bad_target' };
-    var mode = mailMode_(), toOffice = target === 'office';
+    var mode = mailMode_(), toOffice = target === 'office', org = isOrg_(a.user);
     if (toOffice && r.expectMode !== mode) return withMailInfo_({ ok: false, error: 'mode_changed', mailMode: mode }, a.user);
     var folder = requestFolder_(r.folderId);
     if (!folder) return { ok: false, error: 'bad_folder' };
@@ -925,8 +989,9 @@ var ACTIONS = {
     var cache = CacheService.getScriptCache(), hour = Math.floor(now_() / 3600000), uh = sha256Hex_(a.name).slice(0, 16);
     var allKey = 'sends:' + kind + ':' + hour, userKey = 'sends:u:' + kind + ':' + uh + ':' + hour, tryKey = 'sends:t:' + uh + ':' + hour;
     var sendsAll = Number(cache.get(allKey)) || 0, sendsUser = Number(cache.get(userKey)) || 0, tries = Number(cache.get(tryKey)) || 0;
+    // חשבון ארגוני פטור מהתקרה הכוללת בלבד (לא מהאישית): מטיסים שמילאו את הדלי הכללי לא מרעיבים את הארגון. השליחה עדיין נספרת בסך הכול
     if (sendsUser >= lim.u) return rateErr_('user', kind);
-    if (sendsAll >= lim.a) return rateErr_('all', kind);
+    if (!org && sendsAll >= lim.a) return rateErr_('all', kind);
     if (tries >= CFG.MAX_SEND_ATTEMPTS_PER_HOUR) return rateErr_('user', 't');
 
     var c = folderFiles_(folder);
@@ -934,20 +999,21 @@ var ACTIONS = {
     if (!c.hasDocx || !c.hasImage) return { ok: false, error: 'missing_files', message: 'חסר קובץ Word או תמונת מפה/תצ"א בתיקייה' };   // א-11 נספח ג': חובה לצרף מפה/תצ"א
     if (c.total > CFG.MAX_MAIL_BYTES) return { ok: false, error: 'too_big' };
 
-    // המבקש = כתובת המשתמש המחובר (שמורה ומאומתת); בלי כתובת — הבעלים. הבעלים חייב להיות ידוע: הוא תמיד מקבל עותק סמוי (נכשל סגור)
-    var owner = ownerEmail_(), requester = requesterEmail_(a.user) || owner;
-    if (!owner || !requester) return { ok: false, error: 'no_owner' };
-    var plan = mailPlan_(mode, target, requester, owner), to = plan.to;
+    // המבקש = כתובת המשתמש המחובר (שמורה ומאומתת); בלי כתובת — כתובת הארגון. כתובת הארגון חייבת להיות ידועה: היא מקבלת עותק מכל שליחה של מטיס
+    // וכתובת ה"השב ל" של חשבון ארגוני (נכשל סגור)
+    var orgA = orgAddr_(), stored = requesterEmail_(a.user);
+    if (!orgA) return { ok: false, error: 'no_owner' };
+    var plan = mailPlan_(org, mode, target, stored, orgA), to = plan.to, sender = senderName_(a.user, r.fromName);
     // מכסת המיילים היומית של גוגל נספרת לפי נמענים (to+cc+bcc): בודקים מראש, כדי שהכשל יהיה ברור, לא יירשם "failed" ביומן ולא יצרוך קצב.
-    // עותקים משאירים רזרבה (MAIL_QUOTA_RESERVE) לשליחה האמיתית למשרד ולקודי ההרשמה.
+    // עותקים משאירים רזרבה (MAIL_QUOTA_RESERVE) לשליחה האמיתית למשרד ולקודי ההרשמה — מלבד חשבון ארגוני, שפטור מהרזרבה (הרזרבה נועדה לשמור מכסה *לארגון* מפני מטיסים).
     var need = plan.to.length + plan.cc.length + plan.bcc.length;
-    if (!mailQuotaOk_(need, kind === 'o' ? 0 : CFG.MAIL_QUOTA_RESERVE)) return quotaErr_();
+    if (!mailQuotaOk_(need, (kind === 'o' || org) ? 0 : CFG.MAIL_QUOTA_RESERVE)) return quotaErr_();
     var prefix = !toOffice ? '[עותק לעצמי — לא נשלח למשרד נוטאם] ' : mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ';
     // ביומן: שליחה לעצמו נרשמת כ-mode:'self' (ראו sendKind_) — לעולם לא כ"נשלחה חי"
-    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
+    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid, sender);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
     cache.put(allKey, String(sendsAll + 1), 3600); cache.put(userKey, String(sendsUser + 1), 3600); cache.put(tryKey, String(tries + 1), 3600);
     try {
-      var opts = { to: to.join(','), replyTo: plan.replyTo, name: CFG.SENDER_NAME, subject: prefix + subject, body: body, attachments: c.blobs };
+      var opts = { to: to.join(','), replyTo: plan.replyTo, name: sender, subject: prefix + subject, body: body, attachments: c.blobs };
       if (plan.cc.length) opts.cc = plan.cc.join(',');
       if (plan.bcc.length) opts.bcc = plan.bcc.join(',');
       MailApp.sendEmail(opts);
@@ -957,13 +1023,18 @@ var ACTIONS = {
       throw err;
     }
     try { logSentEnd_(folder.getId(), sid, 'sent'); } catch (e3) { /* המייל כבר יצא; הרשומה נשארת "בשליחה" וממשיכה לחסום כפילות */ }
+    // כתובת הארגון לא נחשפת למטיס עצמאי (בתשובה ובסימון): היא מוסתרת ממנו, אלא אם זו כתובתו השמורה. חשבון ארגוני רואה הכול
+    var show = function (list) { return org ? list : list.filter(function (x) { x = String(x).toLowerCase(); return x !== orgA || x === stored; }); };
+    var shownTo = show(to), shownCc = show(plan.cc);
     try {   // סימון בתוך תיקיית הבקשה, כדי שגם מי שפותח את התיקייה בדרייב יראה שנשלחה
       var kindName = !toOffice ? 'עותק לעצמו — לא נשלח למשרד נוטאם' : mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — למבקש בלבד, לא נשלח למשרד נוטאם';
       folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (!toOffice ? ' (לעצמו)' : mode === 'live' ? '' : ' (בדיקה)') + '.txt',
-        ['נשלח ע"י: ' + a.name, 'יעד: ' + (toOffice ? 'משרד' : 'לעצמו'), 'מצב: ' + kindName, 'אל: ' + to.join(', '), 'עותק: ' + (plan.cc.length ? plan.cc.join(', ') : '—'), 'עותק סמוי למנהל: כן', 'נושא: ' + prefix + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
+        ['נשלח ע"י: ' + a.name, 'סוג חשבון: ' + (org ? 'ארגוני' : 'עצמאי'), 'שם השולח: ' + sender, 'יעד: ' + (toOffice ? 'משרד' : 'לעצמו'), 'מצב: ' + kindName,
+          'אל: ' + (shownTo.length ? shownTo.join(', ') : '—'), 'עותק: ' + (shownCc.length ? shownCc.join(', ') : '—'), 'עותק סמוי לארגון: ' + (plan.bcc.length ? 'כן' : 'לא'),
+          'נושא: ' + prefix + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
     } catch (e4) { /* הסימון אינו חיוני */ }
-    // owner לא מוחזר ללקוח אלא כשהוא עצמו המבקש (to/cc מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר)
-    return { ok: true, mode: mode, target: target, to: to, cc: plan.cc, adminCopy: true, files: c.names, sentAt: t };
+    // כתובת הארגון לא מוחזרת ללקוח אלא לחשבון ארגוני (to/cc של מטיס מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר). adminCopy = כתובת הארגון בין הנמענים (בכל תפקיד)
+    return { ok: true, mode: mode, target: target, to: shownTo, cc: shownCc, adminCopy: [].concat(plan.to, plan.cc, plan.bcc).some(function (x) { return String(x).toLowerCase() === orgA; }), from: sender, files: c.names, sentAt: t };
   }
 };
 
@@ -1023,15 +1094,38 @@ function admin_(r) {
   if (a.user.role !== 'admin') return { error: 'forbidden' };
   return a;
 }
-// תיקיית בקשה תקפה = בתוך תיקיית הבקשות (עד 10 רמות), לא מחוצה לה
+// תיקיית בקשה תקפה = תיקייה בעומק 1-3 מתחת לתיקייה הראשית ורק כזו: עומק 1 = תיקיות ישנות (נוצרו לפני ההפרדה לפי סוג; ללא סוג — נחשבות ארגוניות),
+// עומק 2 = "הארגון/<בקשה>", עומק 3 = "מטיסים/<משתמש>/<בקשה>". התיקייה הראשית עצמה, תיקייה עמוקה יותר ותיקייה מחוץ לעץ — נדחות.
+// שמות התיקיות העוטפות אינם נבדקים (שינוי שם ידני בדרייב לא שובר בקשות קיימות); הפעולות שמשתמשות בה דורשות בנוסף רשומה ביומן, שאותה יוצרת רק saveBegin
 function requestFolder_(id) {
   var folder;
   try { folder = DriveApp.getFolderById(String(id)); } catch (err) { return null; }
-  var seen = 0, cur = folder;
-  while (cur && seen++ < 10) {
-    if (cur.getId() === CFG.ROOT_FOLDER_ID) return folder.getId() === CFG.ROOT_FOLDER_ID ? null : folder;
+  var depth = 0, cur = folder;
+  while (cur && depth <= 3) {
+    if (cur.getId() === CFG.ROOT_FOLDER_ID) return depth >= 1 ? folder : null;
     var ps = cur.getParents();
     cur = ps.hasNext() ? ps.next() : null;
+    depth++;
   }
   return null;
+}
+// ----- תיקיות הדרייב של הבקשות לפי סוג -----
+function folderIdSet_(log) { var o = {}; log.forEach(function (e) { o[e.id] = true; }); return o; }
+// תת-תיקייה בשם נתון: הראשונה שאינה בפח ואינה תיקיית בקשה מהיומן (בקשה ישנה ששמה במקרה "הארגון"/"מטיסים" אינה תיקייה עוטפת); אחרת נוצרת.
+// אידמפוטנטית: קריאה שנייה מוצאת את התיקייה ואינה יוצרת כפילות. קריאות מקבילות מסודרות בנעילת הסקריפט של doPost
+function childFolder_(parent, name, skip) {
+  var it = parent.getFoldersByName(name);
+  while (it.hasNext()) { var f = it.next(); if (!skip[f.getId()] && !f.isTrashed()) return f; }
+  return parent.createFolder(name);
+}
+// שם התיקייה האישית של מטיס = שם המשתמש, מנוקה. שם שהניקוי שינה (למשל רווחים כפולים, או שם מוחלף של משתמש שנמחק) מקבל סיומת גיבוב, כדי ששני משתמשים לא יתכנסו לאותה תיקייה
+function pilotFolderName_(user) {
+  var raw = String(user || ''), c = cleanFolderName_(raw);
+  return (c && c === raw) ? c : ((c || 'user') + ' ~' + sha256Hex_(raw).slice(0, 6)).slice(0, 120);
+}
+// תיקיית האב של בקשה חדשה: ארגוני — "הארגון" תחת התיקייה הראשית; עצמאי — "מטיסים/<משתמש>". נוצרת לפי דרישה
+function requestParent_(kind, owner, log) {
+  var skip = folderIdSet_(log), root = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID);
+  if (kind !== 'pilot') return childFolder_(root, cleanFolderName_(CFG.ORG_FOLDER_NAME) || 'הארגון', skip);
+  return childFolder_(childFolder_(root, cleanFolderName_(CFG.PILOTS_FOLDER_NAME) || 'מטיסים', skip), pilotFolderName_(owner), skip);
 }

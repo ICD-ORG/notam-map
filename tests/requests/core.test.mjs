@@ -1178,10 +1178,14 @@ test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל 
 /* ===== עצמאות המבקש: שם הגורם המבקש (שדה 2), אות קריאה (שדה 13) ומס׳ רישום (שדה 14) נקבעים על ידי המבקש — אין עוד ערכים קבועים של הארגון ===== */
 const ofErrs = (o, f) => C.validateInput(Object.assign({}, baseInput, o), cfg).filter(e => e.field === f);
 
-test("config.json: אין בלוק org (שם, רישום, אות קריאה); הנוסח ״לא רלוונטי״ של שדות 13 ו-14 הוא fixed.not_relevant", () => {
-  assert.equal(cfg.org, undefined, "הגדרות הארגון הוסרו");
-  assert.ok(!/הארגון הישראלי לרב להב|"ICD"/.test(JSON.stringify(cfg)), "אין שם ארגון קבוע בהגדרות");
+// עודכן בכוונה (הפרדה בין הארגון למטיסים עצמאיים): ברירות המחדל של הארגון חזרו, אך ורק כבלוק org_defaults שהלקוח טוען לחשבון ארגוני בלבד (js/ui.js loadPerson). שום מקום אחר בהגדרות אינו נושא שם ארגון או רישום קבועים, ובלוק org הישן לא חזר
+test("config.json: ברירות המחדל של הארגון (שם, אות קריאה, רישום) רק ב-org_defaults; אין בלוק org ישן; הנוסח ״לא רלוונטי״ של שדות 13 ו-14 הוא fixed.not_relevant", () => {
+  assert.equal(cfg.org, undefined, "בלוק org הישן לא חזר");
+  assert.deepEqual(cfg.org_defaults, { name: "הארגון הישראלי לרב להב", callsign: "לא רלוונטי", registration: "ICD" });
+  const rest = Object.assign({}, cfg); delete rest.org_defaults;
+  assert.ok(!/הארגון הישראלי לרב להב|"ICD"/.test(JSON.stringify(rest)), "שם הארגון והרישום מופיעים רק ב-org_defaults");
   assert.equal(cfg.fixed.not_relevant, "לא רלוונטי");
+  assert.equal(cfg.org_defaults.callsign, cfg.fixed.not_relevant);
 });
 
 test("אימות שם הגורם המבקש (שדה 2): חובה; אחרי trim; עד 80 תווים; בלי תווי בקרה, חצי סרוגייט ותווים אסורים ב-XML", () => {
@@ -1349,11 +1353,11 @@ const REQ_DIR = "members-k38p/requests/", readReq = f => fs.readFileSync(path.jo
 test("n=12: config.json מגדיר support_email תקין (כתובת מייל בלבד)", () => {
   assert.equal(typeof cfg.support_email, "string");
   assert.match(cfg.support_email, /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){1,5}$/);
-  assert.equal(cfg.support_email, "office@icd.org.il", "הכתובת שהוגדרה ממתינה לאישור המנהל");
+  assert.equal(cfg.support_email, "info@icd.org.il", "כתובת התמיכה של המטיסים (לא כתובת הארגון)");
 });
 
 test("n=12: כתובת התמיכה מצורפת להודעות הפניה (תמיכה / מנהל המערכת / משרד הארגון) בלבד, פעם אחת, ורק אם היא כתובת מייל תקינה", () => {
-  const A = loadAuth({ support_email: "office@icd.org.il" }), E = "office@icd.org.il";
+  const A = loadAuth({ support_email: "info@icd.org.il" }), E = "info@icd.org.il";
   assert.equal(A.supportEmail(), E);
   assert.equal(A.withSupport("אם הבעיה חוזרת, פנו לתמיכה."), "אם הבעיה חוזרת, פנו לתמיכה: " + E + ".");
   assert.equal(A.withSupport("יש לפנות למנהל המערכת."), "יש לפנות למנהל המערכת: " + E + ".");
@@ -1363,7 +1367,7 @@ test("n=12: כתובת התמיכה מצורפת להודעות הפניה (תמ
   // ההודעות עצמן, דרך msg: מטיס רגיל (role ריק) ומנהל
   for (const code of ["blocked", "mail_quota", "not_configured", "not_ready", "missing_files", "no_owner"]) assert.ok(A.msg({ error: code }).includes(E), code + " כולל את כתובת התמיכה");
   assert.ok(!A.msg({ error: "bad_login" }).includes(E), "שגיאה בלי הפניה לתמיכה — בלי כתובת");
-  assert.ok(/פנו לתמיכה: office@icd\.org\.il/.test(A.msg({ error: "no_owner" })), "נוסח המטיס ל-no_owner");
+  assert.ok(/פנו לתמיכה: info@icd\.org\.il/.test(A.msg({ error: "no_owner" })), "נוסח המטיס ל-no_owner");
 });
 
 test("n=12: ערך support_email לא תקין (HTML, סכמה, רווחים, חסר) לא מוצג ולא משנה הודעות (נכשל סגור)", () => {
@@ -1453,4 +1457,75 @@ test("n=11/12/17/18: מבנה — הודעות הסנכרון לפי תפקיד,
   const rs = auth.slice(auth.indexOf('$("rgSend").onclick'), auth.indexOf('$("regForm").onsubmit'));
   assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
   for (const f of ["js/auth.js", "js/ui.js", "js/sync.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f + ": בלי רצפי unicode-escape");
+});
+
+/* ===== הפרדה וניהול בין מה שהארגון שולח לבין מה שמטיסים עצמאיים שולחים (לקוח; חוזה שרת↔לקוח) ===== */
+const ORG_ADDR = "office@icd.org.il", SUPPORT_ADDR = "info@icd.org.il";
+const withFetch = async (resp, fn) => { const f = globalThis.fetch; globalThis.fetch = async () => ({ ok: true, json: async () => resp }); try { return await fn(); } finally { globalThis.fetch = f; } };
+
+test("הפרדה: auth.js — A.isOrg לפי org מהשרת; שרת ישן (בלי org) נגזר מהתפקיד; features.orgSplit; ערך org לא בוליאני מתעלמים ממנו", async () => {
+  const A = loadAuth({ api_url: "https://x.test/exec" });
+  const NEW = ["sendTarget", "orgSplit"];
+  const cases = [   // [תשובת me, isOrg צפוי, orgSplit צפוי]
+    [{ ok: true, user: "a", role: "admin", org: true, features: NEW }, true, true],
+    [{ ok: true, user: "p", role: "user", org: false, features: NEW }, false, true],
+    [{ ok: true, user: "o", role: "user", org: true, features: NEW }, true, true],
+    [{ ok: true, user: "a", role: "admin", features: ["sendTarget"] }, true, false],        // שרת ישן: מנהל = ארגוני
+    [{ ok: true, user: "p", role: "user", features: ["sendTarget"] }, false, false],        // org=true הקודם לא נשאר (איפוס מלא בכל me)
+    [{ ok: true, user: "p", role: "user" }, false, false],                                   // שרת ישן מאוד: בלי features
+    [{ ok: true, user: "p", role: "user", org: "yes", features: NEW }, false, true],         // לא בוליאני — נגזר מהתפקיד
+    [{ ok: true, user: "a", role: "admin", org: "yes", features: NEW }, true, true]
+  ];
+  for (const [resp, org, split] of cases) {
+    await withFetch(resp, () => A.refresh());
+    assert.equal(A.isOrg(), org, JSON.stringify(resp) + " isOrg");
+    assert.equal(A.hasFeature("orgSplit"), split, JSON.stringify(resp) + " orgSplit");
+  }
+});
+
+test("הפרדה: אין אזכור של כתובת הארגון (office@icd.org.il) בשום קובץ לקוח או בהגדרות; כתובת התמיכה היא info@icd.org.il ומוצגת בהודעות ההפניה", () => {
+  for (const f of ["index.html", "config.json", "js/auth.js", "js/ui.js", "js/core.js", "js/output.js", "js/help.js", "js/docx.js", "js/sync.js", "js/mapimg.js", "js/maplayers.js"]) assert.ok(!readReq(f).includes(ORG_ADDR), f + ": כתובת הארגון לא נחשפת בקוד הלקוח");
+  assert.equal(cfg.support_email, SUPPORT_ADDR);
+  const A = loadAuth({ support_email: cfg.support_email });
+  assert.ok(A.msg({ error: "blocked" }).includes(SUPPORT_ADDR) && !A.msg({ error: "blocked" }).includes("office@"), "הודעת חסימה");
+  assert.ok(A.withSupport("אם הבעיה חוזרת, פנו לתמיכה.").endsWith("פנו לתמיכה: " + SUPPORT_ADDR + "."));
+});
+
+test("הפרדה: org_defaults נטענים לטופס רק בחשבון ארגוני ורק לשדה בלי ערך שמור; למטיס עצמאי אין ברירת מחדל — מבנה loadPerson", () => {
+  const ui = readReq("js/ui.js"), lp = ui.slice(ui.indexOf("function loadPerson()"), ui.indexOf("function savePerson()"));
+  assert.ok(/const od = isOrg\(\) \? orgDefaults\(\) : null/.test(lp), "ברירות המחדל רק כש-isOrg");
+  assert.ok(/typeof p\[k\] === "string"/.test(lp) && /od && typeof od\[dk\] === "string" \? od\[dk\] : ""/.test(lp), "ערך שמור (גם ריק) גובר; בלעדיו — ברירת המחדל, ובלי ארגוני — ריק");
+  for (const k of ["name", "callsign", "registration"]) assert.ok(new RegExp('"' + k + '"\\)').test(lp) || lp.includes('"' + k + '"'), "מיפוי " + k);
+  assert.ok(/org: isOrg\(\)/.test(ui.slice(ui.indexOf("function savePerson()"), ui.indexOf("function clearPersonFields"))), "הרשומה השמורה נושאת את סוג החשבון");
+  assert.ok(/isOrg = \(\) => \{[^}]*A\.loggedIn\(\)[^}]*A\.isOrg\(\)/.test(ui), "isOrg דורש התחברות תקפה");
+});
+
+test("הפרדה: שליחה — fromName נשלח רק לשרת עם orgSplit (= inp.requesterOrg, גם office וגם self); דיאלוג שונה לארגוני ולעצמאי; מטיס עצמאי בלי כתובת שמורה נחסם; הכתובת של הארגון לא בקוד", () => {
+  const ui = readReq("js/ui.js"), st = ui.slice(ui.indexOf("async function sendToNotam()"), ui.indexOf("async function copyMail()"));
+  assert.ok(/split = newSrv && A\.hasFeature\("orgSplit"\)/.test(st), "orgSplit מזהה שרת חדש");
+  assert.ok(/fromName = split \? String\(S\.res\.inp\.requesterOrg \|\| ""\) : ""/.test(st), "fromName = הגורם שהוקלד");
+  assert.ok(/if \(split\) req\.fromName = fromName;/.test(st) && !/req\.fromName = (?!fromName)/.test(st), "נשלח בכל sendRequest, ורק בשרת עם orgSplit");
+  assert.ok(/אל: ' \+ officeTo \+ ' · עותק: ' \+ orgCc \+ ' · התשובות יחזרו אל הארגון · שם השולח: ' \+ orgName/.test(st), "דיאלוג ארגוני");
+  assert.ok(/<b>שם השולח במייל:<\/b> ' \+ selfName/.test(st), "שורת שם השולח למטיס עצמאי");
+  assert.ok(/if \(split && !org && \(toOwner \|\| !addr\)\)/.test(st), "מטיס עצמאי בלי כתובת שמורה נחסם (נכשל סגור)");
+  assert.ok(/A\.isOrg\(\) !== org/.test(st), "preflight: שינוי סוג החשבון באמצע = dest_changed");
+  const pilotParts = st.slice(st.indexOf("הפרדה, מטיס עצמאי, מצב חי"), st.indexOf(")) : !newSrv ? {"));
+  assert.ok(pilotParts.length > 300 && pilotParts.length < 2500 && !/הארגון|orgName|orgCc|ORG_NAME/.test(pilotParts), "בדיאלוג מטיס עצמאי אין אזכור של הארגון");
+  assert.ok(/ARCHIVE_PILOT = '<p class="small">[^']*'/.test(ui) && !/ARCHIVE_PILOT = [^;]*הארגון/.test(ui), "הערת הארכיון של המטיס ניטרלית");
+});
+
+test("הפרדה: חלון הניהול — עמודת סוג עם setOrg, תיבת ״חשבון ארגוני״ בהוספת משתמש (addUser עם org), סיכומים לפי סוג, עמודת סוג וסינון ביומן", () => {
+  const au = readReq("js/auth.js"), ad = au.slice(au.indexOf("async function openAdmin()"), au.indexOf("/* ---------- ממשק ציבורי"));
+  assert.ok(/call\("setOrg", \{ target: who, org: to \}\)/.test(ad), "setOrg");
+  assert.ok(/id="adO" checked/.test(ad) && /org: \$\("adA"\)\.checked \|\| !\$\("adO"\) \|\| \$\("adO"\)\.checked/.test(ad), "תיבת חשבון ארגוני מסומנת כברירת מחדל, נשלחת ב-addUser; מנהל תמיד ארגוני");
+  assert.ok(/id="admTotals"/.test(ad) && /בקשות הארגון:<\/b> /.test(ad) && /בקשות מטיסים:<\/b> /.test(ad), "סיכומים");
+  assert.ok(/id="admKind"/.test(ad) && /<option value="org">הארגון<\/option><option value="pilot">מטיסים<\/option>/.test(ad), "סינון סוג ביומן");
+  assert.ok(/HELP\.type/.test(ad) && /HELP\.addOrg/.test(ad), "לחצני ! לסוג ולתיבת הסימון");
+  assert.ok(/data-setorg/.test(ad) && /u\.role === "admin" \|\| !split/.test(ad), "כפתור הפיכה לא למנהל ולא בשרת ישן");
+  assert.ok(/A\.hasFeature\("orgSplit"\)/.test(ad), "בשרת ישן אין עמודת סוג");
+});
+
+test("הפרדה: אין רצפי unicode-escape בקבצי הלקוח שהשתנו, ו-config.json תקין", () => {
+  for (const f of ["js/auth.js", "js/ui.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f);
+  assert.doesNotThrow(() => JSON.parse(readReq("config.json")));
 });

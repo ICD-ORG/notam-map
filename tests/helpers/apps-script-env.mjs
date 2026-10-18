@@ -55,8 +55,9 @@ export function makeEnv() {
   const mkFolder = f => ({
     getId: () => f.id, getUrl: () => "https://drive/" + f.id, getName: () => f.name, setName: n => { f.name = n; }, isTrashed: () => !!f.trashed,
     getParents() { const p = f.parent && folders[f.parent]; let used = !p; return { hasNext: () => !used, next: () => { used = true; return mkFolder(p); } }; },
-    getFoldersByName(n) { const hit = Object.values(folders).filter(x => x.parent === f.id && x.name === n); let i = 0; return { hasNext: () => i < hit.length, next: () => mkFolder(hit[i++]) }; },
-    createFolder(n) { const id = "F" + ++seq; folders[id] = { id, name: n, parent: f.id, files: [] }; return mkFolder(folders[id]); },
+    // כמו Drive האמיתי: getFoldersByName לא מחזיר תיקיות שבפח
+    getFoldersByName(n) { const hit = Object.values(folders).filter(x => x.parent === f.id && x.name === n && !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => mkFolder(hit[i++]) }; },
+    createFolder(n) { if (hooks.beforeCreateFolder) hooks.beforeCreateFolder(n, f.id); const id = "F" + ++seq; folders[id] = { id, name: n, parent: f.id, files: [] }; return mkFolder(folders[id]); },
     getFilesByName(n) { const hit = f.files.filter(x => x.name === n && !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => fileApi(hit[i++]) }; },
     getFiles() { const hit = f.files.filter(x => !x.trashed); let i = 0; return { hasNext: () => i < hit.length, next: () => fileApi(hit[i++]) }; },
     createFile(a1, content, mime) {

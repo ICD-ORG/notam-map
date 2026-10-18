@@ -188,6 +188,10 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 .admTbl td.acts .hw { display: flex; margin: 0 0 4px; }   /* כפתורי השורה בעמודה אחת מוערמת, כדי שהטבלה לא תתרחב */
 .admTbl td.acts .hw:last-child { margin-bottom: 0; }
 .admTbl td.acts button:not(.hbtn) { min-height: 30px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+.admTbl td button:not(.hbtn) { min-height: 30px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }   /* כפתור הפיכת הסוג (ארגוני / עצמאי) בתא הסוג */
+.admTbl .utype.org { color: var(--amber); } .admTbl .utype.pilot { color: var(--cyan); }
+.admTotals { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }   /* סיכום בקשות לפי סוג בראש חלון הניהול */
+.admKind { margin: 0 0 6px; }
 
 /* ===== לחצן "!" עם הסבר (js/help.js) ===== */
 .hw { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; max-width: 100%; }
@@ -261,9 +265,9 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="grid" style="margin-top:10px">
       <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
       <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
-      <label class="f"><b>שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)</b><input type="text" id="reqOrg" autocomplete="off"><span class="hint">נספח ג׳ שדה 2 — חובה, עד 80 תווים. כל מבקש מקליד כאן את שמו; אין ברירת מחדל.</span><span class="err" id="e_requesterOrg"></span></label>
-      <label class="f"><b>אות קריאה (אופציונלי)</b><input type="text" id="reqCallsign" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 13 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_callsign"></span></label>
-      <label class="f"><b>מס׳ רישום כלי הטיס (אופציונלי)</b><input type="text" id="reqReg" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 14 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_registration"></span></label>
+      <label class="f"><b>שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)</b><input type="text" id="reqOrg" autocomplete="off"><span class="hint" id="hReqOrg">נספח ג׳ שדה 2 — חובה, עד 80 תווים. כל מבקש מקליד כאן את שמו; אין ברירת מחדל.</span><span class="err" id="e_requesterOrg"></span></label>
+      <label class="f"><b>אות קריאה (אופציונלי)</b><input type="text" id="reqCallsign" autocomplete="off" placeholder="לא רלוונטי"><span class="hint" id="hReqCallsign">נספח ג׳ שדה 13 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_callsign"></span></label>
+      <label class="f"><b>מס׳ רישום כלי הטיס (אופציונלי)</b><input type="text" id="reqReg" autocomplete="off" placeholder="לא רלוונטי"><span class="hint" id="hReqReg">נספח ג׳ שדה 14 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_registration"></span></label>
     </div>
     <span class="err" id="e_requester"></span>
     <div class="plh"><b>אנשי קשר בשטח</b><span class="hint">נספח ג׳ שדה 12 — לפחות שניים, עם שם וטלפון לכל אחד</span></div>
