@@ -2860,7 +2860,7 @@ try {
       check("עובד ארגון: השמירה האוטומטית התחילה כ-1.5 שנ׳ אחרי שהבקשה נהייתה מוכנה (לא מיד)", at0 - tReady >= 1000 && at0 - tReady < 20000, (at0 - tReady) + " מ״ש");
       check("עובד ארגון: סדרה אחת בדיוק saveBegin → 7×saveFile → saveEnd (בלי קריאות אחרות באמצע)", JSON.stringify(page._calls.actions.slice(i0)) === JSON.stringify(["saveBegin", ...Array(7).fill("saveFile"), "saveEnd"]), page._calls.actions.slice(i0).join(","));
       const fo = folders()[0];
-      check("עובד ארגון: התיקייה בארכיון המרכזי תחת ״הארגון״ עם 7 קבצים (Word, KML, ארבע תמונות, נתוני בקשה), והשרת סימן את הבקשה מוכנה", folders().length === 1 && /^הארגון\//.test(folderPath(env, fo)) && fo.files.filter(f => !f.trashed).length === 7 && env.call({ action: "listRequests", token: admTok }).requests.find(r => r.name === fo.name).ready === true, folderPath(env, fo));
+      check("עובד ארגון: התיקייה בארכיון המרכזי תחת ״הארגון״ עם 7 קבצים (Word, KML, ארבע תמונות, נתוני בקשה), והשרת סימן את הבקשה מוכנה", folders().length === 1 && /^הארגון\//.test(folderPath(env, fo)) && fo.files.filter(f => !f.trashed).length === 7 && !fo.files.some(f => /^נשלח/.test(f.name)) && env.call({ action: "listRequests", token: admTok }).requests.find(r => r.name === fo.name).ready === true, folderPath(env, fo));   // והשמירה האוטומטית לא כותבת סימן ״נשלח״
       const msg = await page.textContent("#driveMsg");
       check("עובד ארגון: ההודעה ״נשמר אוטומטית בדרייב ✔ (HH:MM)״ — בלי קישור לתיקייה (התיקייה בדרייב של בעל המערכת)", AUTO_RE.test(msg) && msg.trim().length < 40 && (await page.locator("#driveMsg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && !/drive\./.test(await page.locator("#actions").innerHTML()), msg);
       // הפקדים: שלושה כפתורים בלבד (כל אחד עם ״!״ שלו); ״אפשרויות נוספות״ סגור; המייל הידני (למנהל) מוסתר לגמרי (לא בסדר הטאבים, לא בעץ הנגישות), בלי טקסט ישן על מייל ידני
@@ -2926,6 +2926,7 @@ try {
       const bl = mail.body.split("\n");
       check("המייל שנשלח: הגוף הקצר בנקודות כפי שהלקוח בנה (4 שורות ״• ״), בלי כלי טיס / מהות / קואורדינטות / אנשי קשר, ושורת ״כל הפרטים — בטופס המצורף.״", mail.body === want.body && bl.filter(l => l.startsWith("\u2022 ")).length === 4 && bl.includes("כל הפרטים — בטופס המצורף.") && !/DJI|מהות הפעילות|כלי טיס|°|אנשי קשר|בודק שני/.test(mail.body), mail.body.slice(0, 300));
       check("המייל שנשלח: ל-MailApp מועבר גם htmlBody — div RTL מיושר לימין, רשימת <ul> עם ארבעה <li> של הנקודות, והטקסט escaped", typeof mail.htmlBody === "string" && /^<div dir="rtl" style="direction:rtl;text-align:right/.test(mail.htmlBody) && (mail.htmlBody.match(/<li\b/g) || []).length === 4 && (mail.htmlBody.match(/<ul\b/g) || []).length === 1 && mail.htmlBody.includes("גורם מבקש: חברת עובד הארגון") && !mail.htmlBody.includes("\u2022") && !/<(a|img|script)\b/i.test(mail.htmlBody) && mail.body === want.body, String(mail.htmlBody).slice(0, 200));
+      check("עובד ארגון: אחרי השליחה ההודעה בלי קישור לתיקייה (בחלון ובעמוד), ובתיקייה סימן ״נשלח (בדיקה)״ — שנכתב בשליחה בלבד, לא בשמירה האוטומטית", (await page.locator("#sendProg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && (await page.locator("#driveMsg a").count()) === 0 && folders()[0].files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folders()[0].files.map(f => f.name).join(" | ").slice(0, 160));
       await page.click("#mdClose");
       await ctx.close();
     }
@@ -3022,6 +3023,19 @@ try {
       const sb = n(page, "saveBegin");
       await page.click("#incChecks"); await autoDone(page);
       check("מנהל: ביטול ״כולל דף בדיקות״ (משנה את ה-Word) → נשמר שוב אוטומטית לאותה תיקייה, וה-Word בדרייב בלי דף הבדיקות", n(page, "saveBegin") === sb + 1 && folders().length === before + 1 && !!adminFolder && !(await docxOf(adminFolder)).includes("מצאי לפי קבוצות"), "saveBegin " + sb + "→" + n(page, "saveBegin") + " folders " + before + "→" + folders().length);
+      await ctx.close();
+    }
+
+    /* ---- ו. חלון השליחה פתוח (עוד לא נשלח דבר): השמירה האוטומטית לא מתחרה בו ונדחית עד שייסגר; ואחרי שליחה — לא נשמרת שוב ---- */
+    {
+      const { ctx, page } = await openAs("ora.org", "ora-pass-12345", { autosave: 3000 });
+      await runOnly(page, { org: "חברת החלון הפתוח" }); await page.check("#reviewOk"); await ready(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      await sleepMs(7500);   // יותר מפעמיים ההשהיה (3 שנ׳)
+      check("חלון השליחה פתוח: השמירה האוטומטית נדחית (אין saveBegin) וממתינה לסגירת החלון", n(page, "saveBegin") === 0 && (await page.evaluate(() => window.__REQ.autoPending())) === true, "saveBegin=" + n(page, "saveBegin"));
+      await page.click("#mdClose"); await page.waitForSelector(".sendBox", { state: "detached" });
+      await autoDone(page);
+      check("אחרי סגירת החלון (בלי שליחה) הבקשה נשמרת אוטומטית פעם אחת", n(page, "saveBegin") === 1 && n(page, "saveEnd") === 1, "saveBegin=" + n(page, "saveBegin"));
       await ctx.close();
     }
   }
