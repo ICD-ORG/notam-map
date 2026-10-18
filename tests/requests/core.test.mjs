@@ -1391,6 +1391,75 @@ test("n=12: ערך support_email לא תקין (HTML, סכמה, רווחים, ח
   assert.equal(loadAuth(null).supportEmail(), "", "בלי הגדרות");
 });
 
+/* ---------- הסבר מראש על הכרטיס (שימו לב + מה מקבלים + כפתור רכישה) במסכי הכניסה וההרשמה, והודעה אחרי ״שלחו לי קוד״ ---------- */
+// הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד: כל שינוי בו ייתפס
+const BUY_NOTICE = "שימו לב: מנוי או הרשמה למפת הנוט״מים אינם כוללים בקשות טיסה. בקשות טיסה מיועדות למטיסים מסחריים בלבד, ודורשות רכישה נפרדת של הכרטיס ״בקשת אישורי טיסה״.";
+const BUY_BENEFIT = "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.";
+const BUY_LABEL = "לרכישת הכרטיס והצטרפות";
+const BUY_NO_CODE = "לא הגיע קוד? כנראה שלא נרכש הכרטיס ״בקשת אישורי טיסה״. מנוי למפת הנוט״מים בלבד אינו מקנה גישה לבקשות טיסה.";
+const RENEW_OK = "https://www.icd.org.il/events-1/bqst-yswry-tysh";
+const anchorsOf = html => [...html.matchAll(/<a\b[^>]*>/g)].map(m => m[0]);
+
+test("הסבר הכרטיס: config.json מגדיר renew_url בכתובת https, והלקוח מקבל אותה כפי שהיא", () => {
+  assert.equal(typeof cfg.renew_url, "string");
+  assert.match(cfg.renew_url, /^https:\/\/[^\s"'<>]+$/);
+  assert.equal(loadAuth({ renew_url: cfg.renew_url }).renewHref(), new URL(cfg.renew_url).href);
+});
+
+test("הסבר הכרטיס: כתובת הרכישה נכנסת לקישור רק כשהיא https תקין — חסרה, http, javascript:, data:, יחסית, עם רווח / מירכאות / סוגריים משולשים, עם שם משתמש וסיסמה, או לא מחרוזת = אין כתובת (נכשל סגור)", () => {
+  const good = new Map([[RENEW_OK, RENEW_OK], ["  " + RENEW_OK + "  ", RENEW_OK], ["HTTPS://WWW.ICD.ORG.IL/x", "https://www.icd.org.il/x"], ["https://www.icd.org.il/p?a=1&b=2", "https://www.icd.org.il/p?a=1&b=2"]]);
+  for (const [inp, out] of good) assert.equal(loadAuth({ renew_url: inp }).renewHref(), out, JSON.stringify(inp));
+  const bad = ["", "   ", "http://www.icd.org.il/x", "javascript:alert(1)", "JAVASCRIPT:alert(1)", "data:text/html,<b>x</b>", "//evil.example/x", "/events-1/x", "www.icd.org.il/x", "https://", "https:///x", "https://user:pw@www.icd.org.il/x", "https://www.icd.org.il/a b", 'https://www.icd.org.il/x"><img src=x>', "https://www.icd.org.il/x'onmouseover='y", "https://www.icd.org.il/<b>", "https://www.icd.org.il/\\x", "https://www.icd.org.il/`x", "ftp://www.icd.org.il/x", "mailto:a@b.co", null, undefined, 42, true, {}, [RENEW_OK]];
+  for (const inp of bad) assert.equal(loadAuth({ renew_url: inp }).renewHref(), "", JSON.stringify(inp));
+  assert.equal(loadAuth({}).renewHref(), "", "הגדרות בלי renew_url (הגדרות / שרת ישנים)");
+  assert.equal(loadAuth(null).renewHref(), "", "בלי הגדרות");
+});
+
+test("הסבר הכרטיס: תיבת ההסבר — הנוסח המאושר במלואו, כפתור הרכישה כקישור אמיתי ללשונית חדשה (noopener noreferrer) והכתובת רק ב-href; בלי כתובת תקינה אין קישור אבל ההסבר נשאר", () => {
+  const A = loadAuth({ renew_url: RENEW_OK, support_email: "info@icd.org.il" }), html = A.buyBox();
+  assert.ok(html.includes(">" + BUY_NOTICE + "<") && html.includes(">" + BUY_BENEFIT + "<"), "שימו לב ויתרון הצטרפות בנוסח המאושר");
+  assert.deepEqual(anchorsOf(html), ['<a class="buyBtn" id="buyBtn" href="' + RENEW_OK + '" target="_blank" rel="noopener noreferrer">'], "קישור אחד בלבד: href, target, rel");
+  assert.ok(html.includes(">" + BUY_LABEL + "</a>"), "תווית הכפתור");
+  assert.ok(!/<button/.test(html), "קישור אמיתי, לא button");
+  assert.equal(html.split(RENEW_OK).length - 1, 1, "הכתובת מופיעה פעם אחת, ב-href בלבד");
+  // & בכתובת: מומר ל-&amp; בתוך ה-href (HTML תקין), ובדפדפן חוזר ל-&
+  assert.ok(loadAuth({ renew_url: "https://www.icd.org.il/p?a=1&b=2" }).buyBox().includes('href="https://www.icd.org.il/p?a=1&amp;b=2"'));
+  for (const bad of [undefined, null, "", "http://www.icd.org.il/x", "javascript:alert(1)", 'https://x.y/"><img src=x>']) {
+    const h = loadAuth({ renew_url: bad }).buyBox();
+    assert.deepEqual(anchorsOf(h), [], "בלי קישור: " + JSON.stringify(bad));
+    assert.ok(h.includes(BUY_NOTICE) && h.includes(BUY_BENEFIT) && !h.includes(BUY_LABEL), "ההסבר נשאר, בלי כפתור: " + JSON.stringify(bad));
+  }
+  assert.ok(!html.includes("office@icd.org.il") && !/מנהל המערכת/.test(html), "בלי כתובת הארגון ובלי ״מנהל המערכת״ בטקסט למטיס");
+});
+
+test("הסבר הכרטיס: ההודעה אחרי ״שלחו לי קוד״ — המשפט החדש נוסף למשפט הקיים (קוד ל-15 דקות, ספאם, מייל הרכישה, רכישה כחבר), כתובת התמיכה נשארת, והיא נגזרת רק מההגדרות (זהה לכל כתובת)", () => {
+  const A = loadAuth({ support_email: "info@icd.org.il", renew_url: RENEW_OK }), m = A.regSentMessage();
+  assert.ok(m.startsWith("אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם; ודאו שהכרטיס שולם, שהמייל שהקלדתם הוא מייל הרכישה"), "המשפט הקיים נשמר");
+  assert.ok(m.includes(", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר. " + BUY_NO_CODE + " "), "ברירת מחדל (דרישת החברות לא דווחה): סעיף החברות, ואחריו המשפט החדש");
+  assert.ok(m.endsWith("אם הבעיה נמשכת — פנו לתמיכה: info@icd.org.il."), "כתובת התמיכה צורפה (withSupport)");
+  assert.ok(!m.includes("office@icd.org.il") && !/מנהל המערכת/.test(m));
+  assert.equal(A.regSentMessage(), m, "קריאה חוזרת — אותו טקסט");
+  assert.equal(loadAuth({ support_email: "info@icd.org.il", renew_url: "http://x.y/z" }).regSentMessage(), m, "הכתובת (תקינה או לא) אינה משפיעה על הטקסט");
+  A.requireMember = true; assert.equal(A.regSentMessage(), m);
+  A.requireMember = false;   // השרת דיווח שדרישת החברות כבויה: סעיף החברות נעלם, והמשפט החדש נשאר
+  const off = A.regSentMessage();
+  assert.ok(!/חברים רשומים/.test(off) && off.includes("מייל הרכישה. " + BUY_NO_CODE + " אם הבעיה נמשכת"), off);
+  // בלי כתובת תמיכה תקינה: בלי כתובת, ובלי כישלון
+  const n = loadAuth({}).regSentMessage();
+  assert.ok(n.includes(BUY_NO_CODE) && n.endsWith("אם הבעיה נמשכת — פנו לתמיכה.") && !n.includes("@"), n);
+});
+
+test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך הכניסה (לא בהקמה ראשונית) ובראש מסך ההרשמה, והודעת הקוד נבנית מ-regSentMessage בלבד (בלי תלות בתשובת השרת) עם כפתור הרכישה", () => {
+  const au = readReq("js/auth.js");
+  assert.ok(/<h2>בקשות טיסה — כניסה<\/h2>' \+ \(boot \? "" : buyBox\(\)\)/.test(au), "מסך הכניסה");
+  assert.ok(/<h2>הרשמה \/ חידוש מנוי<\/h2>' \+ buyBox\(\)/.test(au), "מסך ההרשמה");
+  const send = au.slice(au.indexOf('$("rgSend").onclick'), au.indexOf('$("regForm").onsubmit'));
+  assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
+  assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
+  assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=6"><\/script>/, "גרסת המטמון של auth.js");
+});
+
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
   const SY = require(path.join(ROOT, REQ_DIR, "js/sync.js")), html = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8"), meta = J("members-k38p/pamat-meta.json");
   const T = "2026-10-17T06:00:00Z", base = () => ({ html, meta: { ...meta }, zones, cfg, mapNotam: { fetched_iso: T }, notamAll: { fetched_iso: T } });
@@ -1466,7 +1535,8 @@ test("n=11/12/17/18: מבנה — הודעות הסנכרון לפי תפקיד,
   assert.ok(/id="rgMember"[^]*האירוע לחברי האתר בלבד/.test(auth), "הסבר דרישת החברות בהרשמה");
   assert.ok(/if \(\$\("rgStep2"\)\.style\.display === "none"\) \{ \$\("rgSend"\)\.click\(\); return; \}/.test(auth), "Enter בשדה המייל שולח קוד");
   const rs = auth.slice(auth.indexOf('$("rgSend").onclick'), auth.indexOf('$("regForm").onsubmit'));
-  assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
+  const rm = auth.slice(auth.indexOf("const regSentMessage"), auth.indexOf("function expiredNote"));   // הנוסח עצמו נגזר מההגדרות בלבד (regSentMessage), והמטפל רק מציג אותו
+  assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rm) && /esc\(regSentMessage\(\)\)/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs + rm), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
   for (const f of ["js/auth.js", "js/ui.js", "js/sync.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f + ": בלי רצפי unicode-escape");
 });
 
@@ -1539,4 +1609,21 @@ test("הפרדה: חלון הניהול — עמודת סוג עם setOrg, תי�
 test("הפרדה: אין רצפי unicode-escape בקבצי הלקוח שהשתנו, ו-config.json תקין", () => {
   for (const f of ["js/auth.js", "js/ui.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f);
   assert.doesNotThrow(() => JSON.parse(readReq("config.json")));
+});
+
+test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חלון השליחה, S.saved אחרי כשל, חץ ה״אפשרויות נוספות״ מחוץ לשם הנגיש, וניסוח ״בעל המערכת״ בעזרת הדרייב", () => {
+  const ui = readReq("js/ui.js"), html = readReq("index.html");
+  // השמירה האוטומטית לא מתחילה בזמן שחלון השליחה נבנה (S.opening), והלחצן ״שלח״ מכסה את כל הבנייה בדגל
+  assert.match(ui, /if \(S\.sending \|\| S\.opening \|\| \$\("sendProg"\)\) \{ autoFor = rev;/);
+  assert.match(ui, /async function sendToNotam\(\) \{\s*if \(S\.opening\) return;\s*S\.opening = true;\s*try \{ await sendToNotamOpen\(\); \} finally \{ S\.opening = false; \}\s*\}/);
+  // שמירה חדשה מבטלת את ״נשמר לגרסה הזו״ עד שהיא מצליחה
+  assert.match(ui, /S\.driveTry = rev0;[^\n]*\n\s*S\.saved = null;/);
+  // guarded אינו שותק כשיש שמירה בעיצומה
+  assert.match(ui, /const guarded = async fn => \{\s*if \(S\.sending\) \{ prog\.className = "small"; prog\.textContent = "שמירה בדרייב בעיצומה/);
+  // החץ הוא טקסט חלופי ריק: לא נכנס לשם הנגיש של הכפתור
+  assert.ok(html.includes('#btnMore::after{content:" ▾" / ""}') && html.includes('#btnMore[aria-expanded=true]::after{content:" ▴" / ""}'));
+  // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
+  const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
+  // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
+  assert.match(html, /js\/ui\.js\?v=9/);
 });

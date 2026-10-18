@@ -620,6 +620,11 @@ function calmWix() {
 const regAns = (env, email) => JSON.parse(JSON.stringify(env.call({ action: "regStart", email })));    // תשובת regStart כעותק פשוט להשוואת deepEqual
 const setCfg = (env, k, v) => vm.runInContext("CFG." + k + " = " + JSON.stringify(v), env.sandbox);
 const withWixInto = env => { env.props.WIX_API_KEY = "test-key"; return env; };    // מפעיל את מפתח Wix המדומה בסביבה קיימת
+// הודעת "לא נמצא כרטיס" (regStart לכתובת בלי כרטיס זכאי ובלי חשבון) היא סוג מייל נפרד מקודי ההרשמה ומ"כבר קיים חשבון"; בדיקות שסופרות קודים מסננות אותה (ובדיקות ייעודיות בודקות אותה: "הודעת 'לא נמצא כרטיס'" בהמשך)
+const NOTICKET_SUBJECT = "לא נמצא כרטיס ״בקשת אישורי טיסה״ על הכתובת הזו";
+const isNotice = m => m.subject === NOTICKET_SUBJECT;
+const notices = env => env.mails.filter(isNotice);
+const nonNotice = env => env.mails.filter(m => !isNotice(m));
 
 test("הרשמה: כרטיס ששולם → קוד למייל → שם משתמש וסיסמה שהמשתמש בוחר → כניסה; תוקף 12 חודשים מיום הרכישה", () => {
   const { env, token } = withWix(); const o = addOrder(env);
@@ -655,16 +660,17 @@ test("הרשמה: בלי כרטיס ששולם בפועל — לא נשלח קו
   addOrder(env, { email: "pilot@example.com.evil", status: "PAID" });                // התאמה חלקית
   const answers = ["free", "offline", "canceled", "pending", "visitor", "other", "pilot"].map(n => env.call({ action: "regStart", email: n + "@example.com" }));
   for (const a of answers) assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(base)));
-  assert.equal(env.mails.length, 0, "לא נשלח אף קוד");
+  assert.equal(nonNotice(env).length, 0, "לא נשלח אף קוד (ולא 'כבר קיים חשבון')");
+  assert.equal(notices(env).length, 8, "כל כתובת בלי כרטיס זכאי קיבלה רק את הודעת 'לא נמצא כרטיס' — אל הכתובת שהוקלדה בלבד");
 });
 
 test("הרשמה: הזמנה שנרשמה בשם מייל אחר/בכרטיס של משתתף אחר — מתאימים לפי המייל שבהזמנה או שבכרטיס, בשוויון מלא", () => {
   const { env } = withWix();
   addOrder(env, { email: "buyer@example.com", tickets: [{ guestDetails: { email: "holder@example.com" } }] });
   assert.ok(env.call({ action: "regStart", email: "holder@example.com" }).ok);
-  assert.equal(env.mails.length, 1, "בעל הכרטיס (לא הרוכש) זכאי");
+  assert.equal(nonNotice(env).length, 1, "בעל הכרטיס (לא הרוכש) זכאי");
   assert.ok(env.call({ action: "regStart", email: "holder@example.co" }).ok);
-  assert.equal(env.mails.length, 1, "מייל דומה אינו זכאי");
+  assert.equal(nonNotice(env).length, 1, "מייל דומה אינו זכאי (לא נשלח לו קוד)");
 });
 
 test("הרשמה: קוד שגוי נספר ונחסם אחרי 5, קוד פג תוקף אחרי 15 דקות, ושם משתמש/סיסמה נבדקים בלי לשרוף את הקוד", () => {
@@ -679,6 +685,18 @@ test("הרשמה: קוד שגוי נספר ונחסם אחרי 5, קוד פג ת
   env.call({ action: "regStart", email: "pilot@example.com" }); const c2 = codeFrom(env);
   env.advance(16 * 60000);
   assert.equal(env.call({ action: "regFinish", email: "pilot@example.com", code: c2, user: "dana.pilot", pass: "dana-pass-1234" }).error, "bad_code", "פג תוקף");
+});
+
+test("הרשמה: מייל \"כבר קיים חשבון\" לא טוען שהמנוי בתוקף כשהוא כבר פג", () => {
+  const { env } = withWix(); addOrder(env); assert.ok(regOk(env).ok);
+  const u = userRec(env, "dana.pilot"); u.until = env.now() - 40 * DAY; env.props["U:dana.pilot"] = JSON.stringify(u);   // מנוי שפג לפני 40 יום, ואין כרטיס חדש
+  let before = env.mails.length; env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.equal(env.mails.length, before + 1); assert.match(env.mails[before].subject, /כבר קיים חשבון/); assert.match(env.mails[before].body, /dana\.pilot/);
+  assert.ok(!/בתוך תוקף/.test(env.mails[before].body), "מנוי שפג אינו מתואר כ״בתוך תוקף״");
+  // בקרה: מנוי בתוקף — המשפט נשאר
+  env.advance(25 * HOUR); const u2 = userRec(env, "dana.pilot"); u2.until = env.now() + 20 * DAY; env.props["U:dana.pilot"] = JSON.stringify(u2);
+  before = env.mails.length; env.call({ action: "regStart", email: "pilot@example.com" });
+  assert.equal(env.mails.length, before + 1); assert.match(env.mails[before].body, /המנוי בתוך תוקף עד/);
 });
 
 test("הרשמה: כל הזמנה נצרכת פעם אחת — לא אפשר להירשם פעמיים עם אותו כרטיס (גם במייל שני)", () => {
@@ -719,7 +737,8 @@ test("הרשמה: מכסה לכתובת (5 בשעה) נספרת בכל בקשה 
   assert.deepEqual(holder, none, "אין הבדל בין כתובת עם כרטיס לכתובת בלי");
   assert.deepEqual(holder.map(x => x.error || "ok"), ["ok", "ok", "ok", "ok", "ok", "rate", "rate"]);
   assert.equal(holder[5].scope, undefined, "מגבלה אישית של הכתובת, לא כללית");
-  assert.equal(env.mails.length, 5, "5 קודים לבעל הכרטיס; לכתובת בלי כרטיס לא נשלח דבר");
+  assert.equal(nonNotice(env).length, 5, "5 קודים לבעל הכרטיס; לכתובת בלי כרטיס לא נשלח קוד");
+  assert.equal(notices(env).length, 1, "ולכתובת בלי כרטיס הודעת 'לא נמצא כרטיס' אחת בלבד (פעם ב-24 שעות לכתובת)");
   env.advance(61 * 60000);
   assert.ok(regAns(env, "holder@example.com").ok);
   assert.ok(regAns(env, "nobody@example.com").ok);
@@ -1608,12 +1627,12 @@ test("ניחושי קוד הרשמה (n=6): הכשלונות מצטברים לכ
   assert.equal(bad(c2).error, "bad_code", "אחרי 10 כשלונות בחלון גם הקוד הנכון נדחה");
   const r = env.call({ action: "regStart", email: "pilot@example.com" });
   assert.deepEqual(r, { ok: true, sent: true }, "אותה תשובה כרגיל");
-  assert.equal(env.mails.length, sent, "אבל לא נוצר קוד חדש ולא נשלח מייל");
+  assert.equal(env.mails.length, sent, "אבל לא נוצר קוד חדש ולא נשלח מייל (גם לא 'לא נמצא כרטיס' — לכתובת נעולה יש כרטיס)");
   assert.deepEqual(env.call({ action: "regStart", email: "nobody@example.com" }), r, "אי אפשר להבחין בין כתובת נעולה לכתובת בלי כרטיס");
   assert.equal(bad(c2).error, "bad_code");
   env.advance(7 * 3600000);                                                // CODE_FAIL_HOURS = 6
   assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);
-  assert.equal(env.mails.length, sent + 1, "אחרי החלון נשלח קוד חדש");
+  assert.equal(nonNotice(env).length, sent + 1, "אחרי החלון נשלח קוד חדש");
   const ok = bad(codeFrom(env));
   assert.ok(ok.ok && ok.token, JSON.stringify(ok));
   assert.ok(!Object.keys(env.props).some(k => k.startsWith("R:")), "הצלחה מנקה את הרשומה כולה");
@@ -1660,10 +1679,11 @@ test("השקה (n=1/13): 100 מטיסים שונים נרשמים באותה ש�
 test("השקה (n=1/13): 150 בקשות אנונימיות לכתובות זבל לא חוסמות מטיס אמיתי ולא צורכות את תקציב מיילי ההרשמה (הוא נספר רק על מיילים שיצאו)", () => {
   const { env } = calmWix(); addOrder(env, { email: "real@example.com" });
   for (let i = 0; i < 150; i++) assert.deepEqual(regAns(env, "junk" + i + "@attacker.example"), { ok: true, sent: true });
-  assert.equal(env.mails.length, 0); assert.equal(env.wix.calls.length, 150, "כל בקשה שאלה את Wix פעם אחת");
-  assert.equal(env.props.REG_MAILS, undefined, "זבל לא נגע בתקציב המיילים היומי");
+  assert.equal(nonNotice(env).length, 0); assert.equal(env.wix.calls.length, 150, "כל בקשה שאלה את Wix פעם אחת");
+  assert.equal(notices(env).length, 20, "הודעות 'לא נמצא כרטיס' חסומות בתקציב משלהן (REG_NOTICKET_PER_HOUR = 20) — לא 150 מיילים");
+  assert.equal(env.props.REG_MAILS, undefined, "זבל לא נגע בתקציב המיילים היומי (קודים)");
   assert.deepEqual(regAns(env, "real@example.com"), { ok: true, sent: true });
-  assert.equal(env.mails.length, 1); assert.equal(env.mails[0].to, "real@example.com");
+  assert.equal(nonNotice(env).length, 1); assert.equal(nonNotice(env)[0].to, "real@example.com", "הקוד יצא למרות שתקציב ההודעות מלא");
   assert.equal(JSON.parse(env.props.REG_MAILS).n, 1, "נספר רק המייל שיצא");
 });
 
@@ -1706,7 +1726,8 @@ test("הרשמה — כתובת נעולה (10 כשלונות קוד) אינה �
   let [a, b] = both(); assert.deepEqual(a, b); assert.deepEqual(a, { ok: true, sent: true });
   env.fail.wix = 500; [a, b] = both(); assert.deepEqual(a, b); assert.equal(a.error, "wix_down", "הנעולה לא מדלגת על שאילתת Wix — אחרת כשל Wix היה מגלה אותה");
   env.fail.wix = 0; setCfg(env, "REG_WIX_PER_HOUR", 0); [a, b] = both(); assert.deepEqual(a, b); assert.equal(a.error, "rate"); assert.equal(a.scope, "all");
-  assert.equal(env.mails.length, 0);
+  assert.equal(nonNotice(env).length, 0);
+  assert.deepEqual(notices(env).map(m => m.to), ["nobody@example.com"], "רק בבקשה הראשונה (Wix עבד) נשלחה 'לא נמצא כרטיס', ורק לכתובת בלי כרטיס — לא לנעולה, ולא כש-Wix נופל או מכסת Wix מלאה");
 });
 
 test("תקציב מיילי ההרשמה (n=1/2/14): נספר רק על מיילים שיצאו בפועל; חריגה שעתית ויומית = אותה תשובה לכולם; שעה/יום חדשים משחררים", () => {
@@ -1716,16 +1737,16 @@ test("תקציב מיילי ההרשמה (n=1/2/14): נספר רק על מייל
   env.fail.mail = true; regAns(env, "a@example.com"); regAns(env, "b@example.com"); env.fail.mail = false;     // כשלי שליחה אינם נספרים
   assert.equal(env.props.REG_MAILS, undefined);
   for (const n of "abc") assert.deepEqual(regAns(env, n + "@example.com"), { ok: true, sent: true });
-  assert.equal(env.mails.length, 3);
+  assert.equal(nonNotice(env).length, 3);
   const busy = regAns(env, "d@example.com"), junk = regAns(env, "junk99@attacker.example");
   assert.deepEqual(busy, junk, "תשובה אחידה לכתובת עם כרטיס ולכתובת בלי"); assert.deepEqual([busy.ok, busy.error, busy.scope], [false, "rate", "all"]);
-  assert.equal(env.mails.length, 3, "החריגה לא שלחה ולא כתבה קוד"); assert.ok(!env.props[vm.runInContext("regKey_('d@example.com')", env.sandbox)]);
+  assert.equal(nonNotice(env).length, 3, "החריגה לא שלחה ולא כתבה קוד"); assert.ok(!env.props[vm.runInContext("regKey_('d@example.com')", env.sandbox)]);
   env.advance(61 * 60000);                                                // שעה חדשה
   assert.deepEqual(regAns(env, "d@example.com"), { ok: true, sent: true }); assert.deepEqual(regAns(env, "e@example.com"), { ok: true, sent: true });
-  assert.equal(env.mails.length, 5);
+  assert.equal(nonNotice(env).length, 5);
   assert.equal(regAns(env, "f@example.com").error, "rate", "התקציב היומי (5) מלא גם בשעה חדשה"); assert.equal(regAns(env, "junk100@attacker.example").error, "rate");
   env.advance(24 * HOUR);
-  assert.deepEqual(regAns(env, "f@example.com"), { ok: true, sent: true }); assert.equal(env.mails.length, 6);
+  assert.deepEqual(regAns(env, "f@example.com"), { ok: true, sent: true }); assert.equal(nonNotice(env).length, 6);
 });
 
 test("שאילתות Wix (n=1/13): מכסה כללית בשעה — חריגה היא אותה תשובה לכולם, לא צורכת מכסת כתובת ולא שולחת מייל; שעה חדשה משחררת", () => {
@@ -1734,10 +1755,10 @@ test("שאילתות Wix (n=1/13): מכסה כללית בשעה — חריגה �
   assert.equal(env.wix.calls.length, 10);
   const h = regAns(env, "holder@example.com"), n = regAns(env, "nobody@example.com");
   assert.deepEqual(h, n); assert.deepEqual([h.ok, h.error, h.scope], [false, "rate", "all"]); assert.match(h.message, /המגבלה אינה אישית/);
-  assert.equal(env.wix.calls.length, 10, "הבקשות שנדחו לא שאלו את Wix"); assert.equal(env.mails.length, 0);
+  assert.equal(env.wix.calls.length, 10, "הבקשות שנדחו לא שאלו את Wix"); assert.equal(nonNotice(env).length, 0);
   env.advance(61 * 60000);
   for (let i = 0; i < 5; i++) assert.ok(regAns(env, "holder@example.com").ok, "מכסת הכתובת לא נצרכה בבקשות שנדחו, i=" + i);
-  assert.equal(env.mails.length, 5);
+  assert.equal(nonNotice(env).length, 5);
 });
 
 test("'כבר קיים חשבון' (n=2/14): לכל היותר פעם ב-24 שעות לכתובת (חותמת ב-Properties) ולא מפריע לקודי חידוש — והתשובה תמיד זהה", () => {
@@ -1792,7 +1813,7 @@ test("כשל קריאת מכסה (n=7): מכסה שחוזרת null / ריקה / 
     assert.ok(regAns(env, "nobody" + String(bad) + "@example.com").ok);
   }
   env.sandbox.MailApp.getRemainingDailyQuota = () => null;
-  assert.deepEqual(regAns(env, "holder@example.com"), { ok: true, sent: true }); assert.equal(env.mails.length, 1, "קוד יצא למרות שהמכסה לא ידועה");
+  assert.deepEqual(regAns(env, "holder@example.com"), { ok: true, sent: true }); assert.equal(nonNotice(env).length, 1, "קוד יצא למרות שהמכסה לא ידועה");
   // הקריאה נכשלת והמכסה בפועל 0: MailApp זורק — אותה תשובה לכולם (ולא error:'server' רק לבעלי כרטיס)
   const { env: e2 } = calmWix(); addOrder(e2, { email: "holder@example.com" }); e2.fail.quotaCall = true; e2.mailQuota.left = 0;
   const h = regAns(e2, "holder@example.com"), n = regAns(e2, "nobody@example.com");
@@ -1803,9 +1824,213 @@ test("מכסת קודים יומית לכתובת (n=2/14): מעבר ל-REG_MAIL
   const { env } = calmWix(); setCfg(env, "REG_MAILS_PER_EMAIL_DAY", 2); addOrder(env, { email: "victim@example.com" });
   const sendAt = () => { const r = regAns(env, "victim@example.com"); env.advance(61 * 60000); return r; };
   assert.deepEqual([sendAt(), sendAt(), sendAt(), sendAt()], Array(4).fill({ ok: true, sent: true }));
-  assert.equal(env.mails.length, 2, "שני קודים ביום, והשאר נדחו בשקט"); assert.equal(JSON.parse(env.props.REG_MAILS).n, 2, "רק מיילים שיצאו נספרים");
+  assert.equal(nonNotice(env).length, 2, "שני קודים ביום, והשאר נדחו בשקט"); assert.equal(JSON.parse(env.props.REG_MAILS).n, 2, "רק מיילים שיצאו נספרים");
   assert.deepEqual(regAns(env, "nobody@example.com"), { ok: true, sent: true });
-  env.advance(24 * HOUR); sendAt(); assert.equal(env.mails.length, 3, "יום חדש — שוב");
+  env.advance(24 * HOUR); sendAt(); assert.equal(nonNotice(env).length, 3, "יום חדש — שוב");
+});
+
+/* ===== הודעת "לא נמצא כרטיס" (regStart): כתובת בלי כרטיס זכאי ובלי חשבון, אחרי ששאילתת Wix הצליחה ===== */
+// הנוסח שאושר, מילה במילה (נפרד מהקוד בכוונה — טעות בקוד תיתפס כאן). ״ = ״, מקף ארוך = —
+const NT = {
+  hi: "שלום,",
+  p1: "ביקשתם להירשם לבקשות טיסה בכתובת הזו. בדקנו את הרישומים ולא נמצא כרטיס ששולם עבור ״בקשת אישורי טיסה״.",
+  p2: "ייתכן שנרשמתם רק למפת הנוט״מים — היא אינה כוללת בקשות טיסה, שמיועדות למטיסים מסחריים ודורשות רכישה נפרדת של הכרטיס.",
+  benefit: "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.",
+  label: "לרכישת הכרטיס והצטרפות",
+  member: ", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר",
+};
+const ntTail = (member, support) => "אם כבר רכשתם את הכרטיס, ודאו שהמייל שהקלדתם הוא מייל הרכישה" + (member ? NT.member : "") + "." + (support ? " לשאלות: " + support : "");
+const ntBody = (url, tail) => [NT.hi, "", NT.p1, "", NT.p2, "", NT.benefit, "", ...(url ? [NT.label + ": " + url, ""] : []), tail].join("\n");
+const ntRtl = '<div dir="rtl" style="direction:rtl;text-align:right;';
+const ntNoTicketEnv = () => { const r = calmWix(); addOrder(r.env, { email: "holder@example.com" }); return r.env; };
+const ntRun = (env, email) => { const n = env.mails.length; assert.deepEqual(regAns(env, email), { ok: true, sent: true }, email); return env.mails.slice(n); };
+const ntLedger = env => env.props.REG_NOTICKET === undefined ? [] : JSON.parse(env.props.REG_NOTICKET).l;
+
+test("הודעת 'לא נמצא כרטיס': כתובת בלי כרטיס זכאי ובלי חשבון מקבלת מייל RTL בנוסח המאושר — לכתובת שהוקלדה בלבד, בשם הארגון, 'השב ל' כתובת הארגון, כפתור https אחד, ובלי כתובת הארגון בגוף", () => {
+  const env = ntNoTicketEnv(), url = vm.runInContext("CFG.RENEW_URL", env.sandbox), senderName = vm.runInContext("CFG.SENDER_NAME", env.sandbox);
+  const sent = ntRun(env, " Nobody@Example.com ");
+  assert.equal(sent.length, 1); const m = sent[0];
+  assert.deepEqual(Object.keys(m).sort(), ["body", "htmlBody", "name", "replyTo", "subject", "to"], "אין שדות נמענים נוספים (cc / bcc)");
+  assert.equal(m.to, "nobody@example.com"); assert.equal(m.name, senderName); assert.equal(m.replyTo, ORG);
+  assert.equal(m.subject, NOTICKET_SUBJECT);
+  assert.equal(m.body, ntBody(url, ntTail(true, "info@icd.org.il")), "גוף הטקסט הרגיל (גיבוי) — הנוסח המאושר בלבד");
+  // HTML: מימין לשמאל, פסקאות, כפתור אחד שכתובתו RENEW_URL, בלי כלום מעבר ל-div / br / a
+  const h = m.htmlBody;
+  assert.ok(h.startsWith(ntRtl) && h.endsWith("</div>") && h.includes('dir="rtl"'), h);
+  assert.equal((h.match(/<a[\s>]/g) || []).length, 1, "כפתור אחד בלבד");
+  assert.equal((h.match(/href=/g) || []).length, 1);
+  assert.ok(h.includes('<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="'), "כתובת הכפתור = RENEW_URL, בלשונית חדשה, עם noopener noreferrer");
+  assert.ok(h.includes(">" + NT.label + "</a>"), "תווית הכפתור");
+  assert.ok(url.startsWith("https://"));
+  assert.deepEqual([...new Set([...h.matchAll(/<\/?([a-z0-9]+)/gi)].map(x => x[1].toLowerCase()))].sort(), ["a", "br", "div"], "בלי סקריפט / תמונה / רשימה");
+  for (const p of [NT.hi, NT.p1, NT.p2, NT.benefit, ntTail(true, "info@icd.org.il")]) assert.ok(h.includes(p), "ב-HTML: " + p.slice(0, 30));
+  assert.ok(h.indexOf(NT.benefit) < h.indexOf("<a ") && h.indexOf("<a ") < h.indexOf("אם כבר רכשתם"), "סדר: תועלת, כפתור, ואז 'אם כבר רכשתם'");
+  // כתובת הארגון והבעלים לעולם לא בגוף / בנושא / בכותרת השולח; רק ב'השב ל'. ובנוסח פונה למטיס: בלי 'מנהל המערכת'
+  for (const field of ["subject", "body", "htmlBody", "to", "name"]) assert.ok(!/office@icd\.org\.il|owner@icd\.test/i.test(m[field]) && !/מנהל המערכת/.test(m[field]), field);
+  assert.ok(m.htmlBody.includes("info@icd.org.il") && m.body.includes("info@icd.org.il"), "כתובת התמיכה");
+  assert.equal(env.props.REG_MAILS, undefined, "לא נספר בתקציב מיילי ההרשמה (קודים)");
+});
+
+test("הודעת 'לא נמצא כרטיס': ההסתייגות על חברות באתר רק כש-REQUIRE_MEMBER; כתובת התמיכה נדפסת רק אם תקינה ואינה כתובת הארגון; 'השב ל' נופל לכתובת הבעלים וגם היא לא בגוף", () => {
+  const env = ntNoTicketEnv(), url = vm.runInContext("CFG.RENEW_URL", env.sandbox);
+  const body = (email, member, support) => { const [m] = ntRun(env, email); assert.equal(m.body, ntBody(url, ntTail(member, support)), email); assert.ok(m.htmlBody.includes(ntTail(member, support)), email); return m; };
+  body("a1@example.com", true, "info@icd.org.il");
+  setCfg(env, "REQUIRE_MEMBER", false); body("a2@example.com", false, "info@icd.org.il");
+  setCfg(env, "REQUIRE_MEMBER", true);
+  setCfg(env, "SUPPORT_EMAIL", ""); body("a3@example.com", true, "");
+  setCfg(env, "SUPPORT_EMAIL", "not an address"); body("a4@example.com", true, "");
+  setCfg(env, "SUPPORT_EMAIL", ORG); const m5 = body("a5@example.com", true, ""); assert.ok(!JSON.stringify([m5.subject, m5.body, m5.htmlBody]).includes(ORG), "כתובת הארגון לא מודפסת גם אם הוגדרה בטעות כתובת תמיכה");
+  setCfg(env, "SUPPORT_EMAIL", "info@icd.org.il"); setCfg(env, "ADMIN_COPY_TO", "");
+  const m6 = body("a6@example.com", true, "info@icd.org.il"); assert.equal(m6.replyTo, "owner@icd.test", "כתובת הארגון ריקה: נופלים לכתובת הבעלים, כמו בשאר מיילי המערכת");
+  assert.ok(!JSON.stringify([m6.subject, m6.body, m6.htmlBody]).includes("owner@icd.test"));
+});
+
+test("הודעת 'לא נמצא כרטיס': גם כרטיס ששולם בלי חברות באתר אינו 'כרטיס זכאי' — הודעה עם ההסתייגות על חברות; ועם כרטיס זכאי יוצא קוד ולא הודעה", () => {
+  const env = ntNoTicketEnv();
+  addOrder(env, { email: "visitor@example.com", memberId: "" });
+  const [m] = ntRun(env, "visitor@example.com"); assert.equal(m.subject, NOTICKET_SUBJECT); assert.ok(m.body.includes(NT.member.slice(2)));
+  const [c] = ntRun(env, "holder@example.com"); assert.match(c.subject, /^קוד הרשמה לבקשות טיסה: \d{6}$/);
+  setCfg(env, "REQUIRE_MEMBER", false);                                        // בלי הדרישה — הכרטיס של visitor זכאי
+  const [c2] = ntRun(env, "visitor@example.com"); assert.match(c2.subject, /^קוד הרשמה/, "כרטיס זכאי = קוד, לא הודעה (גם לכתובת שכבר קיבלה הודעה)");
+});
+
+test("הודעת 'לא נמצא כרטיס': כפתור רק עם RENEW_URL תקין ב-https — כתובת אחרת/מסוכנת = בלי כפתור וגם בלי הכתובת בגוף הטקסט; המייל עדיין יוצא; כתובת תקינה עוברת escape ב-HTML", () => {
+  const env = ntNoTicketEnv(); let i = 0; setCfg(env, "REG_NOTICKET_PER_HOUR", 1000);
+  const bad = ["http://www.icd.org.il/x", "javascript:alert(1)", "//www.icd.org.il/x", "ftp://x.example/z", "https://", "https:///x", 'https://evil.example/"><script>alert(1)</script>', "https://evil.example/x'onmouseover='y",
+    "https://evil.example/a b", "https://u:p@evil.example/", "https://u:80@evil.example/", "https://evil.example/א", "https://evil.example/\\x", "https://evil.example/<x>", "", null, 12345, "https://" + "a".repeat(400) + ".com"];
+  for (const u of bad) {
+    setCfg(env, "RENEW_URL", u);
+    const [m] = ntRun(env, "bad" + ++i + "@example.com");
+    assert.ok(m, String(u).slice(0, 40)); assert.equal(m.subject, NOTICKET_SUBJECT);
+    assert.ok(!/<a[\s>]|href|<script|javascript/i.test(m.htmlBody), "אין כפתור / קישור: " + String(u).slice(0, 40));
+    assert.equal(m.body, ntBody("", ntTail(true, "info@icd.org.il")), "בלי שורת הכפתור והכתובת בטקסט: " + String(u).slice(0, 40));
+    assert.ok(m.htmlBody.includes(NT.benefit) && m.htmlBody.includes("אם כבר רכשתם"), "שאר הנוסח נשאר");
+  }
+  setCfg(env, "RENEW_URL", "https://www.icd.org.il/events-1/x?a=1&b=2#f");
+  let [m] = ntRun(env, "good1@example.com");
+  assert.ok(m.htmlBody.includes('href="https://www.icd.org.il/events-1/x?a=1&amp;b=2#f"'), "escape של & ב-HTML"); assert.ok(m.body.includes("\nhttps://www.icd.org.il/events-1/x?a=1&b=2#f\n") || m.body.includes(NT.label + ": https://www.icd.org.il/events-1/x?a=1&b=2#f"));
+  setCfg(env, "RENEW_URL", "https://icd.org.il");
+  [m] = ntRun(env, "good2@example.com"); assert.equal((m.htmlBody.match(/<a[\s>]/g) || []).length, 1); assert.ok(m.htmlBody.includes('href="https://icd.org.il"'));
+});
+
+test("הודעת 'לא נמצא כרטיס': אותה תשובה לכתובת עם כרטיס, עם חשבון, בלי כלום ומוגבלת — וכל ענף שלא נדחה שולח בדיוק מייל אחד מסוגו (קוד / 'כבר קיים חשבון' / 'לא נמצא כרטיס'), בלי שינוי בשניים הראשונים", () => {
+  const env = ntNoTicketEnv(); pilotUser(env, "acct@example.com", "acct.user"); env.mails.length = 0; env.advance(61 * 60000);
+  const kind = m => isNotice(m) ? "notice" : /^כבר קיים חשבון/.test(m.subject) ? "exists" : /^קוד הרשמה/.test(m.subject) ? "code" : "other";
+  const one = email => { const sent = ntRun(env, email); return sent.map(kind); };
+  assert.deepEqual(one("holder@example.com"), ["code"]);
+  assert.deepEqual(one("acct@example.com"), ["exists"]);
+  assert.deepEqual(one("nobody@example.com"), ["notice"]);
+  assert.deepEqual(one("nobody@example.com"), [], "מוגבלת (כבר קיבלה): אותה תשובה, בלי מייל");
+  assert.deepEqual(one("acct@example.com"), [], "'כבר קיים חשבון' מוגבלת כמו קודם");
+  assert.deepEqual(env.mails.map(kind), ["code", "exists", "notice"]);
+  const [code, exists, notice] = env.mails;
+  for (const [m, to] of [[code, "holder@example.com"], [exists, "acct@example.com"]]) { assert.deepEqual(Object.keys(m).sort(), ["body", "name", "replyTo", "subject", "to"], "מיילי הקוד ו'כבר קיים' ללא htmlBody (ללא שינוי)"); assert.equal(m.to, to); assert.equal(m.replyTo, ORG); }
+  assert.match(code.body, /^שלום,\n\nהקוד שלך להרשמה לבקשות טיסה: \d{6}\nהקוד תקף ל-15 דקות\. אם לא ביקשת — אפשר להתעלם מהמייל\.\n\nצוות הארגון הישראלי לרחפנים$/);
+  assert.equal(exists.subject, "כבר קיים חשבון לבקשות טיסה בכתובת הזו"); assert.match(exists.body, /^שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו\. שם המשתמש: acct\.user\n/); assert.ok(exists.body.includes("info@icd.org.il") && !exists.body.includes(ORG));
+  assert.equal(notice.to, "nobody@example.com");
+  // והתשובות זהות גם אחרי שהתקציב והמכסות מלאים
+  setCfg(env, "REG_NOTICKET_PER_HOUR", 0); setCfg(env, "REG_NOTICKET_PER_DAY", 0);
+  for (const e of ["holder@example.com", "acct@example.com", "nobody@example.com", "other-nobody@example.com"]) assert.deepEqual(regAns(env, e), { ok: true, sent: true });
+});
+
+test("הודעת 'לא נמצא כרטיס': נכשל סגור — לא נשלחת כש-Wix לא מוגדר, נופל או מחזיר שגיאה (בלי טענה שווא 'אין כרטיס'); ורק כש-Wix עונה היא יוצאת", () => {
+  const a = bootstrapped();                                                      // בלי WIX_API_KEY
+  assert.equal(a.env.call({ action: "regStart", email: "nobody@example.com" }).error, "not_configured");
+  assert.equal(a.env.mails.length, 0); assert.equal(a.env.props.REG_NOTICKET, undefined);
+  const { env } = calmWix();
+  for (const code of [500, 401, 404, 429]) { env.fail.wix = code; assert.equal(env.call({ action: "regStart", email: "nobody@example.com" }).error, "wix_down", String(code)); }
+  assert.equal(env.mails.length, 0); assert.equal(env.props.REG_NOTICKET, undefined, "גם לא נרשם בספר ההודעות");
+  env.fail.wix = 0; delete env.props.WIX_API_KEY;
+  assert.equal(env.call({ action: "regStart", email: "nobody@example.com" }).error, "not_configured"); assert.equal(env.mails.length, 0);
+  env.props.WIX_API_KEY = "test-key"; env.advance(61 * 60000);                  // שעה חדשה: מכסת הכתובת (5 בשעה) מתאפסת
+  const sent = ntRun(env, "nobody@example.com"); assert.equal(sent.length, 1, "Wix חזר: ההודעה יוצאת (לא נחסמה בגלל הניסיונות הקודמים)"); assert.equal(sent[0].subject, NOTICKET_SUBJECT);
+});
+
+test("הודעת 'לא נמצא כרטיס': לכל היותר אחת ב-24 שעות לכתובת (גם אחרי שהמטמון פג, ובלי רגישות לאותיות / רווחים) — ושוב אחרי החלון; הספר ב-Script Properties", () => {
+  const env = ntNoTicketEnv(), N = () => notices(env).length;
+  ntRun(env, "nobody@example.com"); assert.equal(N(), 1);
+  assert.ok(ntLedger(env).length === 1, "נרשם ב-Script Properties (המטמון מוגבל ל-6 שעות)");
+  assert.deepEqual(ntRun(env, "NOBODY@example.com "), [], "אותה כתובת (נורמלית) באותה שעה");
+  env.advance(61 * 60000); assert.deepEqual(ntRun(env, "nobody@example.com"), []);
+  env.advance(7 * HOUR); assert.deepEqual(ntRun(env, "nobody@example.com"), [], "אחרי 8 שעות — מעבר לחיי המטמון — עדיין לא");
+  env.advance(15 * HOUR + 50 * 60000); assert.deepEqual(ntRun(env, "nobody@example.com"), [], "23 שעות ו-51 דקות מהראשונה");
+  assert.equal(N(), 1);
+  env.advance(11 * 60000); assert.equal(ntRun(env, "nobody@example.com").length, 1, "אחרי 24 שעות — שוב"); assert.equal(N(), 2);
+  assert.equal(ntRun(env, "someone.else@example.com").length, 1, "כתובת אחרת לא הושפעה");
+});
+
+test("הודעת 'לא נמצא כרטיס': תקציב שעתי ויומי משלה (REG_NOTICKET_PER_HOUR / PER_DAY, חלון מתגלגל) — חריגה = דילוג בשקט באותה תשובה, ושעה/יממה חולפות משחררות", () => {
+  const env = ntNoTicketEnv(); setCfg(env, "REG_NOTICKET_PER_HOUR", 3); setCfg(env, "REG_NOTICKET_PER_DAY", 5);
+  const to = (...a) => a.map(x => x + "@example.com");
+  const run = (...a) => a.flatMap(x => ntRun(env, x + "@example.com")).map(m => m.to);
+  assert.deepEqual(run("a", "b", "c", "d", "e"), to("a", "b", "c"), "3 בשעה; השאר נדחו בשקט");
+  env.advance(61 * 60000);
+  assert.deepEqual(run("d", "e", "f"), to("d", "e"), "שעה חדשה: עוד שתיים עד תקרת היום (5); f נדחתה");
+  env.advance(23 * HOUR);                                                      // 24 שעות ודקה מהשליחות הראשונות
+  assert.deepEqual(run("f", "g", "h", "i"), to("f", "g", "h"), "היממה הראשונה חלפה (נשארו d, e): שלוש שוב עד תקרת השעה; i נדחתה");
+  assert.equal(env.props.REG_MAILS, undefined, "ההודעות לא נספרו בתקציב מיילי ההרשמה"); assert.equal(env.mails.length, 8);
+});
+
+test("הודעת 'לא נמצא כרטיס': מיצוי התקציב שלה (גם 100 כתובות בלי כרטיס) לא חוסם קודי הרשמה ו'כבר קיים חשבון', ואינו צורך את תקציב הקודים (ובקשות 'עמוס' גורפות לא שולחות אותה)", () => {
+  const { env } = calmWix(); pilotUser(env, "acct@example.com", "acct.user"); env.mails.length = 0; env.advance(61 * 60000);
+  const codesBefore = JSON.parse(env.props.REG_MAILS).n;                       // הקוד של ההרשמה של acct
+  for (let i = 0; i < 100; i++) regAns(env, "junk" + i + "@attacker.example");
+  assert.equal(notices(env).length, 20, "REG_NOTICKET_PER_HOUR = 20");
+  for (let i = 0; i < 100; i++) addOrder(env, { email: "pilot" + i + "@example.com" });
+  for (let i = 0; i < 100; i++) assert.deepEqual(regAns(env, "pilot" + i + "@example.com"), { ok: true, sent: true });
+  assert.equal(nonNotice(env).length, 100, "כל 100 הקודים יצאו"); assert.equal(JSON.parse(env.props.REG_MAILS).n, codesBefore + 100, "רק הקודים נספרו בתקציב ההרשמה");
+  assert.deepEqual(ntRun(env, "acct@example.com").map(m => m.subject), ["כבר קיים חשבון לבקשות טיסה בכתובת הזו"], "'כבר קיים חשבון' עובדת");
+  assert.equal(notices(env).length, 20, "ותקציב ההודעות עדיין מלא");
+  // תקציב הקודים מלא: כל התשובות 'עמוס' לפני שאילתת Wix — ולכן גם לא נשלחת הודעה
+  setCfg(env, "REG_MAILS_PER_HOUR", 0); const n = env.mails.length;
+  assert.equal(regAns(env, "fresh@example.com").error, "rate"); assert.equal(env.mails.length, n);
+});
+
+test("הודעת 'לא נמצא כרטיס': מכבדת את MAIL_QUOTA_RESERVE — מתחת לרזרבת העותקים היא מדולגת בשקט (ולא נרשמת), וקודי הרשמה עדיין יוצאים", () => {
+  const env = ntNoTicketEnv();
+  env.mailQuota.left = 20;                                                     // 1 + רזרבה (20) = 21 נדרשים
+  assert.deepEqual(ntRun(env, "nobody@example.com"), []); assert.equal(env.mailQuota.left, 20); assert.equal(env.props.REG_NOTICKET, undefined, "דילוג לפני הרישום");
+  const [c] = ntRun(env, "holder@example.com"); assert.match(c.subject, /^קוד הרשמה/, "קוד כן (רזרבת הקודים 8)"); assert.equal(env.mailQuota.left, 19);
+  env.mailQuota.left = 21; assert.equal(ntRun(env, "nobody@example.com").length, 1, "מעל הרזרבה — נשלחה (ולא נחסמה בגלל הניסיון שדולג)"); assert.equal(env.mailQuota.left, 20);
+  env.mailQuota.left = 15; assert.deepEqual(ntRun(env, "someone@example.com"), []);
+});
+
+test("הודעת 'לא נמצא כרטיס': נרשמת רק אם יצאה — MailApp זורק = אותה תשובה, בלי רישום ובלי צריכת תקציב; ואם אי אפשר לרשום, לא שולחים (נכשל סגור)", () => {
+  const env = ntNoTicketEnv(); setCfg(env, "REG_NOTICKET_PER_HOUR", 1);
+  env.fail.mail = true; assert.deepEqual(ntRun(env, "a@example.com"), []); assert.equal(env.props.REG_NOTICKET, undefined, "הרישום שנכתב לפני השליחה חזר אחורה");
+  env.fail.mail = false; assert.equal(ntRun(env, "a@example.com").length, 1, "הניסיון הכושל לא נחשב: לא תקציב ולא חותמת לכתובת");
+  assert.deepEqual(ntRun(env, "b@example.com"), [], "התקציב (1) נצרך רק על מה שיצא");
+  const ledger = env.props.REG_NOTICKET; setCfg(env, "REG_NOTICKET_PER_HOUR", 5);
+  env.fail.mail = true; assert.deepEqual(ntRun(env, "c@example.com"), []); assert.equal(env.props.REG_NOTICKET, ledger, "הספר הקודם חזר כפי שהיה");
+  env.fail.mail = false;
+  const real = env.sandbox.PropertiesService.getScriptProperties;
+  env.sandbox.PropertiesService.getScriptProperties = () => { const p = real(); return { ...p, setProperty: (k, v) => { if (k === "REG_NOTICKET") throw new Error("props full"); return p.setProperty(k, v); } }; };
+  assert.deepEqual(ntRun(env, "d@example.com"), [], "הרישום נכשל — לא נשלח מייל שלא ניתן להגביל");
+  env.sandbox.PropertiesService.getScriptProperties = real;
+  assert.equal(ntRun(env, "d@example.com").length, 1);
+});
+
+test("הודעת 'לא נמצא כרטיס': הספר קטן ומגזים את עצמו — מאפיין אחד, גיבובים בלבד (בלי כתובות), בלי מאפיין לכל כתובת זבל, ישנים נשמטים, פגום מתעלמים, ותקרת 300 רשומות מתחת ל-9KB", () => {
+  const env = ntNoTicketEnv();
+  for (const n of "abc") ntRun(env, n + "@example.com");
+  assert.equal(ntLedger(env).length, 3); for (const e of ntLedger(env)) assert.match(e, /^[0-9a-f]{10}:\d{10}$/);
+  assert.ok(!/example|@/.test(env.props.REG_NOTICKET), "אין כתובות בספר");
+  assert.deepEqual(Object.keys(env.props).filter(k => /^[MR]:/.test(k)), [], "לא נוצר M: / R: לכתובות בלי כרטיס");
+  env.advance(25 * HOUR); ntRun(env, "d@example.com"); assert.equal(ntLedger(env).length, 1, "הישנות נגזמו");
+  env.props.REG_NOTICKET = "not json"; assert.equal(ntRun(env, "e@example.com").length, 1); assert.equal(ntLedger(env).length, 1);
+  env.props.REG_NOTICKET = JSON.stringify({ l: ["zz", 5, null, "0123456789:1"] }); assert.equal(ntRun(env, "f@example.com").length, 1); assert.equal(ntLedger(env).length, 1, "רשומות פגומות / ישנות נשמטות");
+  setCfg(env, "REG_NOTICKET_PER_HOUR", 100000); setCfg(env, "REG_NOTICKET_PER_DAY", 100000);
+  for (let i = 0; i < 310; i++) regAns(env, "bulk" + i + "@example.com");
+  assert.equal(ntLedger(env).length, 300, "תקרת רשומות"); assert.ok(env.props.REG_NOTICKET.length < 9000, "מתחת לתקרת מאפיין בודד: " + env.props.REG_NOTICKET.length);
+});
+
+test("הודעת 'לא נמצא כרטיס': כתובת לא תקינה לא מקבלת דבר (ולא נשאלת ב-Wix); מכסת הכתובת לשעה חלה קודם — ההודעה יוצאת פעם אחת בלבד", () => {
+  const env = ntNoTicketEnv();
+  for (const bad of ["not-an-email", "a@b.com,c@d.com", "x@y.com\nbcc:z@w.com", "", "a b@c.com", "<a@b.com>", "a@b.com;c@d.com", "x".repeat(130) + "@example.com"]) assert.equal(env.call({ action: "regStart", email: bad }).error, "bad_email", bad.slice(0, 30));
+  assert.equal(env.mails.length, 0); assert.equal(env.wix.calls.length, 0); assert.equal(env.props.REG_NOTICKET, undefined);
+  const answers = Array.from({ length: 7 }, () => regAns(env, "nobody@example.com"));
+  assert.deepEqual(answers.map(x => x.error || "ok"), ["ok", "ok", "ok", "ok", "ok", "rate", "rate"]);
+  assert.equal(notices(env).length, 1); assert.equal(env.wix.calls.length, 5, "הבקשות שנדחו במכסת הכתובת לא שאלו את Wix");
 });
 
 /* ===== שחזור גישת מנהל (n=3/6) ===== */
@@ -2515,11 +2740,11 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
   const readme = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "apps-script", "README.md"), "utf8");
   const { sandbox } = makeEnv();
   const cfg = vm.runInContext("CFG", sandbox);
-  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW|REG|ADMIN|ORG|PILOTS)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE", "REG_MAILS"].includes(n));   // אלה Script Properties ולא CFG
+  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW|REG|ADMIN|ORG|PILOTS)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE", "REG_MAILS", "REG_NOTICKET"].includes(n));   // אלה Script Properties ולא CFG
   assert.ok(named.length >= 10, "נמצאו קבועים: " + named.join(","));
   for (const n of named) assert.ok(n in cfg, "README מזכיר את " + n + " אבל אין אותו ב-CFG");
   for (const [k, v] of [["MAX_OFFICE_PER_HOUR", 10], ["MAX_OFFICE_PER_HOUR_ALL", 60], ["MAX_COPIES_PER_HOUR", 10], ["MAX_COPIES_PER_HOUR_ALL", 120], ["MAX_SEND_ATTEMPTS_PER_HOUR", 40], ["MAIL_QUOTA_RESERVE", 20], ["LOG_MAX", 2000], ["LOG_KEEP_DAYS", 30], ["CODE_FAIL_MAX", 10], ["CODE_FAIL_HOURS", 6],
-    ["MAIL_QUOTA_RESERVE_REG", 8], ["REG_PER_EMAIL_HOUR", 5], ["REG_WIX_PER_HOUR", 600], ["REG_MAILS_PER_HOUR", 150], ["REG_MAILS_PER_DAY", 400], ["REG_MAILS_PER_EMAIL_DAY", 10], ["REG_EXISTS_HOURS", 24],
+    ["MAIL_QUOTA_RESERVE_REG", 8], ["REG_PER_EMAIL_HOUR", 5], ["REG_WIX_PER_HOUR", 600], ["REG_MAILS_PER_HOUR", 150], ["REG_MAILS_PER_DAY", 400], ["REG_MAILS_PER_EMAIL_DAY", 10], ["REG_EXISTS_HOURS", 24], ["REG_NOTICKET_HOURS", 24], ["REG_NOTICKET_PER_HOUR", 20], ["REG_NOTICKET_PER_DAY", 100],
     ["MAX_FOLDER_FILES", 12], ["MAX_UPLOAD_BYTES_PER_HOUR", 400 * 1048576], ["MAX_UPLOAD_BYTES_PER_DAY", 1000 * 1048576], ["MAX_OPEN_REQUESTS_PER_USER", 60], ["MAX_SENT_PER_REQUEST", 100]])
     assert.equal(cfg[k], v, k);
   assert.ok(!("REG_PER_HOUR" in cfg), "המכסה הכללית הישנה (60 בשעה) בוטלה");
@@ -2527,6 +2752,8 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
   assert.ok(cfg.MAX_FOLDER_BYTES <= cfg.MAX_MAIL_BYTES && cfg.REG_MAILS_PER_HOUR > 100, "תקרת תיקייה ≤ תקרת מייל; התקציב השעתי מכסה 100 נרשמים");
   assert.ok(cfg.MAX_COPIES_PER_HOUR_ALL >= 60, "תקרה כוללת לעותקים לא נמוכה מ-60");
   for (const fn of ["showMailQuota", "initialize", "installTrigger"]) assert.ok(readme.includes("`" + fn + "`"), "README מזכיר את " + fn);
+  for (const k of ["REG_NOTICKET_HOURS", "REG_NOTICKET_PER_HOUR", "REG_NOTICKET_PER_DAY", "REG_NOTICKET"]) assert.ok(readme.includes("`" + k + "`"), "README מזכיר את " + k);   // הודעת 'לא נמצא כרטיס': שלושת הקבועים והספר ב-Script Properties
+  assert.ok(cfg.REG_NOTICKET_PER_HOUR <= cfg.REG_NOTICKET_PER_DAY && cfg.REG_NOTICKET_PER_DAY <= 300, "התקציב השעתי ≤ היומי, והיומי בתוך תקרת הרשומה (300)");
   // הפרדה בין הארגון למטיסים: הקבועים החדשים, הפעולות והשדות מתועדים, וערכי ברירת המחדל זהים לחוזה
   for (const [k, v] of [["ADMIN_COPY_TO", "office@icd.org.il"], ["ORG_FOLDER_NAME", "הארגון"], ["PILOTS_FOLDER_NAME", "מטיסים"], ["SENDER_NAME", "הארגון הישראלי לרב להב"], ["SENDER_SUFFIX", " — דרך מערכת בקשות הטיסה"], ["SENDER_FALLBACK", "מטיס"], ["SENDER_MAX", 60]]) {
     assert.equal(cfg[k], v, k);

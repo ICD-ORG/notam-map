@@ -109,6 +109,7 @@ async function newPage(browser, opts) {
   await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
   await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API; d.sync_retry_ms = 400;
+    if ("renewUrl" in opts) { if (opts.renewUrl === null) delete d.renew_url; else d.renew_url = opts.renewUrl; }   // כתובת רכישת הכרטיס (renew_url): null = חסרה בהגדרות; כל ערך אחר נכנס כמות שהוא (לבדיקת אימות הכתובת במסכי הכניסה וההרשמה)
     if (typeof opts.autosave === "number") d.autosave_ms = opts.autosave; else if (!opts.autosave) d.autosave_ms = 0;   // שמירה אוטומטית בדרייב (ui.js: autosave_ms) כבויה כברירת מחדל בתרחישים הקיימים (הם בודקים שמירה ושליחה ידניות); opts.autosave: true = בלי המפתח, כלומר ברירת המחדל של המוצר (1500 מ״ש); מספר = השהיה אחרת
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
   });
@@ -1116,7 +1117,8 @@ try {
       await page.click("#auReg"); await page.waitForSelector("#regForm");
       // כתובת בלי כרטיס שולם (רוכש שאינו חבר): אותה תשובה, אין מייל, והקוד לא יעבוד
       await page.fill("#rgEmail", "visitor@example.com"); await page.click("#rgSend"); await page.waitForSelector("#rgStep2", { state: "visible" });
-      check("בלי כרטיס זכאי: אותה הודעה גנרית ולא נשלח קוד", /אם נמצא כרטיס ששולם/.test(await page.textContent("#rgInfo")) && env.mails.length === 0, "");
+      // אותה הודעה גנרית על המסך; לא נשלח קוד. השרת שולח לכתובת בלי כרטיס זכאי (גם רוכש אורח) לכל היותר הודעת ״לא נמצא כרטיס״ — ורק לכתובת שהוקלדה (התוצאה הספציפית נמסרת במייל בלבד, לא על המסך)
+      check("בלי כרטיס זכאי: אותה הודעה גנרית על המסך, ולא נשלח קוד (לכל היותר הודעת ״לא נמצא כרטיס״ לכתובת שהוקלדה בלבד)", /אם נמצא כרטיס ששולם/.test(await page.textContent("#rgInfo")) && env.mails.every(m => m.to === "visitor@example.com" && !/\b\d{6}\b/.test(m.subject + " " + m.body)), JSON.stringify(env.mails.map(m => [m.to, m.subject])));
       await page.fill("#rgCode", "123456"); await page.fill("#rgUser", "vis.user"); await page.fill("#rgPass", "visitor-pass-12"); await page.click("#rgGo");
       await page.waitForFunction(() => document.querySelector("#rgErr").textContent.length > 0);
       check("קוד שגוי נדחה בהודעה ברורה ולא נוצר חשבון", /הקוד שגוי/.test(await page.textContent("#rgErr")) && !env.props["U:vis.user"], await page.textContent("#rgErr"));
@@ -1124,8 +1126,8 @@ try {
       await page.fill("#rgEmail", "pilot@example.com"); await page.click("#rgSend");
       await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0);
       await page.waitForFunction(() => true); await page.waitForTimeout(300);
-      const mailRec = env.mails[env.mails.length - 1], code = /(\d{6})/.exec(mailRec.subject)[1];
-      check("נשלח קוד בן 6 ספרות רק לכתובת הרכישה", mailRec.to === "pilot@example.com" && env.mails.length === 1, mailRec.to);
+      const codeMails = env.mails.filter(m => /\b\d{6}\b/.test(m.subject)), mailRec = codeMails[codeMails.length - 1], code = mailRec ? /(\d{6})/.exec(mailRec.subject)[1] : "";
+      check("נשלח קוד בן 6 ספרות רק לכתובת הרכישה (ואף קוד לא נשלח לכתובת אחרת; לכתובת בלי כרטיס יצאה לכל היותר הודעת ״לא נמצא כרטיס״)", !!mailRec && codeMails.length === 1 && mailRec.to === "pilot@example.com" && env.mails.every(m => m.to === "pilot@example.com" || m.to === "visitor@example.com"), env.mails.map(m => m.to).join(","));
       await page.fill("#rgCode", code); await page.fill("#rgUser", "dana.pilot"); await page.fill("#rgPass", "dana-pass-1234"); await page.click("#rgGo");
       await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
       const sub = await page.textContent("#ubSub");
@@ -2484,8 +2486,11 @@ try {
       let pr = await probe();
       check("n=21: " + (noApi ? "מסך ״שרת ההתחברות לא הוגדר״" : "מסך הכניסה") + " (390px): קישור ״← חזרה למפה״ אל ../ בתוך הכיסוי, לחיץ (הנקודה במרכזו פוגעת בו), גובה 44px לפחות ובתוך האזור הבטוח", !!pr && pr.text === "← חזרה למפה" && pr.hit && pr.h >= 44 && pr.top >= 44 && pr.bottom <= pr.vh - 34, JSON.stringify(pr));
       if (!noApi) {
-        await page.click("#auReg"); await page.waitForSelector("#regForm"); pr = await probe();
-        check("n=21: מסך ההרשמה: אותו קישור ״← חזרה למפה״ לחיץ, 44px לפחות", !!pr && pr.hit && pr.h >= 44, JSON.stringify(pr));
+        await page.click("#auReg"); await page.waitForSelector("#regForm");
+        // מסך ההרשמה ארוך יותר מהמסך (תיבת ההסבר על הכרטיס בראשו): הכיסוי נגלל, והקישור שבסופו נבדק אחרי גלילה לסוף — לחיץ, 44px לפחות ובתוך האזור הבטוח
+        await page.evaluate(() => { const c = document.getElementById("authCover"); c.scrollTop = c.scrollHeight; });
+        pr = await probe();
+        check("n=21: מסך ההרשמה: אותו קישור ״← חזרה למפה״ (בסוף הכיסוי הנגלל) לחיץ, 44px לפחות ובתוך האזור הבטוח", !!pr && pr.hit && pr.h >= 44 && pr.top >= 44 && pr.bottom <= pr.vh - 34, JSON.stringify(pr));
         // חוזה השרת החדש: מכסת המייל היומית מלאה גם בהרשמה (קוד האימות לא יכול להישלח) — הודעה ברורה ולא ״שגיאה לא ידועה״
         o21.intercept = b => b.action === "regStart" ? { ok: false, error: "mail_quota", message: "הודעת שרת" } : undefined;
         await page.fill("#rgEmail", "someone@example.com"); await page.click("#rgSend");
@@ -3041,6 +3046,112 @@ try {
   }
 
   /* NEW18-END */
+
+  /* REG19-BEGIN */
+  /* ===== תרחיש 19: הסבר מראש על הכרטיס — בראש מסך הכניסה ומסך ההרשמה (שימו לב, מה מקבלים, כפתור רכישה), והודעה אחרי ״שלחו לי קוד״ שזהה לכל כתובת ומלווה בכפתור הרכישה; בלי כתובת https תקינה אין כפתור ===== */
+  {
+    // הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד, כדי שכל שינוי בו ייתפס
+    const NOTICE = "שימו לב: מנוי או הרשמה למפת הנוט״מים אינם כוללים בקשות טיסה. בקשות טיסה מיועדות למטיסים מסחריים בלבד, ודורשות רכישה נפרדת של הכרטיס ״בקשת אישורי טיסה״.";
+    const BENEFIT = "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.";
+    const BUY = "לרכישת הכרטיס והצטרפות";
+    const NOCODE = "לא הגיע קוד? כנראה שלא נרכש הכרטיס ״בקשת אישורי טיסה״. מנוי למפת הנוט״מים בלבד אינו מקנה גישה לבקשות טיסה.";
+    const RENEW = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")).renew_url;
+    const norm = t => t.replace(/\s+/g, " ").trim();
+    const ready19 = async page => { await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await page.waitForSelector("#authForm", { timeout: 20000 }); };
+    const buyLinks = (page, sel) => page.$$eval(sel + " a.buyBtn", a => a.map(x => ({ href: x.getAttribute("href"), target: x.getAttribute("target"), rel: x.getAttribute("rel"), text: x.textContent.trim(), h: Math.round(x.getBoundingClientRect().height), vis: x.getClientRects().length > 0 })));
+    const boxInfo = (page, formId) => page.evaluate(id => { const f = document.getElementById(id), b = document.getElementById("buyBox"); if (!b) return null; const r = b.getBoundingClientRect(), a = b.querySelector("a.buyBtn"), ar = a && a.getBoundingClientRect();
+      return { afterTitle: f.children[0].tagName === "H2" && f.children[1] === b, notice: b.querySelector(".buyNote") && b.querySelector(".buyNote").textContent, why: b.querySelector(".buyWhy") && b.querySelector(".buyWhy").textContent, dir: getComputedStyle(b).direction,
+        inside: r.left >= 0 && r.right <= innerWidth && (!ar || (ar.left >= 0 && ar.right <= innerWidth)), noHScroll: document.documentElement.scrollWidth <= innerWidth, w: innerWidth }; }, formId);
+    const hrefs = (page, sel) => page.$$eval(sel + " a[href]", a => a.map(x => x.getAttribute("href")));
+    const SAFE_HREF = /^(mailto:[^ ]+|\.\.\/)$/;
+
+    /* ---- א. הגדרות אמיתיות (renew_url מ-config.json) בטלפון: תיבת ההסבר בראש מסך הכניסה ובראש מסך ההרשמה, והכפתור הוא קישור אמיתי ללשונית חדשה ---- */
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    env.props.WIX_API_KEY = "test-key";
+    env.wix.orders.push({ orderNumber: "ORD-N19-1", status: "PAID", created: new Date(Date.now() - 3 * 86400000).toISOString(), email: "member@example.com", firstName: "דנה", memberId: "m-19", tickets: [] });
+    const seen = [];
+    {
+      const { ctx, page } = await newPage(browser, { env, viewport: { width: 375, height: 700 }, touch: true, patchResp: (b, r) => { if (b.action === "regStart") seen.push(JSON.stringify(r)); return undefined; } });
+      await ready19(page);
+      check("תרחיש 19: renew_url בהגדרות הוא כתובת https", /^https:\/\/[^\s"'<>]+$/.test(RENEW || ""), String(RENEW));
+      for (const [scr, formId] of [["הכניסה", "authForm"], ["ההרשמה", "regForm"]]) {
+        if (formId === "regForm") { await page.click("#auReg"); await page.waitForSelector("#regForm"); }
+        const bi = await boxInfo(page, formId), links = await buyLinks(page, "#buyBox"), html = await page.content();
+        check("מסך " + scr + ": תיבת ההסבר מיד אחרי הכותרת, בנוסח המאושר (שימו לב + מה מקבלים), מיושרת לימין", !!bi && bi.afterTitle && bi.notice === NOTICE && bi.why === BENEFIT && bi.dir === "rtl", JSON.stringify(bi));
+        check("מסך " + scr + ": כפתור הרכישה הוא קישור אמיתי לכתובת מההגדרות, בלשונית חדשה (noopener noreferrer), בתווית המאושרת, גלוי ובגובה מגע (44px)", links.length === 1 && links[0].href === RENEW && links[0].target === "_blank" && /\bnoopener\b/.test(links[0].rel) && /\bnoreferrer\b/.test(links[0].rel) && links[0].text === BUY && links[0].vis && links[0].h >= 44, JSON.stringify(links));
+        check("מסך " + scr + ": התיבה נכנסת ברוחב הטלפון (375) בלי גלילה אופקית ובלי חיתוך", !!bi && bi.w === 375 && bi.inside && bi.noHScroll, JSON.stringify(bi));
+        await page.setViewportSize({ width: 320, height: 640 });
+        const b320 = await boxInfo(page, formId);
+        check("מסך " + scr + ": גם ברוחב 320 התיבה והכפתור נכנסים בלי חיתוך ובלי גלילה אופקית", !!b320 && b320.w === 320 && b320.inside && b320.noHScroll, JSON.stringify(b320));
+        await page.screenshot({ path: path.join(OUT, "reg19-" + formId + "-320.png") });
+        await page.setViewportSize({ width: 375, height: 700 });
+        check("מסך " + scr + ": כתובת הארגון office@icd.org.il אינה מוצגת (רק כתובת התמיכה)", !html.includes("office@icd.org.il") && html.includes('href="mailto:' + SUPPORT + '"'), "");
+        check("מסך " + scr + ": ההסבר מלווה את הטופס — השדות והכפתור הראשי עדיין קיימים ולחיצים", formId === "authForm" ? (await page.locator("#auGo").isEnabled()) && !!(await page.$("#auUser")) && !!(await page.$("#auPass")) : (await page.locator("#rgSend").isEnabled()) && !!(await page.$("#rgEmail")), "");
+        if (formId === "authForm") check("מסך הכניסה: ההסבר לא הוסיף קישור שאינו https או mailto או ״חזרה למפה״", (await hrefs(page, "#authCover")).every(h => SAFE_HREF.test(h) || h === RENEW), JSON.stringify(await hrefs(page, "#authCover")));
+      }
+      /* ---- ב. אחרי ״שלחו לי קוד״: אותה הודעה בדיוק (ואותו כפתור) לכתובת עם כרטיס ולכתובת בלי כרטיס ---- */
+      const outs = [];
+      for (const em of ["member@example.com", "nobody@example.com"]) {
+        await page.fill("#rgEmail", em); await page.click("#rgSend");
+        await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+        outs.push({ text: norm(await page.textContent("#rgInfo")), html: await page.innerHTML("#rgInfo"), links: await buyLinks(page, "#rgInfo") });
+        if (em === "member@example.com") await page.screenshot({ path: path.join(OUT, "reg19-after-code-375.png") });
+        await page.evaluate(() => { document.getElementById("rgInfo").innerHTML = ""; });
+      }
+      const o = outs[0];
+      check("אחרי ״שלחו לי קוד״: ההודעה והכפתור זהים לגמרי לכתובת עם כרטיס ולכתובת בלי כרטיס (אין חשיפה מי רכש)", outs.length === 2 && outs[0].html === outs[1].html && outs[0].text === outs[1].text && JSON.stringify(outs[0].links) === JSON.stringify(outs[1].links), outs.map(x => x.text).join(" || "));
+      check("אחרי ״שלחו לי קוד״: נשארו המשפט על קוד תקף ל-15 דקות ובדיקות הספאם / מייל הרכישה / רכישה כחבר, ונוסף המשפט החדש (לא הגיע קוד? כנראה שלא נרכש הכרטיס…)", /נשלח אליה קוד \(תקף ל-15 דקות\)/.test(o.text) && /ספאם/.test(o.text) && /מייל הרכישה/.test(o.text) && /כחברים רשומים באתר/.test(o.text) && o.text.includes(NOCODE), o.text);
+      check("אחרי ״שלחו לי קוד״: כתובת התמיכה מופיעה, ואין office@icd.org.il ואין ״מנהל המערכת״", o.text.includes(SUPPORT) && !o.html.includes("office@icd.org.il") && !/מנהל המערכת/.test(o.text), o.text);
+      check("אחרי ״שלחו לי קוד״: כפתור הרכישה — קישור אמיתי, אותה כתובת, לשונית חדשה, noopener noreferrer, תווית מאושרת", o.links.length === 1 && o.links[0].href === RENEW && o.links[0].target === "_blank" && /\bnoopener\b/.test(o.links[0].rel) && /\bnoreferrer\b/.test(o.links[0].rel) && o.links[0].text === BUY && o.links[0].vis, JSON.stringify(o.links));
+      check("תשובות regStart מהשרת זהות לשתי הכתובות (המסך אינו נשען על תשובה שונה)", seen.length >= 2 && seen.every(x => x === seen[0]) && JSON.parse(seen[0]).ok === true, seen.join(" | "));
+      await ctx.close();
+    }
+
+    /* ---- ג. כתובת רכישה שאינה https תקין — חסרה, http, javascript:, מירכאות ותגית, יחסית, לא מחרוזת: אין כפתור באף מסך (ואין קישור מסוכן בדף), וההסבר עצמו נשאר ---- */
+    // כל מקרה שולח קוד לכתובת אחרת: לשרת תקרת בקשות לכתובת בשעה (REG_PER_EMAIL_HOUR), והבדיקה כאן אינה בודקת אותה
+    for (const [ci, [label, val]] of [["חסרה בהגדרות", null], ["http (לא https)", "http://www.icd.org.il/events-1/bqst-yswry-tysh"], ["javascript:", "javascript:alert(1)"], ["מירכאות ותגית", 'https://www.icd.org.il/x"><img src=x onerror=alert(1)>'], ["יחסית (//)", "//evil.example/x"], ["לא מחרוזת", 42]].entries()) {
+      const { ctx, page } = await newPage(browser, { env, renewUrl: val });
+      await ready19(page);
+      const lg = { box: await boxInfo(page, "authForm"), links: await buyLinks(page, "#authCover"), hrefs: await hrefs(page, "#authCover") };
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      const rg = { box: await boxInfo(page, "regForm"), links: await buyLinks(page, "#authCover"), hrefs: await hrefs(page, "#authCover") };
+      await page.fill("#rgEmail", "case" + ci + "@example.com"); await page.click("#rgSend");
+      await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+      const after = { text: norm(await page.textContent("#rgInfo")), links: await buyLinks(page, "#authCover") };
+      check("renew_url " + label + ": אין כפתור רכישה בכניסה, בהרשמה ואחרי ״שלחו לי קוד״; אין קישור מסוכן בדף", lg.links.length === 0 && rg.links.length === 0 && after.links.length === 0 && lg.hrefs.every(h => SAFE_HREF.test(h)) && rg.hrefs.every(h => SAFE_HREF.test(h)), JSON.stringify({ lg: lg.hrefs, rg: rg.hrefs, n: after.links.length }));
+      check("renew_url " + label + ": ההסבר (שימו לב + מה מקבלים) והמשפט החדש אחרי שליחת הקוד נשארים במקומם, והזרימה ממשיכה (שדה הקוד מוצג)", !!lg.box && lg.box.notice === NOTICE && lg.box.why === BENEFIT && !!rg.box && rg.box.notice === NOTICE && after.text.includes(NOCODE) && (await page.isVisible("#rgStep2")), "");
+      await ctx.close();
+    }
+
+    /* ---- ד. כתובת https עם פרמטרים (&): נכנסת ל-href בלי שינוי (הליכה הלוך ושוב דרך ההמרה ל-HTML), בכניסה ובהרשמה ואחרי שליחת הקוד ---- */
+    {
+      const U = "https://www.icd.org.il/events-1/bqst-yswry-tysh?a=1&b=2";
+      const { ctx, page } = await newPage(browser, { env, renewUrl: U });
+      await ready19(page);
+      const l0 = await buyLinks(page, "#buyBox");
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      const l1 = await buyLinks(page, "#buyBox");
+      await page.fill("#rgEmail", "nobody@example.com"); await page.click("#rgSend");
+      await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+      const l2 = await buyLinks(page, "#rgInfo");
+      check("renew_url עם & : הקישור נשמר כפי שהוא בשלושת המקומות", l0.length === 1 && l1.length === 1 && l2.length === 1 && l0[0].href === U && l1[0].href === U && l2[0].href === U, JSON.stringify([l0, l1, l2].map(x => x.map(y => y.href))));
+      await ctx.close();
+    }
+
+    /* ---- ה. שרת ישן (תשובות בלי השדות החדשים): ההסבר, הכפתור וההודעה עובדים והזרימה לא נשברת ---- */
+    {
+      const { ctx, page } = await newPage(browser, { env, oldServer: true });
+      await ready19(page);
+      const l0 = await buyLinks(page, "#buyBox");
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      await page.fill("#rgEmail", "member@example.com"); await page.click("#rgSend");
+      await page.waitForSelector("#rgStep2", { state: "visible", timeout: 15000 });
+      const t = norm(await page.textContent("#rgInfo")), l1 = await buyLinks(page, "#rgInfo");
+      check("שרת ישן: ההסבר והכפתור במסך הכניסה, וההודעה והכפתור אחרי ״שלחו לי קוד״ (שדה הקוד מוצג)", l0.length === 1 && l0[0].href === RENEW && t.includes(NOCODE) && l1.length === 1 && l1[0].href === RENEW, t);
+      await ctx.close();
+    }
+  }
+  /* REG19-END */
   check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();
