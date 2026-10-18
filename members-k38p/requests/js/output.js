@@ -19,8 +19,11 @@
   }
 
   /* ---------- רשימות לשדה "סגירה/הגבלה" ---------- */
+  // חלקי שורת פריט: שם (עם המספר שבמפה) ומרחק (עם הגובה, אם יש). itemText (אזהרות, דף הבדיקות) ושורת הפריט בשדה 8 (itemLine) נבנות מאותם חלקים — המספור והמרחקים זהים בכולן
+  const itemParts = it => ({ name: it.n + ". " + it.title, dist: dLabel(it.d) + (it.height ? " · גובה " + C.trimNum(it.height, 0) + " מ׳" : "") });
   function itemText(it) {
-    return it.n + ". " + it.title + " — " + dLabel(it.d) + (it.height ? " · גובה " + C.trimNum(it.height, 0) + " מ׳" : "");
+    const p = itemParts(it);
+    return p.name + " — " + p.dist;
   }
   // גובה האזור כפי שהוא במפה; לאזור משורטט בקירוב אין גובה מובנה — מציגים את לשון הפמ״ת
   const isB09 = z => z.src === "b09";
@@ -43,9 +46,12 @@
       lines.push("קרבה לגבול " + b.name + ": הסגירה המבוקשת נמצאת " + C.fmtDist(Math.max(0, b.d - R)) + " מהגבול (פמ״ת א-17 סעיף 4: אין לטוס במרחק של פחות מ-" + b.km + " ק״מ מגבול " + b.name + ")."));
     return lines;
   }
-  function listCapped(items, cap) {
-    const shown = items.slice(0, cap).map(itemText);
-    return shown.join("; ") + (items.length > cap ? "; ועוד " + (items.length - cap) + " פריטים (ראו דף הבדיקות)" : "");
+  // שורת פריט בשדה 8: המספר והשם בתחילת השורה והמרחק בקצה שלה. הרכיב fs הוא המפריד — קו מנחה מקווקו במסך (index.html .fl), טאב ימני עם קו מנחה ב-Word (docx.js htmlRuns) ו-" — " בטקסט הפשוט (toText).
+  // אותו HTML משמש את המסך ואת ה-Word: ללא טבלה, וללא טאב בטקסט עצמו (ב-Word הטאב מוגדר בפסקה, לא נכתב כתו)
+  const itemLine = it => { const p = itemParts(it); return "<span class='fl'><span class='fn'>" + E(p.name) + "</span><span class='fs'> — </span><span class='fd'>" + E(p.dist) + "</span></span>"; };
+  // פריט בשורה, עד cap פריטים; מעבר לכך שורה אחת "ועוד N פריטים (ראו דף הבדיקות)". כל שורה נפתחת ב-<br>, אחרי כותרת הקבוצה
+  function listLines(items, cap) {
+    return items.slice(0, cap).map(i => "<br>" + itemLine(i)).join("") + (items.length > cap ? "<br>ועוד " + (items.length - cap) + " פריטים (ראו דף הבדיקות)" : "");
   }
 
   /* ---------- מועדים ---------- */
@@ -89,10 +95,11 @@
     let f8 = "<b>מעגל</b> — נ.צ. מרכזי:<br><span dir='ltr'>" + E(C.dmsLat(inp.lat)) + " &nbsp; " + E(C.dmsLon(inp.lon)) + "</span> <span class='muted'>(עשרוני: " + inp.lat + ", " + inp.lon + ")</span>";
     if (air.length) f8 += "<br>תשתית אווירית מושפעת: " + air.map(E).join(" ");
     if (res.b09Footnote) f8 += "<br><span class='muted'>" + E(footnoteText(res)) + "</span>";
-    if (ins.length) f8 += "<br>מכשולים ותשתיות בתוך האזור (עד " + R + " מ׳): " + E(listCapped(ins, 25)) + ".";
-    if (ring.length) f8 += "<br>בקרבת האזור (עד " + 2 * R + " מ׳): " + E(listCapped(ring, 25)) + ".";
+    // מכשולים ותשתיות: כותרת מודגשת לכל קבוצה ואחריה פריט בשורה (מספר, שם, ומרחק בקצה השורה) — לא פסקה אחת רצופה
+    if (ins.length) f8 += "<br><b>מכשולים ותשתיות בתוך האזור (עד " + R + " מ׳):</b>" + listLines(ins, 25);
+    if (ring.length) f8 += "<br><b>בקרבת האזור (עד " + 2 * R + " מ׳):</b>" + listLines(ring, 25);
     const sites = res.nearScan.near;
-    if (sites.length) f8 += "<br>אתרים ותשתיות נוספים בקרבת האזור (עד " + C.fmtDist(R + cfg.thresholds.site_near_m) + " מהנקודה): " + E(listCapped(sites, 25)) + ".";
+    if (sites.length) f8 += "<br><b>אתרים ותשתיות נוספים בקרבת האזור (עד " + C.fmtDist(R + cfg.thresholds.site_near_m) + " מהנקודה):</b>" + listLines(sites, 25);
     const ko = knownObstaclesText(inp);   // מכשולים שהמבקש מכיר — הטקסט כלשונו, בלי תוצאות הצלבה (ההצלבה בדף הבדיקות)
     if (ko) f8 += "<br>מכשולים שידועים למבקש: " + E(ko);
     const vl = inp.vlos ? "קיים קשר עין" : "ללא קשר עין";
@@ -125,6 +132,24 @@
   function toText(h) {
     return String(h).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").trim();
   }
+
+  /* ---------- הצהרה ואישור המבקש ---------- */
+  // הנוסח המאושר של הצהרת המבקש (index.html #declBox מציג אותו כלשונו; בדיקה ב-core.test.mjs מוודאת שהם זהים). שינוי בנוסח מחייב להקפיץ את version, כי הוא נרשם בנתוני הבקשה בדרייב ליד הטקסט
+  const DECLARATION = {
+    version: "2026-10-19",
+    title: "הצהרה ואישור המבקש",
+    paragraphs: [
+      "אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).",
+      "אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.",
+      "לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה."
+    ],
+    label: "קראתי, הבנתי ואני מאשר את האמור לעיל",
+    gate: "יש לאשר את ההצהרה"
+  };
+  // הרשומה שנשמרת בדרייב בקובץ נתוני הבקשה: גרסת הנוסח, מועד האישור (ISO) והטקסט שהמבקש אישר. at = Date של סימון התיבה; בלי אישור — null
+  const declarationRecord = at => at ? { version: DECLARATION.version, confirmedAt: at.toISOString(), text: DECLARATION.paragraphs.join("\n") } : null;
+  // טקסט אישור המבקש בדף הבדיקות ובקובץ ה-Word (סעיף ״אישור סקירה אנושית״): קצר ועובדתי — מי אישר ומתי, ומה בהצהרה; בלי סעיף הוויתור
+  const reviewText = at => at ? "המבקש אישר ב-" + at.toLocaleString("he-IL") + " את ״" + DECLARATION.title + "״: שעבר באופן אישי על התצ״א, על רשימת המצאי ועל המפה ושהוא מודע לאזור ולסכנות הקיימות בו; שאין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוסיף אותם ידנית); ושהאחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור ולביצוע הטיסה היא עליו בלבד." : "";
 
   /* ---------- דף הבדיקות ---------- */
   // תא תוצאה: כל ממצא בשורה משלו (מופרד ב-<br>); כשיש יותר משורה אחת הממצאים ממוספרים "1. …". הפריטים הם HTML מוכן (כבר עבר esc)
@@ -294,6 +319,24 @@
       "א-11 סעיף 3.ד.4: ״יש להגיש את התכנית בשנית למודיעין טיס יום טרם ביצוע הטיסה במייל <span dir='ltr'>" + E(cfg.mail.fpl) + "</span>״. לעומת זאת בפרק ב-09 סעיף 6(ד) (מצוטט בדף הבדיקות): בסגירה אווירית מאושרת אין חובה להגיש תכנית טיסה, ונדרש אישור מראש מיחידת הנת״א ודיווח אחרי הנחיתה. המערכת אינה מכריעה איזה מהם חל על הפעילות — יש לבדוק מול מודיעין טיס." +
       (r78 ? " הערה: " + E(r78.ref) + " מציין 5 ימי עבודה מראש (״" + E(r78.text) + "״), בעוד פרק א-11 סעיף 6.ב (עדכון 1/26) מחייב לפחות " + cfg.thresholds.min_working_days + "; הבדיקה כאן לפי " + cfg.thresholds.min_working_days + "." : "");
   }
+  /* ---------- סיכום והגשה: סעיף 5 בדף הבדיקות למי שאין לו תצוגה מתקדמת ---------- */
+  // במקום סעיף ההגשה המלא (submissionHtml, עם הפניות לנוהל) — סיכום קצר בנקודות: מה נמצא בסריקה וכמה ימי עבודה יש עד הפעילות. בלי שום הפניה לפרק, סעיף או עמוד בפמ״ת, ובלי הנחיה להגיש מחדש תכנית טיסה או לפנות למודיעין טיס (החלטת בעל המערכת).
+  // הכול מאותו ניתוח של הטופס: הספירות מ-res (אזורים החופפים לסגירה, נוטמים בקרבה — סגירות ומכשולים שפורסמו, ומכשולים ותשתיות שבשדה 8), וימי העבודה מ-res.workingDays מול cfg.thresholds.min_working_days (כמו בנוסח המלא; בלי ערך — אין שורה)
+  const SUBMIT_HEAD = "הגשה", SUMMARY_HEAD = "סיכום והגשה";
+  function summaryModel(res, cfg) {
+    const min = cfg.thresholds.min_working_days, wd = res.workingDays;
+    const counts = { zones: res.zones.inside.length, notams: res.notams.hits.length + (res.notams.obstacles || []).length, items: res.nearScan.items.length };
+    const ok = wd == null ? null : wd >= min;
+    const lines = ["<b>נמצאו בסריקה:</b> אזורי איסור/הגבלה חופפים " + counts.zones + " · נוטמים בקרבה " + counts.notams + " · מכשולים ותשתיות " + counts.items];
+    if (wd != null) lines.push("<b>ימי עבודה עד הפעילות:</b> " + wd + " (נדרשים לפחות " + min + ") " + (ok ? "✔" : "✘"));
+    return { head: SUMMARY_HEAD, counts, workingDays: wd, minWorkingDays: min, daysOk: ok, lines };
+  }
+  // הסעיף לפי תצוגת המבקש: adv === true — הנוסח המלא כמות שהוא; כל ערך אחר (גם חסר) — הסיכום (נכשל סגור). html = הנוסח המלא (או ""), lines = נקודות הסיכום (או null)
+  function submissionSection(res, cfg, data, adv) {
+    if (adv === true) return { head: SUBMIT_HEAD, html: submissionHtml(res, cfg, data), lines: null };
+    const s = summaryModel(res, cfg);
+    return { head: s.head, html: "", lines: s.lines };
+  }
   const whereOf = i => i.zone === "in" ? "בתוך האזור" : i.zone === "ring" ? "בטבעת הכתומה" : "בקרבת האזור";
   /* ---------- שורת המצורפים בטופס והערות המבקש (משותפות ל-UI ול-Word) ---------- */
   // ארבע התמונות המצורפות לכל בקשה: תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי, ומפת אזור מרוחקת
@@ -306,10 +349,10 @@
     if (!notes) return d ? "<b>סיור באתר ב-" + C.ddmmyyyy(d) + "</b>" : "";
     return "<b>הערות המבקש" + (d ? " (סיור באתר ב-" + C.ddmmyyyy(d) + ")" : "") + ":</b> " + E(notes).replace(/\r?\n/g, "<br>");
   }
-  // o: {images:{aerial,street,overview,region} (כל אחד {bytes,w,h} או null), providerName, providerNames:{aerial,street,overview,region}, includeChecks, draft, review (טקסט), creator}
+  // o: {images:{aerial,street,overview,region} (כל אחד {bytes,w,h} או null), providerName, providerNames:{aerial,street,overview,region}, includeChecks, draft, review (טקסט), creator, adv (תצוגה מתקדמת של המבקש: true = סעיף ההגשה המלא; אחרת סיכום קצר)}
   function docxModel(res, data, cfg, o) {
     o = o || {};
-    const inp = res.inp, now = o.now || new Date(), pn = o.providerNames || {};
+    const inp = res.inp, now = o.now || new Date(), pn = o.providerNames || {}, sub = submissionSection(res, cfg, data, o.adv);
     const prov = (k, dflt) => { const p = pn[k] != null ? pn[k] : dflt; return p ? " — " + p : ""; };
     return {
       docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || orgName(inp),
@@ -333,7 +376,7 @@
       coverage: (function () { const c = buildCoverage(res, data, cfg); return { groups: c.groups, censusOnly: c.censusOnly.map(i => ({ title: i.title, dist: dLabel(i.d) })), censusMore: c.censusMore }; })(),
       dayNightHead: ["תאריך", "זריחה", "שקיעה", "שעות יום בחלון", "שעות לילה בחלון"],
       dayNight: res.sun.map(r => ["יום " + r.dayName + " " + C.ddmmyyyy(r.date), r.sunrise, r.sunset, C.fmtHM(r.dayMin), C.fmtHM(r.nightMin)]),
-      submission: submissionHtml(res, cfg, data),
+      submissionHead: sub.head, submission: sub.html, summary: sub.lines,   // סעיף ההגשה לפי o.adv (תצוגה מתקדמת): נוסח מלא, או סיכום קצר בלי הפניות לנוהל
       review: o.review || "",
       footer: "הופק " + now.toLocaleString("he-IL")
     };
@@ -407,5 +450,5 @@
     return { to: cfg.mail.to, subject, body, mailto: "mailto:" + cfg.mail.to.join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body) };
   }
 
-  return { fileBase, safeName, submissionHtml, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel };
+  return { fileBase, safeName, submissionHtml, submissionSection, summaryModel, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel, DECLARATION, declarationRecord, reviewText };
 });

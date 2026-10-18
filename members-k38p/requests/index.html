@@ -6,7 +6,6 @@
 <title>בקשות טיסה — בקשת סגירה אווירית (נספח ג׳ לפמ״ת א-11)</title>
 <meta name="theme-color" content="#0b1220">
 <meta name="robots" content="noindex,nofollow">
-<script src="../gate.js"></script>
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,6 +41,19 @@ input.bad,select.bad,textarea.bad{border-color:var(--red)}
 .hint{color:var(--muted);font-size:12px;line-height:1.6}
 .checks{display:flex;flex-wrap:wrap;gap:8px 14px}
 .checks label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)}
+/* הצהרה ואישור המבקש (סעיף 4): תיבה בולטת וחובה — מסגרת ענבר, רקע מוטה, טקסט 15.5px, תיבת סימון 30px ושורת סימון לחיצה בכל הרוחב (טלפון). #declGate: הודעת השער ליד כפתורי ההפקה כל עוד לא סומנה */
+.decl{margin-top:18px;padding:14px 16px 16px;border:2px solid var(--amber);border-radius:12px;background:rgba(255,184,77,.10)}
+.decl h3{font-size:18px;font-weight:900;color:var(--amber);line-height:1.4}
+.decl p{font-size:15.5px;line-height:1.8;color:var(--ink);margin-top:8px;overflow-wrap:anywhere}
+.declok{display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px 14px;min-height:56px;border:1px solid rgba(255,184,77,.65);border-radius:10px;background:rgba(255,184,77,.12);cursor:pointer;font-size:16px;line-height:1.5;color:var(--ink)}
+.declok input{width:30px;height:30px;flex:none;margin:0;accent-color:var(--amber);cursor:pointer}
+.declok input:focus{outline:none}
+.declok:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+.declok b{min-width:0;overflow-wrap:anywhere}
+.declgate{color:#ffd27a;font-weight:700;font-size:14.5px;line-height:1.6;margin-top:10px}
+.declgate:empty{display:none}
+.declgate::before{content:"⚠ " / ""}
+@media (max-width:420px){.decl{padding:12px}.declok{padding:10px 12px;gap:12px}}
 button{cursor:pointer;border-radius:10px;padding:9px 16px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);font-weight:700;transition:.15s;min-height:40px}
 button:hover:not(:disabled){border-color:var(--amber);color:var(--amber)}
 button.primary{background:var(--amber);border-color:var(--amber);color:#1a1204}
@@ -137,6 +149,11 @@ body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לש
 .paper table.ck td:nth-child(n+2),.paper table.ck th:nth-child(n+2){overflow-wrap:anywhere}
 .paper img.mapimg{width:100%;display:block;border:1px solid #555}
 .paper .ph{white-space:nowrap}   /* מספר טלפון בשדות 11 ו-12 לא נשבר באמצע בעמודת הערך הצרה (output.js מוסיף class="ph" לטלפונים) */
+/* שדה 8: שורת פריט (output.js itemLine) — מספר ושם בתחילת השורה, קו מנחה מקווקו, והמרחק בקצה השורה (ב-Word: טאב ימני עם קו מנחה, docx.js). שם ארוך: המרחק יורד לשורה משלו, עדיין בקצה. הטקסט " — " שב-.fs נשאר להעתקה ולטקסט פשוט, והוא מוסתר חזותית */
+.paper .fl{display:inline-flex;flex-wrap:wrap;align-items:baseline;width:100%;column-gap:6px}
+.paper .fn{min-width:0;overflow-wrap:anywhere}
+.paper .fs{flex:1 1 14px;min-width:14px;height:0;overflow:hidden;font-size:0;color:transparent;border-bottom:1px dotted #777;align-self:flex-end;margin-bottom:.35em}
+.paper .fd{flex:none;white-space:nowrap}
 .paper h3{font-size:13px;margin:10px 0 4px;color:#111}   /* כותרת משנית בדף הבדיקות: "3.1 פריטים נוספים…" */
 .paper .foot{margin-top:8px;font-size:10.5px;color:#555;border-top:1px solid #000;padding-top:3px;display:flex;justify-content:space-between}
 .paper ul{margin:4px 18px}.paper ol{margin:4px 22px}
@@ -336,7 +353,14 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <textarea autocomplete="off" id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
       <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף "הנקודה") ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
       <span class="err" id="e_visitNotes"></span></div>
-    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input autocomplete="off" type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
+    <!-- הצהרה ואישור המבקש (חובה: בלי סימון אי אפשר לשמור או לשלוח). הנוסח המאושר ב-js/output.js DECLARATION — שינוי כאן מחייב שינוי שם ואת version (בדיקת core.test.mjs מוודאת שהם זהים) -->
+    <div class="decl" id="declBox" role="group" aria-labelledby="declTitle">
+      <h3 id="declTitle">הצהרה ואישור המבקש</h3>
+      <p>אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).</p>
+      <p>אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.</p>
+      <p>לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה.</p>
+      <label class="declok" for="reviewOk"><input autocomplete="off" type="checkbox" id="reviewOk" aria-required="true"><b>קראתי, הבנתי ואני מאשר את האמור לעיל</b></label>
+    </div>
   </div>
   <div class="card nonprint" id="actions">
     <h2>5 · הפקות</h2>
@@ -345,7 +369,8 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
       <button type="button" id="btnMore" aria-expanded="false" aria-controls="moreOptions">אפשרויות נוספות</button>
     </div>
-    <p class="small" id="actionsHint" style="margin-top:8px">הבקשה נשמרת אוטומטית בדרייב כשכל הבדיקות הושלמו והסקירה אושרה. השליחה במייל מצרפת את כל הקבצים אוטומטית — אין צורך להוריד או לצרף דבר.</p>
+    <p class="declgate" id="declGate" role="status"></p>
+    <p class="small" id="actionsHint" style="margin-top:8px">הבקשה נשמרת אוטומטית בדרייב כשכל הבדיקות הושלמו וההצהרה אושרה. השליחה במייל מצרפת את כל הקבצים אוטומטית — אין צורך להוריד או לצרף דבר.</p>
     <p class="small" id="driveMsg" role="status"></p>
     <p class="small" id="sendMsg" role="status"></p>
     <div id="moreOptions" hidden>
