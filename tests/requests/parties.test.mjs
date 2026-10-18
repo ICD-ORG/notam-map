@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { contactsOf } from "../../scripts/export-zones.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -13,6 +14,10 @@ const P = require(path.join(ROOT, "members-k38p/requests/js/parties.js"));
 const C = require(path.join(ROOT, "members-k38p/requests/js/core.js"));
 const J = p => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
 const G = J("tests/fixtures/golden-contacts.json");
+// אזור מהנתונים הקפואים (כרטיס המפה הקפוא דרך המייצא האמיתי) — כך שהבדיקות על שיוך פרטי הקשר אינן תלויות בעדכוני הפמ״ת ב-zones.json החי
+const B09REF = { "302": "נספח ב'-1, עמ' 10 בפרק ב-09, עדכון 1/26", "401 א": "נספח ב'-2, עמ' 13 בפרק ב-09, עדכון 1/26" };
+const fz = (id, cat, extra) => { const z = Object.assign({ id, cat, pmt: G.pmt[id], pmtRef: "עמ' 1, עדכון 1/26" }, extra || {}); if (G.cards[id]) z.contacts = contactsOf(G.cards[id], id); else if (B09REF[id]) z.contacts = P.quoteEntries(G.pmt[id], { ref: B09REF[id], scope: "zone" }); return z; };
+const fzRec = (id, cat, extra) => { const z = fz(id, cat, extra); return zrec({ id, cat, label: id, pmt: z.pmt, pmtRef: z.pmtRef, coord: z.coord || "", src: /^B09/.test(cat) ? "b09" : "a17", z }); };
 const cfg = J("members-k38p/requests/config.json"), exp = J("members-k38p/requests/selftest/expected.json");
 const zones = J("members-k38p/data/zones.json"), inpa = J("members-k38p/data/inpa-zones.json"), agri = J("members-k38p/data/agri-airstrips.json"), snap = J("members-k38p/requests/selftest/notam-data.snap.json");
 const NOW = new Date(exp.now);
@@ -67,6 +72,22 @@ test("סיומת מקוצרת (073-3636954/5, 08-9902926/8) נשמרת כלשו�
   assert.equal(P.scanPhones("03-5487211/2018")[0].range, "");
 });
 
+test("גבול תחילת מספר: מספר צמוד לאות לטינית/ספרה/קו תחתון אינו טלפון (מזהי נוטם, חותמות), אבל אחרי אות עברית כן; סיום: לא חלק ממספר ארוך יותר", () => {
+  for (const t of ["ID A0501234567", "x03-5487211", "_03-5487211", "12054-1234567", "9990501234567", "054-12345678", "03-54872111"]) assert.deepEqual(P.scanPhones(t), [], t);
+  assert.deepEqual(display(P.scanPhones("בטלפון054-1234567")), ["054-1234567"]);
+  assert.deepEqual(display(P.scanPhones("(054-1234567)")), ["054-1234567"]); assert.deepEqual(display(P.scanPhones("ב-03-5487211.")), ["03-5487211"]);
+});
+
+test("validate: קידומות ישראליות בלבד (קווי 02/03/04/08/09, סלולרי 05X, VoIP 072–079); 01/06/070/071 ומספרים באורך שגוי נדחים", () => {
+  assert.deepEqual(P.validate("035487211"), { kind: "landline", national: "35487211" });
+  assert.deepEqual(P.validate("0542479323"), { kind: "mobile", national: "542479323" });
+  assert.deepEqual(P.validate("0733636954"), { kind: "voip", national: "733636954" });
+  assert.deepEqual(P.validate("97235487211"), { kind: "landline", national: "35487211" }); assert.deepEqual(P.validate("0097235487211"), { kind: "landline", national: "35487211" });
+  assert.deepEqual(P.validate("972035487211"), { kind: "landline", national: "35487211" }, "+972 (0)3…");
+  for (const d of ["015487211", "065487211", "0701234567", "0711234567", "0112345678", "0612345678", "05487211", "03548721", "0354872111", "05424793234", "5487211", "", "abc"]) assert.equal(P.validate(d), null, d);
+  assert.equal(P.scanPhones("073-3142501/05 2345678")[0].range, "", "״/05״ אחרי מספר אינו סיומת מקוצרת (נראה כמספר שני)");
+});
+
 test("שני מספרים מלאים עם לוכסן הם שני טלפונים (LLU60, LLU61); רשימה ב-LLD42/LLD49", () => {
   assert.deepEqual(display(P.scanPhones(G.pmt.LLU60)), ["073-3142501", "052-9289403"]);
   assert.deepEqual(display(P.scanPhones(G.pmt.LLU61)), ["052-3410054", "02-5917531"]);
@@ -79,6 +100,9 @@ test("זוגות תווית–מספר: רק הפסקה הכללית של LLU (4
   assert.deepEqual(g.map(x => x.label + "=" + x.phone.display), ["מטה ארצי=074-7833333", "מחוז צפון=074-7834080", "מחוז מרכז=074-7836000", "מחוז דרום=074-7839000"]);
   for (const id of ["LLD42", "LLD48", "LLD49", "LLP22", "LLU60", "LLU61", "LLU73"]) assert.equal(P.pairs(P.extract(G.pmt[id]).excerpts[0]), null, id);
   assert.equal(P.pairs("אחד 03-5487211"), null, "מקטע יחיד אינו זוג");
+  assert.equal(P.pairs("אלף 03-5487211 ; בית 02-5305042 ו-04-6977808"), null, "שני מספרים במקטע אחד — אין זיווג");
+  assert.equal(P.pairs("אלף 03-5487211 ; 02-5305042"), null, "מקטע בלי תווית"); assert.equal(P.pairs("אלף1 03-5487211 ; בית 02-5305042"), null, "תווית עם ספרה");
+  assert.deepEqual(P.pairs("אלף: 03-5487211 ; בית – 02-5305042").map(x => x.label), ["אלף", "בית"]);
 });
 
 test("הפניה בלי מספר (LLD41/44/51/52): אין מספר ואין השלמה; המשפט נשמר כלשונו כ-cue", () => {
@@ -141,6 +165,7 @@ test("פורמטים של OSM: נקודות/מקפים/רווחים/+972/(0)/ס�
   assert.deepEqual(norm("(03) 5487211"), ["03-5487211"]);
   assert.deepEqual(norm("03-5487211; 054-2479323"), ["03-5487211", "054-2479323"]);
   assert.deepEqual(norm("tel: 03-5487211"), ["03-5487211"], "תווית לפני המספר אינה פוסלת");
+  assert.deepEqual(P.phonesFromTag("+44 20 7946 0958, 03-5487211").map(p => p.kind), ["unverified", "landline"], "פסיק מפריד בין ערכים");
   const bad = P.phonesFromTag("+44 20 7946 0958")[0];
   assert.equal(bad.kind, "unverified"); assert.equal(bad.valid, false); assert.equal(bad.tel, "", "לא ישראלי: גולמי, בלי קישור"); assert.equal(bad.display, "+44 20 7946 0958");
   assert.deepEqual(P.phonesFromTag("בלי מספר"), [], "ערך בלי ספרות נפסל");
@@ -163,6 +188,7 @@ test("דוא״ל: נקודה בסוף נקצצת, אותיות גדולות נש
   assert.equal(P.scanEmails("caai-charigot@mot.gov.il")[0].role, "exception");
   assert.deepEqual(P.scanEmails("a@b, @x.co, a..b@x.co, x@y.c"), [], "כתובות פגומות נדחות");
   assert.deepEqual(P.scanEmails("...x@y.co").map(x => x.raw), ["x@y.co"], "נקודות מובילות נקצצות");
+  assert.deepEqual(P.scanEmails("mail a@b.co- now").map(x => x.raw), ["a@b.co"], "מקף בסוף נקצץ");
 });
 
 test("הקטע המצוטט: כלשונו (תת-מחרוזת של המקור), לא חותך באמצע מילה ולא ארוך מ-221 תווים — על כל טקסטי האזורים והכרטיסים הקפואים", () => {
@@ -193,7 +219,6 @@ test("הקטע המצוטט: יחידה ארוכה מתפצלת לפי פסיק 
   const one = P.extract(words + " בטלפון 03-5487211 " + words).excerpts;
   assert.equal(one.length, 1); assert.ok(one[0].startsWith("…") && one[0].endsWith("…") && one[0].includes("03-5487211"));
   assert.ok(Array.from(one[0]).length <= 221);
-  assert.ok(!/…\S*\s/.test(one[0].slice(0, 3)) || true);
 });
 
 test("חסימות: כתובות/טלפון הארגון, נמעני נוטאם ובקשת חריגה לעולם אינם בפלט — גם כשנזרקים לטקסט אזור מלאכותי", () => {
@@ -252,8 +277,7 @@ test("LLU20/LLU17: אין פרט קשר משלהם — ההנחיה הכללית
 });
 
 test("LLU21: המספר הייעודי 03-5038875 כאזור (ולא נספר בין מספרי שב״ס) ובנוסף ההנחיה הכללית עם ארבעת מספרי שב״ס", () => {
-  const z = zones.zones.find(q => q.id === "LLU21");
-  const [r] = P.build(mkRes({ zones: { inside: [zrec({ id: "LLU21", cat: "LLU", label: "LLU21 ״גלילות״", pmt: z.pmt, pmtRef: z.pmtRef, z })], near: [], excluded: [] } }), cfg, { zones });
+  const [r] = P.build(mkRes({ zones: { inside: [fzRec("LLU21", "LLU")], near: [], excluded: [] } }), cfg, { zones });
   assert.deepEqual(texts(r.contacts.phones), ["03-5038875"]); assert.deepEqual(r.contacts.lines, ["לאזור LLU21 לטלפון 03-5038875"]);
   assert.deepEqual(texts(r.contacts.general.phones), ["074-7833333", "074-7834080", "074-7836000", "074-7839000"], "03-5038875 אינו נספר פעמיים");
   assert.ok(r.contacts.general.pairs && r.contacts.general.pairs.length === 4);
@@ -264,18 +288,15 @@ test("LLU21: המספר הייעודי 03-5038875 כאזור (ולא נספר ב
 
 test("אזור LLU עם פרט קשר משלו (LLU60): ההנחיה הכללית של שב״ס אינה מוצגת; LLU55 (דוא״ל בלבד) — אותו כלל", () => {
   for (const [id, field] of [["LLU60", "phones"], ["LLU55", "emails"]]) {
-    const z = zones.zones.find(q => q.id === id);
-    const [r] = P.build(mkRes({ zones: { inside: [zrec({ id, cat: "LLU", label: id, pmt: z.pmt, pmtRef: z.pmtRef, z })], near: [], excluded: [] } }), cfg, { zones });
+    const [r] = P.build(mkRes({ zones: { inside: [fzRec(id, "LLU")], near: [], excluded: [] } }), cfg, { zones });
     assert.ok(r.contacts[field].length > 0, id); assert.equal(r.contacts.general, null, id); assert.equal(r.general, undefined, id);
   }
-  const z60 = zones.zones.find(q => q.id === "LLU60");
-  const [r60] = P.build(mkRes({ zones: { inside: [zrec({ id: "LLU60", cat: "LLU", pmt: z60.pmt, z: z60 })], near: [], excluded: [] } }), cfg, { zones });
+  const [r60] = P.build(mkRes({ zones: { inside: [fzRec("LLU60", "LLU")], near: [], excluded: [] } }), cfg, { zones });
   assert.deepEqual(texts(r60.contacts.phones), ["073-3142501", "052-9289403"]);
 });
 
 test("LLR: אנשי הקשר של סעיף 2 מוצגים כהנחיה של הפמ״ת (לא כגורם האזור), 4 מתא״מים עם סיומות מקוצרות ללא tel:", () => {
-  const z = zones.zones.find(q => q.id === "LLR30");
-  const [r] = P.build(mkRes({ zones: { inside: [zrec({ id: "LLR30", cat: "LLR", label: "LLR30", pmt: z.pmt, z })], near: [], excluded: [] } }), cfg, { zones });
+  const [r] = P.build(mkRes({ zones: { inside: [fzRec("LLR30", "LLR")], near: [], excluded: [] } }), cfg, { zones });
   const g = r.contacts.general;
   assert.equal(g.label, "הנחיה של הפמ״ת (סעיף 2)"); assert.deepEqual(texts(g.phones), ["08-9902926/8", "02-5305042/1", "073-3483007", "04-6977808"]);
   assert.deepEqual(g.phones.map(p => p.tel), ["", "", "tel:+972733483007", "tel:+97246977808"], "אין tel: לסיומות מקוצרות בלבד");
@@ -292,6 +313,12 @@ test("נוטמים: נוטם עם COORD WITH בשורה משלו, נוטם עם 
   assert.equal(b.key, "n:C1828/26"); assert.equal(b.party, "מוזכר בנוטם: ATC AND MABBAH"); assert.equal(b.hasContact, false); assert.equal(b.status, "nocontact"); assert.deepEqual(b.contacts.phones, []);
   assert.equal(c.key, "g:notams"); assert.equal(c.count, 10); assert.match(c.title, /^נוטמים בקרבה \(10\): A100\/26, A101\/26, A102\/26, A103\/26, A104\/26, A105\/26, A106\/26, A107\/26 ועוד 2$/); assert.equal(c.tag, "חלקם חופפים לסגירה");
   assert.deepEqual(rows.map(r => r.type), ["report", "report", "report"]);
+});
+
+test("נוטם מכשול (obstacles) עם COORD WITH נכנס לשורה כמו נוטם סגירה", () => {
+  const o = notamRec("A777/26", nraw("A777/26", "CRANE 80M AGL. ALL FLT SHALL COORD WITH TWR."), { relation: "overlap", d: 0, edge: 0 });
+  const rows = P.build(mkRes({ notams: { hits: [], obstacles: [o] } }), cfg, {});
+  assert.equal(rows.length, 1); assert.equal(rows[0].key, "n:A777/26"); assert.equal(rows[0].party, "מוזכר בנוטם: TWR"); assert.equal(rows[0].tag, "חפיפה לסגירה");
 });
 
 test("חולה/מטולה/גולן על נוטמי אמת: שני נוטמי COORD בשורות משלהם ושורה מאוחדת", () => {
@@ -368,11 +395,15 @@ test("אזורי רט״ג: הגורם ״רשות הטבע והגנים״ (נגז
   const rows = P.build(mkRes({ zones: { inside: [inpaRec, b09], near: [], excluded: [] } }), cfg, {});
   assert.equal(rows[0].party, "רשות הטבע והגנים"); assert.equal(rows[0].hasContact, false); assert.equal(rows[0].status, "nocontact");
   assert.equal(rows[1].cue, "פעילות צה״ל"); assert.equal(rows[1].hasContact, false);
+  // ״הגשת בקשה למשרד נוטאם״ (תיאום כללי ב-09) היא הבקשה עצמה — לא גורם נוסף: בלי cue (אבל השורה נשארת)
+  const coord401 = "הגשת בקשה למשרד נוטאם 5 ימי עבודה מראש.";
+  const [r401] = P.build(mkRes({ zones: { inside: [fzRec("401 א", "B09", { coord: coord401 })], near: [], excluded: [] } }), cfg, { zones });
+  assert.match(G.pmt["401 א"], /משרד נוטאם/); assert.equal(r401.cue, undefined); assert.equal(r401.hasContact, false); assert.equal(r401.status, "nocontact");
+  assert.equal(P.build(mkRes({ zones: { inside: [zrec({ id: "LLX5", pmt: "יש לתאם עם משרד נוטאם." })], near: [], excluded: [] } }), cfg, {})[0].cue, undefined);
 });
 
 test("ב-09: 302 — הטלפון מהערות האזור כלשונו עם הסיומת המקוצרת, מקור שורת האזור בנספח", () => {
-  const z = zones.zones.find(q => q.id === "302");
-  const [r] = P.build(mkRes({ zones: { inside: [zrec({ id: "302", cat: "B09", src: "b09", label: "302", pmt: z.pmt, pmtRef: z.pmtRef, z })], near: [], excluded: [] } }), cfg, { zones });
+  const [r] = P.build(mkRes({ zones: { inside: [fzRec("302", "B09")], near: [], excluded: [] } }), cfg, { zones });
   assert.deepEqual(texts(r.contacts.phones), ["073-3636954/5"]); assert.equal(r.contacts.phones[0].tel, ""); assert.match(r.contactSrc, /^פמ״ת ב-09, נספח ב'-1, עמ' 10 בפרק ב-09/);
 });
 
@@ -403,6 +434,7 @@ test("תקרה: מעל 40 שורות — נושרות קודם שורות OSM ב
   assert.equal(r.rows.length, 40); assert.equal(r.dropped, 11);
   assert.equal(r.rows[0].key, "z:LLX1", "אזור אינו נושר");
   assert.ok(r.rows.some(x => x.key === "o:k49"), "שורה עם פרט קשר נשמרת");
+  assert.deepEqual(r.rows.map(x => x.key), ["z:LLX1"].concat(Array.from({ length: 38 }, (_, i) => "o:k" + i), ["o:k49"]), "נושרות השורות האחרונות בלי פרט קשר (k38..k48), לא הראשונות");
   assert.equal(new Set(r.rows.map(x => x.key)).size, 40);
   // כפילות מפתח (שני אזורים עם אותו מזהה) מקבלת סיומת
   const dup = P.build(mkRes({ zones: { inside: [zrec({ id: "LLX1" }), zrec({ id: "LLX1" })], near: [], excluded: [] } }), cfg, {});
@@ -428,6 +460,25 @@ test("כל מחרוזות הפלט הן טקסט רגיל: HTML/XSS בשמות O
   assert.ok(!r.contacts.emails.some(e => /[<>]/.test(e)), "דוא״ל עם סוגריים משולשים לא נבלע");
 });
 
+test("עשן על כל האזורים החיים: בנייה סביב כל אזור (א-17, ב-09) — בלי כשל, מפתחות ייחודיים, ערכים חוקיים, הלוך-חזור, ובלי מחרוזות אסורות", () => {
+  const data = siteData("yarkon"); let checked = 0, withGeneral = 0, withOwn = 0;
+  for (const z of zones.zones) {
+    const ring = z.rings[0], lat = ring.reduce((a, p) => a + p[0], 0) / ring.length, lon = ring.reduce((a, p) => a + p[1], 0) / ring.length;
+    const res = C.analyze(Object.assign({}, baseInput, { lat, lon, radius: 100 }), data, cfg, NOW), r = P.buildResult(res, cfg, data);
+    assert.deepEqual(r.failed, [], z.id); assert.ok(r.rows.length <= 40, z.id);
+    assert.equal(new Set(r.rows.map(x => x.key)).size, r.rows.length, z.id + " מפתחות");
+    for (const x of r.rows) {
+      assert.ok(P.TYPES.includes(x.type) && P.STATUSES.includes(x.status), z.id + " " + x.key); assert.equal(typeof x.title, "string"); assert.ok(x.title.length > 0 && !/undefined|\[object/.test(JSON.stringify(x)), z.id + " " + x.key);
+      assert.equal(x.hasContact, x.status !== "nocontact"); if (x.contacts.general) withGeneral++; if (x.contacts.phones.length || x.contacts.emails.length) withOwn++;
+      for (const ph of x.contacts.phones.concat(x.contacts.general ? x.contacts.general.phones : [])) assert.ok(ph.tel === "" || /^tel:\+?\d+$/.test(ph.tel), z.id + " tel");
+    }
+    const json = JSON.stringify(r.rows);
+    for (const bad of ["icd.org.il", "5076677", "notamoffice", "caai-charigot", "גורם: שירות בתי הסוהר", "מנהל המערכת"]) assert.ok(!json.includes(bad), z.id + ": " + bad);
+    assert.deepEqual(P.restore(JSON.parse(JSON.stringify(P.record(r.rows)))), r.rows, z.id + " הלוך-חזור"); checked++;
+  }
+  assert.equal(checked, zones.zones.length); assert.ok(withGeneral > 40 && withOwn > 10, "הנחיות כלליות: " + withGeneral + ", פרטי קשר עצמיים: " + withOwn);
+});
+
 /* ================= עריכה, ידניות, מיזוג ================= */
 const base3 = () => P.build(mkRes({ zones: { inside: [zrec({ id: "LLX1", pmt: "בטלפון 03-5487211." }), zrec({ id: "LLX2", label: "LLX2" })], near: [zrec({ id: "LLX3", label: "LLX3", edge: 200 })], excluded: [] } }), cfg, {});
 
@@ -440,9 +491,9 @@ test("setField: סוג/סטטוס/הערה נשמרים כסימון מטיס; �
   assert.equal(P.setField(rows, "z:NOPE", "note", "x").error, "השורה לא נמצאה"); assert.equal(P.setField(rows, "z:LLX1", "title", "x").error, "שדה לא מוכר", "שורה אוטומטית — שם ופרטי קשר אינם ניתנים לעריכה");
   assert.equal(P.setField(rows, "z:LLX1", "note", "א".repeat(301)).error, "ההערה: עד 300 תווים");
   assert.equal(P.setField(rows, "z:LLX1", "note", "א".repeat(301)).rows, rows); assert.equal(P.setField(rows, "z:LLX1", "note", "א".repeat(300)).error, "");
-  assert.equal(P.setField(rows, "z:LLX1", "note", "ab\u0007c").error, "ההערה מכיל תווים לא תקינים (למשל תווי בקרה)");
-  assert.equal(P.setField(rows, "z:LLX1", "note", "‏​").error, "ההערה אינו מכיל תו גלוי");
-  assert.equal(P.setField(rows, "z:LLX1", "note", 5).error, "ההערה אינם תקינים");
+  assert.equal(P.setField(rows, "z:LLX1", "note", "ab\u0007c").error, "ההערה מכילה תווים לא תקינים (למשל תווי בקרה)");
+  assert.equal(P.setField(rows, "z:LLX1", "note", "‏​").error, "ההערה אינה מכילה תו גלוי");
+  assert.equal(P.setField(rows, "z:LLX1", "note", 5).error, "ההערה אינה תקינה");
   // 300 תווים נמדדים בנקודות קוד (אמוג׳י = תו אחד)
   assert.equal(P.setField(rows, "z:LLX1", "note", "😀".repeat(300)).error, ""); assert.equal(P.setField(rows, "z:LLX1", "note", "😀".repeat(301)).error, "ההערה: עד 300 תווים");
   // הסימון מנקה בחזרה ל-ברירת המחדל כשהערך ריק
@@ -453,7 +504,7 @@ test("addManual: שם חובה (גלוי), מגבלות 80/120/300, עד 20 יד
   let rows = base3(), r;
   assert.equal(P.addManual(rows, { name: "" }).error, "יש להזין שם הגורם"); assert.equal(P.addManual(rows, { name: "‏ ㅤ" }).error, "יש להזין שם הגורם");
   assert.equal(P.addManual(rows, { name: "א".repeat(81) }).error, "שם הגורם: עד 80 תווים"); assert.equal(P.addManual(rows, { name: "x", contact: "1".repeat(121) }).error, "פרטי הקשר: עד 120 תווים");
-  assert.equal(P.addManual(rows, { name: "x", note: "n".repeat(301) }).error, "ההערה: עד 300 תווים"); assert.equal(P.addManual(rows, { name: "a\nb" }).error, "שם הגורם מכיל תווים לא תקינים (למשל תווי בקרה)");
+  assert.equal(P.addManual(rows, { name: "x", note: "n".repeat(301) }).error, "ההערה: עד 300 תווים"); assert.equal(P.addManual(rows, { name: "x", contact: "a\u0007" }).error, "פרטי הקשר מכילים תווים לא תקינים (למשל תווי בקרה)"); assert.equal(P.addManual(rows, { name: "x", contact: "\u200f" }).error, "פרטי הקשר אינם מכילים תו גלוי"); assert.equal(P.addManual(rows, { name: 5 }).error, "שם הגורם אינו תקין"); assert.equal(P.addManual(rows, { name: "a\nb" }).error, "שם הגורם מכיל תווים לא תקינים (למשל תווי בקרה)");
   r = P.addManual(rows, { name: "<b>עיריית טבריה</b>", contact: "<i>03-5487211</i>" }); assert.equal(r.error, ""); assert.equal(r.key, "m:1");
   const m = r.rows.find(x => x.key === "m:1"); assert.equal(m.title, "<b>עיריית טבריה</b>"); assert.equal(m.contact, "<i>03-5487211</i>"); assert.equal(m.manual, true); assert.equal(m.src, "manual");
   assert.deepEqual([m.type, m.status, m.note], ["approval", "unmarked", ""]);
@@ -521,6 +572,24 @@ test("marks() + merge(compact): צורה קומפקטית לדפדפן — רק 
   assert.deepEqual(P.merge({ marks: { "__proto__": { status: "done" }, "x": {} }, keys: ["../etc"] }, fresh).map(r => r.key), ["z:LLX2", "z:LLX7"], "מפתחות פגומים נדחים");
 });
 
+test("describe: מבנה מוכן להצגה — פרטי הגורם עצמו לפני ההנחיה הכללית; pairs במקום lines; תקרת קטעים (Word: 3) ו״ועוד N״; שורה ללא פרט קשר + cue; ידנית", () => {
+  const y = siteRows("yarkon").find(r => r.key === "z:LLU20"), d = P.describe(y);
+  assert.equal(d.none, false); assert.equal(d.blocks.length, 1); assert.equal(d.blocks[0].label, P.GENERAL_LLU_LABEL); assert.equal(d.blocks[0].pairs.length, 4); assert.deepEqual(d.blocks[0].lines, []); assert.equal(d.blocks[0].src, "פמ״ת א-17, סעיף 1א (עמ' 5, עדכון 1/25)");
+  const [r21] = P.build(mkRes({ zones: { inside: [fzRec("LLU21", "LLU")], near: [], excluded: [] } }), cfg, { zones });
+  const d21 = P.describe(r21); assert.deepEqual(d21.blocks.map(b => b.label), ["", P.GENERAL_LLU_LABEL]); assert.deepEqual(texts(d21.blocks[0].phones), ["03-5038875"]); assert.deepEqual(d21.blocks[0].lines, ["לאזור LLU21 לטלפון 03-5038875"]);
+  // תקרה: LLR30 — 4 קטעים מצוטטים; max=3 => 3 + ״ועוד 1״
+  const [r30] = P.build(mkRes({ zones: { inside: [fzRec("LLR30", "LLR")], near: [], excluded: [] } }), cfg, { zones });
+  assert.deepEqual([P.describe(r30).blocks[0].lines.length, P.describe(r30).more], [4, 0]); const d3 = P.describe(r30, { max: 3 }); assert.deepEqual([d3.blocks[0].lines.length, d3.more], [3, 1]);
+  assert.deepEqual([P.describe(r30, { max: 1 }).blocks[0].lines.length, P.describe(r30, { max: 1 }).more], [1, 3]);
+  // שורה בלי פרט קשר: none + cue
+  const [r41] = P.build(mkRes({ zones: { inside: [fzRec("LLD41", "LLD")], near: [], excluded: [] } }), cfg, { zones });
+  assert.deepEqual(P.describe(r41), { none: true, cue: "לתיאום טיסה במרחב זה יש ליצור קשר עם מגדל רמת דוד בטלפון המפורסם בפרק א' 07.", blocks: [], more: 0 });
+  assert.deepEqual(P.describe(P.build(mkRes({ notams: { hits: [notamRec("A1/26", nraw("A1/26", "OPS CLSD."))], obstacles: [] } }), cfg, {})[0]), { none: true, cue: "", blocks: [], more: 0 });
+  // ידנית
+  const m = P.addManual([], { name: "עירייה", contact: "03-5487211" }).rows[0]; assert.deepEqual(P.describe(m).blocks.map(b => b.lines), [["03-5487211"]]);
+  assert.equal(P.describe(P.addManual([], { name: "עירייה" }).rows[0]).none, true); assert.deepEqual(P.describe(null), { none: true, cue: "", blocks: [], more: 0 });
+});
+
 /* ================= סיכום ================= */
 test("summary / summaryText / mailLine: כל הצירופים, יחיד/רבים, אפסים מושמטים, סדר קבוע, ריק", () => {
   const S = (o) => Object.assign({ total: 0, done: 0, needed: 0, unmarked: 0, nocontact: 0, notneeded: 0 }, o);
@@ -572,6 +641,7 @@ test("restore: JSON פגום/עוין לא זורק ולא מכניס כלום �
   assert.equal(r.contacts.pairs, null); assert.equal(r.mark.note.length <= 300, true); assert.equal(r.stale, true); assert.ok(r.count <= 99999);
   assert.deepEqual(texts(r.contacts.general.phones), ["074-7833333"]); assert.equal(r.contacts.general.pairs, null);
   for (const bad of [null, undefined, 5, "x", [], {}, { rows: "x" }, { rows: [], manual: 5 }]) assert.deepEqual(P.restore(bad), []);
+  assert.equal(P.restore({ manual: Array.from({ length: 30 }, (_, i) => ({ key: "m:" + (i + 1), title: "ג" + i })) }).length, 20, "תקרת ידניות");
   assert.equal(P.restore({ rows: Array.from({ length: 500 }, (_, i) => ({ key: "z:" + i, title: "t" + i })) }).length, 60, "תקרה על מערך ענק");
   // restore מסנן גם לפי ההגדרות (נמעני מייל)
   const rec = { rows: [{ key: "z:a", title: "t", contacts: { emails: ["x-office@corp.example", "ok@corp.example"] } }] };
@@ -597,7 +667,10 @@ test("localAuthority: הרשות המקומית לפי OSM (רמה 6–8 הגב�
 });
 
 test("נוסח: תוויות עברית קבועות; אין כתובת הארגון, ״מנהל המערכת״ או ״גורם: שירות בתי הסוהר״ באף תווית/קבוע", () => {
-  const consts = JSON.stringify([P.TYPE_LABEL, P.STATUS_LABEL, P.STATUS_ICON, P.GENERAL_LLU_LABEL, P.SUGGESTIONS]);
+  const T = P.TEXT, consts = JSON.stringify([P.TYPE_LABEL, P.STATUS_LABEL, P.STATUS_ICON, P.GENERAL_LLU_LABEL, P.SUGGESTIONS, T.title, T.intro, T.paperNote, T.footer("18.10.2026 21:00"), T.footer(""), T.empty, T.noContact, T.srcPrefix, T.unverified, T.outOfRange, T.updated, T.failed, T.more(3), T.dropped(1), T.dropped(4), T.newFound(1), T.newFound(3)]);
+  assert.equal(T.title, "דיווח לגורמים נוספים"); assert.match(T.footer("18.10.2026 21:00"), /מצב נכון ל-18\.10\.2026 21:00\.$/); assert.ok(!/מצב נכון/.test(T.footer("")));
+  assert.equal(T.newFound(1), "נוסף גורם אחד חדש מאז הבדיקה הקודמת"); assert.equal(T.newFound(3), "נוספו 3 גורמים חדשים מאז הבדיקה הקודמת"); assert.equal(T.more(3), "ועוד 3"); assert.equal(T.dropped(4), "4 גורמים נוספים לא הוצגו");
+  assert.match(T.intro, /אינה מונעת שליחה/, "הרשימה אינה חוסמת שליחה"); assert.ok(!/משרד נוטאם|office@|info@/.test(consts), "בנוסח חדש — בלי שם המשרד/כתובות");
   assert.deepEqual(P.TYPE_LABEL, { approval: "אישור מקומי", report: "דיווח", update: "עדכון" });
   assert.deepEqual(P.STATUS_LABEL, { needed: "נדרש", done: "דווח / התקבל אישור", nocontact: "לא נמצא איש קשר", notneeded: "אין צורך", unmarked: "טרם סומן" });
   assert.deepEqual(P.STATUS_ICON, { needed: "!", done: "✓", nocontact: "—", notneeded: "○", unmarked: "·" });

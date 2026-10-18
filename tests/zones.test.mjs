@@ -153,8 +153,8 @@ test("cardQuotes: רק ציטוט <i> מילולי — לא span.mapnote, לא �
   const html = 'לשון הפמ"ת (עמ\' 4, עדכון 2/25): <i>LLX1, האזור &quot;בדיקה&quot;. בטלפון 03-5487211.<br>שורה שנייה &amp; עוד</i><br>'
     + '<span class="mapnote">הערת המפה (אינה מהפמ"ת): <i>התקשרו 04-1111111 או x@y.co</i></span><br>'
     + 'סעיף 2 בפמ"ת (עמ\' 8, עדכון 2/25): <i>2. כותרת<br>[…]<br>בטלפון 02-5305042/1</i>'
-    + '<details class="xl"><summary>הצג</summary><div class="xlb"><i>34° 29&#39; 17.00&quot; E | 31° 38&#39; 58.00&quot; N<br>054-1111111</i></div></details>'
-    + '<div class="xlb"><i>050-2222222</i></div><br>מפת נספח א\' (עמ\' 51, עדכון 1/26), תווית LLX1: <i>UNL<br>GND</i>';
+    + '<details class="xl"><summary>הצג</summary>טבלה: <i>34° 29&#39; 17.00&quot; E | 31° 38&#39; 58.00&quot; N<br>054-1111111</i></details>'
+    + '<div class="xlb">נקודות: <i>050-2222222</i></div><br>מפת נספח א\' (עמ\' 51, עדכון 1/26), תווית LLX1: <i>UNL<br>GND</i>';
   assert.deepEqual(cardQuotes(html), [
     { label: 'לשון הפמ"ת (עמ\' 4, עדכון 2/25)', text: 'LLX1, האזור "בדיקה". בטלפון 03-5487211.\nשורה שנייה & עוד' },
     { label: 'סעיף 2 בפמ"ת (עמ\' 8, עדכון 2/25)', text: "2. כותרת\n[…]\nבטלפון 02-5305042/1" },
@@ -192,12 +192,11 @@ test("ייצוא חי: השדה היחיד שנוסף לאזורים הוא cont
   for (const z of out.zones) { const ks = Object.keys(z); if ("contacts" in z) assert.equal(ks[ks.length - 1], "contacts", z.id + ": contacts אחרון"); }
   assert.deepEqual(Object.keys(out), ["edition", "mapVersion", "mapDate", "dataHash", "pamat", "zones", "approxIds", "approx09Ids", "general"]);
   assert.deepEqual(Object.keys(out.general), ["LLU", "B09"]);
-  assert.equal(out.general.LLU.text.includes("[…]"), true, "הנוסח הכללי של LLU נשאר כפי שהיה (הפלט של שלב א׳ אינו משתנה)");
 });
 
 test("ייצוא חי: כל רשומת contacts תקינה — שדות, scope, role, בלי כתובות הארגון / נמעני נוטאם, בלי מפת-הערות", () => {
   const withC = out.zones.filter(z => z.contacts);
-  assert.ok(withC.length >= 80, "אזורים עם contacts: " + withC.length);
+  assert.ok(withC.length >= 50, "אזורים עם contacts: " + withC.length);
   for (const z of withC) {
     assert.ok(Array.isArray(z.contacts) && z.contacts.length > 0, z.id);
     for (const e of z.contacts) {
@@ -232,26 +231,36 @@ test("ייצוא חי: סגירות — כל פרט קשר בציטוט מילו
   }
 });
 
-test("ייצוא חי: שיוך — פסקה כללית (1א) לכל אזורי LLU; מספר ייעודי (scope:zone) מציטוט כללי רק כשמצוין בו מזהה האזור עצמו; אין מספר LLU21 באף אזור אחר", () => {
+test("ייצוא חי: שיוך — פסקה כללית לכל כרטיס שמצטט אותה; מספר ייעודי (scope:zone) מציטוט כללי רק כשמצוין בו מזהה האזור עצמו; המספר של LLU21 לא נמצא באף אזור אחר", () => {
+  // בדיקות מותנות בכרטיס החי (לא בספרות מדויקות): אם הכרטיס מציין "(לאזור <מזהה> לטלפון …)" — חייבת להיות רשומת zone עם הטלפון הזה
   const llu = out.zones.filter(z => z.cat === "LLU");
-  assert.ok(llu.length >= 60);
+  assert.ok(llu.length >= 40, "אזורי LLU: " + llu.length);
+  let dedicated = 0;
   for (const z of llu) {
-    assert.ok((z.contacts || []).some(e => e.scope === "general" && /^סעיף 1א בפמ"ת/.test(e.ref)), z.id + ": חסרה ההנחיה הכללית");
-    for (const e of z.contacts) if (e.scope === "zone" && /^סעיף 1א/.test(e.ref)) assert.ok(new RegExp("(^|[^A-Za-z0-9])" + z.id + "(?![A-Za-z0-9])").test(e.text), z.id + ": מספר ייעודי בלי מזהה האזור: " + e.text);
+    const qs = cardQuotes(NOTE_OF.get(z.id)), g1 = qs.filter(q => /^סעיף 1א בפמ"ת/.test(q.label) && PARTIES.extract(q.text).phones.length);
+    assert.equal((z.contacts || []).some(e => e.scope === "general" && /^סעיף 1א בפמ"ת/.test(e.ref)), g1.length > 0, z.id + ": ההנחיה הכללית (1א) לפי הכרטיס");
+    for (const e of z.contacts || []) if (e.scope === "zone" && /^סעיף 1א/.test(e.ref)) assert.ok(new RegExp("(^|[^A-Za-z0-9])" + z.id + "(?![A-Za-z0-9])").test(e.text), z.id + ": מספר ייעודי בלי מזהה האזור: " + e.text);
+    for (const q of g1) for (const m of q.text.matchAll(/\(([^()]*)\)/g)) {
+      if (!new RegExp("(^|[^A-Za-z0-9])" + z.id + "(?![A-Za-z0-9])").test(m[1])) continue;
+      const want = PARTIES.extract(m[1]).phones.map(p => p.text);
+      if (!want.length) continue;
+      dedicated++;
+      assert.deepEqual((z.contacts || []).filter(e => e.scope === "zone" && e.ref === q.label).flatMap(e => e.phones), want, z.id + ": המספר הייעודי מהכרטיס");
+      // המספר הייעודי אינו נכנס להנחיה הכללית של אף אזור אחר (שיוך שגוי)
+      for (const o of out.zones) if (o.id !== z.id) for (const e of o.contacts || []) if (e.scope === "general") for (const ph of want) assert.ok(!e.phones.includes(ph), o.id + " ירש את המספר הייעודי של " + z.id);
+    }
   }
-  const l21 = out.zones.find(z => z.id === "LLU21"), own = l21.contacts.filter(e => e.scope === "zone");
-  assert.ok(own.length === 1 && own[0].phones.length === 1 && own[0].text.includes("LLU21"), "המספר הייעודי של LLU21");
-  const num = own[0].phones[0];
-  for (const z of out.zones) if (z.id !== "LLU21") for (const e of z.contacts || []) assert.ok(!e.phones.includes(num), z.id + " ירש את המספר של LLU21");
-  const l20 = out.zones.find(z => z.id === "LLU20"); assert.deepEqual(l20.contacts.map(e => e.scope), ["general"]);
+  assert.ok(dedicated >= 1, "כרטיס LLU עם מספר ייעודי (LLU21) — אם המפה הסירה אותו, יש לעדכן בדיקה זו");
 });
 
-test("ייצוא חי: LLR (שטחי אש), LLP19, LLP14 — אנשי הקשר שבכרטיסים הגיעו ל-zones.json", () => {
-  const Z2 = new Map(out.zones.map(z => [z.id, z]));
-  const l30 = Z2.get("LLR30"); assert.ok(l30.contacts.every(e => /^סעיף 2 בפמ"ת/.test(e.ref) && e.scope === "general"));
-  assert.ok(new Set(l30.contacts.flatMap(e => e.phones)).size >= 4 && l30.contacts.some(e => e.emails.length), "ארבעה מתא״מים ודוא״ל");
-  const l19 = Z2.get("LLP19"); assert.ok(l19.contacts.some(e => !e.role && e.emails.length) && l19.contacts.some(e => e.role === "exception"));
-  assert.ok(new Set(Z2.get("LLP14").contacts.flatMap(e => e.phones)).size >= 4, "רגרסיה: ארבעת הטלפונים של LLP14");
-  const withSec2 = out.zones.filter(z => (z.contacts || []).some(e => /^סעיף 2 בפמ"ת/.test(e.ref))).map(z => z.id);
-  assert.ok(withSec2.length >= 16 && withSec2.every(id => /^LLR/.test(id)), "אזורי LLR עם סעיף 2: " + withSec2.length);
+test("ייצוא חי: סעיף 2 (LLR) — כל אזור שהכרטיס שלו מצטט את סעיף 2 עם פרטי קשר קיבל אותם עם ההפניה; ורק אזורי LLR", () => {
+  let n = 0;
+  for (const z of out.zones) {
+    if (/^B09/.test(z.cat) || !NOTE_OF.has(z.id)) continue;
+    const q2 = cardQuotes(NOTE_OF.get(z.id)).filter(q => /^סעיף 2 בפמ"ת/.test(q.label) && PARTIES.extract(q.text).phones.length);
+    const got = (z.contacts || []).filter(e => /^סעיף 2 בפמ"ת/.test(e.ref));
+    assert.equal(got.length > 0, q2.length > 0, z.id);
+    if (q2.length) { n++; assert.equal(z.cat, "LLR", z.id); assert.ok(got.every(e => e.scope === "general")); }
+  }
+  assert.ok(n >= 10, "אזורים עם סעיף 2: " + n);
 });

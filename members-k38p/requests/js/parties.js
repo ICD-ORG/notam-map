@@ -3,12 +3,16 @@
    כללי ברזל: (1) רק מה שכתוב במקור — לא משלימים ספרות, לא מרחיבים סיומות ("073-3636954/5" נשאר כך, בלי tel:), לא מנחשים שם↔מספר; (2) כל פרט נושא את מקורו;
    (3) נכשל סגור — שדה שלא עבר אימות נפסל, והשורה נשארת "לא נמצא איש קשר"; (4) כתובות/טלפונים של הארגון, נמעני נוטאם ובקשת חריגה לעולם אינם פלט.
    כל המחרוזות בפלט הן טקסט רגיל (לא HTML): המציגים חייבים לעבור esc (HTML) / esc+xmlClean (Word). הקלט לא נסמך: restore() בודק מחדש כל שדה.
+   זרימה טיפוסית: אחרי C.analyze — rows = P.merge(prev, P.build(res, cfg, data)); עריכה: P.setField / P.addManual / P.removeManual (מחזירות rows חדש, בלי מוטציה); הצגה: P.describe(row) + P.summary / P.summaryText;
+   שמירה: P.record(rows, {now}) לדרייב או P.marks(rows) לדפדפן; שחזור: P.restore(rec, cfg). מקור פרטי הקשר באזורים: zone.contacts ב-zones.json (נכתב ע״י scripts/export-zones.mjs מאותו קוד חילוץ בדיוק —
+   אחרי כל שינוי בדקדוק החילוץ כאן יש להריץ: node scripts/export-zones.mjs).
 
    ===== API (כל הפונקציות טהורות; "rows" = מערך שורות כמוגדר למטה, הכולל גם ידניות) =====
    VERSION                       1
    LIMITS                        {rows:40, stale:20, manual:20, note:300, name:80, contact:120}
    TYPES / STATUSES              ["approval","report","update"] / ["needed","done","nocontact","notneeded","unmarked"]
    TYPE_LABEL / STATUS_LABEL / STATUS_ICON   תוויות עברית וסמלים לסוג/סטטוס (STATUS_ICON: ! ✓ — ○ ·)
+   TEXT                          נוסח קבוע לכותרת/הסבר/הערת תחתית/ריק/כשל (title, intro, paperNote, footer(stamp), empty, noContact, srcPrefix, unverified, outOfRange, updated, failed, more(n), dropped(n), newFound(n))
    GENERAL_LLU_LABEL             "הנחיה כללית של הפמ״ת לכל אזורי LLU (שירות בתי הסוהר)" — התווית הקבועה (לעולם לא "גורם: שירות בתי הסוהר")
    enabled(cfg)                  true אלא אם config.features.parties === false (מפתח חסר = פעיל)
    fingerprint(inp)              "lat,lon,dateFrom,dateTo" — מפתח זהות לבקשה (לשמירה בדפדפן / החלטה אם למזג)
@@ -27,12 +31,14 @@
                                     שורה שסומנה "done" או נכתבה בה הערה ונעלמה מהסריקה => stale:true (נשארת "מחוץ לטווח"); ידניות נשמרות. אין בקשה חוזרת/שער — רק נתונים.
    setField(rows, key, field, value) => {rows, error}. field: "type"|"status"|"note" (לכל שורה), "name"|"contact" (ידנית בלבד). ערך לא תקין => rows ללא שינוי + error בעברית (להצגה ליד השדה)
    addManual(rows, {name, contact?, type?, status?, note?}) => {rows, key, error}      removeManual(rows, key) => rows
+   cueOf(text)                   משפט תיאום בלי מספר ("…בטלפון המפורסם בפרק א׳ 07."); notamContacts(raw) => {phones, lines, coordWith}
    SUGGESTIONS                   שמות הצ׳יפים להוספה ידנית;  localAuthority(far, cfg?) => {name, phones, emails, urls}|null — הרשות המקומית לפי OSM (לצ׳יפ "רשות מקומית")
    summary(rows)                 => {total, done, needed, unmarked, nocontact, notneeded}
    summaryText(sum)              => "6 גורמים — 2 דווחו/התקבל אישור · 3 נדרש · 1 אין צורך" (אפסים מושמטים; "לא נמצאו גורמים")
    mailLine(sum)                 => "דיווח לגורמים נוספים: 6 גורמים — 2 דווחו/התקבל אישור" (ללא "• "; Q6: רק סך הכול ו"דווחו"; M=0 => בלי החלק השני)
-   record(rows, {now?})          => {v, builtAt, summary, rows:[אוטומטיות], manual:[ידניות]} — בלוק "parties" בקובץ נתוני הבקשה (דרייב); restore(rec) => rows (תקינות מחדש, תקרות, אף פעם לא זורק)
-   marks(rows)                   => {marks:{key:{type?,status?,note?,title?}}, manual:[…]} — צורה קומפקטית לשמירה בדפדפן; merge מקבל אותה כ-prev
+   describe(row, {max?})         => {none, cue, blocks:[{label, phones, emails, urls, lines, pairs, src}], more} — מבנה מוכן להצגת פרטי הקשר (מסך / Word / דרייב). none => להציג "לא נמצא פרט קשר" (+cue); max (ב-Word: 3) = תקרת קטעים מצוטטים, more = "ועוד N"
+   record(rows, {now?})          => {v, builtAt, summary, rows:[אוטומטיות], manual:[ידניות]} — בלוק "parties" בקובץ נתוני הבקשה (דרייב); restore(rec, cfg?) => rows (תקינות מחדש, תקרות, חסימות מההגדרות, אף פעם לא זורק)
+   marks(rows)                   => {keys:[מפתחות הסריקה], marks:{key:{type?,status?,note?,title?}}, manual:[…]} — צורה קומפקטית לשמירה בדפדפן; merge מקבל אותה כ-prev
 
    ===== שורה (Row) — מחרוזות טקסט רגיל =====
    {key, src:"zone|notam|agri|airfield|osm|manual", title, tag, party, cue?,
@@ -55,6 +61,18 @@
   const STATUS_LABEL = { needed: "נדרש", done: "דווח / התקבל אישור", nocontact: "לא נמצא איש קשר", notneeded: "אין צורך", unmarked: "טרם סומן" };
   const STATUS_ICON = { needed: "!", done: "✓", nocontact: "—", notneeded: "○", unmarked: "·" };
   const SRCS = ["zone", "notam", "agri", "airfield", "osm", "manual"];
+  // נוסח קבוע (קצר, ענייני, ניטרלי) — משותף למסך, ל-Word ולדרייב. בלי כתובת הארגון ובלי ״מנהל המערכת״. footer(stamp) — stamp = תאריך ושעה מוכנים להצגה
+  const TEXT = {
+    title: "דיווח לגורמים נוספים",
+    intro: "הרשימה נאספה אוטומטית. פרטי הקשר הועתקו כלשונם מהמקור ואינם מאומתים. הסימונים הם שלכם. הרשימה מצורפת לבקשה ואינה מונעת שליחה.",
+    paperNote: "עמוד נלווה לבקשה, אינו חלק מ-17 שדות נספח ג׳. הסימונים הם הצהרת המבקש.",
+    footer: stamp => "הרשימה נבנתה אוטומטית ממקורות המערכת (פמ״ת, נוטמים, OpenStreetMap, טבלת המנחתים החקלאיים). פרטי הקשר הועתקו כלשונם ואינם מאומתים." + (stamp ? " מצב נכון ל-" + stamp + "." : ""),
+    empty: "לא נמצאו גורמים בסריקה, ולא נוספו גורמים ידנית.",
+    noContact: "לא נמצא פרט קשר", srcPrefix: "מקור: ", unverified: "לא אומת", outOfRange: "מחוץ לטווח הסריקה הנוכחית", updated: "פרטי הקשר עודכנו",
+    failed: "לא ניתן היה להכין רשימה אוטומטית. אפשר להוסיף גורמים ידנית.",
+    more: n => "ועוד " + n, dropped: n => (n === 1 ? "גורם אחד נוסף לא הוצג" : n + " גורמים נוספים לא הוצגו"),
+    newFound: n => (n === 1 ? "נוסף גורם אחד חדש מאז הבדיקה הקודמת" : "נוספו " + n + " גורמים חדשים מאז הבדיקה הקודמת")
+  };
   const GENERAL_LLU_LABEL = "הנחיה כללית של הפמ״ת לכל אזורי LLU (שירות בתי הסוהר)";
   const enabled = cfg => !(cfg && cfg.features && cfg.features.parties === false);
   const fingerprint = inp => { inp = inp || {}; const n = v => (isFinite(+v) && v !== "" && v != null ? (+v).toFixed(6) : ""); return [n(inp.lat), n(inp.lon), inp.dateFrom || "", inp.dateTo || ""].join(","); };
@@ -125,7 +143,7 @@
   // keepExc: כתובת בקשת חריגה נשארת (ברמת הרשומה היא מסומנת role:"exception"; רק הבנייה והשחזור מסירים גם אותה)
   function scrub(str, blk, keepExc) {
     if (typeof str !== "string" || !str) return str;
-    let t = str.replace(/[^\s"'<>()]*icd\.org\.il[^\s"'<>()]*/gi, "…");
+    let t = clean(str).replace(/[^\s"'<>()]*icd\.org\.il[^\s"'<>()]*/gi, "…");
     t = t.replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+/g, m => { const a = m.replace(/[.\-_]+$/, ""), r = roleOfEmail(a, blk); return r && !(keepExc && r === "exception") ? "…" + m.slice(a.length) : m; });
     const bad = scanPhones(t, blk, true).filter(p => p.role === "internal");
     for (let i = bad.length - 1; i >= 0; i--) t = t.slice(0, bad[i].idx) + "…" + t.slice(bad[i].end);
@@ -149,7 +167,7 @@
   const S = "[ \\t" + DASH + "]?";
   const TAIL = S + "\\d{3}" + S + "\\d{4}";
   const NAT0 = "(?:0(?:[23489]" + TAIL + "|5\\d" + TAIL + "|7[2-9]" + TAIL + ")|\\(0(?:[23489]|5\\d|7[2-9])\\)" + TAIL + ")";
-  const INTL = "(?:\\+|00)?972[ \\t" + DASH + ".]*(?:\\(0\\)|0)?[ \\t" + DASH + ".]*(?:[23489]" + TAIL + "|5\\d" + TAIL + "|7[2-9]" + TAIL + ")";
+  const INTL = "(?:\\+|00)?972[ \\t" + DASH + ".]{0,6}(?:\\(0\\)|0)?[ \\t" + DASH + ".]{0,6}(?:[23489]" + TAIL + "|5\\d" + TAIL + "|7[2-9]" + TAIL + ")";
   const CAND = new RegExp("(?:" + INTL + "|" + NAT0 + ")(?!\\d)", "g");
   const TOLL = new RegExp("1[ \\t" + DASH + "]?(?:700|800|599)[ \\t" + DASH + "]?\\d{3}[ \\t" + DASH + "]?\\d{3}(?!\\d)", "g");
   const RANGE_TAIL = /^[ \t]*\/[ \t]*(\d{1,3})(?![\d\-\u2010-\u2015\/])/;
@@ -458,6 +476,7 @@
     return raw.slice(0, 40).map(e => entryFacts(e, blk)).filter(Boolean);
   }
   // משפט תיאום בלי מספר: המשפט שבו מופיעה מילת תיאום, מתחיל בסעיף הקטן שמכיל אותה ("לתיאום טיסה במרחב זה יש ליצור קשר עם מגדל רמת דוד בטלפון המפורסם בפרק א׳ 07."). לא משלימים כלום
+  const NOTAM_OFFICE = /משרד\s+נוטאם/;
   const CUE_RE = /[^.\n]*?(לתיאום|ליצור קשר|יש לתאם|מחייב תיאום|תיאום מיוחד|יש לפנות)[^.\n]*\.?/;
   function cueOf(text) {
     const m = CUE_RE.exec(clean(text)); if (!m) return "";
@@ -483,11 +502,11 @@
     }
     let cue = "";
     if (!hasAny(c)) {   // הפמ״ת מציין גורם/הפניה בלי מספר: מציגים את המשפט כלשונו, ללא השלמה ("בטלפון המפורסם בפרק א׳ 07")
-      if (b09 && rec.coord) cue = String(rec.coord);
-      else cue = cueOf(rec.pmt);
+      cue = b09 && rec.coord ? String(rec.coord) : cueOf(rec.pmt);
+      if (NOTAM_OFFICE.test(cue)) cue = "";   // ״הגשת בקשה למשרד נוטאם״ היא הבקשה עצמה, לא גורם נוסף לתאם איתו
     }
     return mkRow({
-      key: "z:" + txt(rec.id, 100), src: "zone", title: rec.label + " — " + rec.kind, tag: inside ? "חפיפה לסגירה" : fmtDist(rec.edge) + " מקצה הסגירה",
+      key: "z:" + txt(rec.id, 100), src: "zone", title: String(rec.label || rec.id) + " — " + String(rec.kind || ""), tag: inside ? "חפיפה לסגירה" : fmtDist(rec.edge) + " מקצה הסגירה",
       party: rec.src === "inpa" ? "רשות הטבע והגנים" : "", contacts: c, cue, dtype: DTYPE.zone(inside),
       contactSrc: own.length ? uniq(own.map(e => srcLabel(e.ref, book))).join("; ") : ""
     });
@@ -597,13 +616,18 @@
   const build = (res, cfg, data) => buildResult(res, cfg, data).rows;
 
   /* ================= ידניות ועריכה ================= */
+  const FIELD_TXT = {   // שם השדה בעברית + נטיות (הערה — נקבה, פרטי הקשר — רבים)
+    note: { name: "ההערה", has: "מכילה", not: "אינה", ok: "תקינה" },
+    name: { name: "שם הגורם", has: "מכיל", not: "אינו", ok: "תקין" },
+    contact: { name: "פרטי הקשר", has: "מכילים", not: "אינם", ok: "תקינים" }
+  };
   function fieldProblem(field, v) {
-    const lab = { note: "ההערה", name: "שם הגורם", contact: "פרטי הקשר" }[field], max = LIMITS[field];
-    if (typeof v !== "string") return lab + " אינם תקינים";
-    if (len(v.trim()) > max) return lab + ": עד " + max + " תווים";
-    if (hasBadChar(v)) return lab + " מכיל תווים לא תקינים (למשל תווי בקרה)";
+    const t = FIELD_TXT[field], max = LIMITS[field];
+    if (typeof v !== "string") return t.name + " " + t.not + " " + t.ok;
+    if (len(v.trim()) > max) return t.name + ": עד " + max + " תווים";
+    if (hasBadChar(v)) return t.name + " " + t.has + " תווים לא תקינים (למשל תווי בקרה)";
     if (field === "name" && (!v.trim() || !hasVisible(v))) return "יש להזין שם הגורם";
-    if (v.trim() && !hasVisible(v)) return lab + " אינו מכיל תו גלוי";
+    if (v.trim() && !hasVisible(v)) return t.name + " " + t.not + " " + t.has + " תו גלוי";
     return "";
   }
   const num = key => { const m = /^m:(\d+)$/.exec(key); return m ? +m[1] : 0; };
@@ -651,6 +675,23 @@
     const name = txt(best["name:he"] || best.name, LIMITS.name); if (!name) return null;
     const oc = osmContact([best], blk);
     return { name, phones: oc.phones.slice(0, 2).map(phoneOut), emails: oc.emails.slice(0, 2), urls: oc.urls.slice(0, 2) };
+  }
+
+  // תיאור מוכן להצגה של פרטי הקשר בשורה (אותו מבנה למסך, ל-Word ולקובץ הדרייב): none = אין פרט קשר (להציג ״לא נמצא פרט קשר״ + cue אם יש);
+  // blocks = [{label, phones, emails, urls, lines, pairs, src}] — קודם פרטי הגורם עצמו (label ""), אחר כך ההנחיה הכללית (label = התווית). max = תקרת קטעים מצוטטים כוללת (ב-Word: 3);
+  // more = כמה קטעים מצוטטים לא נכללו ("ועוד N"). כשיש pairs — מציגים אותם במקום lines. שורה ידנית: פרטי הקשר שהוקלדו כקטע אחד
+  function describe(row, opt) {
+    const max = opt && opt.max > 0 ? opt.max : Infinity, r = row || {}, c = r.contacts || blankContacts(), blocks = [];
+    let left = max, more = 0;
+    const take = (lines, pairs) => { if (pairs) { if (left > 0) { left--; return { lines: [], pairs }; } more++; return { lines: [], pairs: null }; } const out = lines.slice(0, left); left -= out.length; more += lines.length - out.length; return { lines: out, pairs: null }; };
+    if (r.manual) {
+      if (r.contact) blocks.push({ label: "", phones: [], emails: [], urls: [], lines: [r.contact], pairs: null, src: "" });
+    } else {
+      if (c.phones.length || c.emails.length || c.urls.length || c.lines.length) { const t = take(c.lines, c.pairs); blocks.push({ label: "", phones: c.phones, emails: c.emails, urls: c.urls, lines: t.lines, pairs: t.pairs, src: r.contactSrc || "" }); }
+      if (c.general) { const g = c.general, t = take(g.lines, g.pairs); blocks.push({ label: g.label, phones: g.phones, emails: g.emails, urls: [], lines: t.lines, pairs: t.pairs, src: g.src }); }
+    }
+    const none = r.manual ? !r.contact : !r.hasContact;
+    return { none, cue: none && r.cue ? r.cue : "", blocks, more };
   }
 
   /* ================= סיכום ================= */
@@ -805,10 +846,10 @@
   }
 
   return {
-    VERSION, LIMITS, TYPES, STATUSES, TYPE_LABEL, STATUS_LABEL, STATUS_ICON, GENERAL_LLU_LABEL, POLICY,
+    VERSION, LIMITS, TYPES, STATUSES, TYPE_LABEL, STATUS_LABEL, STATUS_ICON, GENERAL_LLU_LABEL, TEXT, POLICY,
     enabled, fingerprint,
     extract, scanPhones, scanEmails, pairs, cueOf, cleanUrl, phonesFromTag, osmContact, quoteEntries, notamContacts, notamE, segments, validate, srcLabel, generalLabel,
-    build, buildResult, merge, setField, addManual, removeManual, summary, summaryText, mailLine, record, restore, marks, SUGGESTIONS, localAuthority,
+    build, buildResult, merge, setField, addManual, removeManual, summary, summaryText, mailLine, record, restore, marks, SUGGESTIONS, localAuthority, describe, cueOf, notamContacts,
     txt, hasBadChar, hasVisible
   };
 });
