@@ -333,23 +333,29 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="card nonprint" id="actions">
     <h2>5 · הפקות</h2>
     <div class="row">
-      <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
-      <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
-      <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
-      <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
-      <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
-      <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
-      <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
-      <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
-      <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
       <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
-      <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
     </div>
-    <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
-    <p class="small" id="mailInfo"></p>
+    <p class="small" id="actionsHint" style="margin-top:8px">הבקשה נשמרת אוטומטית בדרייב כשכל הבדיקות הושלמו והסקירה אושרה. השליחה במייל מצרפת את כל הקבצים אוטומטית — אין צורך להוריד או לצרף דבר.</p>
     <p class="small" id="driveMsg" role="status"></p>
     <p class="small" id="sendMsg" role="status"></p>
+    <details id="manualTools" hidden>
+      <summary>הורדות ידניות (למנהל)</summary>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
+        <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
+        <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
+        <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
+        <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
+        <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
+        <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
+        <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
+        <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
+        <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
+      </div>
+      <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
+      <p class="small" id="mailInfo"></p>
+    </details>
   </div>
   <div id="reportHost"><div id="report"></div></div>
   <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (לעיון על המסך בלבד — אינן חלק מהדוח, מהטופס או מקובץ ה-Word)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
@@ -371,9 +377,9 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="js/sync.js?v=2"></script>
 <script src="js/core.js?v=6"></script>
 <script src="js/maplayers.js?v=1"></script>
-<script src="js/output.js?v=5"></script>
+<script src="js/output.js?v=6"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=7"></script>
+<script src="js/ui.js?v=8"></script>
 </body>
 </html>

@@ -2520,7 +2520,7 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
   for (const n of named) assert.ok(n in cfg, "README מזכיר את " + n + " אבל אין אותו ב-CFG");
   for (const [k, v] of [["MAX_OFFICE_PER_HOUR", 10], ["MAX_OFFICE_PER_HOUR_ALL", 60], ["MAX_COPIES_PER_HOUR", 10], ["MAX_COPIES_PER_HOUR_ALL", 120], ["MAX_SEND_ATTEMPTS_PER_HOUR", 40], ["MAIL_QUOTA_RESERVE", 20], ["LOG_MAX", 2000], ["LOG_KEEP_DAYS", 30], ["CODE_FAIL_MAX", 10], ["CODE_FAIL_HOURS", 6],
     ["MAIL_QUOTA_RESERVE_REG", 8], ["REG_PER_EMAIL_HOUR", 5], ["REG_WIX_PER_HOUR", 600], ["REG_MAILS_PER_HOUR", 150], ["REG_MAILS_PER_DAY", 400], ["REG_MAILS_PER_EMAIL_DAY", 10], ["REG_EXISTS_HOURS", 24],
-    ["MAX_FOLDER_FILES", 12], ["MAX_UPLOAD_BYTES_PER_HOUR", 200 * 1048576], ["MAX_UPLOAD_BYTES_PER_DAY", 500 * 1048576], ["MAX_OPEN_REQUESTS_PER_USER", 60], ["MAX_SENT_PER_REQUEST", 100]])
+    ["MAX_FOLDER_FILES", 12], ["MAX_UPLOAD_BYTES_PER_HOUR", 400 * 1048576], ["MAX_UPLOAD_BYTES_PER_DAY", 1000 * 1048576], ["MAX_OPEN_REQUESTS_PER_USER", 60], ["MAX_SENT_PER_REQUEST", 100]])
     assert.equal(cfg[k], v, k);
   assert.ok(!("REG_PER_HOUR" in cfg), "המכסה הכללית הישנה (60 בשעה) בוטלה");
   assert.ok(cfg.MAIL_QUOTA_RESERVE_REG < cfg.MAIL_QUOTA_RESERVE, "קודי הרשמה משאירים רזרבה קטנה מזו של עותקים: משרד נוטאם ← קודים ← עותקים");
@@ -2533,5 +2533,191 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
     assert.ok(readme.includes("`" + k + "`"), "README מזכיר את " + k);
   }
   assert.deepEqual(Array.from(cfg.FEATURES), ["sendTarget", "orgSplit"]);
-  for (const w of ["setOrg", "fromName", "orgSplit", "totals", "kind", "copyToIsOwner", "is_admin", "bad_org", "no_owner", "הארגון/", "מטיסים/<"]) assert.ok(readme.includes(w), "README מזכיר את " + w);
+  for (const w of ["setOrg", "fromName", "orgSplit", "totals", "kind", "copyToIsOwner", "is_admin", "bad_org", "no_owner", "הארגון/", "מטיסים/<", "htmlBody"]) assert.ok(readme.includes(w), "README מזכיר את " + w);
+});
+
+/* ===== גוף המייל: htmlBody (מימין לשמאל, תבליטים) לצד גוף טקסט רגיל ===== */
+const htmlOf = (env, text) => vm.runInContext("htmlBody_", env.sandbox)(text);
+const RTL_ROOT = '<div dir="rtl" style="direction:rtl;text-align:right;';
+const tagNames = html => [...html.matchAll(/<\/?([a-z0-9]+)/gi)].map(m => m[1].toLowerCase());
+const bareHtml = html => html.replace(/ style="[^"]*"/g, "");      // המבנה בלי העיצוב
+const BULLET_BODY = "הבקשה לסגירה אווירית מצורפת (טופס Word מלא).\n• מקום: פי גלילות, תל אביב\n• תאריך: 22.10.2026, 08:00–12:00\n• קבצים: Word, KML, ארבע מפות\n\nבברכה,\nדנה";
+
+test("htmlBody_: שורש מימין לשמאל ומיושר לימין; שורות '• ' רצופות = רשימה אחת (RTL, תבליטים מימין); שורה ריקה = רווח; שורה אחרת = שורה בפני עצמה", () => {
+  const { env } = bootstrapped();
+  const h = htmlOf(env, BULLET_BODY);
+  assert.ok(h.startsWith(RTL_ROOT) && h.endsWith("</div>"), h);
+  assert.equal(bareHtml(h), '<div dir="rtl"><div>הבקשה לסגירה אווירית מצורפת (טופס Word מלא).</div><ul dir="rtl"><li>מקום: פי גלילות, תל אביב</li><li>תאריך: 22.10.2026, 08:00–12:00</li><li>קבצים: Word, KML, ארבע מפות</li></ul><br><div>בברכה,</div><div>דנה</div></div>');
+  const ul = /<ul dir="rtl" style="([^"]*)">/.exec(h)[1];
+  assert.match(ul, /direction:rtl/); assert.match(ul, /text-align:right/); assert.match(ul, /padding:0 \d+px 0 0/, "מרווח לתבליט מצד ימין");
+  assert.equal([...h.matchAll(/<li style="text-align:right">/g)].length, 3);
+  assert.match(h.slice(RTL_ROOT.length, h.indexOf('">')), /font-family:[^;]+;font-size:\d+px/, "גופן קריא");
+  assert.ok(!h.includes("• "), "התבליט הטקסטואלי הוחלף בתבליט של הרשימה");
+});
+
+test("htmlBody_: שתי רשימות מופרדות בשורה ריקה = שתי רשימות; שורה ריקה בהתחלה/בסוף לא הופכת לרווח; כמה שורות ריקות = כמה רווחים", () => {
+  const { env } = bootstrapped();
+  assert.equal(bareHtml(htmlOf(env, "• א\n• ב\n\n• ג")), '<div dir="rtl"><ul dir="rtl"><li>א</li><li>ב</li></ul><br><ul dir="rtl"><li>ג</li></ul></div>');
+  assert.equal(bareHtml(htmlOf(env, "\n  \nשלום\n\n\n\nסוף\n \n")), '<div dir="rtl"><div>שלום</div><br><br><br><div>סוף</div></div>');
+  for (const empty of ["", "\n\n", "   "]) { const h = htmlOf(env, empty); assert.ok(h.startsWith(RTL_ROOT) && h.endsWith("</div>") && !/<(ul|li|br)/.test(h), JSON.stringify(empty)); }
+});
+
+test("htmlBody_: גוף ישן בלי תבליטים נשאר שורות (RTL תקין); '•' בלי רווח או עם הזחה אינו תבליט", () => {
+  const { env } = bootstrapped();
+  const h = htmlOf(env, "שם: פי גלילות\nתאריך: 22.10.2026\n\nמצורף טופס.");
+  assert.ok(h.startsWith(RTL_ROOT) && !h.includes("<ul"));
+  assert.equal(bareHtml(h), '<div dir="rtl"><div>שם: פי גלילות</div><div>תאריך: 22.10.2026</div><br><div>מצורף טופס.</div></div>');
+  const h2 = htmlOf(env, "•בלי רווח\n  • מוזח\n• באמת");
+  assert.equal([...h2.matchAll(/<li/g)].length, 1); assert.equal(bareHtml(h2), '<div dir="rtl"><div>•בלי רווח</div><div>• מוזח</div><ul dir="rtl"><li>באמת</li></ul></div>');
+  assert.equal(bareHtml(htmlOf(env, "• א ב\n• ג")), '<div dir="rtl"><ul dir="rtl"><li>א ב</li><li>ג</li></ul></div>', "U+2028 בתוך שורת תבליט לא שובר אותה");
+});
+
+test("htmlBody_: כל הטקסט עובר escape (& < > \" ') — אין תגית, תכונה, קישור או תמונה שנוצרים מהגוף", () => {
+  const { env } = bootstrapped();
+  const evil = "<script>alert(\"x\")</script> & 'q' <img src=x onerror=1> <a href=\"http://evil.example\">לחצו</a>\n• <b>x</b>\n• a&amp;b \" onmouseover=\"alert(1)\n</div><div dir=\"ltr\">";
+  const h = htmlOf(env, evil);
+  assert.deepEqual([...new Set(tagNames(h))].sort(), ["div", "li", "ul"], "רק התגיות שהקוד יצר: " + h);
+  const text = h.replace(/<\/?(div|ul|li|br)\b[^>]*>/g, "");        // מה שנשאר אחרי הסרת תגיות הקוד: טקסט בלבד
+  assert.ok(!/[<>"']/.test(text), "אין תו מסוכן גולמי: " + text);
+  assert.ok(!/&(?!(amp|lt|gt|quot|#39);)/.test(text), "כל & הוא ישות: " + text);
+  assert.ok(text.includes("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;q&#39; &lt;img src=x onerror=1&gt;"));
+  assert.ok(h.includes('<li style="text-align:right">&lt;b&gt;x&lt;/b&gt;</li>'), "שורת התבליט '• <b>x</b>' נשארת טקסט");
+  assert.ok(h.includes("a&amp;amp;b &quot; onmouseover=&quot;alert(1)"), "ישות שהוקלדה כטקסט לא מפוענחת, ומירכאות לא בורחות");
+  assert.ok(h.includes("&lt;/div&gt;&lt;div dir=&quot;ltr&quot;&gt;"), "ניסיון לסגור את השורש ולפתוח אחר נשאר טקסט");
+  assert.equal((h.match(/<div dir=/g) || []).length, 1, "שורש יחיד");
+});
+
+test("htmlBody_: גוף ארוך (20,000 תווים) מתעבד מיד — רווחים ארוכים ושורות רבות לא גורמים לריצוד ריבועי", () => {
+  const { env } = bootstrapped();
+  const t0 = Date.now();
+  const spaces = htmlOf(env, " ".repeat(19999) + "x"), lines = htmlOf(env, "• א\n".repeat(5000)), blanks = htmlOf(env, "\n".repeat(19999) + "x");
+  assert.ok(Date.now() - t0 < 2000, "לקח " + (Date.now() - t0) + "ms");
+  assert.ok(spaces.includes(">x</div>") && [...lines.matchAll(/<li /g)].length === 5000 && blanks.includes(">x</div>"));
+});
+
+// 3 חשבונות (מנהל = ארגוני בלי כתובת שמורה; עובד ארגון עם כתובת; מטיס עצמאי) × כל צירופי מצב ויעד
+for (const who of ["admin", "org-worker", "pilot"]) {
+  test(`שליחה — ${who}: ל-MailApp מועבר htmlBody (RTL, תבליטים) לצד body הטקסטואלי ללא שינוי, בכל מצב ויעד; שאר שדות המייל כמקודם`, () => {
+    const { env, token } = withWix();
+    let tok = token;
+    if (who !== "admin") { const p = pilotUser(env, "staff@example.com", "worker.user"); tok = p.token; if (who === "org-worker") assert.ok(setOrg(env, token, "worker.user", true).ok); }
+    for (const [mode, target] of [["test", "office"], ["test", "self"], ["live", "office"], ["live", "self"]]) {
+      if (mode === "live") goLive(env, token); else env.call({ action: "setMailMode", token, mode: "test" });
+      const tag = who + " " + mode + " " + target, before = env.mails.length;
+      const b = savedRequest(env, tok, tag + " — 03.01.2027");
+      const r = sendTo(env, tok, b.folderId, { target, body: BULLET_BODY });
+      assert.ok(r.ok, tag + " " + JSON.stringify(r));
+      assert.equal(env.mails.length, before + 1, tag); const m = env.mails[before];
+      assert.equal(m.body, BULLET_BODY, tag + ": הגוף הטקסטואלי כפי שנשלח (שורות '• ' גולמיות)");
+      assert.equal(m.htmlBody, htmlOf(env, BULLET_BODY), tag);
+      assert.ok(m.htmlBody.startsWith(RTL_ROOT) && m.htmlBody.endsWith("</div>"), tag);
+      assert.equal([...m.htmlBody.matchAll(/<ul /g)].length, 1, tag); assert.equal([...m.htmlBody.matchAll(/<li /g)].length, 3, tag);
+      assert.deepEqual(Object.keys(m).filter(k => !["to", "cc", "bcc", "replyTo", "name", "subject", "body", "htmlBody", "attachments"].includes(k)), [], tag + ": אין שדות חדשים מלבד htmlBody");
+      assert.equal(m.attachments.length, 4, tag + ": הקבצים מצורפים אוטומטית מהתיקייה");
+      assert.equal(m.name, who === "pilot" ? "דנה" + SENDER_SUFFIX : ORG_NAME, tag);
+      assert.equal(m.subject, (target === "self" ? SELF_PREFIX : mode === "test" ? TEST_PREFIX : "") + "בקשה — נושא", tag);
+    }
+  });
+}
+
+test("שליחה: גוף עוין (<script>, &, מירכאות, '• <b>x</b>') — ה-body נשאר גולמי כפי שנשלח, ה-htmlBody עובר escape", () => {
+  const { env, token } = bootstrapped();
+  const evil = "<script>alert(1)</script> & \"ציטוט\" 'x'\n• <b>x</b>\n• <img src=x onerror=alert(1)>";
+  assert.ok(sendTo(env, token, savedRequest(env, token).folderId, { body: evil }).ok);
+  const m = env.mails[0];
+  assert.equal(m.body, evil, "הטקסט הרגיל אינו מקודד");
+  assert.equal(m.htmlBody, htmlOf(env, evil));
+  assert.deepEqual([...new Set(tagNames(m.htmlBody))].sort(), ["div", "li", "ul"]);
+  assert.ok(!m.htmlBody.includes("<script") && !m.htmlBody.includes("<b>") && !m.htmlBody.includes("<img"));
+  assert.ok(m.htmlBody.includes("&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;ציטוט&quot; &#39;x&#39;") && m.htmlBody.includes("<li style=\"text-align:right\">&lt;b&gt;x&lt;/b&gt;</li>"));
+});
+
+test("שליחה: ניקוי הגוף לא משנה תבליט, פיסוק עברי (״ ׳ — –) ומבנה שורות; CRLF הופך ל-LF ותווי בקרה מוסרים; htmlBody נבנה מהגוף המנוקה", () => {
+  const { env, token } = bootstrapped();
+  const sent = "שלום\r\n• אתר ״גני יהושע״ — ת״א\r\n• מס׳ 5 – שעה 08:00\u0001\r\n\r\nסיום\tבטאב\u0000";
+  const clean = "שלום\n• אתר ״גני יהושע״ — ת״א\n• מס׳ 5 – שעה 08:00\n\nסיום\tבטאב";
+  assert.ok(sendTo(env, token, savedRequest(env, token).folderId, { body: sent }).ok);
+  const m = env.mails[0];
+  assert.equal(m.body, clean);
+  assert.equal(bareHtml(m.htmlBody), '<div dir="rtl"><div>שלום</div><ul dir="rtl"><li>אתר ״גני יהושע״ — ת״א</li><li>מס׳ 5 – שעה 08:00</li></ul><br><div>סיום\tבטאב</div></div>');
+  assert.ok(!/[\u0000-\u0008\r]/.test(m.htmlBody));
+});
+
+test("שליחה: גוף ישן (בלי תבליטים) ו-20,000 תווים — htmlBody תקין (RTL, שורות), נחתך כמו ה-body, ו'גוף ריק' עדיין נדחה בלי לשלוח", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token);
+  assert.ok(sendTo(env, token, b.folderId, { body: "בקשה לסגירה אווירית\nמקום: פי גלילות\nתאריך: 22.10.2026" }).ok);
+  assert.equal(bareHtml(env.mails[0].htmlBody), '<div dir="rtl"><div>בקשה לסגירה אווירית</div><div>מקום: פי גלילות</div><div>תאריך: 22.10.2026</div></div>');
+  assert.ok(sendTo(env, token, b.folderId, { body: "א".repeat(30000) }).ok);
+  assert.equal(env.mails[1].body.length, 20000); assert.equal(env.mails[1].htmlBody, htmlOf(env, "א".repeat(20000)));
+  assert.equal(sendTo(env, token, b.folderId, { body: "" }).error, "bad_mail"); assert.equal(env.mails.length, 2);
+});
+
+/* ===== העלאה אוטומטית לדרייב בכל מחזור 'מוכנה': תקרות האחסון מחזיקות סשן ריאליסטי (עובד ארגון + מטיס) ===== */
+// מחזור = saveBegin + קבצי הבקשה (Word, KML, ארבע תמונות, JSON) + saveEnd, כמו persistToDrive בדפדפן. גדלי הקבצים ב-MB כך שהמחזור כולו (23.9MB) ממש מתחת לתקרת התיקייה (24MB) — המקסימום האפשרי.
+// כל תקרות הנפח לינאריות בבייטים, ולכן הבדיקה מקטינה פי 1024 גם את הקבצים וגם את התקרות האמיתיות (MAX_UPLOAD_BYTES_PER_HOUR/DAY, MAX_FOLDER_BYTES) — במקום להעביר מאות MB בזיכרון
+const MB_K = 1048576 / 1024;
+const MAX_CYCLE = [["בקשה לסגירה אווירית.docx", 2.9], ["אתר.kml", 0.1], ["תצ״א תקריב.png", 6.8], ["מפת רחובות.png", 2.0], ["מבט כללי.png", 6.0], ["מפת אזור.png", 6.0], ["נתוני הבקשה.json", 0.1]];
+const scaleCaps = env => ["MAX_UPLOAD_BYTES_PER_HOUR", "MAX_UPLOAD_BYTES_PER_DAY", "MAX_FOLDER_BYTES"].forEach(k => setCfg(env, k, vm.runInContext("CFG." + k, env.sandbox) / 1024));
+function readyCycle(env, tok, rid, place) {
+  const b = env.call({ action: "saveBegin", token: tok, folderName: place, rid });
+  if (!b.ok) return { ok: false, step: "saveBegin", error: b.error, message: b.message };
+  for (const [n, mb] of MAX_CYCLE) {
+    const r = env.call({ action: "saveFile", token: tok, folderId: b.folderId, name: place + " — " + n, mime: "application/octet-stream", b64: bytesB64(Math.floor(mb * MB_K)) });
+    if (!r.ok) return { ok: false, step: n, error: r.error, kind: r.kind, message: r.message, folderId: b.folderId };
+  }
+  const e = env.call({ action: "saveEnd", token: tok, folderId: b.folderId, ready: true });
+  return { ok: !!(e.ok && e.ready), step: "saveEnd", folderId: b.folderId };
+}
+function orgWorker(env, token, name = "org.worker") {
+  assert.ok(env.call({ action: "addUser", token, newUser: name, newPass: "worker-pass-1234", org: true }).ok);
+  const r = env.call({ action: "login", user: name, pass: "worker-pass-1234" }); assert.ok(r.ok && r.org === true); return r;
+}
+
+test("העלאה אוטומטית (מחזור 'מוכנה' בגודל תקרת התיקייה): 3 בקשות × 5 מחזורים בשעה לעובד ארגון ולמטיס במקביל לא נחסמים, התיקייה לא מצטברת, ותקרת השעה עדיין נאכפת", () => {
+  const { env, token } = calmWix(); scaleCaps(env);
+  const cfg = vm.runInContext("CFG", env.sandbox), cycleBytes = MAX_CYCLE.reduce((s, f) => s + Math.floor(f[1] * MB_K), 0);
+  assert.ok(cycleBytes <= cfg.MAX_FOLDER_BYTES, "המחזור נכנס לתיקייה");
+  const worker = orgWorker(env, token), pilot = pilotUser(env);
+  const users = [{ n: "עובד", tok: worker.token, path: ["הארגון"] }, { n: "מטיס", tok: pilot.token, path: ["מטיסים", "dana.pilot"] }];
+  users.forEach(u => { u.rids = [newRid(), newRid(), newRid()]; u.folders = {}; });
+  for (let cycle = 1; cycle <= 5; cycle++) for (let q = 0; q < 3; q++) for (const u of users) {
+    const place = "אתר " + (q + 1) + (cycle >= 3 ? " (מקום עודכן)" : "") + " — 20.11.2026";       // ממחזור 3 שם המקום משתנה: אותו rid, אותה תיקייה, קבצים בשמות חדשים
+    const r = readyCycle(env, u.tok, u.rids[q], place), tag = u.n + " בקשה " + (q + 1) + " מחזור " + cycle;
+    assert.ok(r.ok, tag + " נחסם: " + JSON.stringify(r));
+    assert.equal(u.folders[q] || r.folderId, r.folderId, tag + ": אותה תיקייה בכל מחזור"); u.folders[q] = r.folderId;
+    const files = livesIn(env, r.folderId);
+    assert.equal(files.length, MAX_CYCLE.length, tag + ": הגרסה הקודמת הוחלפה ולא הצטברה (מקסימום " + cfg.MAX_FOLDER_FILES + ")");
+    assert.equal(logOf(env).find(e => e.id === r.folderId).ready, true, tag);
+  }
+  for (const u of users) {
+    const folders = Object.values(u.folders);
+    assert.equal(new Set(folders).size, 3, u.n + ": תיקייה אחת לכל בקשה, לא תיקייה למחזור");
+    folders.forEach(id => assert.deepEqual(pathOf(env, id).slice(0, -1), u.path, u.n + ": הארכיון המרכזי לפי סוג החשבון"));
+    assert.equal(logOf(env).filter(e => folders.includes(e.id)).length, 3);
+  }
+  // המונים נפרדים לכל משתמש: מחזור 16 עובר לשניהם (16 × 23.9MB ≤ 400MB), ומחזור 17 נחסם לעובד בתקרת הנפח השעתית — בלי להפריע למטיס
+  const w16 = readyCycle(env, worker.token, users[0].rids[0], "אתר 1 (מקום עודכן) — 20.11.2026"), p16 = readyCycle(env, pilot.token, users[1].rids[0], "אתר 1 (מקום עודכן) — 20.11.2026");
+  assert.ok(w16.ok && p16.ok, JSON.stringify([w16, p16]));
+  const w17 = readyCycle(env, worker.token, users[0].rids[0], "אתר 1 (מקום עודכן) — 20.11.2026");
+  assert.deepEqual([w17.ok, w17.error, w17.kind], [false, "rate", "upload"]); assert.match(w17.message, /השעתית/);
+  assert.equal(logOf(env).find(e => e.id === w17.folderId).ready, false, "מחזור שנחסם באמצע לא משאיר בקשה מסומנת מוכנה");
+  env.advance(61 * 60000);
+  assert.ok(readyCycle(env, worker.token, users[0].rids[0], "אתר 1 (מקום עודכן) — 20.11.2026").ok, "שעה חדשה — ההעלאה חוזרת לעבוד");
+});
+
+test("העלאה אוטומטית ביום עבודה של עובד ארגון: 10 בקשות × 4 מחזורים (מחזורי תקרה) לא נחסמים בשעה ולא ביום, ותקרת היום עדיין נאכפת", () => {
+  const { env, token } = calmWix(); scaleCaps(env);
+  const worker = orgWorker(env, token), rids = Array.from({ length: 10 }, newRid);
+  let done = 0;
+  const run = (q, tag) => { const r = readyCycle(env, worker.token, rids[q], "אתר " + (q + 1) + " — 21.11.2026"); assert.ok(r.ok, tag + " (מחזור " + (done + 1) + ") נחסם: " + JSON.stringify(r)); done++; };
+  for (let hour = 0; hour < 3; hour++) {
+    for (let i = 0; i < (hour < 2 ? 15 : 10); i++) { const k = done; run(k % 10, "שעה " + (hour + 1)); }
+    env.advance(61 * 60000);
+  }
+  assert.equal(done, 40);
+  run(0, "מחזור 41 (979.9MB מתוך 1000MB)");
+  const r = readyCycle(env, worker.token, rids[1], "אתר 2 — 21.11.2026");
+  assert.deepEqual([r.ok, r.error, r.kind], [false, "rate", "upload"]); assert.match(r.message, /היומית/);
+  assert.equal(logOf(env).filter(e => e.user === "org.worker").length, 10, "עשר בקשות, לא תיקייה למחזור");
 });

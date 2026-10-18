@@ -610,9 +610,9 @@ test("הערת שוליים ¹ של נספח ב׳-1 מצוטטת במלואה כ
   assert.ok(!/1500 רגל אנכית/.test(O.buildForm(none, cfg).find(r => r.n === 8).text));
 });
 
-test("נוסח המייל: ארבע התמונות (בלי תצ״א נקי); שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
+test("נוסח המייל: שורה אחת למצורפים (Word, KML וארבע התמונות, בלי תצ״א נקי); שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
   const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), m = O.mail(res, cfg);
-  assert.match(m.body, /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\), ארבע תמונות — תצ״א בתקריב, מפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת עם סימון המיקום \(המפה\/התצ״א הנדרשים בנספח ג׳\), וקובץ KML\./);
+  assert.ok(m.body.split("\n").includes("קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת."), "שורת המצורפים");
   assert.ok(!/תצ״א נקי|תצ״א עם סימון|הדמיות עם סימון/.test(m.body));
   const long = C.analyze(Object.assign({}, baseInput, { siteName: "מקום ארוך מאוד ".repeat(20) }), mkData(fixture("yarkon")), cfg, now), base = O.fileBase(long);
   for (const tail of [" — בקשה לסגירה אווירית.docx", " — תצ״א תקריב.png", " — מפת רחובות תקריב.png", " — הדמיה מבט כללי.png", " — מפת אזור.png", " — נתוני הבקשה.json"]) assert.ok((base + tail).length <= 110, tail + " " + (base + tail).length);
@@ -776,21 +776,32 @@ test("הזרקת HTML בשדות אנשי הקשר, המשתתפים והמכש�
   assert.ok(/&lt;img src=x onerror=alert\(1\)&gt;/.test(html));
 });
 
-test("מייל: אנשי קשר כל אחד בשורה ממוספרת, משתתפים נוספים, מכשולים שידועים, בלי הערות סיור, ושורת ארבע התמונות", () => {
-  const data = mkData(fixture("yarkon"));
-  const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה\nקו מתח", visitDate: "2026-10-15", visitNotes: "ממצא סיור פנימי" }), data, cfg, now), body = O.mail(res, cfg).body, lines = body.split("\n");
-  const at = t => lines.indexOf(t);
-  assert.ok(at("אנשי קשר בשטח:") > 0);
-  assert.deepEqual(lines.slice(at("אנשי קשר בשטח:") + 1, at("אנשי קשר בשטח:") + 3), ["1. דנה כהן — 050-1112233", "2. יוסי לוי — ללא טלפון"]);
-  assert.deepEqual(lines.slice(at("משתתפים נוספים בטיסה:") + 1, at("משתתפים נוספים בטיסה:") + 3), ["1. נועה אברהם, 050-9998877", "2. אלון שמעוני, 053-4445566"]);
-  assert.ok(lines.includes("מכשולים שידועים למבקש: עגורן בנייה; קו מתח"));
-  assert.ok(at("אנשי קשר בשטח:") < at("משתתפים נוספים בטיסה:") && at("משתתפים נוספים בטיסה:") < lines.findIndex(l => /^מכשולים שידועים למבקש/.test(l)));
-  assert.ok(!/ממצא סיור פנימי|הערות המבקש|סיור/.test(body), "הערות הסיור אינן במייל");
-  assert.ok(lines.some(l => l.startsWith("מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), ארבע תמונות")));
-  // בלי משתתפים ובלי מכשולים: השורות האלה לא מופיעות
-  const bare = O.mail(C.analyze(baseInput, data, cfg, now), cfg).body;
-  assert.ok(!/משתתפים נוספים|מכשולים שידועים/.test(bare)); assert.ok(/אנשי קשר בשטח:\n1\. א — 050-0000001\n2\. ב — 050-0000002\n/.test(bare));
-  assert.ok(!/contactNames|undefined/.test(bare));
+test("מייל קצר בנקודות: הנוסח המדויק (יום בודד / כמה ימים), שורות הנקודות פותחות ב-״• ״, ושום פרט שכבר בטופס (כלי טיס, מהות, קואורדינטות, אנשי קשר, משתתפים, מכשולים, סיור) לא במייל", () => {
+  const data = mkData(fixture("yarkon")), mailOf = over => O.mail(C.analyze(Object.assign({}, baseInput, over), data, cfg, now), cfg);
+  const TAIL = ["", "קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת.", "כל הפרטים — בטופס המצורף.", "", "בברכה,"];
+  const head = ["שלום רב,", "", "מצורפת בקשה לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26).", ""];
+  const bullets = when => ["• גורם מבקש: חברת הבדיקה בע״מ", "• מיקום: בדיקה", "• מועד: " + when + " 17:00–20:00 (שעון מקומי)", "• סגירה: מעגל ברדיוס 200 מטר · גובה 262.5 רגל (80 מטר) מעפ״ש (AGL)"];
+  // כמה ימים: ״, בכל יום״ אחרי הטווח
+  const multi = mailOf({});
+  assert.equal(multi.body, head.concat(bullets("יום שלישי 20.10.2026 עד יום שישי 23.10.2026, בכל יום")).concat(TAIL, ["בודק", "חברת הבדיקה בע״מ", "050-0000000"]).join("\n"));
+  // יום בודד: בלי ״בכל יום״
+  const one = mailOf({ dateTo: "2026-10-20" });
+  assert.equal(one.body, head.concat(bullets("יום שלישי 20.10.2026")).concat(TAIL, ["בודק", "חברת הבדיקה בע״מ", "050-0000000"]).join("\n"));
+  // כל שורת נקודה פותחת ב-״• ״ (U+2022 ורווח) ואין עוד שורה שנראית כנקודה; ארבע נקודות בדיוק
+  const lines = multi.body.split("\n"), pts = lines.filter(l => l.startsWith("\u2022 "));
+  assert.equal(pts.length, 4); assert.ok(lines.every(l => !/^[-*·●▪]/.test(l)), "רק ״• ״ כסימון נקודה");
+  // הנושא והצורה המוחזרת {to, subject, body, mailto} לא השתנו
+  assert.deepEqual(Object.keys(multi).sort(), ["body", "mailto", "subject", "to"]);
+  assert.equal(multi.subject, "בקשה לסגירה אווירית — בדיקה — יום שלישי 20.10.2026 עד יום שישי 23.10.2026");
+  assert.equal(decodeURIComponent(multi.mailto.split("&body=")[1]), multi.body);
+  // הטלפון אופציונלי: ריק => אין שורה ריקה או חסרה בסוף הגוף
+  const nophone = mailOf({ requesterPhone: "" }).body;
+  assert.ok(nophone.endsWith("בברכה,\nבודק\nחברת הבדיקה בע״מ"), JSON.stringify(nophone.slice(-40)));
+  // פרטים שנמצאים בטופס ה-Word בלבד
+  const full = mailOf(Object.assign({}, people, { knownObstacles: "עגורן בנייה\nקו מתח", visitDate: "2026-10-15", visitNotes: "ממצא סיור פנימי" })).body;
+  assert.equal(full, multi.body, "אנשי קשר, משתתפים, מכשולים והערות סיור אינם משנים את הגוף");
+  for (const t of [baseInput.aircraft[0], baseInput.purpose, "DJI", "32°", "34°", "32.0991", "קשר עין", "אנשי קשר", "משתתפים", "מכשולים", "סיור", "ממצא", "עגורן", "דנה כהן", "050-1112233", "מהות הפעילות", "כלי טיס", "(עשרוני"]) assert.ok(!full.includes(t), "לא אמור להופיע במייל: " + t);
+  assert.ok(!/undefined|null|NaN/.test(full));
 });
 
 test("O.attachmentsLine ו-O.visitNoteHtml: שורת המצורפים, הערות המבקש עם תאריך / בלי תאריך / ריקות / עם HTML", () => {
@@ -1144,7 +1155,7 @@ test("אימות מהות הפעילות: מהות מותאמת תקינה; רי
 });
 
 
-test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל ול-Word כטקסט בלבד: escape ב-HTML, XML תקין, בלי הזרקה", async () => {
+test("מהות מותאמת (גם עוינת) זורמת לשדה 4 ול-Word כטקסט בלבד (ולא למייל הקצר): escape ב-HTML, XML תקין, בלי הזרקה", async () => {
   const data = mkData(fixture("yarkon")), BID = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
   const hostile = ["<img src=x onerror=1>", "]]>", "</w:t>", "<script>alert(1)</script> & \"q\" 'r'", "&lt;b&gt;&amp;lt;", "<![CDATA[ x ]]> <?xml?>", "לצורך הדרכה " + fcc(0xd83d, 0xde00), "לצורך מיפוי חקלאי (מותאם)"];
   for (const p of hostile) {
@@ -1156,7 +1167,7 @@ test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל 
     assert.equal(row.text, p, "טקסט שדה 4");
     // מייל: שורה אחת בגוף, וגם בקישור mailto (אחרי פענוח)
     const m = O.mail(res, cfg);
-    assert.ok(m.body.split("\n").includes("מהות הפעילות: " + p), "גוף המייל: " + p);
+    assert.ok(!m.body.includes("מהות הפעילות") && !m.body.includes(p), "המהות אינה במייל הקצר (היא בטופס ה-Word בלבד): " + p);
     assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");
     // Word: XML מאוזן ותקין, ללא תגית מוזרקת, והטקסט נשמר כלשונו אחרי פענוח ה-entities
     const model = O.docxModel(res, data, cfg, { includeChecks: true }), z = await JSZipNode.loadAsync(await D.build(model)), xml = await z.file("word/document.xml").async("string");
@@ -1278,7 +1289,7 @@ test("הטופס: שדה 2 = הגורם שהוקלד; שדות 13 ו-14 = מה �
 
 test("מייל: ״שם/גורם המבקש״ והחתימה לפי הגורם שהוקלד (בלי ארגון קבוע); mailto מקודד אותם במלואם", () => {
   const data = mkData(fixture("yarkon")), org = 'חברת "אלפא" & בטא', res = C.analyze(Object.assign({}, baseInput, { requesterOrg: org, requesterName: "דנה לוי", requesterPhone: "050-1234567" }), data, cfg, now), m = O.mail(res, cfg), lines = m.body.split("\n");
-  assert.ok(lines.includes("שם/גורם המבקש: " + org), "שורת הגורם המבקש");
+  assert.ok(lines.includes("• גורם מבקש: " + org), "שורת הגורם המבקש");
   const i = lines.indexOf("בברכה,"); assert.ok(i > 0); assert.deepEqual(lines.slice(i, i + 4), ["בברכה,", "דנה לוי", org, "050-1234567"], "חתימה: שם, גורם, טלפון");
   assert.ok(!/הארגון הישראלי|לרב להב/.test(m.body));
   assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");

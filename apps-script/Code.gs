@@ -54,8 +54,10 @@ var CFG = {
   // --- תקרות אחסון (saveFile / saveBegin): מטיס אחד לא ממלא את הדרייב של הבעלים, לא מנפח את היומן ולא מאט את השרת (נעילת הסקריפט) לאחרים. מנהל פטור מהמכסות האישיות (לא מהתקרות לתיקייה).
   MAX_FOLDER_FILES: 12,          // קבצי בקשה (Word, KML, תמונות, JSON) בתיקייה אחת — הלקוח כותב 7 (Word, KML, 4 תמונות, JSON); סימוני "נשלח — ....txt" אינם נספרים
   MAX_FOLDER_BYTES: 24 * 1024 * 1024,   // נפח כולל של קבצי הבקשה בתיקייה — לא מעל תקרת המייל (MAX_MAIL_BYTES): בקשה גדולה יותר לא תישלח בכל מקרה
-  MAX_UPLOAD_BYTES_PER_HOUR: 200 * 1024 * 1024,   // בייטים שנכתבו בשעה לכל משתמש (נמדדים בכתיבה, לא בנפח שנשמר: גרסה ישנה שנזרקה לאשפה עדיין תופסת מקום בדרייב)
-  MAX_UPLOAD_BYTES_PER_DAY: 500 * 1024 * 1024,    // ... וביום (שעון ישראל) לכל משתמש
+  // הדף מעלה לדרייב אוטומטית בכל פעם שהבקשה הופכת מוכנה (saveBegin + 7-8 קבצים + saveEnd, ושמירה חוזרת מוחקת את הקודמים — הקבצים בתיקייה לא מצטברים), ולכן נפח השעה והיום מוגדר לפי מחזורים:
+  // מחזור שמגיע לתקרת התיקייה (24MB, המקסימום האפשרי) × 5 מחזורים × 3 בקשות בשעה = 360MB ≤ 400MB; ו-10 בקשות × 4 מחזורים ביום = 960MB ≤ 1000MB. (בגודל טיפוסי, כ-10MB למחזור, אלה כ-40 מחזורים בשעה)
+  MAX_UPLOAD_BYTES_PER_HOUR: 400 * 1024 * 1024,   // בייטים שנכתבו בשעה לכל משתמש (נמדדים בכתיבה, לא בנפח שנשמר: גרסה ישנה שנזרקה לאשפה עדיין תופסת מקום בדרייב)
+  MAX_UPLOAD_BYTES_PER_DAY: 1000 * 1024 * 1024,   // ... וביום (שעון ישראל) לכל משתמש
   MAX_OPEN_REQUESTS_PER_USER: 60, // בקשות של משתמש שלא נשלחו חי ושנגעו בהן ב-LOG_KEEP_DAYS הימים האחרונים — מעבר לכך אין תיקייה חדשה (בקשה שנשלחה חי משחררת מקום)
   MAX_SENT_PER_REQUEST: 100,     // רשומות שליחה בבקשה אחת ביומן; מעבר לכך נמחקות הישנות ביותר שאינן שליחה חיה
   // --- מנוי מטיס מסחרי: כרטיס "בקשת אישורי טיסה" באתר הארגון (Wix Events). הרשמה רק למי שיש לו הזמנה ששולמה בפועל.
@@ -255,6 +257,27 @@ function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסי�
 // נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה — כולל תווי C1 (ביניהם NEL), מפרידי השורה של יוניקוד וסימוני כיווניות (שמסתירים/הופכים טקסט)
 function cleanSubject_(s) { return String(s || '').replace(HIDDEN_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
 function cleanBody_(s) { return String(s || '').replace(/\r\n?/g, '\n').replace(/\r/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, 20000); }
+// גרסת ה-HTML של גוף המייל (htmlBody; ה-body הטקסטואלי נשאר כגיבוי לקורא בלי HTML), מימין לשמאל ומיושרת לימין: שורות רצופות שמתחילות ב"• " (תבליט + רווח) הופכות לרשימה אחת,
+// שורה אחרת — שורה בפני עצמה (גוף ישן בלי תבליטים נשאר שורות), שורה ריקה — רווח. הגוף מגיע מהלקוח ואינו אמין: כל טקסט עובר escape, ולא נוצרים קישורים, תמונות או סקריפטים.
+function escapeHtml_(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function htmlBody_(text) {
+  var out = [], items = null;
+  var flush = function () {
+    if (items) out.push('<ul dir="rtl" style="direction:rtl;text-align:right;margin:4px 0;padding:0 22px 0 0">' + items.join('') + '</ul>');
+    items = null;
+  };
+  var lines = String(text).split('\n'), a = 0, b = lines.length;
+  while (a < b && !lines[a].trim()) a++;                  // שורות ריקות בהתחלה ובסוף לא הופכות לרווח (בלי regex על רצף רווחים: ריצוד ריבועי)
+  while (b > a && !lines[b - 1].trim()) b--;
+  lines.slice(a, b).forEach(function (line) {
+    var m = /^\u2022 ([\s\S]*)$/.exec(line);       // [\s\S] ולא . — נקודה לא תופסת U+2028/2029 שנשארים בגוף
+    if (m) { (items = items || []).push('<li style="text-align:right">' + escapeHtml_(m[1].trim()) + '</li>'); return; }
+    flush();
+    out.push(line.trim() ? '<div style="text-align:right">' + escapeHtml_(line.trim()) + '</div>' : '<br>');
+  });
+  flush();
+  return '<div dir="rtl" style="direction:rtl;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6">' + out.join('') + '</div>';
+}
 
 /* ---------- אתחול (פעם אחת, מהעורך) ---------- */
 // קוד ההקמה הוא הדבר היחיד שמאפשר ליצור מנהל מרחוק, ולכן הוא ארוך (128 ביט) ו*אין נעילה לניסיונות שגויים* ב-bootstrap: כל נעילה ללא זהות (Apps Script לא מוסר כתובת IP)
@@ -1015,7 +1038,7 @@ var ACTIONS = {
     var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid, sender);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
     cache.put(allKey, String(sendsAll + 1), 3600); cache.put(userKey, String(sendsUser + 1), 3600); cache.put(tryKey, String(tries + 1), 3600);
     try {
-      var opts = { to: to.join(','), replyTo: plan.replyTo, name: sender, subject: prefix + subject, body: body, attachments: c.blobs };
+      var opts = { to: to.join(','), replyTo: plan.replyTo, name: sender, subject: prefix + subject, body: body, htmlBody: htmlBody_(body), attachments: c.blobs };   // body = גיבוי טקסטואלי, htmlBody = המייל שנראה (RTL, תבליטים)
       if (plan.cc.length) opts.cc = plan.cc.join(',');
       if (plan.bcc.length) opts.bcc = plan.bcc.join(',');
       MailApp.sendEmail(opts);

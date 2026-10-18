@@ -2,9 +2,11 @@
 (function () {
   "use strict";
   const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, H = window.ReqHelp, $ = id => document.getElementById(id);
-  // rev: מונה גרסת הבקשה (מתקדם בכל שינוי בה, ב-clearOutcome); buildSeq/building: בניית ההדמיות ("האחרון מנצח"); pending: הדמיות ממתינות לעדכון (נגזר מטיימר עריכה ממתין או מבנייה רצה)
-  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false, uk: "", lastUser: "" };
+  // rev: מונה גרסת הבקשה (מתקדם בכל שינוי בה, ב-clearOutcome); buildSeq/building: בניית ההדמיות ("האחרון מנצח"); pending: הדמיות ממתינות לעדכון (נגזר מטיימר עריכה ממתין או מבנייה רצה);
+  // driveTry: הגרסה האחרונה (S.rev) שנוסתה לשמור בדרייב (אוטומטית, ידנית או בשליחה) — השמירה האוטומטית לא חוזרת עליה, גם אחרי כשל; saved: {rev, folder} של שמירה מוצלחת בדרייב לגרסה הנוכחית (נמחק בכל שינוי)
+  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false, uk: "", lastUser: "", driveTry: -1, saved: null };
   let rebuildTimer = null;   // טיימר העריכה הרכה (null = אין עדכון ממתין)
+  let autoTimer = null, autoFor = -1;   // טיימר השמירה האוטומטית בדרייב (null = אין) והגרסה (S.rev) שהוא מתוזמן אליה
   // מפתחות הבסיס של הנתונים השמורים בדפדפן. כולם שייכים למשתמש: הנשמר בפועל הוא <בסיס>:<גיבוב שם המשתמש> (ukey), כך שמשתמש אחר באותו דפדפן לא רואה ולא יורש אותם. מתגי השכבות (icd_req_layers_v1) נשארים גלובליים — אינם נתוני משתמש
   const PERSON_KEY = "icd_req_person_v1", AIRCRAFT_KEY = "icd_req_aircraft_v1";
   const MAX_EXTRA_AC = 30;   // תקרת כלי הטיס הנוספים השמורים בדפדפן — נאכפת גם בהוספה וגם בטעינה (אחרת כלים מעל התקרה נשמרים ואז נעלמים בשקט)
@@ -45,7 +47,7 @@
   // תוצאות שמירה/שליחה שייכות לבקשה שנשמרה; כשהבקשה משתנה או מורצת מחדש הן כבר לא נכונות ולא נשארות על המסך
   function clearOutcome() {
     S.rev++;   // כל נתיב ששינה את הבקשה עובר כאן: שמירה בדרייב שהתחילה לפני השינוי תזהה אותו (persistToDrive)
-    S.sent = null; S.driveUrl = "";
+    S.sent = null; S.driveUrl = ""; S.saved = null;
     ["driveMsg", "sendMsg"].forEach(id => { const e = $(id); if (e) { e.textContent = ""; e.className = "small"; } });
     if (S.onStale) { if ($("sendProg")) S.onStale(); else S.onStale = null; }   // חלון שליחה פתוח (sendToNotam): הבקשה השתנתה מאחוריו — הוא ננעל ומסביר, במקום להמתין ללחיצה
   }
@@ -155,16 +157,16 @@
     mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור הסקירה — יש לאשר אותה שוב.",
     btnPrint: "פותח את חלון ההדפסה של הדפדפן, ומשם אפשר להדפיס או לשמור כ-PDF. מודפס הדוח בלבד: הטופס, ארבע התמונות, וכן דף הבדיקות אם ״כולל דף בדיקות״ מסומן.",
     btnDocx: "מוריד קובץ Word לעריכה: טופס נספח ג׳, ארבע התמונות וטבלת המכשולים והתשתיות. דף הבדיקות נכלל רק אם ״כולל דף בדיקות״ מסומן.",
-    incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והשמירה בדרייב תתבצע מחדש.",
+    incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והבקשה תישמר מחדש בדרייב (אוטומטית).",
     btnKml: "מוריד קובץ KML לפתיחה ב-Google Earth, עם מעגלי הסגירה, אזורי האיסור והמכשולים והתשתיות שנמצאו.",
     btnAerial: "מוריד את תמונת התצ״א בתקריב (PNG), עם כל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnStreet: "מוריד את מפת הרחובות (OpenStreetMap) בתקריב (PNG), עם שמות הרחובות וכל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
     btnRegion: "מוריד את מפת האזור המרוחקת (PNG), בטווח של כ-10 ק״מ ומעלה, עם סמן וחץ שמצביעים על המיקום. הפריטים מסומנים בה בלי מספרים.",
     btnCopy: "מעתיק ללוח את נוסח המייל המוכן (נמענים, נושא וגוף ההודעה) כדי להדביק בתוכנת המייל. לא שולח ולא שומר דבר.",
-    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בתיקייה בדרייב של בעל המערכת (הארכיון המרכזי: בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. הכפתור מוצג למנהל המערכת בלבד: מטיס רגיל אינו יכול לפתוח את התיקייה, וכל שליחה שומרת את הבקשה בארכיון המרכזי גם בלי הכפתור הזה. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
-    btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון המרכזי (בדרייב, לצורכי תמיכה — התיקייה אינה נפתחת למטיס) ושולח אותה במייל עם הקבצים. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — המייל יוצא בשם הגורם המבקש שהצהרתם עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה צוות התמיכה של המערכת מקבל עותק סמוי לצורכי תמיכה בלבד. שליחה למשרד נוטאם אינה ניתנת לביטול.",
-    btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית.",
+    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בארכיון המרכזי של הארגון בדרייב (בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. השמירה מתבצעת אוטומטית כשכל הבדיקות הושלמו, הכול סומן והסקירה אושרה — אין צורך ללחוץ; הכפתור מיועד לשמירה ידנית חוזרת, למשל כשהשמירה האוטומטית נכשלה. התיקייה נמצאת בדרייב של בעל המערכת ולכן הקישור אליה מוצג למנהל בלבד. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
+    btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שולח את הבקשה במייל כשכל הקבצים מצורפים אוטומטית (טופס Word, KML וארבע תמונות המפה) — אין צורך להוריד או לצרף דבר. אם הגרסה הנוכחית עדיין לא נשמרה בארכיון המרכזי בדרייב (בדרך כלל היא כבר נשמרה אוטומטית) היא נשמרת קודם; התיקייה אינה נפתחת למטיס. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — המייל יוצא בשם הגורם המבקש שהצהרתם עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה צוות התמיכה של המערכת מקבל עותק סמוי לצורכי תמיכה בלבד. שליחה למשרד נוטאם אינה ניתנת לביטול.",
+    btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית (לשליחה עם הקבצים מצורפים אוטומטית — ״שלח למשרד נוטאם״).",
     acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
     puAdd: "מוסיף את המהות שהקלדתם (עד " + PURPOSE_MAX + " תווים) לרשימת ״מהות הפעילות״ ובוחר אותה מיד. היא נשמרת בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ותופיע גם בביקורים הבאים — עד " + MAX_EXTRA_PURPOSES + " מהויות נוספות; מעל זה יש להסיר אחת כדי להוסיף. בבקשה אחת נבחרת מהות אחת, והיא נכנסת כלשונה לשדה 4 בטופס הרשמי, לקובץ ה-Word ולמייל. מהות שהוספתם מוצגת מתחת לשדה עם × שמסירה אותה מהרשימה השמורה; את המהויות הקבועות בהגדרות המערכת אי אפשר להסיר.",
     addContact: "מוסיף שורה לאיש קשר נוסף בשטח (שם וטלפון), עד 20. נדרשים לפחות שני אנשי קשר עם שם, ולפחות טלפון תקין אחד (נספח ג׳ שדה 12). אנשי הקשר נשמרים בדפדפן הזה בלבד, ורק עבור החשבון שלכם.",
@@ -173,7 +175,7 @@
     stRun: "מריץ מחדש את הבדיקה העצמית: מחשב את נקודת הירקון מנתוני אמת שנשמרו מראש ומשווה לתוצאות שחושבו בנפרד. הבדיקה רצה גם אוטומטית בכל טעינת דף; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה."
   };
   // הסבר ״שלח״ לחשבון ארגוני (מוחלף ב-data-help אחרי ההתחברות, ב-applyRole): שליחה בשם הארגון, עותק ותשובות אל הארגון
-  const HELP_SEND_ORG = "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון הארגון בדרייב (תיקיית ״הארגון״) ושולח אותה במייל עם הקבצים, בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״). במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — עותק נשלח לארגון (ולכתובת שנרשמה בחשבונכם, אם יש), ותשובות המשרד יחזרו אל הארגון; או ״שלח רק לעצמי״ — עותק לבדיקה בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון (ובלעדיה — לכתובת הארגון). שליחה למשרד נוטאם אינה ניתנת לביטול.";
+  const HELP_SEND_ORG = "פותח חלון אישור; אחרי שתאשרו הוא שולח את הבקשה במייל בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״), וכל הקבצים מצורפים אוטומטית (טופס Word, KML וארבע תמונות המפה) — אין צורך להוריד או לצרף דבר. אם הגרסה הנוכחית עדיין לא נשמרה בארכיון הארגון בדרייב (תיקיית ״הארגון״; בדרך כלל היא כבר נשמרה אוטומטית) היא נשמרת קודם. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — עותק נשלח לארגון (ולכתובת שנרשמה בחשבונכם, אם יש), ותשובות המשרד יחזרו אל הארגון; או ״שלח רק לעצמי״ — עותק לבדיקה בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון (ובלעדיה — לכתובת הארגון). שליחה למשרד נוטאם אינה ניתנת לביטול.";
   // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
   const HELP_NAME = {
     qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
@@ -426,6 +428,7 @@
       S.uk = "";
       step(() => window.ReqAuth.lock());
       step(() => { clearTimeout(rebuildTimer); rebuildTimer = null; clearTimeout(LAY.timer); LAY.timer = null; });
+      step(cancelAutoSave);   // שמירה אוטומטית שממתינה לא תיכתב לדרייב אחרי ההתנתקות / החלפת המשתמש / פקיעת האסימון / החסימה
       S.buildSeq++; S.building = false; S.pending = false; S.ready = false; S.stale = false; S.staleWhy = ""; S.running = false; S.onStale = null;
       S.res = null; S.report = null; S.reportHtml = false; S.reportDraft = false; S.imgs = {}; S.imgSite = null; S.manual = []; S.manualKey = ""; S.reviewAt = null; S.scanKey = null; S.analysisStamp = null;
       S.sent = null; S.sendFolder = null; S.rid = ""; S.ridKey = ""; S.driveUrl = ""; S.center = null; S.autoSite = ""; S.pick = false;
@@ -783,6 +786,7 @@
     if (S.ready) mailA.removeAttribute("aria-disabled"); else mailA.setAttribute("aria-disabled", "true");
     if (S.report && !(opts && opts.quiet)) renderReport();
     markReportDraft();
+    scheduleAutoSave();
   }
   // סימון טיוטה מיידי של הדוח המוצג והמודפס (Ctrl+P) בחלון העריכה הרכה: ההקלדה נועלת את הלחצנים מיד אך הדוח (quiet) לא נבנה מחדש עד תום ה-debounce, ולכן הוא עדיין של הגרסה הקודמת וללא באנר טיוטה.
   // מחלקה pendDraft על ה-body (ולא על #report: הדוח אינו נוגע ב-DOM שלו בזמן הקלדה); CSS ב-index.html מציג ממנה באנר על כל עמוד בדוח, גם ב-@media print — בלי להחליף DOM ובלי להזיז שדות. דוח שכבר נבנה כטיוטה (S.reportDraft) מכיל את הבאנר בעצמו
@@ -1123,6 +1127,7 @@
   // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
   async function persistToDrive(progress) {
     const rev0 = S.rev;   // גרסת הבקשה שממנה נבנים הקבצים; עריכה בזמן השמירה מקדמת אותה (clearOutcome) והקבצים בדרייב כבר אינם מעודכנים
+    S.driveTry = rev0;    // הגרסה הזו נוסתה: השמירה האוטומטית לא תחזור עליה (גם אם הניסיון נכשל)
     const A = window.ReqAuth, i0 = S.res.inp, key = JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo]);
     if (!S.rid || (S.ridKey && S.ridKey !== key)) S.rid = newRid();
     S.ridKey = key;
@@ -1144,18 +1149,19 @@
     }
     // השרת מסמן את הבקשה "מוכנה" רק כאן, אחרי שכל הקבצים נשמרו, והדפדפן מצהיר שכל הבדיקות עברו — ורק בקשה מסומנת תישלח
     // הבקשה שונתה בזמן ההעלאה: saveEnd נשלח עם ready:false (הקבצים אינם הגרסה הנוכחית, ולכן לא תסומן מוכנה), ונזרקת שגיאה — בלי ״נשמרו״ ובלי תוצאה
-    // ״שמור בדרייב״ קיים רק למנהל: הניסוח "יש לשמור שוב" מופנה אליו; מטיס רגיל (שהשמירה היא חלק אוטומטי מהשליחה) מקבל ניסוח בלי כפתור שאין לו. הקוד request_changed סוגר את חלון השליחה (guarded) ופותח אותו מחדש
-    const changedMsg = isAdmin() ? "הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב." : "הבקשה שונתה בזמן השליחה — לא נשלח דבר. המתינו לסיום העדכון (ואם נדרש, הריצו את הבדיקות מחדש) ושלחו שוב.";
-    const changedErr = () => { const e = new Error(changedMsg); e.code = "request_changed"; return e; };
+    // הקוד request_changed סוגר את חלון השליחה (guarded) ופותח אותו מחדש; בשמירה ידנית ההודעה מוצגת בשורת הסטטוס, ובשמירה אוטומטית היא לא מוצגת (עריכה בזמן השמירה — הבקשה תישמר שוב כשתהיה מוכנה)
+    const changedErr = () => { const e = new Error("הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב."); e.code = "request_changed"; return e; };
     const changed = S.rev !== rev0;
     const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed });
     if (!end.ok) throw new Error(A.msg(end));
     if (changed || S.rev !== rev0) throw changedErr();   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
-    if (!end.ready) throw new Error(isAdmin() ? "השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב" : sup("לא ניתן היה להכין את הבקשה לשליחה — נסו לשלוח שוב; אם הבעיה חוזרת, פנו לתמיכה."));
+    if (!end.ready) throw new Error(isAdmin() ? "השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב" : sup("לא ניתן היה להכין את הבקשה לשליחה — נסו שוב; אם הבעיה חוזרת, פנו לתמיכה."));
     S.driveUrl = begin.url;
-    return { folderId: begin.folderId, url: begin.url, name: begin.name, count: files.length };
+    const saved = { folderId: begin.folderId, url: begin.url, name: begin.name, count: files.length };
+    S.saved = { rev: rev0, folder: saved };   // הגרסה הנוכחית שמורה בדרייב: שליחה לא תשמור אותה שוב, והשמירה האוטומטית לא תחזור עליה (S.saved נמחק בכל שינוי — clearOutcome)
+    return saved;
   }
-  // כפתור ״שמור בדרייב״ (עם ״!״ שלו) מוצג רק למנהל: התיקייה בדרייב של בעל המערכת (ארכיון מרכזי לצורכי תמיכה) ומטיס רגיל לא יכול לפתוח אותה. השליחה ממשיכה לשמור בארכיון (persistToDrive) כחלק מהשליחה, בלי כפתור וקישור למטיס
+  // ״שמור בדרייב״ וה״שמירה האוטומטית״ זמינים לכל חשבון (ארכיון מרכזי: ארגוני תחת ״הארגון״, מטיס תחת ״מטיסים/<משתמש>״), אבל התיקייה בדרייב של בעל המערכת: הקישור אליה, "הורדות ידניות" (הדפסה, Word, KML, תמונות, העתקה ופתיחת מייל) והפירוט הטכני — למנהל בלבד
   const isAdmin = () => !!(window.ReqAuth && window.ReqAuth.getRole && window.ReqAuth.getRole() === "admin");
   // רמזי שדות הגורם המבקש, אות הקריאה ומס׳ הרישום בחשבון ארגוני (בחשבון עצמאי נשאר הנוסח שב-index.html: אין ברירת מחדל)
   const ORG_HINTS = {
@@ -1164,29 +1170,59 @@
     hReqReg: "נספח ג׳ שדה 14 — עד 40 תווים. בחשבון ארגוני נטענת כאן ברירת המחדל של הארגון; אפשר לערוך אותה, והעריכה נשמרת. ריק = ״לא רלוונטי״."
   };
   function applyRole() {
-    const b = $("btnDrive"), w = b && (b.closest(".hw") || b);
-    if (w) w.hidden = !isAdmin();
-    if (!isAdmin()) { const m = $("driveMsg"); if (m) { m.textContent = ""; m.className = "small"; } }
+    const tools = $("manualTools");
+    if (tools) { tools.hidden = !isAdmin(); if (!isAdmin()) tools.open = false; }   // ההורדות הידניות — למנהל בלבד (מוסתר = גם לא נגיש במקלדת ובקורא מסך)
     // ההסבר של ״שלח״ ורמזי שדות הגורם המבקש לפי סוג החשבון: ארגוני (שולח בשם הארגון, וברירות המחדל שלו נטענות) או מטיס עצמאי (ברירת המחדל; הנוסח הקבוע ב-HELP וב-index.html)
     const org = isOrg(), sb = $("btnSend"), hb = sb && sb.closest(".hw") && sb.closest(".hw").querySelector(".hbtn");
     if (hb) hb.setAttribute("data-help", org ? HELP_SEND_ORG : HELP.btnSend);
     Object.keys(ORG_HINTS).forEach(id => { const e = $(id); if (!e) return; if (e.dataset.base == null) e.dataset.base = e.textContent; e.textContent = org ? ORG_HINTS[id] : e.dataset.base; });
   }
-  async function saveToDrive() {
+  const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  // auto: שמירה אוטומטית (scheduleAutoSave) — אותה זרימה כמו הכפתור, בלי A.setBusy (לא חוסמת חלונות), ובלי הודעת שגיאה כשהבקשה שונתה בזמן השמירה
+  async function saveToDrive(auto) {
     const out = $("driveMsg"), btn = $("btnDrive"), A = window.ReqAuth;
-    if (!isAdmin() || !S.ready || S.sending) return;
-    if (!A.loggedIn()) { A.show(); return; }
-    S.sending = true; A.setBusy(true); refreshGate();
+    if (!S.ready || S.sending) return;
+    if (!A.loggedIn()) { if (!auto) A.show(); return; }
+    // גרסה שכבר נשלחה חי למשרד: התיקייה נעולה (already_sent) ושמירה נוספת הייתה פותחת תיקייה כפולה ״פתוחה״ — לא שומרים שוב
+    if (S.sent && S.sent.mode === "live" && S.sent.target === "office") { out.className = "small ok"; out.textContent = "הגרסה הזו כבר נשלחה למשרד נוטאם ושמורה בדרייב — אין צורך לשמור שוב."; return; }
+    const rev0 = S.rev;
+    S.driveTry = rev0;   // גם ניסיון שנעצר לפני ההעלאה (סנכרון) סוגר את הגרסה לשמירה אוטומטית — אין לולאת ניסיונות
+    S.sending = true; if (!auto) A.setBusy(true); refreshGate();
     try {
       if (!(await checkSync())) { out.className = "small err"; out.textContent = "לא נשמר: הנתונים אינם מסונכרנים עם מפת החברים (ראו ההודעה בראש הדף)."; return; }
       if (!S.ready) { out.className = "small err"; out.textContent = "לא נשמר: הנתונים השתנו מאז הרצת הבדיקות — יש להריץ אותן שוב."; return; }
       out.className = "small"; out.textContent = "שומר בדרייב…";
-      const r = await persistToDrive((n, t, name) => { out.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
+      const r = await persistToDrive((n, t, name) => { if (S.rev === rev0) out.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
+      const link = isAdmin() ? ' — <a href="' + esc(r.url) + '" target="_blank" rel="noopener">פתח את התיקייה</a>' : "";   // התיקייה בדרייב של בעל המערכת: הקישור למנהל בלבד
       out.className = "small ok";
-      out.innerHTML = "✔ נשמרו " + r.count + " קבצים בדרייב, בתיקייה <b>" + esc(r.name) + '</b> — <a href="' + esc(r.url) + '" target="_blank" rel="noopener">פתח את התיקייה</a>';
+      out.innerHTML = auto ? "נשמר אוטומטית בדרייב ✔ (" + hhmm() + ")" + link
+        : isAdmin() ? "✔ נשמרו " + r.count + " קבצים בדרייב, בתיקייה <b>" + esc(r.name) + "</b>" + link : "✔ נשמרו " + r.count + " קבצים בדרייב (" + hhmm() + ")";
     } catch (e) {
-      out.className = "small err"; out.textContent = "השמירה בדרייב נכשלה: " + (e && e.message ? e.message : e);
-    } finally { S.sending = false; A.setBusy(false); btn.disabled = !S.ready; refreshGate(); }
+      if (auto && e && e.code === "request_changed") { out.className = "small"; out.textContent = ""; }
+      else { out.className = "small err"; out.textContent = (auto ? "השמירה האוטומטית בדרייב נכשלה: " : "השמירה בדרייב נכשלה: ") + (e && e.message ? e.message : e); }
+    } finally { S.sending = false; if (!auto) A.setBusy(false); btn.disabled = !S.ready; refreshGate(); }
+  }
+
+  /* ---------- שמירה אוטומטית בדרייב כשהבקשה מוכנה ---------- */
+  // כשכל הבדיקות הושלמו, הכול סומן והסקירה אושרה (S.ready) הבקשה נשמרת בדרייב מעצמה, לכל סוג חשבון, כמו לחיצה על ״שמור בדרייב״: פעם אחת לכל גרסה (S.rev) של הבקשה, כ-1.5 שנ׳ אחרי שנהייתה מוכנה
+  // (קריאות חוזרות לא דוחות; הפיכה ללא-מוכנה מבטלת). אחרי עריכה שהפכה אותה ללא-מוכנה ושוב למוכנה — נשמרת שוב לאותה תיקייה (אותו rid, הקבצים מוחלפים). שמירה/שליחה בעיצומה (או חלון שליחה פתוח) נדחית, לא מתחרה.
+  // כשל מוצג בשורת הסטטוס (הודעת השרת) ואינו חוזר על עצמו (S.driveTry): הכפתור ״שמור בדרייב״ נשאר זמין לניסיון ידני, ועריכה חדשה מתחילה מחזור חדש. הטיימר מבוטל באיפוס הדף (resetPage). config.json → autosave_ms: 1500 כברירת מחדל, 0 = כבוי
+  function autoDelay() { const d = S.cfg && S.cfg.autosave_ms; return typeof d === "number" && d >= 0 ? d : 1500; }
+  function cancelAutoSave() { clearTimeout(autoTimer); autoTimer = null; autoFor = -1; }
+  function autoDue(rev) { return !S.resetting && !!S.res && !S.running && S.ready && S.rev === rev && S.driveTry !== rev && autoDelay() > 0 && !!(window.ReqAuth && window.ReqAuth.loggedIn()); }
+  function scheduleAutoSave() {
+    const rev = S.rev;
+    if (!autoDue(rev)) { cancelAutoSave(); return; }
+    if (autoTimer !== null && autoFor === rev) return;   // כבר מתוזמנת לגרסה הזו
+    cancelAutoSave(); autoFor = rev;
+    autoTimer = setTimeout(() => fireAutoSave(rev), autoDelay());
+  }
+  function fireAutoSave(rev) {
+    autoTimer = null; autoFor = -1;
+    if (S.rev !== rev) { scheduleAutoSave(); return; }   // הבקשה השתנתה בהמתנה בלי refreshGate: מתזמנים מחדש אם היא מוכנה
+    if (!autoDue(rev)) return;
+    if (S.sending || $("sendProg")) { autoFor = rev; autoTimer = setTimeout(() => fireAutoSave(rev), autoDelay()); return; }   // שמירה/שליחה אחרת בעיצומה או חלון שליחה פתוח (השליחה שומרת בעצמה): לא מתחרים
+    saveToDrive(true);
   }
 
   /* ---------- שליחה למשרד נוטאם (פמ"ת א-11 סעיף 6(א)) ---------- */
@@ -1372,8 +1408,9 @@
     // שני היעדים עוברים אותן הגנות: preflight, שמירה בארכיון המרכזי (persistToDrive) והשער S.ready. "למשרד" ובמצב בדיקה = target "office" (בבדיקה השרת שולח ממילא רק למבקש)
     const startSend = target => guarded(async () => {
       await preflight();
-      // בקשה שלא השתנתה מאז השליחה הקודמת כבר שמורה בדרייב (clearOutcome מאפס כל שינוי) — לא שומרים שוב, כדי שהשרת יזהה שליחה כפולה
-      if (!(S.sent && S.sendFolder)) S.sendFolder = await persistToDrive((n, t, name) => { prog.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
+      // הגרסה הנוכחית כבר שמורה בדרייב (שמירה אוטומטית או ידנית, או שליחה קודמת שלה — clearOutcome מאפס כל שינוי) — לא שומרים שוב, כדי שהשרת יזהה שליחה כפולה
+      if (S.saved && S.saved.rev === S.rev) S.sendFolder = S.saved.folder;
+      else S.sendFolder = await persistToDrive((n, t, name) => { prog.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
       if (!S.ready) throw new Error("הנתונים השתנו בזמן השמירה — לא נשלח. הרצו את הבדיקות שוב");
       if (S.rev !== rev0) { const e = new Error("הבקשה שונתה בזמן שהחלון היה פתוח"); e.code = "request_changed"; throw e; }
       prog.textContent = "שולח…";
@@ -1430,7 +1467,7 @@
   /* ---------- אתחול ---------- */
   async function init() {
     if (H) { H.wire(); attachHelp(); }   // לחצני ״!״ ליד כפתורי הדף (ההסברים ב-HELP)
-    applyRole();   // עד שהתחברות מזוהה — ״שמור בדרייב״ מוסתר (נכשל סגור); המנהל מקבל אותו ב-req-auth
+    applyRole();   // עד שהתחברות מזוהה — ״הורדות ידניות״ מוסתרות (נכשל סגור); המנהל מקבל אותן ב-req-auth
     initMap();
     try { initLayerUi(); } catch (e) { logLayerErr("initLayerUi", e); }   // מתגי האיסורים והנוטמים + פס הסיכום (גם כשהמפה לא נטענה: המתגים מושבתים עם הסבר); כשל בהם לעולם לא עוצר את האתחול
     const okCfg = await loadStatic();
@@ -1460,7 +1497,7 @@
     $("puAdd").onclick = addPurpose; $("puNew").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPurpose(); } });
     $("purpose").addEventListener("change", () => { $("puMsg").textContent = ""; });   // הודעת ההוספה האחרונה ("כבר ברשימה — נבחרה") לא נשארת אחרי שבחרו מהות אחרת
     $("puList").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-purm]"); if (b) removePurpose(+b.dataset.purm); });
-    $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); } });
+    $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); scheduleAutoSave(); } });
     $("runBtn").onclick = run; $("qBtn").onclick = searchPlace; $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
     $("btnPrint").onclick = () => { if (authed() && S.res) window.print(); };
     $("btnMail").addEventListener("click", ev => { if (!S.ready || !authed()) ev.preventDefault(); });   // Enter/הפעלה תוכנתית על הקישור כשהבקשה אינה מוכנה (השער S.ready) — לא פותח את תוכנת המייל, ולא משנה כיצד ה-href נקבע
@@ -1471,14 +1508,14 @@
     $("mPick").onclick = () => { S.pick = true; $("mPick").textContent = "לחצו על המפה למעלה…"; $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
     $("reviewOk").addEventListener("change", onReviewChange);
     $("btnCopy").onclick = copyMail;
-    $("btnDrive").onclick = saveToDrive;
+    $("btnDrive").onclick = () => saveToDrive(false);
     $("btnSend").onclick = sendToNotam;
     $("wipePerson").onclick = wipePerson;
     $("stRun").onclick = selfTest;
     renderManual();
     setStatus("selftest", false, "טרם הורצה");
     if (okCfg) await selfTest();
-    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs, userKey: ukey };
+    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs, userKey: ukey, autoPending: () => autoTimer !== null };   // autoPending: לבדיקות — האם שמירה אוטומטית ממתינה
     window.__REQ_READY = true;
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
