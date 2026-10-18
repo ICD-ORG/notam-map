@@ -3,8 +3,9 @@
   "use strict";
   const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, H = window.ReqHelp, $ = id => document.getElementById(id);
   // rev: מונה גרסת הבקשה (מתקדם בכל שינוי בה, ב-clearOutcome); buildSeq/building: בניית ההדמיות ("האחרון מנצח"); pending: הדמיות ממתינות לעדכון (נגזר מטיימר עריכה ממתין או מבנייה רצה)
-  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false };
+  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false, uk: "", lastUser: "" };
   let rebuildTimer = null;   // טיימר העריכה הרכה (null = אין עדכון ממתין)
+  // מפתחות הבסיס של הנתונים השמורים בדפדפן. כולם שייכים למשתמש: הנשמר בפועל הוא <בסיס>:<גיבוב שם המשתמש> (ukey), כך שמשתמש אחר באותו דפדפן לא רואה ולא יורש אותם. מתגי השכבות (icd_req_layers_v1) נשארים גלובליים — אינם נתוני משתמש
   const PERSON_KEY = "icd_req_person_v1", AIRCRAFT_KEY = "icd_req_aircraft_v1";
   const MAX_EXTRA_AC = 30;   // תקרת כלי הטיס הנוספים השמורים בדפדפן — נאכפת גם בהוספה וגם בטעינה (אחרת כלים מעל התקרה נשמרים ואז נעלמים בשקט)
   const PURPOSE_KEY = "icd_req_purposes_v1", MAX_EXTRA_PURPOSES = 30, PURPOSE_MAX = 80;   // מהויות פעילות נוספות (כמו כלי טיס): התקרה נאכפת בהוספה ובטעינה; PURPOSE_MAX זהה ל-PURPOSE_MAX ב-core.js (validateInput)
@@ -25,6 +26,12 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* פרטיות/חסימה */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
+  // אחסון לפי המשתמש המחובר (S.uk = C.userHash של שם המשתמש, נקבע ב-req-auth). בלי משתמש מחובר אין מפתח ולכן לא קוראים ולא כותבים ("" / null) — אין נתונים "בלי בעלים".
+  // הגיבוב סינכרוני (core.js): כל שמירה/טעינה בזמן הקלדה והתחברות סינכרונית. שם המשתמש עצמו לא נכתב בשם המפתח
+  const ukey = base => S.uk ? base + ":" + S.uk : "";
+  const lsGet = base => { const k = ukey(base); return k ? ls.get(k) : null; };
+  const lsSet = (base, v) => { const k = ukey(base); if (k) ls.set(k, v); };
+  const lsDel = base => { const k = ukey(base); if (k) ls.del(k); };
   // כתובת ייחודית בכל בקשה: עוקפת את מטמון ה-HTTP של GitHub Pages ואת ה-service worker של המפה (שמגיש מהמטמון כשהרשת איטית)
   const bust = u => u + (u.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
   async function getJson(url) {
@@ -40,6 +47,7 @@
     S.rev++;   // כל נתיב ששינה את הבקשה עובר כאן: שמירה בדרייב שהתחילה לפני השינוי תזהה אותו (persistToDrive)
     S.sent = null; S.driveUrl = "";
     ["driveMsg", "sendMsg"].forEach(id => { const e = $(id); if (e) { e.textContent = ""; e.className = "small"; } });
+    if (S.onStale) { if ($("sendProg")) S.onStale(); else S.onStale = null; }   // חלון שליחה פתוח (sendToNotam): הבקשה השתנתה מאחוריו — הוא ננעל ומסביר, במקום להמתין ללחיצה
   }
   function setStatus(k, ok, msg) { S.statuses[k] = { ok: !!ok, msg: msg || "" }; refreshGate(); }
 
@@ -134,11 +142,11 @@
     btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בתיקייה בדרייב של בעל המערכת (הארכיון המרכזי), בלי לשלוח. הכפתור מוצג למנהל המערכת בלבד: מטיס רגיל אינו יכול לפתוח את התיקייה, וכל שליחה שומרת את הבקשה בארכיון המרכזי גם בלי הכפתור הזה. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
     btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון המרכזי (בדרייב של מנהל המערכת, לצורכי תמיכה — התיקייה אינה נפתחת למטיס) ושולח אותה במייל עם הקבצים. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה מנהל המערכת מקבל עותק סמוי לצורכי תמיכה. שליחה למשרד נוטאם אינה ניתנת לביטול.",
     btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית.",
-    acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת) ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
-    puAdd: "מוסיף את המהות שהקלדתם (עד " + PURPOSE_MAX + " תווים) לרשימת ״מהות הפעילות״ ובוחר אותה מיד. היא נשמרת בדפדפן הזה בלבד (לא בשרת) ותופיע גם בביקורים הבאים — עד " + MAX_EXTRA_PURPOSES + " מהויות נוספות; מעל זה יש להסיר אחת כדי להוסיף. בבקשה אחת נבחרת מהות אחת, והיא נכנסת כלשונה לשדה 4 בטופס הרשמי, לקובץ ה-Word ולמייל. מהות שהוספתם מוצגת מתחת לשדה עם × שמסירה אותה מהרשימה השמורה; את המהויות הקבועות בהגדרות המערכת אי אפשר להסיר.",
-    addContact: "מוסיף שורה לאיש קשר נוסף בשטח (שם וטלפון), עד 20. נדרשים לפחות שני אנשי קשר עם שם, ולפחות טלפון תקין אחד (נספח ג׳ שדה 12). אנשי הקשר נשמרים בדפדפן הזה בלבד.",
+    acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
+    puAdd: "מוסיף את המהות שהקלדתם (עד " + PURPOSE_MAX + " תווים) לרשימת ״מהות הפעילות״ ובוחר אותה מיד. היא נשמרת בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ותופיע גם בביקורים הבאים — עד " + MAX_EXTRA_PURPOSES + " מהויות נוספות; מעל זה יש להסיר אחת כדי להוסיף. בבקשה אחת נבחרת מהות אחת, והיא נכנסת כלשונה לשדה 4 בטופס הרשמי, לקובץ ה-Word ולמייל. מהות שהוספתם מוצגת מתחת לשדה עם × שמסירה אותה מהרשימה השמורה; את המהויות הקבועות בהגדרות המערכת אי אפשר להסיר.",
+    addContact: "מוסיף שורה לאיש קשר נוסף בשטח (שם וטלפון), עד 20. נדרשים לפחות שני אנשי קשר עם שם, ולפחות טלפון תקין אחד (נספח ג׳ שדה 12). אנשי הקשר נשמרים בדפדפן הזה בלבד, ורק עבור החשבון שלכם.",
     addPart: "מוסיף שורה למשתתף נוסף בטיסה (שם פרטי, שם משפחה וטלפון), עד 20. הרשימה אופציונלית, ואין חובה לטוס יחד. משתתפים מלאים נכנסים לשדה 11 בטופס ולמייל; שורה שמולאה חלקית חוסמת את ההרצה. המשתתפים אינם נשמרים בדפדפן.",
-    wipePerson: "מוחק מהדפדפן הזה את שם וטלפון המבקש, שם הגורם המבקש, אות הקריאה ומס׳ הרישום ואת אנשי הקשר השמורים, מנקה את השדות ומחזיר שתי שורות ריקות לאנשי הקשר; גם רשימת המשתתפים מתרוקנת. קבצים שכבר נשמרו בדרייב אינם משתנים.",
+    wipePerson: "מוחק מהדפדפן הזה את הפרטים השמורים של החשבון המחובר: שם וטלפון המבקש, שם הגורם המבקש, אות הקריאה ומס׳ הרישום ואת אנשי הקשר השמורים, מנקה את השדות ומחזיר שתי שורות ריקות לאנשי הקשר; גם רשימת המשתתפים מתרוקנת. קבצים שכבר נשמרו בדרייב אינם משתנים.",
     stRun: "מריץ מחדש את הבדיקה העצמית: מחשב את נקודת הירקון מנתוני אמת שנשמרו מראש ומשווה לתוצאות שחושבו בנפרד. הבדיקה רצה גם אוטומטית בכל טעינת דף; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה."
   };
   // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
@@ -167,12 +175,12 @@
   const cleanAircraft = t => String(t == null ? "" : t).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
   const acKey = t => cleanAircraft(t).toLowerCase();
   function loadExtraAircraft() {
-    let a = []; try { a = JSON.parse(ls.get(AIRCRAFT_KEY) || "[]"); } catch (e) { a = []; }
+    let a = []; try { a = JSON.parse(lsGet(AIRCRAFT_KEY) || "[]"); } catch (e) { a = []; }
     const seen = new Set((S.cfg.aircraft || []).map(acKey)), out = [];
     (Array.isArray(a) ? a : []).forEach(x => { const n = cleanAircraft(x); if (n && !seen.has(acKey(n)) && out.length < MAX_EXTRA_AC) { seen.add(acKey(n)); out.push(n); } });
     return out;
   }
-  const saveExtraAircraft = () => ls.set(AIRCRAFT_KEY, JSON.stringify(S.extraAc));
+  const saveExtraAircraft = () => lsSet(AIRCRAFT_KEY, JSON.stringify(S.extraAc));
   const checkedAc = () => new Set([...document.querySelectorAll('input[name="ac"]:checked')].map(i => acKey(i.value)));
   // keep: קבוצת המפתחות המסומנים כרגע (שומרת את הסימון בעת רינדור מחדש); בלי keep — ברירת מחדל: הכלי הראשון בהגדרות בלבד
   function renderAircraft(keep) {
@@ -213,7 +221,7 @@
   const puKey = t => cleanPurpose(t).toLowerCase();
   // טעינה מוגנת מ-localStorage משובש: JSON שבור / לא מערך -> ריק; ערך שאינו מחרוזת או ארוך מדי נזרק; בלי כפילויות (גם מול הקבועות); לא יותר מהתקרה
   function loadExtraPurposes() {
-    let a = []; try { a = JSON.parse(ls.get(PURPOSE_KEY) || "[]"); } catch (e) { a = []; }
+    let a = []; try { a = JSON.parse(lsGet(PURPOSE_KEY) || "[]"); } catch (e) { a = []; }
     const seen = new Set((S.cfg.purposes || []).map(puKey)), out = [];
     (Array.isArray(a) ? a : []).forEach(x => {
       if (typeof x !== "string" || x.length > 4 * PURPOSE_MAX) return;   // הבדיקה הראשונה חוסכת ניקוי של מחרוזת ענקית
@@ -222,7 +230,7 @@
     });
     return out;
   }
-  const saveExtraPurposes = () => ls.set(PURPOSE_KEY, JSON.stringify(extraPu));
+  const saveExtraPurposes = () => lsSet(PURPOSE_KEY, JSON.stringify(extraPu));
   // sel: המהות שתיבחר ("" = ״בחרו…״; ערך שאינו ברשימה גם הוא חוזר ל״בחרו…״). הכול נכנס ל-HTML דרך esc
   function renderPurposes(sel) {
     const el = $("purpose"), opt = p => '<option value="' + esc(p) + '">' + esc(p) + "</option>";
@@ -311,7 +319,7 @@
   }
   // פרטי המבקש ואנשי הקשר נשמרים בדפדפן; משתתפים והערות הסיור לא. פורמט ישן (contactNames/contactPhone) עובר מיגרציה לרשימה לפי אינדקס
   function loadPerson() {
-    let p = null; try { p = JSON.parse(ls.get(PERSON_KEY) || "null"); } catch (e) { p = null; }
+    let p = null; try { p = JSON.parse(lsGet(PERSON_KEY) || "null"); } catch (e) { p = null; }
     if (!p || typeof p !== "object") p = {};
     let contacts = Array.isArray(p.contacts) ? p.contacts.filter(c => c && typeof c === "object").map(c => ({ name: String(c.name || ""), phone: String(c.phone || "") })) : null, migrated = false;
     if (!contacts && (p.contactNames || p.contactPhone)) {
@@ -327,13 +335,56 @@
     if (migrated) savePerson();   // כותב בפורמט החדש ומסיר את המפתחות הישנים
   }
   function savePerson() {
-    ls.set(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, reqOrg: $("reqOrg").value, reqCallsign: $("reqCallsign").value, reqReg: $("reqReg").value, contacts: readRows("contacts") }));
+    lsSet(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, reqOrg: $("reqOrg").value, reqCallsign: $("reqCallsign").value, reqReg: $("reqReg").value, contacts: readRows("contacts") }));
   }
-  function wipePerson() {
-    ls.del(PERSON_KEY);
+  // ניקוי שדות פרטי המבקש בדף בלבד (בלי לגעת באחסון)
+  function clearPersonFields() {
     $("reqName").value = ""; $("reqPhone").value = ""; $("reqOrg").value = ""; $("reqCallsign").value = ""; $("reqReg").value = "";
     setRows("contacts", []); setRows("participants", []);
+  }
+  function wipePerson() {
+    lsDel(PERSON_KEY);   // רק של המשתמש המחובר
+    clearPersonFields();
     onSoftInputChange();
+  }
+  /* ---------- בידוד בין חשבונות באותו דפדפן ---------- */
+  // מיגרציה חד-פעמית: נתונים שנשמרו לפני שהאחסון הפך לפי משתמש (מפתחות גלובליים) עוברים למשתמש הראשון שמתחבר בדפדפן הזה אחרי העדכון, והמפתחות הגלובליים נמחקים — כך משתמש אחר באותו מכשיר לא יורש אותם.
+  // מי שכבר יש לו נתונים משלו לא נדרס (הגלובלי נמחק בלי אימוץ); ואם הכתיבה נכשלה (אחסון חסום/מלא) הוא נמחק בכל זאת — עדיף לאבד נוחות מלהשאיר פרטי מבקש פתוחים לכל משתמש
+  function adoptLegacyStorage() {
+    [PERSON_KEY, AIRCRAFT_KEY, PURPOSE_KEY].forEach(base => {
+      const old = ls.get(base);
+      if (old === null) return;
+      if (lsGet(base) === null) lsSet(base, old);
+      ls.del(base);
+    });
+  }
+  // כניסה ראשונה בדף הזה: קובעים את מפתח האחסון של המשתמש, מאמצים נתונים ישנים (פעם אחת), וטוענים את הנתונים השמורים של המשתמש הזה בלבד. כניסה חוזרת של אותו משתמש באותו דף (פקיעת אסימון) לא מגיעה לכאן — הטופס נשאר כמות שהוא
+  function enterUser(u) {
+    S.uk = C.userHash(u);
+    adoptLegacyStorage();
+    extraPu = loadExtraPurposes(); renderPurposes($("purpose").value);
+    S.extraAc = loadExtraAircraft(); renderAircraft(checkedAc());
+    loadPerson();
+  }
+  // משתמש אחר נכנס באותו דף (בלי רענון): לא נשאר דבר מהקודם — לא הבקשה המוכנה, לא הדוח והתמונות, לא פרטי המבקש ואנשי הקשר, לא חלונות פתוחים. הדרך הבטוחה: טעינת הדף מחדש. האסימון של המשתמש החדש כבר שמור ב-sessionStorage (auth.js: save() לפני האירוע),
+  // ולכן אחרי הטעינה הוא מחובר עם מצב נקי לגמרי ועם הנתונים השמורים שלו בלבד; אין לולאה — בדף החדש S.lastUser ריק. עד שהטעינה מתבצעת הדף נעול ומנוקה (נכשל סגור), ו-S.uk מרוקן כדי שששום ניקוי לא ייכתב או יימחק באחסון.
+  // אין איפוס ב-logout עצמו: logout נקרא גם בפקיעת אסימון באמצע עבודה, וכניסה חוזרת של אותו משתמש שומרת לו את הבקשה
+  function switchUser() {
+    S.uk = "";
+    document.body.classList.add("authLocked");
+    clearTimeout(rebuildTimer); rebuildTimer = null; clearTimeout(LAY.timer);
+    S.buildSeq++; S.building = false; S.pending = false; S.ready = false; S.stale = false; S.staleWhy = "";
+    S.res = null; S.report = null; S.imgs = {}; S.imgSite = null; S.manual = []; S.manualKey = ""; S.reviewAt = null; S.scanKey = null; S.analysisStamp = null;
+    S.sent = null; S.sendFolder = null; S.rid = ""; S.ridKey = ""; S.driveUrl = "";
+    S.statuses.review = { ok: false, msg: "לא אושרה סקירה" }; S.statuses.input = { ok: false, msg: "" };
+    clearOutcome();   // מקדם את S.rev: שמירה או שליחה של הקודם שעדיין באוויר נעצרת בבדיקת הגרסה
+    try { window.ReqAuth.closeModal(); } catch (e) { /* ignore */ }
+    clearPersonFields();
+    ["coord", "height", "dateFrom", "dateTo", "timeFrom", "timeTo", "siteName", "knownObs", "visitDate", "visitNotes", "mName", "mCoord", "mHeight", "puNew", "acNew", "q"].forEach(id => { const e = $(id); if (e) e.value = ""; });
+    $("reviewOk").checked = false; $("report").innerHTML = ""; $("resultsSec").style.display = "none"; $("progress").innerHTML = "";
+    extraPu = []; renderPurposes(""); S.extraAc = []; renderAircraft(null);
+    window.__REQ_SWITCHING = true;   // לבדיקות: הדף נטען מחדש
+    location.reload();
   }
   function readInputs() {
     const c = C.parseCoordInput($("coord").value) || S.center || {};
@@ -374,7 +425,7 @@
       const dateErr = e.field === "visitNotes" && /תאריך/.test(e.msg);   // שגיאת תאריך הסיור מדווחת תחת הערות המבקש
       const inp = !dateErr && idMap[e.field] && $(idMap[e.field]); if (inp) inp.classList.add("bad");
       if (dateErr) $("visitDate").classList.add("bad");
-      if (e.field === "requester") { if (!$("reqName").value.trim()) $("reqName").classList.add("bad"); if (!C.validPhone($("reqPhone").value)) $("reqPhone").classList.add("bad"); }
+      if (e.field === "requester") { if (!$("reqName").value.trim() || !C.purposeHasVisible($("reqName").value)) $("reqName").classList.add("bad"); if (!C.validPhone($("reqPhone").value)) $("reqPhone").classList.add("bad"); }
     });
     markPeople(errs);
     // טקסט שהוקלד בשדה ההוספה ולא נוסף: רמז בלבד (לא חוסם, לא מוסיף לבד) — ההרצה ממילא נעצרת כי לא נבחרה מהות
@@ -559,6 +610,11 @@
   function updateSummary() {
     const box = $("pointSummary"); if (!box || !LY) return;
     const r = LY.preview(Object.assign(layerInputs(), { zones: S.data.zones, inpa: S.data.inpa, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso, thresholds: (S.cfg && S.cfg.thresholds) || {}, now: new Date() }));
+    // אזור aria-live: בנייה מחדש של הצמתים גם כשהתוכן זהה גורמת לקורא מסך להקריא את כל הסיכום שוב (בכל תו, בכל change/blur). לכן משווים לתוכן שנבנה בפעם האחרונה ולא נוגעים ב-DOM כשהוא זהה.
+    // summaryFailed מאפס את המפתח — אחרת עדכון תקין עם אותו תוכן כמו לפני תקלה היה משאיר את הודעת התקלה על המסך
+    const k = JSON.stringify(r.lines);
+    if (box._k === k && box.firstChild) return;
+    box._k = k;
     box.textContent = "";
     const ttl = document.createElement("div"); ttl.className = "pst"; ttl.textContent = "סיכום מקדים לנקודה שנבחרה"; box.appendChild(ttl);
     r.lines.forEach(l => {
@@ -570,7 +626,7 @@
   // עדכון התצוגה כולה (ציור + פס): לא זורק לעולם — כל חלק בנפרד ב-try/catch. כשל בפס מוצג כהסבר בפס עצמו (לא נעלמת הפס בשקט), ושום סטטוס/שער אינו נגע
   function summaryFailed(e) {
     logLayerErr("updateSummary", e);
-    try { const box = $("pointSummary"); if (box) box.textContent = "סיכום מקדים אינו זמין (תקלה בחישוב התצוגה). הבדיקות המלאות נקבעות רק ב״הרץ את כל הבדיקות״."; } catch (e2) { /* ignore */ }
+    try { const box = $("pointSummary"); if (box) { box._k = ""; box.textContent = "סיכום מקדים אינו זמין (תקלה בחישוב התצוגה). הבדיקות המלאות נקבעות רק ב״הרץ את כל הבדיקות״."; } } catch (e2) { /* ignore */ }
   }
   function onLayerData() {
     try { refreshLayers(); } catch (e) { logLayerErr("refreshLayers", e); }
@@ -643,9 +699,19 @@
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     if (!skipHtml && box._html !== html) { box.innerHTML = html; box._html = html; }   // לא מחליפים DOM זהה
     ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
-    $("btnMail").querySelector("button").disabled = !S.ready;
-    $("btnMail").style.pointerEvents = S.ready ? "" : "none";
+    // הקישור "פתח מייל" הוא <a href=mailto>: disabled על ה-button שבתוכו ו-pointer-events חוסמים עכבר בלבד — Enter על הקישור עצמו (מקלדת) היה פותח את תוכנת המייל גם כשהבקשה אינה מוכנה. לכן גם tabindex ו-aria-disabled, ומאזין click (ב-init) שמבטל את הפעולה כש-!S.ready
+    const mailA = $("btnMail");
+    mailA.querySelector("button").disabled = !S.ready;
+    mailA.style.pointerEvents = S.ready ? "" : "none";
+    mailA.tabIndex = S.ready ? 0 : -1;
+    if (S.ready) mailA.removeAttribute("aria-disabled"); else mailA.setAttribute("aria-disabled", "true");
     if (S.report && !(opts && opts.quiet)) renderReport();
+    markReportDraft();
+  }
+  // סימון טיוטה מיידי של הדוח המוצג והמודפס (Ctrl+P) בחלון העריכה הרכה: ההקלדה נועלת את הלחצנים מיד אך הדוח (quiet) לא נבנה מחדש עד תום ה-debounce, ולכן הוא עדיין של הגרסה הקודמת וללא באנר טיוטה.
+  // מחלקה pendDraft על ה-body (ולא על #report: הדוח אינו נוגע ב-DOM שלו בזמן הקלדה); CSS ב-index.html מציג ממנה באנר על כל עמוד בדוח, גם ב-@media print — בלי להחליף DOM ובלי להזיז שדות. דוח שכבר נבנה כטיוטה (S.reportDraft) מכיל את הבאנר בעצמו
+  function markReportDraft() {
+    document.body.classList.toggle("pendDraft", !!(S.res && S.report && S.reportHtml && !S.ready && !S.reportDraft));
   }
   function warnings() {
     const out = [], r = S.res; if (!r) return out;
@@ -678,6 +744,20 @@
   function progress(items) {
     $("progress").innerHTML = items.map(i => '<li><span class="s ' + i.s + '">' + ({ ok: "✔", no: "✖", wait: "…" }[i.s]) + "</span><span>" + esc(i.t) + (i.m ? ' <span class="hint">' + esc(i.m) + "</span>" : "") + "</span></li>").join("");
   }
+  // שם השדה בהודעה ליד כפתור ההרצה (לפי שדה השגיאה של C.validateInput)
+  const FIELD_LABEL = { coord: "נקודת מרכז", radius: "רדיוס", height: "גובה", dateFrom: "מתאריך", dateTo: "עד תאריך", timeFrom: "משעה", timeTo: "עד שעה", purpose: "מהות הפעילות", aircraft: "כלי טיס", siteName: "ישוב / אתר",
+    requester: "שם וטלפון המבקש", requesterOrg: "שם הגורם המבקש", callsign: "אות קריאה", registration: "מס׳ רישום כלי הטיס", contacts: "אנשי קשר בשטח", participants: "משתתפים", knownObstacles: "מכשולים שידועים", visitNotes: "הערות המבקש / תאריך סיור" };
+  // הראשון בסדר המסמך מבין השדות המסומנים (bad) והודעות השגיאה שליד שדות (גם כשאין שדה מסומן, כמו כלי טיס): גולל אליו למרכז המסך (showErrors כבר פתחה את תיבת פרטי המבקש) וממקד אותו; ב-prefers-reduced-motion — בלי אנימציה
+  function focusFirstError() {
+    try {
+      const cand = [...document.querySelectorAll("input.bad,select.bad,textarea.bad,.err[id^=e_]")].filter(e => e.id !== "e_run" && (e.matches(".bad") || (e.textContent || "").trim()) && e.getClientRects().length > 0);   // רק מה שגלוי: שגיאה בסעיף 4 לפני ההרצה הראשונה (מוסתר) לא תתפוס את המיקוד
+      const first = cand[0]; if (!first) return;
+      const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      first.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
+      const f = first.matches("input,select,textarea") ? first : (first.parentNode && first.parentNode.querySelector("input,select,textarea"));   // הודעה בלי שדה מסומן: השדה הראשון באותו אזור
+      if (f) f.focus({ preventScroll: true });
+    } catch (e) { /* גלילה/מיקוד הם נוחות בלבד — לעולם לא מפילים את ההרצה */ }
+  }
   async function run() {
     if (S.running) return;
     if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
@@ -687,7 +767,14 @@
     { const raw = $("coord").value.trim(); if (raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
     if (inp0.dateFrom && inp0.dateFrom < C.ilToday(new Date())) errs.push({ field: "dateFrom", msg: "תאריך ההתחלה כבר עבר" });
     showErrors(errs);
-    if (errs.length) { setStatus("input", false, errs.map(e => e.msg).join(" · ")); $("e_run").textContent = "יש להשלים את השדות המסומנים."; return; }
+    if (errs.length) {
+      setStatus("input", false, errs.map(e => e.msg).join(" · "));
+      // ההודעה ליד כפתור ההרצה מפרטת אילו שדות (בטלפון הכפתור רחוק מהשדות), והמסך גולל ומתמקד בשדה הפגום הראשון. כאן בלבד, לא ב-showErrors: זו נקראת גם בעריכה רכה אחרי הרצה, וגלילה או מיקוד שם היו גונבים את המקלדת באמצע הקלדה
+      const names = [...new Set(errs.map(e => FIELD_LABEL[e.field]).filter(Boolean))];
+      $("e_run").textContent = "יש להשלים את השדות המסומנים" + (names.length ? " — חסר או שגוי: " + names.join(", ") : "") + ".";
+      focusFirstError();
+      return;
+    }
     S.analysisStamp = null;   // ניתוח חדש בדרך: 'הניתוח ישן' אינו אמור לחסום את ההרצה שמתקנת אותו
     await checkSync();
     for (const k of ["a17", "sync", "agri", "notam"]) if (!(S.statuses[k] && S.statuses[k].ok)) { $("e_run").textContent = "ההרצה נעצרה — " + ({ a17: "אזורי איסור וגנים", sync: "סנכרון עם מפת החברים", agri: "מנחתים חקלאיים", notam: "נוטמים" })[k] + " אינם תקינים: " + (S.statuses[k] ? S.statuses[k].msg : "ממתין") + (k === "sync" ? "" : ". רעננו את הדף."); return; }
@@ -737,7 +824,7 @@
       if (errs2.length) { setStatus("input", false, errs2.map(e => e.msg).join(" · ")); st("calc", "no", errs2.map(e => e.msg).join(" · ")); throw new Error("חסרים פרטים בטופס"); }
       setStatus("input", true, "");
       const age = res.notamAgeH;
-      if (age == null || age > S.cfg.thresholds.notam_max_age_h) { setStatus("notam", false, age == null ? "לא ידוע מתי נמשכו הנוטמים" : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + "). יש לרענן: GitHub → Actions → עדכון נוטמים יומי → Run workflow. אם הריצה נכשלת בגלל תעודת TLS של אתר רשות שדות התעופה — ממתינים לחידושה (אין לכבות אימות)."); }
+      if (age == null || age > S.cfg.thresholds.notam_max_age_h) { setStatus("notam", false, age == null ? "לא ידוע מתי נמשכו הנוטמים" : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + ")." + (isAdmin() ? " יש לרענן: GitHub → Actions → עדכון נוטמים יומי → Run workflow. אם הריצה נכשלת בגלל תעודת TLS של אתר רשות שדות התעופה — ממתינים לחידושה (אין לכבות אימות)." : " אי אפשר להשלים בקשה עד שיתעדכנו — נסו שוב מאוחר יותר, ואם הבעיה נמשכת פנו לתמיכה.")); }   // ההוראה לרענן ב-GitHub מופנית למנהל בלבד
       else setStatus("notam", true, "");
       S.data.near = data.near; S.data.far = data.far; S.data.ext = data.ext; S.data.reverse = data.reverse;
       S.res = res; S.scanKey = scanKeyOf(inp0);
@@ -871,10 +958,12 @@
       (rv ? secH("אישור סקירה אנושית") + "<p>" + esc(rv) + "</p>" : "") +
       "<div class='foot'><span>" + esc(mdl.footer) + "</span></div></div>";
     $("report").className = $("incChecks").checked ? "" : "nochecks";
+    S.reportDraft = draft;   // הדוח נבנה עכשיו מהמצב הנוכחי: markReportDraft (בסוף refreshGate) מסיר את pendDraft
     $("report").innerHTML = p1 + pImgs + p3;
     const style = document.getElementById("nochecksStyle") || Object.assign(document.createElement("style"), { id: "nochecksStyle" });
     style.textContent = ".nochecks .paper.checks{display:none !important}"; document.head.appendChild(style);
     S.reportHtml = true;
+    markReportDraft();
   }
 
   /* ---------- תוספות ידניות ואישור סקירה ---------- */
@@ -974,12 +1063,14 @@
     }
     // השרת מסמן את הבקשה "מוכנה" רק כאן, אחרי שכל הקבצים נשמרו, והדפדפן מצהיר שכל הבדיקות עברו — ורק בקשה מסומנת תישלח
     // הבקשה שונתה בזמן ההעלאה: saveEnd נשלח עם ready:false (הקבצים אינם הגרסה הנוכחית, ולכן לא תסומן מוכנה), ונזרקת שגיאה — בלי ״נשמרו״ ובלי תוצאה
-    const changedMsg = "הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב.";
+    // ״שמור בדרייב״ קיים רק למנהל: הניסוח "יש לשמור שוב" מופנה אליו; מטיס רגיל (שהשמירה היא חלק אוטומטי מהשליחה) מקבל ניסוח בלי כפתור שאין לו. הקוד request_changed סוגר את חלון השליחה (guarded) ופותח אותו מחדש
+    const changedMsg = isAdmin() ? "הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב." : "הבקשה שונתה בזמן השליחה — לא נשלח דבר. המתינו לסיום העדכון (ואם נדרש, הריצו את הבדיקות מחדש) ושלחו שוב.";
+    const changedErr = () => { const e = new Error(changedMsg); e.code = "request_changed"; return e; };
     const changed = S.rev !== rev0;
     const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed });
     if (!end.ok) throw new Error(A.msg(end));
-    if (changed || S.rev !== rev0) throw new Error(changedMsg);   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
-    if (!end.ready) throw new Error("השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב");
+    if (changed || S.rev !== rev0) throw changedErr();   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
+    if (!end.ready) throw new Error(isAdmin() ? "השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב" : "לא ניתן היה להכין את הבקשה לשליחה — נסו לשלוח שוב; אם הבעיה חוזרת, פנו לתמיכה.");
     S.driveUrl = begin.url;
     return { folderId: begin.folderId, url: begin.url, name: begin.name, count: files.length };
   }
@@ -1022,10 +1113,12 @@
     if (!me.ok) { out.className = "small err"; out.textContent = "לא נשלח: לא ניתן לאמת את מצב השליחה מול השרת — " + A.msg(me); return; }
     if (!(await checkSync())) { out.className = "small err"; out.textContent = "לא נשלח: הנתונים אינם מסונכרנים עם מפת החברים (ראו ההודעה בראש הדף)."; refreshGate(); return; }
     if (!S.ready) { out.className = "small err"; out.textContent = "לא נשלח: הנתונים השתנו מאז הרצת הבדיקות — יש להריץ אותן שוב."; return; }
+    // נוסח המייל, האזהרות והאישור שיסומן בחלון הם של גרסת הבקשה הזו (rev0, באותו רגע של בדיקת S.ready). כל שינוי בבקשה מקדם את S.rev (clearOutcome): preflight ולפני כל sendRequest בודקים שהיא לא השתנתה, ואחרי השליחה לא מסמנים S.sent אם השתנתה
+    const rev0 = S.rev;
     const mail = O.mail(S.res, S.cfg), shown = A.getMailMode() === "live" ? "live" : "test", live = shown === "live";
     const serverTo = (A.getMailTo() || []).slice().sort().join(","), cfgTo = mail.to.slice().sort().join(",");
     // כתובות היעד קבועות בשרת; מוודאים שהן זהות לכתובות שמצוינות בנוהל (config.json) — אחרת לא שולחים
-    if (serverTo !== cfgTo) { out.className = "small err"; out.textContent = "לא נשלח: כתובות היעד בשרת (" + serverTo + ") שונות מהכתובות בנוהל א-11 סעיף 6(א) שבהגדרות (" + cfgTo + "). יש לעדכן את השרת."; return; }
+    if (serverTo !== cfgTo) { out.className = "small err"; out.textContent = isAdmin() ? "לא נשלח: כתובות היעד בשרת (" + serverTo + ") שונות מהכתובות בנוהל א-11 סעיף 6(א) שבהגדרות (" + cfgTo + "). יש לעדכן את השרת." : "לא נשלח: כתובות היעד בשרת אינן תואמות את הנוהל (א-11 סעיף 6(א)) — השליחה אינה זמינה כרגע, פנו לתמיכה."; return; }
     const names = ["טופס הבקשה (Word)" + ($("incChecks").checked ? " כולל דף בדיקות" : " בלי דף בדיקות"), "קובץ KML"].concat(IMGS.map(m => m.send));
     const warn = warnings().filter(w => /ימי עבודה|נוטמים נמשכו|מכשול שהוזן ולא נמצא/.test(w));   // אזהרות שחשוב לראות ממש לפני השליחה
     // יעד השליחה. שרת חדש (features.sendTarget) שולח לפי כתובת המבקש שנשמרה בו (נרשמה עם אימות קוד במייל; הלקוח אינו שולח כתובת כלל): למשרד נוטאם (target "office") — עותק למבקש והתשובות אליו, או רק למבקש עצמו (target "self"); במצב בדיקה — רק למבקש.
@@ -1035,7 +1128,11 @@
     const adr = '<span dir="ltr">' + esc(addr) + "</span>", officeTo = '<span dir="ltr">' + esc(mail.to.join(", ")) + "</span>";
     const noAddr = "אין כתובת מייל רשומה בחשבון שלך — העותק יישלח לבעל המערכת (" + adr + ")";
     const subjOf = t => esc((t === "self" ? SUBJ_SELF : t === "test" ? SUBJ_TEST : "") + mail.subject);
-    const oldNote = '<div class="banner warn" style="margin:8px 0 0"><b>שרת ה-Apps Script עדיין בגרסה הישנה — יש לעדכן אותו (ראו README).</b> עד שיעודכן אי אפשר לשלוח רק לעצמי, והשליחה ממשיכה כמו קודם.</div>';
+    // שרת ישן: ההוראה לעדכן את השרת (README) מופנית למנהל בלבד; מטיס רגיל אינו יכול ואינו אמור לעדכן שרת — הוא מקבל הודעה ניטרלית
+    const adm = isAdmin();
+    const oldNote = adm ? '<div class="banner warn" style="margin:8px 0 0"><b>שרת ה-Apps Script עדיין בגרסה הישנה — יש לעדכן אותו (ראו README).</b> עד שיעודכן אי אפשר לשלוח רק לעצמי, והשליחה ממשיכה כמו קודם.</div>'
+      : '<div class="banner warn" style="margin:8px 0 0"><b>שליחה רק לעצמך אינה זמינה כרגע — פנו לתמיכה.</b> השליחה ממשיכה כמו קודם.</div>';
+    const oldSrvTitle = adm ? "שרת ה-Apps Script בגרסה הישנה — יש לעדכן אותו" : "שליחה רק לעצמך אינה זמינה כרגע — פנו לתמיכה";
     const dlg = !newSrv ? {   // שרת ישן
       title: "שליחה למשרד נוטאם",
       banner: (live ? '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> המייל יישלח באמת אל ' + officeTo + '. עותק יישלח לחשבון הבעלים של המערכת, ותשובות המשרד יגיעו אליו (ולא אליך).</div>'
@@ -1059,13 +1156,19 @@
       warn.map(w => '<div class="banner warn" style="margin:8px 0 0">' + w + '</div>').join("") +
       '<label class="checks" style="margin-top:10px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="sendOk" style="margin-top:4px"> עברתי על הבקשה (הטופס, התצ״א והמצאי) והיא מוכנה לשליחה' + (live ? " — שליחה למשרד נוטאם אינה ניתנת לביטול" : "") + '</span></label>' + dlg.archive +
       '<div class="row" style="margin-top:10px"><button type="button" class="primary" id="sendGo" disabled>' + dlg.go + '</button>' +
-      (dlg.self ? '<button type="button" id="sendSelf" disabled' + (dlg.self === "disabled" ? ' data-oldsrv="1" title="שרת ה-Apps Script בגרסה הישנה — יש לעדכן אותו"' : "") + '>שלח רק לעצמי (עותק לבדיקה)</button>' : "") +
+      (dlg.self ? '<button type="button" id="sendSelf" disabled' + (dlg.self === "disabled" ? ' data-oldsrv="1" title="' + esc(oldSrvTitle) + '"' : "") + '>שלח רק לעצמי (עותק לבדיקה)</button>' : "") +
       '</div><div class="small" id="sendProg" role="status" style="margin-top:8px"></div></div>');
     if (!m) return;
     const ok = document.getElementById("sendOk"), go = document.getElementById("sendGo"), prog = document.getElementById("sendProg"), closeBtn = document.getElementById("mdClose");
     const selfBtn = dlg.self === "on" ? document.getElementById("sendSelf") : null;   // בשרת ישן הכפתור מוצג מושבת תמיד (לא ברשימת הכפתורים הפעילים) — ושום target לא נשלח
     const setGo = d => { go.disabled = d; if (selfBtn) selfBtn.disabled = d; };
     ok.onchange = () => { setGo(!ok.checked); };
+    // הבקשה השתנתה בזמן שהחלון פתוח (clearOutcome מקדם את S.rev; הרקע inert, אך שינוי תוכנתי או של טכנולוגיה מסייעת אפשרי): הנוסח והאישור שבחלון אינם של הגרסה העדכנית — נועלים אותו ומסבירים. בזמן שמירה/שליחה (S.sending) הזרימה עצמה בודקת את הגרסה
+    S.onStale = () => {
+      if (S.sending) return;
+      prog.className = "small err"; prog.textContent = "הבקשה שונתה בזמן שהחלון היה פתוח — הנוסח והאישור שבחלון אינם של הגרסה העדכנית, ולא נשלח דבר. יש לסגור את החלון ולפתוח אותו מחדש.";
+      setGo(true); ok.disabled = true;
+    };
     // target: "office" | "self" (נשלח רק לשרת חדש; expectMode רק ל-office, כמו בחוזה); again: "שלח שוב בכל זאת" — רק ל-office
     const doSend = async (target, again) => {
       const req = { folderId: S.sendFolder.folderId, subject: mail.subject, body: mail.body, again: !!again };
@@ -1074,11 +1177,20 @@
       const r = await A.call("sendRequest", req);
       if (!r.ok && r.error === "mode_changed") { A.setMailModeValue(r.mailMode); const e = new Error("מצב השליחה השתנה בשרת"); e.code = "mode_changed"; throw e; }
       if (!r.ok && r.error === "already_sent") {
-        prog.innerHTML = (r.similar ? 'בקשה על אותו מקום ותאריך כבר נשלחה למשרד נוטאם ב-' : 'הבקשה כבר נשלחה למשרד נוטאם ב-') + '<b>' + esc(fmtTime(r.sentAt)) + '</b>. <button type="button" id="sendAgain">שלח שוב בכל זאת</button>';
+        // similar: השרת מזהה בקשה קודמת של אותו משתמש בלבד על אותו מקום ותאריך (בקשה של מטיס אחר לעולם לא נספרת ולא מדווחת) — לכן הניסוח בגוף שני. השעה מוצגת רק כשהשרת מסר זמן תקין
+        const when = r.sentAt != null && r.sentAt !== "" && !isNaN(new Date(r.sentAt).getTime()) ? ' ב-<b>' + esc(fmtTime(r.sentAt)) + '</b>' : "";
+        prog.innerHTML = (r.similar ? 'כבר שלחתם למשרד נוטאם בקשה על אותו מקום ותאריך' : 'הבקשה כבר נשלחה למשרד נוטאם') + when + '. <button type="button" id="sendAgain">שלח שוב בכל זאת</button>';
         document.getElementById("sendAgain").onclick = () => guarded(async () => { await preflight(); prog.textContent = "שולח…"; await doSend("office", true); });
         setGo(true); return;
       }
       if (!r.ok) throw new Error(A.msg(r));
+      // הבקשה שונתה בזמן ש-sendRequest היה באוויר: המייל כן יצא (הגרסה שאושרה בחלון), ולכן לא מסתירים אותו — אבל לא מסמנים S.sent, לא מציגים ✔ ולא קישור לתיקייה, ונועלים את החלון. שליחה נוספת תשמור ותשלח את הגרסה העדכנית
+      if (S.rev !== rev0) {
+        const what = newSrv && r.target === "self" ? "הגרסה שאושרה בחלון נשלחה אליך (לא למשרד נוטאם)" : r.mode === "live" ? "הגרסה שאושרה בחלון נשלחה למשרד נוטאם" : "הגרסה שאושרה בחלון נשלחה במצב בדיקה (לא למשרד נוטאם)";
+        const m2 = "⚠ " + what + ". הבקשה שונתה בזמן השליחה ולכן הגרסה העדכנית לא נשלחה — יש לסגור את החלון, לאשר ולשלוח מחדש.";
+        prog.className = "small err"; prog.textContent = m2; out.className = "small err"; out.textContent = m2;
+        setGo(true); ok.disabled = true; return;
+      }
       S.sent = { at: r.sentAt, mode: r.mode, to: r.to, target: r.target || "office" };
       // ההודעה לפי מה שהשרת דיווח בפועל (target / mode), לא לפי מה שהתבקש. הכתובת של הבעלים לא מוצגת (רק "בעל המערכת"); פרט ל-copyToIsOwner שמוצג בחלון עצמו
       const who = newSrv && !toOwner ? "אליך" : "לבעל המערכת";
@@ -1098,9 +1210,9 @@
       S.sending = true; A.setBusy(true); refreshGate(); closeBtn.disabled = true; setGo(true); ok.disabled = true; prog.className = "small";
       let reopen = "";
       try { await fn(); }
-      catch (e) { if (e && (e.code === "mode_changed" || e.code === "dest_changed")) reopen = e.code; else fail(e); }
+      catch (e) { if (e && (e.code === "mode_changed" || e.code === "dest_changed" || e.code === "request_changed")) reopen = e.code; else fail(e); }
       finally { S.sending = false; A.setBusy(false); refreshGate(); closeBtn.disabled = false; }
-      if (reopen) { A.closeModal(); out.className = "small err"; out.textContent = (reopen === "dest_changed" ? "יעד השליחה בשרת (כתובת העותק) השתנה בזמן שהחלון היה פתוח" : "מצב השליחה בשרת השתנה בזמן שהחלון היה פתוח") + " — לא נשלח דבר. נפתח חלון חדש עם המצב העדכני; יש לאשר מחדש."; sendToNotam(); }
+      if (reopen) { A.closeModal(); out.className = "small err"; out.textContent = (reopen === "dest_changed" ? "יעד השליחה בשרת (כתובת העותק) השתנה בזמן שהחלון היה פתוח" : reopen === "request_changed" ? "הבקשה שונתה בזמן שהחלון היה פתוח" : "מצב השליחה בשרת השתנה בזמן שהחלון היה פתוח") + " — לא נשלח דבר. נפתח חלון חדש עם המצב העדכני; יש לאשר מחדש."; sendToNotam(); }
     };
     // בדיקות ממש לפני כל שליחה (גם "שלח שוב בכל זאת"): מצב השליחה בשרת, שהבקשה עדיין מוכנה ומאושרת, והסנכרון עם המפה
     const preflight = async () => {
@@ -1114,6 +1226,8 @@
       prog.textContent = "בודק סנכרון עם המפה…";
       if (!(await checkSync())) throw new Error("הנתונים אינם מסונכרנים עם מפת החברים — לא נשלח");
       if (!S.ready) throw new Error("הנתונים השתנו מאז הרצת הבדיקות — לא נשלח");
+      // אחרונה, אחרי בדיקות המוכנות (אחרת, כשההדמיות עדיין נבנות, החלון היה נסגר ונפתח מחדש בלי שהפתיחה החוזרת תצליח): האישור שסומן בחלון הוא על גרסה אחת בלבד של הבקשה
+      if (S.rev !== rev0) { const e = new Error("הבקשה שונתה בזמן שהחלון היה פתוח"); e.code = "request_changed"; throw e; }
     };
     // שני היעדים עוברים אותן הגנות: preflight, שמירה בארכיון המרכזי (persistToDrive) והשער S.ready. "למשרד" ובמצב בדיקה = target "office" (בבדיקה השרת שולח ממילא רק למבקש)
     const startSend = target => guarded(async () => {
@@ -1121,6 +1235,7 @@
       // בקשה שלא השתנתה מאז השליחה הקודמת כבר שמורה בדרייב (clearOutcome מאפס כל שינוי) — לא שומרים שוב, כדי שהשרת יזהה שליחה כפולה
       if (!(S.sent && S.sendFolder)) S.sendFolder = await persistToDrive((n, t, name) => { prog.textContent = "שומר בדרייב… (" + n + "/" + t + ") " + name; });
       if (!S.ready) throw new Error("הנתונים השתנו בזמן השמירה — לא נשלח. הרצו את הבדיקות שוב");
+      if (S.rev !== rev0) { const e = new Error("הבקשה שונתה בזמן שהחלון היה פתוח"); e.code = "request_changed"; throw e; }
       prog.textContent = "שולח…";
       await doSend(target, false);
     });
@@ -1178,9 +1293,11 @@
     initMap();
     try { initLayerUi(); } catch (e) { logLayerErr("initLayerUi", e); }   // מתגי האיסורים והנוטמים + פס הסיכום (גם כשהמפה לא נטענה: המתגים מושבתים עם הסבר); כשל בהם לעולם לא עוצר את האתחול
     const okCfg = await loadStatic();
-    document.addEventListener("req-auth", ev => {   // משתמש אחר באותו דף לא יורש תיקייה, מזהה בקשה או הודעות של קודמו
+    document.addEventListener("req-auth", ev => {   // משתמש אחר באותו דף לא יורש דבר מקודמו (בקשה, דוח, תיקייה, פרטי מבקש, נתונים שמורים); כניסה חוזרת של אותו משתמש (פקיעת אסימון) לא מאפסת לו את העבודה
       const u = ev.detail && ev.detail.user;
-      if (S.lastUser && S.lastUser !== u) { S.rid = ""; S.ridKey = ""; S.sendFolder = null; S.driveUrl = ""; clearOutcome(); }
+      if (!u) return;
+      if (S.lastUser && S.lastUser !== u) { switchUser(); return; }
+      if (!S.lastUser) enterUser(u);
       S.lastUser = u;
       applyRole();
     });
@@ -1201,6 +1318,7 @@
     $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); } });
     $("runBtn").onclick = run; $("qBtn").onclick = searchPlace; $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
     $("btnPrint").onclick = () => window.print();
+    $("btnMail").addEventListener("click", ev => { if (!S.ready) ev.preventDefault(); });   // Enter/הפעלה תוכנתית על הקישור כשהבקשה אינה מוכנה (השער S.ready) — לא פותח את תוכנת המייל, ולא משנה כיצד ה-href נקבע
     $("btnKml").onclick = () => download(baseName() + ".kml", "application/vnd.google-earth.kml+xml", O.kml(S.res, { zones: S.data.zones }, S.cfg));
     IMGS.forEach(m => { $(m.btn).onclick = () => downloadImg(m); });
     $("btnDocx").onclick = downloadDocx;
@@ -1215,7 +1333,7 @@
     renderManual();
     setStatus("selftest", false, "טרם הורצה");
     if (okCfg) await selfTest();
-    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs };
+    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs, userKey: ukey };
     window.__REQ_READY = true;
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();

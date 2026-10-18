@@ -8,6 +8,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
+import crypto from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -1216,6 +1217,41 @@ test("אימות אות קריאה ומס׳ רישום (שדות 13 ו-14): או
   }
   // שגיאת אות הקריאה אינה מוצמדת לשדה אחר
   assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { callsign: "x".repeat(41), registration: "y".repeat(41) }), cfg).map(e => e.field).sort(), ["callsign", "registration"]);
+});
+
+test("n=10: ערך שכולו תווים בלתי נראים — שם הגורם והשם נחשבים חסרים, ואות קריאה/מס׳ רישום נדחים (ריק או רווחים בלבד עדיין מותרים)", () => {
+  // RLM, ZWSP, LRM, WJ, מילוי הנגול U+3164, בריילי ריק U+2800, בורר וריאציה, CGJ, ושילוב של כמה מהם — כולם עוברים trim() אבל נראים ריקים בטופס, ב-Word ובמייל
+  const invis = [0x200f, 0x200b, 0x200e, 0x2060, 0x3164, 0x2800, 0xfe0f, 0x34f, 0x115f, 0xffa0].map(c => fcc(c)).concat([fcc(0x200f, 0x200b, 0x2060), " " + fcc(0x200f) + " ", fcc(0x200b).repeat(30)]);
+  for (const v of invis) {
+    const o = ofErrs({ requesterOrg: v }, "requesterOrg"); assert.equal(o.length, 1, "גורם U+" + v.codePointAt(0).toString(16)); assert.equal(o[0].msg, "יש להזין את שם הגורם המבקש");
+    assert.equal(ofErrs({ requesterName: v }, "requester").length, 1, "שם מבקש U+" + v.codePointAt(0).toString(16));
+    for (const f of ["callsign", "registration"]) { const e = ofErrs({ [f]: v }, f); assert.equal(e.length, 1, f + " U+" + v.codePointAt(0).toString(16)); assert.match(e[0].msg, /תו גלוי/); }
+  }
+  // עם טקסט גלוי לצד התו הבלתי נראה (הדבקה מ-RTL, למשל) — תקין
+  for (const c of [0x200f, 0x200b, 0x2060, 0x3164]) {
+    const v1 = fcc(c) + "חברה", v2 = "חברה" + fcc(c), v3 = "חב" + fcc(c) + "רה";
+    for (const v of [v1, v2, v3]) { assert.equal(ofErrs({ requesterOrg: v }, "requesterOrg").length, 0, v); assert.equal(ofErrs({ requesterName: v }, "requester").length, 0, v); assert.equal(ofErrs({ callsign: v }, "callsign").length, 0, v); assert.equal(ofErrs({ registration: v }, "registration").length, 0, v); }
+  }
+  // ריק / רווחים / חסר נשארים אופציונליים באות קריאה וברישום (הפלט ״לא רלוונטי״), וחובה בשם הגורם
+  for (const v of [undefined, null, "", "   ", "\t \n"]) { for (const f of ["callsign", "registration"]) assert.equal(ofErrs({ [f]: v }, f).length, 0, f + JSON.stringify(v)); }
+  assert.equal(ofErrs({ requesterOrg: "   " }, "requesterOrg").length, 1);
+  // שגיאה אחת בלבד לכל שדה, וההודעה על תו בקרה נשארת (בקרה עם טקסט גלוי = ״תווים לא תקינים״, לא ״תו גלוי״)
+  assert.match(ofErrs({ callsign: "ab" + fcc(1) + "cd" }, "callsign")[0].msg, /תווים לא תקינים/);
+  assert.match(ofErrs({ requesterOrg: fcc(1) }, "requesterOrg")[0].msg, /תווים לא תקינים|יש להזין/);
+});
+
+test("אחסון לפי משתמש (n=7/8/16): sha256Hex זהה ל-crypto של node; userHash סינכרוני, קצר, יציב וייחודי; שם המשתמש לא נכנס למפתח; בלי משתמש אין מפתח", () => {
+  for (const t of ["", "abc", "a".repeat(55), "a".repeat(56), "a".repeat(64), "dana.pilot", "שלום עולם", "x".repeat(2000), fcc(0xd83d, 0xde00)]) assert.equal(C.sha256Hex(t), crypto.createHash("sha256").update(t, "utf8").digest("hex"), JSON.stringify(t.slice(0, 20)));
+  const names = Array.from({ length: 100 }, (_, i) => "pilot." + i), hs = names.map(C.userHash);
+  assert.equal(new Set(hs).size, 100, "מאה משתמשים — מאה גיבובים שונים");
+  assert.ok(hs.every(h => /^[0-9a-f]{16}$/.test(h)), "16 תווי hex");
+  assert.equal(C.userHash("dana.pilot"), C.userHash("dana.pilot"), "יציב");
+  assert.notEqual(C.userHash("Dana"), C.userHash("dana"), "שמות משתמש רגישי רישיות בשרת — גם הגיבוב");
+  const k = C.userKey("icd_req_person_v1", "dana.pilot");
+  assert.ok(k.startsWith("icd_req_person_v1:") && k.length === "icd_req_person_v1:".length + 16 && !k.includes("dana"), k);
+  assert.equal(C.userKey("icd_req_person_v1", "dana.pilot"), k); assert.notEqual(C.userKey("icd_req_person_v1", "dave.pilot"), k);
+  assert.notEqual(C.userKey("icd_req_aircraft_v1", "dana.pilot"), C.userKey("icd_req_person_v1", "dana.pilot"));
+  for (const bad of ["", null, undefined]) assert.equal(C.userKey("icd_req_person_v1", bad), "", "בלי משתמש — אין מפתח (הקורא לא קורא ולא כותב)");
 });
 
 test("הטופס: שדה 2 = הגורם שהוקלד; שדות 13 ו-14 = מה שהוקלד, וריק/רווחים => ״לא רלוונטי״; אין שם ארגון או ״ICD״ קבועים באף פלט", async () => {

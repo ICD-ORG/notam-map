@@ -20,18 +20,34 @@
     return bubble;
   }
 
-  // ממקם מתחת לכפתור (או מעליו כשאין מקום), ממורכז אליו ומוגבל לתוך המסך — גם בטלפון
+  // האזורים הבטוחים (חריץ, שורת סטטוס, פינות מעוגלות, פס הבית) כפי שהם מחושבים עכשיו: --safe-* ב-index.html (env(safe-area-inset-*)). נקראים דרך אלמנט בדיקה שה-padding שלו הוא המשתנים,
+  // ולא דרך getPropertyValue על המשתנה (ב-Safari env() בתוך משתנה מותאם אינו תמיד מוחלף במחרוזת px); כל ערך שאינו מספר = 0, כך שדפדפן בלי תמיכה מתנהג כמו קודם
+  let probe = null;
+  function safeInsets() {
+    try {
+      if (!probe || !probe.isConnected) {
+        probe = document.createElement("div"); probe.setAttribute("aria-hidden", "true");
+        probe.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:var(--safe-top,0px) var(--safe-right,0px) var(--safe-bottom,0px) var(--safe-left,0px)";
+        document.body.appendChild(probe);
+      }
+      const cs = getComputedStyle(probe), n = v => (parseFloat(v) > 0 ? parseFloat(v) : 0);
+      return { t: n(cs.paddingTop), r: n(cs.paddingRight), b: n(cs.paddingBottom), l: n(cs.paddingLeft) };
+    } catch (e) { return { t: 0, r: 0, b: 0, l: 0 }; }
+  }
+
+  // ממקם מתחת לכפתור (או מעליו כשאין מקום), ממורכז אליו ומוגבל לתוך האזור הבטוח של המסך — גם בטלפון עם חריץ בלנדסקייפ
   function place() {
     if (!owner || !bubble) return;
-    const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight;
-    bubble.style.maxWidth = Math.min(340, vw - 2 * EDGE) + "px";
+    const vw = document.documentElement.clientWidth || window.innerWidth, vh = window.innerHeight, si = safeInsets();
+    const minL = EDGE + si.l, maxR = vw - EDGE - si.r, minT = EDGE + si.t, maxB = vh - EDGE - si.b;   // גבולות הבועה בתוך האזור הבטוח
+    bubble.style.maxWidth = Math.max(0, Math.min(340, maxR - minL)) + "px";
     bubble.style.left = "0px"; bubble.style.top = "0px";
     const r = owner.getBoundingClientRect(), bw = bubble.offsetWidth, bh = bubble.offsetHeight;
     let left = r.left + r.width / 2 - bw / 2;
-    left = Math.max(EDGE, Math.min(left, vw - bw - EDGE));
+    left = Math.max(minL, Math.min(left, maxR - bw));
     let top = r.bottom + GAP;
-    if (top + bh > vh - EDGE && r.top - GAP - bh >= EDGE) top = r.top - GAP - bh;   // אין מקום למטה ויש למעלה
-    top = Math.max(EDGE, Math.min(top, vh - bh - EDGE));
+    if (top + bh > maxB && r.top - GAP - bh >= minT) top = r.top - GAP - bh;   // אין מקום למטה ויש למעלה
+    top = Math.max(minT, Math.min(top, maxB - bh));
     bubble.style.left = Math.round(left) + "px"; bubble.style.top = Math.round(top) + "px";
   }
 

@@ -118,6 +118,8 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .paper h1{font-size:19px;margin:0 0 4px}.paper h2{font-size:14.5px;margin:14px 0 6px;color:#111}
 .paper .hdr{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px;font-weight:700}
 .paper .draft{background:#ffe3e3;border:2px solid #d92d20;color:#8a1010;padding:6px 10px;margin-bottom:8px;font-weight:700}
+/* חלון העריכה הרכה (450 מ״ש אחרי הקלדה, עד שהדוח נבנה מחדש): הדוח על המסך עדיין של הגרסה הקודמת, ולכן ui.js מסמן את ה-body במחלקה pendDraft והבאנר בא מ-CSS — גם על המסך וגם בהדפסה (Ctrl+P), בלי לגעת ב-DOM של הדוח (המחלקה על ה-body, לא על #report) ובלי להזיז שדות (הדוח בתחתית הדף, מתחת לכל שדות הקלט) */
+body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לשליחה: הדוח מתעדכן לפי השינוי האחרון";display:block;background:#ffe3e3;border:2px solid #d92d20;color:#8a1010;padding:6px 10px;margin-bottom:8px;font-weight:700;font-size:13px;line-height:1.55}
 .paper table.f{width:100%;border-collapse:collapse}
 .paper table.f td{border:1px solid #000;padding:6px 9px;vertical-align:middle}
 .paper td.k{width:40%;background:#efefef;font-weight:700}
@@ -167,7 +169,7 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
   .paper h2{break-after:avoid;page-break-after:avoid}
   .paper table.t td,.paper table.t th{font-size:10.8px}
   .paper td.k,.paper table.t th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .paper .draft{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper .draft,body.pendDraft #report .paper::before{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); pointer-events: none; user-select: none; }
@@ -176,6 +178,7 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 #authCover > .authBox, .authCover2 > .authBox { margin: auto; }   /* מרכוז במרווחי auto (ולא align-items:center): כשהחלון גבוה מהמסך (טלפון ב-landscape) הוא מתחיל בראש האזור הבטוח ונגלל, ולא נחתך למעלה */
 .authBox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(420px, 100%); color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .linkBtn { background: none; border: 0; color: #7cc4ff; text-decoration: underline; cursor: pointer; padding: 6px 0; font-size: 13px; min-height: 0; }
+.authBox a.backMap { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 8px; font-size: 14px; font-weight: 700; text-decoration: none; }   /* "← חזרה למפה" בתוך כיסוי הכניסה/ההרשמה (הכותרת מכוסה): אזור לחיצה של 44px; הכיסוי עצמו כבר מרוחק מהאזורים הבטוחים */
 .authBox.wide { width: min(860px, 100%); display: block; max-height: calc(92vh - var(--safe-top) - var(--safe-bottom)); overflow: auto; }
 .admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
 .userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
@@ -254,7 +257,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <span class="err" id="e_knownObstacles"></span></div>
 
   <details class="person" id="personBox" open>
-    <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה (לא באתר)</summary>
+    <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה, ורק עבור החשבון שלכם (לא באתר)</summary>
     <div class="grid" style="margin-top:10px">
       <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
       <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
@@ -271,7 +274,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="plist" id="partList"></div>
     <div class="row" style="margin-top:6px"><button type="button" id="addPart">➕ הוסף משתתף</button></div>
     <span class="err" id="e_participants"></span>
-    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים (כולל שם הגורם המבקש, אות הקריאה ומס׳ הרישום) נשמרים בדפדפן הזה בלבד; הם נשלחים רק כחלק מהבקשה עצמה — הטופס, קובץ ה-Word והמייל. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
+    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים (כולל שם הגורם המבקש, אות הקריאה ומס׳ הרישום) נשמרים בדפדפן הזה בלבד ורק עבור החשבון המחובר (משתמש אחר באותו דפדפן אינו רואה אותם); הם נשלחים רק כחלק מהבקשה עצמה — הטופס, קובץ ה-Word והמייל. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
   </details>
 </section>
 
@@ -359,14 +362,14 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
-<script src="js/help.js?v=1"></script>
-<script src="js/auth.js?v=3"></script>
+<script src="js/help.js?v=2"></script>
+<script src="js/auth.js?v=4"></script>
 <script src="js/sync.js?v=1"></script>
-<script src="js/core.js?v=5"></script>
+<script src="js/core.js?v=6"></script>
 <script src="js/maplayers.js?v=1"></script>
 <script src="js/output.js?v=5"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=5"></script>
+<script src="js/ui.js?v=6"></script>
 </body>
 </html>

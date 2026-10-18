@@ -13,7 +13,9 @@ export function makeEnv() {
   const props = {}, cache = {}, logs = [];
   // השעון המדומה מתחיל בזמן אמיתי: הדפדפן בבדיקות e2e משווה אותו (פקיעת אסימון) לשעון שלו
   let clock = Date.now();
-  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0, logWrite: false };
+  const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0, logWrite: false, quotaCall: false };
+  const mailQuota = { left: 100000, sentRcpts: 0 };   // נמענים שנותרו ביום / כמה נמענים נשלחו בפועל
+  const rcptCount = m => ["to", "cc", "bcc"].reduce((n, k) => n + (m[k] ? String(m[k]).split(",").map(x => x.trim()).filter(Boolean).length : 0), 0);
   // Wix מדומה (Events orders): env.wix.orders = [{orderNumber,status,created,email,firstName,memberId,tickets,eventId}], נבדקים הכותרות והסינון כמו ב-API האמיתי
   const wix = { orders: [], calls: [], eventId: "fbcb2cc1-4dc7-4545-b9d5-08febf9f8153", siteId: "29dca6d8-08d4-4679-a6e5-c5f4f3317d90" };
   const triggers = [];
@@ -64,7 +66,19 @@ export function makeEnv() {
     UrlFetchApp: { fetch: fetchApp },
     ScriptApp: { getProjectTriggers: () => triggers.slice(), deleteTrigger: t => { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
       newTrigger: fn => { const t = { fn, getHandlerFunction: () => fn, spec: {} }; const b = { timeBased: () => b, everyDays: n => { t.spec.days = n; return b; }, atHour: h => { t.spec.hour = h; return b; }, inTimezone: z => { t.spec.tz = z; return b; }, create: () => { triggers.push(t); return t; } }; return b; } },
-    MailApp: { sendEmail: m => { if (hooks.beforeMail) hooks.beforeMail(m); if (fail.mail) throw new Error("mail down"); mails.push(m); } },
+    // MailApp מדומה כמו האמיתי: המכסה היומית נספרת לפי נמענים (to+cc+bcc), ושליחה מעבר למה שנותר זורקת. ברירת המחדל גדולה מאוד — בדיקות מורידות env.mailQuota.left כדי לדמות מכסה שנגמרת.
+    // להסרת הפונקציה (שרת/מדמה ישן): delete env.sandbox.MailApp.getRemainingDailyQuota. fail.quotaCall = true => הקריאה לבדיקת המכסה עצמה זורקת.
+    MailApp: {
+      sendEmail: m => {
+        if (hooks.beforeMail) hooks.beforeMail(m);
+        if (fail.mail) throw new Error("mail down");
+        const n = rcptCount(m);
+        if (n > mailQuota.left) throw new Error("Service invoked too many times for one day: email.");
+        mailQuota.left -= n; mailQuota.sentRcpts += n;
+        mails.push(m);
+      },
+      getRemainingDailyQuota: () => { if (fail.quotaCall) throw new Error("quota api down"); return mailQuota.left; },
+    },
     Session: { getEffectiveUser: () => ({ getEmail: () => "owner@icd.test" }) },
     CacheService: { getScriptCache: () => ({ get: k => (cache[k] && cache[k].exp > clock ? cache[k].v : null), put: (k, v, s) => { cache[k] = { v, exp: clock + s * 1000 }; }, remove: k => { delete cache[k]; } }) },
     LockService: { getScriptLock: () => ({ tryLock: () => !fail.lockBusy, releaseLock() {} }) },
@@ -89,7 +103,7 @@ export function makeEnv() {
   vm.runInContext(SRC, sandbox, { filename: "Code.gs" });
   vm.runInContext("CFG.ROOT_FOLDER_ID = '" + ROOT_ID + "'", sandbox);   // בבדיקות התיקייה הראשית היא ההדמיה
   const call = (obj) => JSON.parse(vm.runInContext("doPost", sandbox)({ postData: { contents: JSON.stringify(obj) } }).text);
-  return { sandbox, call, props, logs, folders, mails, hooks, fail, wix, triggers, now: () => clock, advance: ms => { clock += ms; },
+  return { sandbox, call, props, logs, folders, mails, hooks, fail, wix, triggers, mailQuota, now: () => clock, advance: ms => { clock += ms; },
     run: name => vm.runInContext(name + "()", sandbox), doGet: () => JSON.parse(vm.runInContext("doGet", sandbox)().text) };
 }
 

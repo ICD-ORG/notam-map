@@ -12,10 +12,30 @@
     expired: "פג תוקף ההתחברות — יש להתחבר מחדש.", auth: "ההתחברות אינה תקפה — יש להתחבר מחדש.", weak_pass: "הסיסמה קצרה מדי (לפחות 10 תווים).",
     bad_user: "שם משתמש לא תקין (3–40 תווים: אותיות, ספרות, נקודה, מקף).", exists: "המשתמש כבר קיים.", no_user: "המשתמש לא נמצא.", self: "לא ניתן לבצע פעולה זו על המשתמש שלך.",
     forbidden: "הפעולה מותרת למנהל בלבד.", bad_code: "הקוד שגוי או שפג תוקפו.", no_setup: "המערכת אינה במצב הקמה.", busy: "השרת עסוק, נסו שוב.", bad_folder: "התיקייה בדרייב אינה תקפה.",
-    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים לשליחת בדיקה.", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", sub_expired: "המנוי הסתיים. לחידוש יש לרכוש כרטיס חדש ואז ללחוץ כאן על ״הרשמה / חידוש מנוי״.", bad_email: "כתובת המייל אינה תקינה.", no_ticket: "לא נמצא כרטיס ששולם עבור הכתובת הזו (או שכבר נוצל).", need_credentials: "יש לבחור שם משתמש וסיסמה.",
+    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", mail_quota: "מכסת המיילים היומית של המערכת הסתיימה — נסו שוב מחר, או פנו לתמיכה.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים של המערכת (נדרשת לכל שליחה, כי הבעלים מקבל עותק סמוי).", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", sub_expired: "המנוי הסתיים. לחידוש יש לרכוש כרטיס חדש ואז ללחוץ כאן על ״הרשמה / חידוש מנוי״.", bad_email: "כתובת המייל אינה תקינה.", no_ticket: "לא נמצא כרטיס ששולם עבור הכתובת הזו (או שכבר נוצל).", need_credentials: "יש לבחור שם משתמש וסיסמה.",
     ticket_expired: "הכרטיס ישן מדי (מעבר לתקופת המנוי) — יש לרכוש כרטיס חדש.", not_configured: "ההרשמה עדיין לא הופעלה במערכת. יש לפנות למשרד הארגון.", wix_down: "לא ניתן לאמת כרגע את הכרטיס מול האתר — נסו שוב בעוד כמה דקות.", bad_date: "תאריך לא תקין (YYYY-MM-DD).", bad_name: "שם התיקייה אינו תקין.", bad_rid: "מזהה הבקשה אינו תקין — רעננו את הדף.", not_ready: "הבקשה לא נשמרה בשרת כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב.", mode_changed: "מצב השליחה בשרת השתנה.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
   };
-  const msg = r => (r && (ERR[r.error] || r.message || r.error)) || "שגיאה לא ידועה";
+  // הודעות שמפנות לפעולה של מנהל (שמירה בדרייב, README, שרת) מוצגות רק למנהל; למטיס רגיל — ניסוח ניטרלי שמפנה לתמיכה
+  const ERR_PILOT = {
+    forbidden: "אין לך הרשאה לפעולה הזו.",
+    not_ready: "לא ניתן היה להכין את הבקשה לשליחה — נסו לשלוח שוב; אם הבעיה חוזרת, פנו לתמיכה.",
+    missing_files: "לא ניתן היה להכין את הבקשה לשליחה — נסו לשלוח שוב; אם הבעיה חוזרת, פנו לתמיכה.",
+    no_owner: "השליחה אינה זמינה כרגע — פנו לתמיכה."
+  };
+  // תקרת השליחות מחזירה scope: "user" = המגבלה האישית של המשתמש, "all" = מגבלה כללית של המערכת (המטיס צריך להבין שהמערכת עמוסה ולא הוא חרג). עם scope מוכר מציגים את הודעת השרת (היא מפרטת מה הוגבל: משרד נוטאם / עותקים / ניסיונות); בלעדיה — נוסח קבוע לפי ה-scope
+  const SCOPE_ALL = /^(all|global|system|total|overall|shared)$/i, SCOPE_USER = /^(user|self|personal|requester|me)$/i;
+  const msg = r => {
+    if (!r) return "שגיאה לא ידועה";
+    if (r.error === "rate") {
+      const sc = String(r.scope == null ? "" : r.scope), all = SCOPE_ALL.test(sc);
+      if ((all || SCOPE_USER.test(sc)) && typeof r.message === "string" && r.message) return r.message;
+      if (all) return "המערכת עמוסה כרגע — המגבלה אינה אישית ואינה קשורה אליכם; נסו שוב מאוחר יותר.";
+      return (!sc && r.message) ? String(r.message) : ERR.rate;   // בלי scope (שרת ישן): הודעת השרת אם יש
+    }
+    if (r.error === "mail_quota" && A.role === "admin" && r.message) return String(r.message);
+    if (A.role !== "admin" && ERR_PILOT[r.error]) return ERR_PILOT[r.error];
+    return ERR[r.error] || r.message || r.error || "שגיאה לא ידועה";
+  };
   // מצב השליחה והנמענים מתשובת השרת (login / regFinish / me / changePassword). full: מאפס קודם — תשובה בלי features היא שרת ישן, ולכן "שלח רק לעצמי" מושבת והלקוח לא שולח target.
   // email = כתובת המבקש השמורה ("" אם אין); copyTo = לאן יישלחו עותקים (email, ובלי כתובת — כתובת הבעלים); copyToIsOwner = copyTo היא כתובת הבעלים כי אין למשתמש כתובת
   function applyMail(r, full) {
@@ -65,6 +85,8 @@
   function logout() { clear(); closeModal(); renderBar(); showCover(); }
 
   /* ---------- מסך כניסה ---------- */
+  // הכיסוי (position:fixed, מעל הכותרת) מסתיר את "← חזרה למפה" שבכותרת, ובאפליקציה מותקנת (standalone) אין כפתור חזרה של הדפדפן — לכן קישור משלו בתוך כל גרסה של הכיסוי (כניסה, הרשמה, שרת לא מוגדר). הכיסוי מרוחק מהאזורים הבטוחים (padding ב-index.html); גובה 44px ב-.backMap
+  const BACK_MAP = '<a class="backMap" href="../" id="auMap">← חזרה למפה</a>';
   function cover() {
     let c = $("authCover");
     if (!c) { c = document.createElement("div"); c.id = "authCover"; c.setAttribute("role", "dialog"); c.dir = "rtl"; document.body.appendChild(c); }
@@ -75,7 +97,7 @@
     document.body.classList.add("authLocked");
     const c = cover();
     if (!A.cfg || !A.cfg.api_url) {
-      c.innerHTML = '<div class="authBox"><h2>בקשות טיסה</h2><p class="err">שרת ההתחברות עדיין לא הוגדר, ולכן אי אפשר להשתמש בדף. יש להשלים את ההתקנה (apps-script/README.md).</p></div>';
+      c.innerHTML = '<div class="authBox"><h2>בקשות טיסה</h2><p class="err">שרת ההתחברות עדיין לא הוגדר, ולכן אי אפשר להשתמש בדף. יש להשלים את ההתקנה (apps-script/README.md).</p>' + BACK_MAP + '</div>';
       return;
     }
     let boot = false;
@@ -85,7 +107,7 @@
       '<label class="f"><b>שם משתמש</b><input id="auUser" type="text" autocomplete="username" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה' + (boot ? ' (לפחות 10 תווים)' : '') + '</b><input id="auPass" type="password" autocomplete="' + (boot ? "new-password" : "current-password") + '" dir="ltr"></label>' +
       '<div class="err" id="auErr">' + esc(note || "") + '</div><button class="primary" id="auGo" type="submit">' + (boot ? "הקם מנהל והיכנס" : "כניסה") + '</button>' +
-      (boot ? "" : '<button type="button" class="linkBtn" id="auReg">מטיס מסחרי? הרשמה / חידוש מנוי</button>') + '</form>';
+      (boot ? "" : '<button type="button" class="linkBtn" id="auReg">מטיס מסחרי? הרשמה / חידוש מנוי</button>') + BACK_MAP + '</form>';
     if ($("auReg")) $("auReg").onclick = () => showRegister();
     $("authForm").onsubmit = async ev => {
       ev.preventDefault();
@@ -121,7 +143,7 @@
       '<label class="f"><b>סיסמה (לפחות 10 תווים)</b><input id="rgPass" type="password" autocomplete="new-password" dir="ltr"></label>' +
       '<p class="small">אם כבר נרשמתם בעבר ואתם רק מחדשים מנוי — השאירו שם משתמש וסיסמה ריקים.</p>' +
       '<button class="primary" id="rgGo" type="submit">אישור</button></div>' +
-      '<div class="err" id="rgErr"></div><button type="button" class="linkBtn" id="rgBack">חזרה לכניסה</button></form>';
+      '<div class="err" id="rgErr"></div><button type="button" class="linkBtn" id="rgBack">חזרה לכניסה</button>' + BACK_MAP + '</form>';
     $("rgBack").onclick = () => showCover();
     $("rgSend").onclick = async () => {
       $("rgErr").textContent = ""; $("rgInfo").textContent = "";
@@ -163,12 +185,26 @@
   function modal(html) {
     if (A.busy) return null;     // באמצע שמירה/שליחה לא מחליפים את החלון הפתוח
     closeModal();
-    const m = document.createElement("div"); m.id = "authModal"; m.className = "authCover2"; m.dir = "rtl";
+    const m = document.createElement("div"); m.id = "authModal"; m.className = "authCover2"; m.dir = "rtl"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = '<div class="authBox wide">' + html + '<div style="margin-top:12px"><button type="button" id="mdClose">סגור</button></div></div>';
+    lastFocus = document.activeElement;   // ההתמקדות חוזרת לשם כשהחלון נסגר (הכפתור שפתח אותו)
     document.body.appendChild(m); $("mdClose").onclick = closeModal;
+    setBackdropInert(true);
+    const box = m.firstElementChild; box.setAttribute("tabindex", "-1"); box.style.outline = "none"; try { box.focus({ preventScroll: true }); } catch (e) { /* ignore */ }   // הרקע inert, ולכן המיקוד עובר אל החלון (קורא מסך מקריא אותו)
     return m;
   }
-  function closeModal() { const m = $("authModal"); if (m) m.remove(); }
+  let lastFocus = null;
+  function closeModal() {
+    const m = $("authModal"); if (m) m.remove();
+    setBackdropInert(false);
+    const f = lastFocus; lastFocus = null;
+    if (m && f && f.isConnected && f !== document.body) { try { f.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+  }
+  // בזמן שחלון פתוח (שליחה, ניהול, סיסמה) הכותרת והטופס שמאחוריו אינם ניתנים למיקוד, להקלדה ולקורא מסך — אחרת אפשר לערוך את הבקשה מאחורי חלון האישור (Tab החוצה). inert על header ו-main בלבד (לא על body):
+  // כיסוי הכניסה (#authCover) ובועת ה"!" הם אחים ב-body ונשארים פעילים. ההגנה העיקרית היא קשירת החלון לגרסת הבקשה (S.rev ב-ui.js); זו הגנה בעומק
+  function setBackdropInert(on) {
+    ["header", "main"].forEach(t => { const e = document.querySelector(t); if (!e) return; if (on) e.setAttribute("inert", ""); else e.removeAttribute("inert"); });
+  }
 
   function openPassword() {
     if (A.busy) return;
@@ -198,6 +234,8 @@
       const logWarn = r.logError ? '<div class="err" style="margin:0 0 8px"><b>יומן הבקשות לא נקרא:</b> ' + esc(r.logError) + " — השליחה והשמירה נעצרות עד שיטופל (אפשר עדיין לחסום משתמשים).</div>" : "";
       const fmt = t => t ? new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
       const modeLive = A.mailMode === "live";
+      // מכסת המייל היומית של המערכת (Google): נותרו N נמענים; אזהרה כשנמוך מ-30. השרת מחזיר מספר או null (לא ידוע) — ללא שורה כשאינו מספר
+      const ql = r.mailQuotaLeft, quotaHtml = (typeof ql === "number" && isFinite(ql)) ? '<div class="small' + (ql < 30 ? ' err' : '') + '" id="admQuota" role="status">' + (ql < 30 ? '⚠ ' : '') + (Math.floor(ql) === 1 ? 'נותר נמען אחד' : 'נותרו ' + esc(String(Math.max(0, Math.floor(ql)))) + ' נמענים') + ' במכסת המייל היומית' + (ql < 30 ? ' — המכסה עומדת להיגמר; אחרי שתיגמר לא יישלחו מיילים (לא בקשות ולא קודי הרשמה) עד מחר' : '') + '.</div>' : '';
       // ארבעת כפתורי הפעולה בשורת משתמש, כל אחד עם ״!״ משלו. בחסימה/פתיחה ההסבר נבחר לפי u.blocked (הכפתור משנה תווית): HELP.block מול HELP.unblock, כפי ש-setBlocked בשרת מתנהג בכל כיוון
       const actCell = u => {
         const un = u.blocked, q = esc(u.user);
@@ -208,7 +246,7 @@
       };
       body.innerHTML = logWarn +
         '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק למבקש עצמו") + '</b> ' +
-        withHelp('<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button>', HELP.mode, "מצב שליחה") + '</div>' +
+        withHelp('<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button>', HELP.mode, "מצב שליחה") + '</div>' + quotaHtml +
         '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +
         '<div class="small admHelp"><span>הסבר על הפעולות בעמודה האחרונה (גם ליד כל כפתור בשורה):</span>' + [["חסום מבקשות", HELP.block], ["פתח מחדש את הבקשות", HELP.unblock], ["איפוס סיסמה", HELP.rst], ["שינוי תוקף", HELP.exp], ["מחק", HELP.del]].map(([l, t]) => withHelp(esc(l), t, l)).join("") + '</div>' +
         '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>מייל</th><th>תוקף מנוי</th><th>בקשות שנשמרו</th><th>נשלחו למשרד נוטאם</th><th>בקשה אחרונה</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
@@ -234,7 +272,9 @@
       if ($("admAll")) $("admAll").onclick = ev => { ev.preventDefault(); filter = ""; draw(); };
       $("admMode").onclick = async () => {
         const toLive = !modeLive;
-        if (toLive && !confirm("מעכשיו כל בקשה שתישלח תישלח באמת למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il). להמשיך?")) return;
+        // הנוסח מתאר את ההתנהגות בפועל (Code.gs, mailPlan_): כל מטיס בוחר בעצמו — למשרד נוטאם (עותק אליו, התשובות אליו, עותק סמוי למנהל) או רק לעצמו; ואין אישור נוסף של המנהל לכל בקשה
+        const offTo = (A.mailTo && A.mailTo.length ? A.mailTo : ["notamoffice@iaa.gov.il", "nofm@iaa.gov.il"]).join(", ");
+        if (toLive && !confirm("במצב חי כל מטיס יוכל לשלוח את בקשתו באמת למשרד נוטאם (" + offTo + "), מחשבון הארגון, עם עותק למטיס — ותשובות המשרד יגיעו אליו ולא אליך. אתה תקבל עותק סמוי של כל שליחה, בלי אישור נוסף שלך לכל בקשה. כל מטיס יכול גם לבחור לשלוח רק לעצמו. השינוי חל מיד על כל המשתמשים. להמשיך?")) return;
         const rr = await call("setMailMode", { mode: toLive ? "live" : "test" }); rr.ok ? draw() : fail(rr);
       };
       $("addForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("addUser", { newUser: $("adU").value.trim(), newPass: $("adP").value, role: $("adA").checked ? "admin" : "user" }); rr.ok ? draw() : fail(rr); };

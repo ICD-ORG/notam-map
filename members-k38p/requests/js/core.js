@@ -679,17 +679,21 @@
   // פרטי המבקש בנספח ג׳: שם הגורם המבקש (שדה 2) חובה ונקבע על ידי המבקש עצמו — אין עוד ברירת מחדל של הארגון; אות קריאה (שדה 13) ומס׳ רישום כלי הטיס (שדה 14) אופציונליים (ריק => "לא רלוונטי" בפלט).
   // אותם כללי תווים כמו במהות (purposeHasBadChar): הערכים נכנסים לטופס, ל-Word (XML), ל-KML ולמייל. הבדיקה על הערך כפי שהוא, והאורך אחרי trim
   const ORG_MAX = 80, ID_MAX = 40;
+  // ערך שכולו תווים בלתי נראים (RLM, ZWSP, U+3164 וכו') עובר trim() אך נראה ריק בטופס, ב-Word ובמייל — לכן שם הגורם והשם נדחים (כמו מהות הפעילות, purposeHasVisible), ואות קריאה/רישום נדחים אלא אם ריקים לגמרי (או רווחים בלבד: "לא רלוונטי")
   function requesterOrgProblem(v) {
     if (typeof v !== "string" || !v.trim()) return "יש להזין את שם הגורם המבקש";
     if (v.trim().length > ORG_MAX) return "שם הגורם המבקש: עד " + ORG_MAX + " תווים";
     if (purposeHasBadChar(v)) return "שם הגורם המבקש מכיל תווים לא תקינים (למשל תווי בקרה)";
+    if (!purposeHasVisible(v)) return "יש להזין את שם הגורם המבקש";   // רק תווים בלתי נראים
     return "";
   }
   function optionalIdProblem(v, label) {
     if (v == null || v === "") return "";
     if (typeof v !== "string") return label + " אינו תקין";
+    if (!v.trim()) return "";   // רווחים בלבד = ריק (הפלט כותב "לא רלוונטי")
     if (v.trim().length > ID_MAX) return label + ": עד " + ID_MAX + " תווים";
     if (purposeHasBadChar(v)) return label + " מכיל תווים לא תקינים (למשל תווי בקרה)";
+    if (!purposeHasVisible(v)) return label + " אינו מכיל תו גלוי — יש להקליד ערך או להשאיר את השדה ריק";
     return "";
   }
   function validateInput(inp, cfg) {
@@ -712,7 +716,7 @@
     if (pu) push("purpose", pu);
     if (!inp.aircraft || !inp.aircraft.length) push("aircraft", "יש לבחור כלי טיס");
     if (!(inp.siteName || "").trim()) push("siteName", "חסר שם ישוב/אתר");
-    if (!(inp.requesterName || "").trim() || !/\d{7,}/.test((inp.requesterPhone || "").replace(/\D/g, ""))) push("requester", "חסרים שם וטלפון של המבקש");
+    if (!(inp.requesterName || "").trim() || !purposeHasVisible(inp.requesterName) || !/\d{7,}/.test((inp.requesterPhone || "").replace(/\D/g, ""))) push("requester", "חסרים שם וטלפון של המבקש");   // שם שכולו תווים בלתי נראים נחשב חסר
     { const p = requesterOrgProblem(inp.requesterOrg); if (p) push("requesterOrg", p); }
     { const p = optionalIdProblem(inp.callsign, "אות הקריאה"); if (p) push("callsign", p); }
     { const p = optionalIdProblem(inp.registration, "מס׳ הרישום של כלי הטיס"); if (p) push("registration", p); }
@@ -830,8 +834,39 @@
     return { ready: failing.length === 0, failing: failing.map(([k, l]) => ({ key: k, label: l, msg: (statuses[k] && statuses[k].msg) || "לא הושלם" })) };
   }
 
+  /* ================= מפתחות אחסון מקומי לפי משתמש =================
+     כל נתון בדפדפן ששייך למשתמש (פרטי המבקש, כלי טיס ומהויות נוספים) נשמר תחת <מפתח בסיס>:<גיבוב של שם המשתמש>, כך שמשתמש אחר באותו דפדפן לא רואה ולא יורש אותו, ושם המשתמש עצמו לא נכתב בשם המפתח.
+     הגיבוב סינכרוני בכוונה (SHA-256 בקוד, לא crypto.subtle): האחרון אסינכרוני, ואינו קיים בהקשר לא מאובטח (http) — ושמירה/טעינה בזמן הקלדה והתחברות חייבות להיות סינכרוניות וללא מצב כשל.
+     16 תווי hex (64 ביט) מתוך 256: התנגשות בין משתמשים אפשרית רק בתיאוריה (≈10^-16 למאה משתמשים). זה בידוד בין חשבונות, לא הצפנה — מי שניגש לדפדפן רואה את הנתונים. */
+  const SHA_K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+  function sha256Hex(msg) {
+    const bytes = new TextEncoder().encode(String(msg == null ? "" : msg)), n = bytes.length, total = ((n + 9 + 63) >> 6) << 6, buf = new Uint8Array(total);
+    buf.set(bytes); buf[n] = 0x80;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(total - 8, Math.floor(n / 0x20000000)); dv.setUint32(total - 4, (n << 3) >>> 0);
+    const H = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]), w = new Uint32Array(64), rr = (x, k) => (x >>> k) | (x << (32 - k));
+    for (let o = 0; o < total; o += 64) {
+      for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
+      for (let i = 16; i < 64; i++) { const a = w[i - 15], b = w[i - 2]; w[i] = w[i - 16] + (rr(a, 7) ^ rr(a, 18) ^ (a >>> 3)) + w[i - 7] + (rr(b, 17) ^ rr(b, 19) ^ (b >>> 10)); }
+      let [a, b, c, d, e, f, g, h] = H;
+      for (let i = 0; i < 64; i++) {
+        const t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + SHA_K[i] + w[i]) >>> 0, t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      [a, b, c, d, e, f, g, h].forEach((x, i) => { H[i] += x; });
+    }
+    return [...H].map(x => x.toString(16).padStart(8, "0")).join("");
+  }
+  const userHash = name => (name == null || name === "") ? "" : sha256Hex("icd-req-user:" + String(name)).slice(0, 16);
+  // "" כשאין משתמש — הקורא חייב לא לקרוא ולא לכתוב (אין מפתח "בלי בעלים")
+  const userKey = (base, name) => { const h = userHash(name); return h ? base + ":" + h : ""; };
+
   return {
     M2FT, NM, HEB_DAY, ZONE_KIND, REQUIRED_CHECKS, MIRRORS,
+    sha256Hex, userHash, userKey,
     Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, xmlClean, altText, fmtHM,
     altRange, notamQ, manualElements, groupOf, COVERAGE_GROUPS, buildQueries, overpass, elemGeoms, elemDist, heLabel, classify, analyzeNear, analyzeZones, analyzeAgri, analyzeAirfields,
     suggestSiteName, nearestPlaces, analyzeBorders, sunTimes, localToUtc, dayNightTable, workingDaysBefore, dayName, ddmmyyyy, parseDate, parseTime, hhmm,
