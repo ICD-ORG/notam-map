@@ -1457,7 +1457,7 @@ test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך ה
   assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
   assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
   assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
-  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=7"><\/script>/, "גרסת המטמון של auth.js");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=8"><\/script>/, "גרסת המטמון של auth.js");
 });
 
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
@@ -1493,7 +1493,7 @@ test("n=10: כל שדה קלט, טקסט ובחירה ב-main של index.html (�
   const ra = ui.slice(ui.indexOf("function renderAircraft"), ui.indexOf("function addAircraft"));
   assert.ok((ra.match(/<input autocomplete="off" type="checkbox"/g) || []).length === 2, "תיבות כלי הטיס הדינמיות");
   assert.ok(/maxlength="' \+ max \+ '" autocomplete="off"/.test(ui), "שורות אנשי קשר ומשתתפים");
-  for (const id of ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"]) assert.match(html, new RegExp('<button[^>]*id="' + id + '"[^>]*disabled'), id + " מושבת בקובץ");
+  for (const id of ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"]) assert.match(html, new RegExp('<button[^>]*id="' + id + '"[^>]*disabled'), id + " מושבת בקובץ");
   assert.match(html, /<a id="btnMail"[^>]*aria-disabled="true"[^>]*tabindex="-1"|<a id="btnMail"[^>]*tabindex="-1"[^>]*aria-disabled="true"/);
   assert.ok(/id="auUser"[^>]*autocomplete="username"/.test(readReq("js/auth.js")) && /autocomplete="' \+ \(boot \? "new-password" : "current-password"\)/.test(readReq("js/auth.js")), "טופס הכניסה נשאר עם autocomplete של מנהל סיסמאות");
 });
@@ -1625,14 +1625,14 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=9/);
+  assert.match(html, /js\/ui\.js\?v=10/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
   const au = readReq("js/auth.js"), html = readReq("index.html");
   assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
   assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
-  assert.match(html, /js\/auth\.js\?v=7/);
+  assert.match(html, /js\/auth\.js\?v=8/);
 });
 
 /* ===== תצוגה מתקדמת (A2): סעיף 5 "הגשה" המלא רק למי שיש לו תצוגה מתקדמת; כל השאר מקבלים "סיכום והגשה" קצר בלי הפניות לפמ״ת ובלי הנחיות למודיעין טיס (החלטת בעל המערכת) ===== */
@@ -1803,7 +1803,7 @@ test("ui.js: סטטוס ״review״ והודעות השער מה-DECLARATION; ה�
   assert.match(ui, /declaration: O\.declarationRecord\(S\.reviewAt\), inputs: o,/, "הרשומה נכנסת לנתוני הבקשה");
   assert.match(ui, /const dg = \$\("declGate"\), rv = S\.statuses\.review, t = rv && rv\.ok \? "" : O\.DECLARATION\.gate;/, "ההודעה ליד הכפתורים: בלי סטטוס מאושר — מוצגת");
   assert.match(ui, /if \(!S\.ready \|\| !\$\("reviewOk"\)\.checked\) throw new Error\(/, "השליחה בודקת גם את הסימון עצמו");
-  assert.ok(/\["btnPrint", "btnDocx", "btnKml"[^\]]*"btnDrive", "btnSend"\]\.forEach\(id => \{ \$\(id\)\.disabled = !S\.ready/.test(ui), "ההפקות נעולות לפי S.ready");
+  assert.ok(/\["btnZip", "btnPrint", "btnDocx", "btnKml"[^\]]*"btnDrive", "btnSend"\]\.forEach\(id => \{ \$\(id\)\.disabled = !S\.ready/.test(ui), "ההפקות נעולות לפי S.ready");
 });
 
 /* --- שדה 8: כותרת מודגשת לכל קבוצה, ופריט בשורה (מספר, שם, ומרחק בקצה) --- */
@@ -1892,4 +1892,23 @@ test("Word + LibreOffice: שורות הפריטים בשדה 8 — המספר ו
     assert.ok(x("109") < x("161"), "המרחק משמאל לשם (בקריאה מימין לשמאל: שם ואז מרחק): " + l1.map(v => v.t).join(" "));
     assert.ok(Math.min(...left) < Math.max(...right) - 150, "המרחק רחוק מהשם — בקצה התא, לא צמוד אליו");
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+/* ===== השער (gate.js) הוסר מדף הבקשות: מי שרכש רק כרטיס בקשות (בלי מנוי מפה) לא מופנה לדף התשלום של המפה; הגישה לבקשות נקבעת בשרת לפי כרטיס האירוע. המפה עצמה ממשיכה להיות מוגנת בשער ===== */
+test("״שמור הכול במחשב״: כפתור ZIP בתוך ״אפשרויות נוספות״ לכל חשבון, מושבת עד שהבקשה מוכנה, ובונה את אותם קבצים שנשמרים בדרייב (בלי קובץ הנתונים הפנימי)", () => {
+  const html = readReq("index.html"), ui = readReq("js/ui.js");
+  assert.match(html, /<div id="moreOptions" hidden>\s*<div class="row">\s*<button type="button" class="primary" id="btnZip" disabled>שמור הכול במחשב/, "הכפתור ראשון בלוח ״אפשרויות נוספות״ ומושבת בקובץ");
+  assert.match(ui, /async function requestFiles\(withData\)/); assert.match(ui, /const files = await requestFiles\(true\);/, "הדרייב משתמש באותה רשימת קבצים (כולל נתוני הבקשה)");
+  assert.match(ui, /\(await requestFiles\(false\)\)\.forEach\(f => zip\.file\(f\.name, f\.b64, \{ base64: true \}\)\)/, "ה-ZIP בלי קובץ הנתונים הפנימי");
+  assert.match(ui, /if \(!authed\(\) \|\| !S\.res \|\| !S\.ready \|\| !window\.JSZip\) return;/, "בלי התחברות או בלי מוכנות אין הורדה");
+  assert.match(ui, /\$\("btnZip"\)\.onclick = downloadZip;/);
+  assert.ok(/btnZip: "שומר במחשב שלכם קובץ ZIP אחד/.test(ui) && /btnZip: "שמירת כל הקבצים במחשב"/.test(ui), "הסבר ״!״ ושם נגיש");
+});
+
+test("דף הבקשות בלי gate.js (כניסה לפי כרטיס האירוע בשרת), והמפה עדיין מוגנת בשער", () => {
+  const html = readReq("index.html");
+  assert.ok(!/gate\.js/.test(html), "אין טעינה של gate.js בדף הבקשות");
+  assert.ok(!/icdGate/.test(html), "אין שאריות של השער בדף הבקשות");
+  const map = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8");
+  assert.match(map, /<script src="gate\.js"><\/script>/, "המפה עדיין טוענת את השער");
 });

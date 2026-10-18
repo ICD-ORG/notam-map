@@ -156,6 +156,7 @@
     runBtn: "מריץ את כל הבדיקות לנקודה, לרדיוס, לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את ההצהרה בסעיף 4.",
     mPick: "אחרי הלחיצה, לחיצה אחת על המפה שמעל מכניסה את הנ״צ שנלחץ לשדה ״נ״צ״ של התוספת הידנית. הלחיצה הזו אינה משנה את מרכז הסגירה.",
     mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור ההצהרה — יש לאשר אותה שוב.",
+    btnZip: "שומר במחשב שלכם קובץ ZIP אחד עם כל קבצי הבקשה: טופס Word (כולל דף הבדיקות אם ״כולל דף בדיקות״ מסומן), קובץ KML וארבע תמונות המפה. אפשר לשמור אותו כארכיון אישי. אין בכך צורך כדי לשלוח את הבקשה.",
     btnPrint: "פותח את חלון ההדפסה של הדפדפן, ומשם אפשר להדפיס או לשמור כ-PDF. מודפס הדוח בלבד: הטופס, ארבע התמונות, וכן דף הבדיקות אם ״כולל דף בדיקות״ מסומן.",
     btnDocx: "מוריד קובץ Word לעריכה: טופס נספח ג׳, ארבע התמונות וטבלת המכשולים והתשתיות. דף הבדיקות נכלל רק אם ״כולל דף בדיקות״ מסומן.",
     incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והבקשה תישמר מחדש בדרייב (אוטומטית).",
@@ -164,7 +165,7 @@
     btnStreet: "מוריד את מפת הרחובות (OpenStreetMap) בתקריב (PNG), עם שמות הרחובות וכל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
     btnRegion: "מוריד את מפת האזור המרוחקת (PNG), בטווח של כ-10 ק״מ ומעלה, עם סמן וחץ שמצביעים על המיקום. הפריטים מסומנים בה בלי מספרים.",
-    btnMore: "פותח וסוגר את רשימת ההורדות: הדפסה או שמירה כ-PDF, קובץ Word לעריכה (עם ״כולל דף בדיקות״), קובץ KML וארבע תמונות המפה (PNG). אין בהן צורך כדי לשלוח: השליחה במייל מצרפת את הקבצים בעצמה, והבקשה נשמרת בדרייב אוטומטית.",
+    btnMore: "פותח וסוגר את רשימת ההורדות: שמירת כל הקבצים במחשב בקובץ ZIP אחד, הדפסה או שמירה כ-PDF, קובץ Word לעריכה (עם ״כולל דף בדיקות״), קובץ KML וארבע תמונות המפה (PNG). אין בהן צורך כדי לשלוח: השליחה במייל מצרפת את הקבצים בעצמה, והבקשה נשמרת בדרייב אוטומטית.",
     btnCopy: "מעתיק ללוח את נוסח המייל המוכן (נמענים, נושא וגוף ההודעה) כדי להדביק בתוכנת המייל. לא שולח ולא שומר דבר.",
     btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בארכיון המרכזי של הארגון בדרייב (בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. השמירה מתבצעת אוטומטית כשכל הבדיקות הושלמו, הכול סומן וההצהרה אושרה — אין צורך ללחוץ; הכפתור מיועד לשמירה ידנית חוזרת, למשל כשהשמירה האוטומטית נכשלה. התיקייה נמצאת בדרייב של בעל המערכת ולכן הקישור אליה מוצג לבעל המערכת בלבד. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
     btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שולח את הבקשה במייל כשכל הקבצים מצורפים אוטומטית (טופס Word, KML וארבע תמונות המפה) — אין צורך להוריד או לצרף דבר; גוף המייל קצר, וכל הפרטים בטופס המצורף. אם הגרסה הנוכחית עדיין לא נשמרה בארכיון המרכזי בדרייב (בדרך כלל היא כבר נשמרה אוטומטית) היא נשמרת קודם; התיקייה אינה נפתחת למטיס. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — המייל יוצא בשם הגורם המבקש שהצהרתם עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה צוות התמיכה של המערכת מקבל עותק סמוי לצורכי תמיכה בלבד. שליחה למשרד נוטאם אינה ניתנת לביטול.",
@@ -182,7 +183,7 @@
   const HELP_MORE_ADMIN = " למנהל נוספים כאן גם העתקת נוסח המייל ופתיחת המייל בתוכנת המייל — שליחה כזו אינה מצרפת קבצים ואינה נרשמת ביומן השליחות.";
   // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
   const HELP_NAME = {
-    qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
+    qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnZip: "שמירת כל הקבצים במחשב", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
     incChecks: "כולל דף בדיקות", btnKml: "הורדת KML", btnAerial: "הורדת תצ״א תקריב", btnStreet: "הורדת מפת רחובות תקריב", btnOverview: "הורדת הדמיה במבט כללי", btnRegion: "הורדת מפת אזור", btnCopy: "העתקת טקסט מייל",
     btnMore: "אפשרויות נוספות", btnDrive: "שמירה בדרייב", btnSend: "שליחה למשרד נוטאם", btnMail: "פתיחת מייל", acAdd: "הוספת כלי טיס", puAdd: "הוספת מהות פעילות", addContact: "הוספת איש קשר", addPart: "הוספת משתתף", wipePerson: "מחיקת פרטים מהמכשיר", stRun: "בדיקה עצמית",
     knownObs: "מכשולים שידועים למבקש", visitNotes: "הערות המבקש"
@@ -454,7 +455,7 @@
         $("btnMail").href = "#";
       });
       step(() => {
-        ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
+        ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
         const mailA = $("btnMail"); mailA.querySelector("button").disabled = true; mailA.style.pointerEvents = "none"; mailA.tabIndex = -1; mailA.setAttribute("aria-disabled", "true");
       });
     } finally {
@@ -783,7 +784,7 @@
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(statusMsg(S.statuses[f.key]) || f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     if (!skipHtml && box._html !== html) { box.innerHTML = html; box._html = html; }   // לא מחליפים DOM זהה
-    ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
+    ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
     // הקישור "פתח מייל" הוא <a href=mailto>: disabled על ה-button שבתוכו ו-pointer-events חוסמים עכבר בלבד — Enter על הקישור עצמו (מקלדת) היה פותח את תוכנת המייל גם כשהבקשה אינה מוכנה. לכן גם tabindex ו-aria-disabled, ומאזין click (ב-init) שמבטל את הפעולה כש-!S.ready
     const mailA = $("btnMail");
     mailA.querySelector("button").disabled = !S.ready;
@@ -1131,6 +1132,22 @@
     if (png && png.length < MAX_B64) return { name: baseName() + " — " + label + ".png", mime: "image/png", b64: png };
     return m.jpegUrl ? { name: baseName() + " — " + label + ".jpg", mime: "image/jpeg", b64: m.jpegUrl.split(",")[1] } : null;
   }
+  // קבצי הבקשה (Word, KML, ארבע התמונות, ובדרייב גם קובץ נתוני הבקשה) כ-{name,mime,b64}: אותם קבצים נשמרים בדרייב וגם ב״שמור הכול במחשב״ (ZIP)
+  async function requestFiles(withData) {
+    return [
+      { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
+      { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
+      ...IMGS.map(m => imageFile(S.imgs[m.k], m.file)),
+      ...(withData ? [{ name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }] : [])
+    ].filter(Boolean);
+  }
+  // ״שמור הכול במחשב״: כל קבצי הבקשה (בלי קובץ הנתונים הפנימי) בקובץ ZIP אחד, בלי שרת ובלי דרייב — ארכיון אישי של המבקש
+  async function downloadZip() {
+    if (!authed() || !S.res || !S.ready || !window.JSZip) return;
+    const zip = new window.JSZip();
+    (await requestFiles(false)).forEach(f => zip.file(f.name, f.b64, { base64: true }));
+    download(baseName() + " — בקשה לסגירה אווירית.zip", "application/zip", await zip.generateAsync({ type: "blob" }));
+  }
   // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל.
   // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
   async function persistToDrive(progress) {
@@ -1144,12 +1161,7 @@
     // הבקשה הקודמת עם אותו מזהה כבר נשלחה (והתיקייה שלה נעולה) והבקשה השתנתה מאז — זו בקשה חדשה, בתיקייה חדשה
     if (!begin.ok && begin.error === "already_sent") { S.rid = newRid(); begin = await A.call("saveBegin", { folderName: baseName(), rid: S.rid }); }
     if (!begin.ok) { const e = new Error(A.msg(begin)); e.code = begin.error; throw e; }
-    const files = [
-      { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
-      { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
-      ...IMGS.map(m => imageFile(S.imgs[m.k], m.file)),
-      { name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }
-    ].filter(Boolean);
+    const files = await requestFiles(true);
     let n = 0;
     for (const f of files) {
       if (progress) progress(++n, files.length, f.name);
@@ -1543,6 +1555,7 @@
     $("btnKml").onclick = () => S.res && download(baseName() + ".kml", "application/vnd.google-earth.kml+xml", O.kml(S.res, { zones: S.data.zones }, S.cfg));
     IMGS.forEach(m => { $(m.btn).onclick = () => downloadImg(m); });
     $("btnDocx").onclick = downloadDocx;
+    $("btnZip").onclick = downloadZip;
     $("mAdd").onclick = addManual;
     $("mPick").onclick = () => { S.pick = true; $("mPick").textContent = "לחצו על המפה למעלה…"; $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
     $("reviewOk").addEventListener("change", onReviewChange);
