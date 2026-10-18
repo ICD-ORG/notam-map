@@ -67,7 +67,13 @@ const CORS = { "access-control-allow-origin": "*" };
 const API_STATS = { preflight: 0, nonSimple: 0, posts: 0 };
 // שרת Apps Script ישן (לפני "עצמאות המבקש"): תשובותיו אינן נושאות features / email / copyTo / copyToIsOwner. opts.oldServer נבדק בכל קריאה, ולכן אפשר להפעילו ולכבותו באמצע בדיקה
 // opts.noSplit: שרת בגרסת "עצמאות המבקש" (sendTarget) שעדיין בלי ההפרדה בין הארגון למטיסים עצמאיים — בלי features.orgSplit ובלי org / totals / kind. opts.oldServer מסיר גם את שאר השדות (email, copyTo…)
+// opts.noAdv: שרת בלי "תצוגה מתקדמת" (לפני advView) — בלי adv בתשובות, בלי adv / advExplicit בשורות המשתמשים ובלי features.advView (opts.oldServer מסיר אותם גם הוא); הלקוח נשאר אז עם ברירת המחדל לפי סוג החשבון
 const oldSrv = (opts, resp) => {
+  if (opts && (opts.oldServer || opts.noAdv) && resp && typeof resp === "object") {
+    resp = { ...resp }; delete resp.adv;
+    if (Array.isArray(resp.users)) resp.users = resp.users.map(u => { const x = { ...u }; delete x.adv; delete x.advExplicit; return x; });
+    if (Array.isArray(resp.features)) resp.features = resp.features.filter(f => f !== "advView");
+  }
   const split = opts && (opts.oldServer || opts.noSplit);
   if (split && resp && typeof resp === "object") {
     resp = { ...resp };
@@ -257,7 +263,7 @@ try {
       process.exit(1);
     }
     const gate0 = await page.textContent("#gate");
-    check("לפני אישור הסקירה: לא מוכן לשליחה וההפקות חסומות", /אינה מוכנה/.test(gate0) && /אישור סקירה אנושית/.test(gate0) && (await page.isDisabled("#btnDocx")) && (await page.isDisabled("#btnPrint")), gate0.replace(/\s+/g, " ").slice(0, 200));
+    check("לפני אישור ההצהרה: לא מוכן לשליחה וההפקות חסומות, והשער מונה את ״הצהרה ואישור המבקש״ בהודעה ״יש לאשר את ההצהרה״", /אינה מוכנה/.test(gate0) && /הצהרה ואישור המבקש: יש לאשר את ההצהרה/.test(gate0.replace(/\s+/g, " ")) && !/אישור סקירה אנושית|לא אושרה סקירה/.test(gate0) && (await page.isDisabled("#btnDocx")) && (await page.isDisabled("#btnPrint")), gate0.replace(/\s+/g, " ").slice(0, 200));
     { // הוספה ידנית: נכנסת לטופס, מאפסת את האישור, וניתנת להסרה
       await page.fill("#mName", "עגורן בנייה (בדיקה)"); await page.fill("#mCoord", "32.0995, 34.8168"); await page.fill("#mHeight", "60"); await page.click("#mAdd");
       await page.waitForFunction(() => /הוזן ידנית/.test(document.querySelector("#report").innerText), null, { timeout: 90000 });
@@ -275,7 +281,9 @@ try {
     const form = await page.$$eval("#report .paper:first-child table.f tr", trs => trs.map(t => t.innerText.replace(/\s+/g, " ").trim()));
     check("בטופס 17 שדות", form.length === 17, String(form.length));
     const f8 = form[7];
-    check("שדה 8: קו מתח 109 מ׳ ועמוד 117 מ׳", /קו מתח עליון 161 ק״ו — 109 מ׳/.test(f8) && /עמוד חשמל 1491 — 117 מ׳/.test(f8), f8.slice(0, 400), true);
+    // שדה 8: כל פריט בשורת פריט משלו — שם עם מספר (.fn) ומרחק (.fd); המפריד " — " מוסתר במסך, ולכן innerText של התא אינו נושא אותו והשורה נבנית מהרכיבים
+    const items8 = await page.$$eval("#report .paper:first-child table.f tr", trs => [...trs[7].querySelectorAll(".fl")].map(e => e.querySelector(".fn").textContent + " — " + e.querySelector(".fd").textContent));
+    check("שדה 8: קו מתח 109 מ׳ ועמוד 117 מ׳ — כל אחד בשורת פריט משלו", items8.some(t => /^\d+\. קו מתח עליון 161 ק״ו — 109 מ׳$/.test(t)) && items8.some(t => /^\d+\. עמוד חשמל 1491 — 117 מ׳$/.test(t)), items8.slice(0, 6).join(" | "), true);
     check("שדה 8: LLU20 בקרבה", /LLU20/.test(f8) && /52[56] מ׳/.test(f8), "");
     check("שדה 8: האצטדיון והבלון מופיעים", /אצטדיון רמת גן/.test(f8) && /כדור פורח תל אביב/.test(f8), f8.slice(-420), true);
     check("תמונת הרקע אמיתית (לא אריחים מדומים)", !LIVE || (await page.evaluate(() => ["aerial", "street", "overview", "region"].every(k => window.__REQ.S.imgs[k] && window.__REQ.S.imgs[k].background))), "");
@@ -3152,6 +3160,336 @@ try {
     }
   }
   /* REG19-END */
+
+  /* DECL-LIST-BEGIN */
+  /* ===== תרחיש ״הצהרה ואישור המבקש״ ורשימת המכשולים בשדה 8: (א) התיבה — בולטת, בנוסח המאושר, הודעת שער ליד כפתורי ההפקה, נפתחת בסימון (עכבר ומקלדת), מתאפסת בעריכה, נרשמת בנתוני הבקשה בדרייב, ניגודיות וטלפון (375 / 320); (ב) שדה 8 — כותרת מודגשת לכל קבוצה ופריט בשורה עם המרחק בקצה: במסך, בטלפון וב-Word ===== */
+  {
+    // הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד, כדי שכל שינוי בו ייתפס
+    const DECL = {
+      version: "2026-10-19", title: "הצהרה ואישור המבקש", label: "קראתי, הבנתי ואני מאשר את האמור לעיל", gate: "יש לאשר את ההצהרה",
+      ps: ["אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).",
+        "אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.",
+        "לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה."]
+    };
+    const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const rgba = s => { const m = (String(s).match(/[\d.]+/g) || []).map(Number); return [m[0], m[1], m[2], m.length > 3 ? m[3] : 1]; };
+    const over = (top, under) => { const a = top[3]; return [0, 1, 2].map(i => top[i] * a + under[i] * (1 - a)); };   // צבע חצי-שקוף מעל רקע אטום
+    const BID = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");
+    const { ctx, page } = await newPage(browser, { viewport: { width: 1280, height: 1000 } });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    const env = page._env, nSave = () => page._calls.actions.filter(a => a === "saveBegin").length, nSend = () => page._calls.actions.filter(a => a === "sendRequest").length;
+    await fillExample(page); await page.click("#runBtn");
+    await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    // מצב ההצהרה: הסימון, הסטטוס בשער, מועד האישור, הודעת השער ליד הכפתורים והאם ההפקות חסומות
+    const state = () => page.evaluate(() => { const S = window.__REQ.S, g = document.getElementById("declGate"), $ = id => document.getElementById(id);
+      return { checked: $("reviewOk").checked, ok: !!(S.statuses.review && S.statuses.review.ok), msg: S.statuses.review ? S.statuses.review.msg : null, ready: !!S.ready, at: S.reviewAt ? S.reviewAt.toISOString() : null, atLocal: S.reviewAt ? S.reviewAt.toLocaleString("he-IL") : null,
+        gate: g ? g.textContent : null, gateShown: !!g && g.getClientRects().length > 0, banner: $("gate").textContent.replace(/\s+/g, " "), dis: ["btnDrive", "btnSend", "btnPrint", "btnDocx", "btnKml"].map(id => $(id).disabled) }; });
+    const declInfo = () => page.evaluate(() => {
+      const $ = id => document.getElementById(id), box = $("declBox"); if (!box) return null;
+      const cs = e => getComputedStyle(e), R = e => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
+      const lab = box.querySelector(".declok"), lb = lab && lab.querySelector("b"), cb = $("reviewOk"), ps = [...box.querySelectorAll("p")], title = $("declTitle"), card = box.closest(".card"), g = $("declGate");
+      return { shown: box.getClientRects().length > 0, role: box.getAttribute("role"), labelledBy: box.getAttribute("aria-labelledby"), title: title && title.textContent, ps: ps.map(p => p.textContent), pSize: ps.map(p => parseFloat(cs(p).fontSize)),
+        label: lb && lb.textContent, labelWeight: lb && +cs(lb).fontWeight, labFor: lab && lab.getAttribute("for"), cbInLabel: !!(lab && lab.contains(cb)), required: cb.getAttribute("aria-required"),
+        border: cs(box).borderTopWidth + " " + cs(box).borderTopStyle + " " + cs(box).borderTopColor, bg: cs(box).backgroundColor, cardBg: card && cs(card).backgroundColor, labBg: lab && cs(lab).backgroundColor, actBg: cs($("actions")).backgroundColor,
+        pColor: ps.map(p => cs(p).color), titleColor: title && cs(title).color, labelColor: lb && cs(lb).color, gateColor: g && cs(g).color,
+        box: R(box), cb: R(cb), lab: lab && R(lab), gateBox: g && g.getClientRects().length ? R(g) : null, drive: R($("btnDrive")), vw: innerWidth, hscroll: document.documentElement.scrollWidth > innerWidth || box.scrollWidth > box.clientWidth + 1 || lab.scrollWidth > lab.clientWidth + 1 }; });   // גלילה אופקית של הדף, או גלישה של התיבה או של שורת הסימון (גלישת טבלאות אחרות בדוח אינה חלק מהבדיקה הזו)
+
+    /* ---- א. התיבה לפני הסימון: נוסח, בולטות, נגישות, ניגודיות ---- */
+    const d0 = await declInfo(), s0 = await state();
+    check("הצהרה: אחרי ההרצה מוצגת תיבה ״הצהרה ואישור המבקש״ בנוסח המאושר כלשונו — כותרת, שלוש פסקאות ותווית מודגשת; תיבת הסימון (#reviewOk) בתוכה", !!d0 && d0.shown && d0.title === DECL.title && JSON.stringify(d0.ps) === JSON.stringify(DECL.ps) && d0.label === DECL.label && d0.labelWeight >= 700 && d0.cbInLabel && d0.labFor === "reviewOk", JSON.stringify(d0 && [d0.title, d0.ps.length, d0.label, d0.labelWeight]));
+    check("הצהרה: התיבה בולטת — מסגרת ענבר 2px, רקע מוטה בענבר, פסקאות ≥15px, תיבת סימון ≥28px ושורת סימון בגובה ≥44px", !!d0 && d0.border === "2px solid rgb(255, 184, 77)" && /^rgba\(255, 184, 77, 0\.1\d*\)$/.test(d0.bg) && d0.pSize.length === 3 && d0.pSize.every(x => x >= 15) && d0.cb.w >= 28 && d0.cb.h >= 28 && d0.lab.h >= 44, JSON.stringify(d0 && [d0.border, d0.bg, d0.pSize, d0.cb.w, d0.cb.h, d0.lab.h]));
+    check("הצהרה: נגישות — קבוצה עם שם (aria-labelledby לכותרת), תיבת הסימון חובה (aria-required) ובתוך <label for>", !!d0 && d0.role === "group" && d0.labelledBy === "declTitle" && d0.required === "true", JSON.stringify(d0 && [d0.role, d0.labelledBy, d0.required]));
+    { const cardBg = rgba(d0 ? d0.cardBg : "rgb(0,0,0)"), boxBg = over(rgba(d0 ? d0.bg : "rgb(0,0,0)"), cardBg), labBg = over(rgba(d0 ? d0.labBg : "rgb(0,0,0)"), boxBg);
+      const cr = d0 ? { p: Math.min(...d0.pColor.map(c => ratio(rgba(c), boxBg))), title: ratio(rgba(d0.titleColor), boxBg), label: ratio(rgba(d0.labelColor), labBg) } : { p: 0, title: 0, label: 0 };
+      check("הצהרה: ניגודיות — הפסקאות, הכותרת והתווית מול הרקע שלהן ≥ 4.5:1", cr.p >= 4.5 && cr.title >= 4.5 && cr.label >= 4.5, JSON.stringify(cr)); }
+    check("הצהרה: לפני הסימון — ההודעה ״יש לאשר את ההצהרה״ גלויה ליד כפתורי ההפקה (סעיף 5, מיד מתחת לשורת הכפתורים), הכפתורים חסומים, הסטטוס בשער לא אושר והשער מונה את ההצהרה", !!d0 && s0.gate === DECL.gate && s0.gateShown && !!d0.gateBox && d0.gateBox.t - d0.drive.b >= 0 && d0.gateBox.t - d0.drive.b < 60 && s0.dis.every(Boolean) && !s0.ok && !s0.ready && s0.msg === DECL.gate && /הצהרה ואישור המבקש: יש לאשר את ההצהרה/.test(s0.banner), JSON.stringify([s0.gate, s0.gateShown, d0 && d0.gateBox && d0.gateBox.t - d0.drive.b, s0.msg]));
+    { const gc = rgba(d0 ? d0.gateColor : "rgb(0,0,0)"), bg = rgba(d0 ? d0.actBg : "rgb(255,255,255)");
+      check("הצהרה: ניגודיות הודעת השער ליד הכפתורים מול רקע כרטיס ההפקות ≥ 4.5:1", !!d0 && ratio(gc, bg) >= 4.5, String(d0 && ratio(gc, bg))); }
+    // נכשל סגור: בלי סימון לחיצה (גם תוכנתית) על כפתורי השמירה והשליחה לא יוצרת קריאה לשרת
+    { const before = [nSave(), nSend()];
+      await page.evaluate(() => ["btnDrive", "btnSend"].forEach(id => document.getElementById(id).click()));
+      await page.waitForTimeout(700);
+      check("הצהרה: בלי סימון אי אפשר לשמור או לשלוח — לחיצה על ״שמור בדרייב״ ו״שלח למשרד נוטאם״ אינה פותחת שמירה (saveBegin) או שליחה (sendRequest), ואין חלון שליחה", nSave() === before[0] && nSend() === before[1] && !(await page.$(".sendBox")) && (await state()).ready === false && (await state()).gate === DECL.gate, JSON.stringify([before, nSave(), nSend()])); }
+
+    /* ---- מקלדת: Tab מגיע לתיבה (אחרי שדה ההערות), טבעת מיקוד גלויה, רווח מסמן ומבטל ---- */
+    await page.focus("#visitNotes"); await page.keyboard.press("Tab");
+    const kf = await page.evaluate(() => { const a = document.activeElement, lab = a && a.closest && a.closest(".declok"), cs = lab && getComputedStyle(lab); return { id: a && a.id, outline: cs ? cs.outlineStyle + " " + cs.outlineWidth : "" }; });
+    await page.keyboard.press("Space"); const k1 = await state();
+    await page.keyboard.press("Space"); const k2 = await state();
+    check("הצהרה: מקלדת — Tab משדה ההערות מגיע לתיבת הסימון, מסביבה טבעת מיקוד גלויה (≥2px), רווח מסמן (ההצהרה אושרה, השער נפתח) ורווח נוסף מבטל (ההודעה חוזרת)", kf.id === "reviewOk" && /^solid 2px$/.test(kf.outline) && k1.checked && k1.ok && !!k1.at && k1.gate === "" && !k2.checked && !k2.ok && k2.at === null && k2.gate === DECL.gate && k2.dis.every(Boolean), JSON.stringify([kf, k1.checked, k1.gate, k2.checked, k2.gate]));
+
+    /* ---- לחיצה על טקסט התווית מסמנת (יעד מגע רחב), והבקשה נפתחת; האישור נכנס לדף הבדיקות ---- */
+    const tLabel0 = Date.now() - 2000;
+    { const lbl = page.locator("#declBox .declok b"); if (await lbl.count()) await lbl.click(); else await page.check("#reviewOk"); }
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 15000 });
+    const s1 = await state();
+    check("הצהרה: לחיצה על טקסט התווית מסמנת — הבקשה מוכנה לשליחה, ההפקות פתוחות, הודעת השער ליד הכפתורים נעלמת, ומועד האישור נקלט (עכשיו)", s1.checked && s1.ok && s1.ready && s1.gate === "" && !s1.gateShown && s1.dis.every(x => !x) && !!s1.at && Date.parse(s1.at) >= tLabel0 && Date.parse(s1.at) <= Date.now() + 2000, JSON.stringify([s1.checked, s1.ready, s1.gate, s1.at]));
+    { const rv = await page.evaluate(() => { const p = document.querySelector("#report .paper.checks"), t = p ? p.innerText.replace(/\s+/g, " ") : ""; return { i: t.indexOf("אישור סקירה אנושית"), t }; });
+      const tail = rv.i >= 0 ? rv.t.slice(rv.i) : "";
+      check("הצהרה: בדף הבדיקות ״אישור סקירה אנושית״ מציין שהמבקש אישר את ״הצהרה ואישור המבקש״ במועד הסימון, עובדתי ובלי סעיף הוויתור; הנוסח הישן נעלם", rv.i >= 0 && tail.includes("המבקש אישר ב-" + s1.atLocal + " את ״" + DECL.title + "״") && tail.includes("שעבר באופן אישי על התצ״א") && tail.includes("האחריות לבדיקת כלל הסכנות") && !/טענה/.test(tail) && !/שעבר על התצ״א, על רשימת המצאי ועל המפה, ושאין/.test(tail), tail.slice(0, 260)); }
+    // ביטול הסימון סוגר שוב את השער, וסימון חוזר פותח
+    await page.uncheck("#reviewOk"); const s2 = await state();
+    await page.check("#reviewOk"); await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 15000 });
+    check("הצהרה: ביטול הסימון חוסם שוב את ההפקות ומחזיר את הודעת השער; סימון חוזר פותח", !s2.checked && !s2.ok && !s2.ready && s2.gate === DECL.gate && s2.dis.every(Boolean) && (await state()).ready === true, JSON.stringify([s2.checked, s2.ready, s2.gate]));
+
+    /* ---- שינוי הרשימה (הוספה ידנית) מאפס את הסימון: חוזרים לשער סגור עם ההודעה, וההסרה מאפסת שוב ---- */
+    await page.fill("#mName", "עגורן בנייה (בדיקת הצהרה)"); await page.fill("#mCoord", "32.0995, 34.8168"); await page.fill("#mHeight", "60"); await page.click("#mAdd");
+    await page.waitForFunction(() => /הוזן ידנית/.test(document.querySelector("#report").innerText), null, { timeout: 90000 });
+    const r1 = await state();
+    check("הצהרה: שינוי הרשימה (הוספה ידנית) מאפס את הסימון — התיבה לא מסומנת, אין מועד אישור, ההודעה ליד הכפתורים חזרה, ההפקות חסומות, והשער מסביר שהרשימה השתנתה", !r1.checked && !r1.ok && r1.at === null && r1.gate === DECL.gate && r1.gateShown && r1.dis.every(Boolean) && !r1.ready && /הרשימה השתנתה — יש לאשר את ההצהרה מחדש/.test(r1.banner), JSON.stringify([r1.checked, r1.at, r1.gate, r1.msg]));
+    await page.check("#reviewOk"); await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 20000 });
+    await page.click('[data-del="0"]');
+    await page.waitForFunction(() => !/הוזן ידנית/.test(document.querySelector("#report").innerText), null, { timeout: 90000 });
+    const r2 = await state();
+    check("הצהרה: גם הסרת הפריט הידני מאפסת את הסימון (חייבים לאשר את הרשימה הסופית)", !r2.checked && !r2.ok && r2.gate === DECL.gate && r2.dis.every(Boolean) && !r2.ready, JSON.stringify([r2.checked, r2.gate]));
+
+    /* ---- טלפון: 375 ו-320 — התיבה והודעת השער נכנסות בלי גלילה אופקית, התיבה והשורה גדולות למגע; תצלומי מסך ---- */
+    for (const w of [375, 320]) {
+      await page.setViewportSize({ width: w, height: 800 });
+      if (await page.locator("#declBox").count()) await page.locator("#declBox").scrollIntoViewIfNeeded();
+      const dp = await declInfo();
+      check("הצהרה: ברוחב " + w + " התיבה נכנסת במלואה בלי גלילה אופקית, תיבת הסימון ≥28px ושורת הסימון ≥44px, הפסקאות ≥15px והודעת השער גלויה בתוך המסך", !!dp && dp.vw === w && dp.box.l >= 0 && dp.box.r <= w && !dp.hscroll && dp.cb.w >= 28 && dp.cb.h >= 28 && dp.lab.h >= 44 && dp.lab.l >= dp.box.l && dp.lab.r <= dp.box.r && dp.pSize.every(x => x >= 15) && !!dp.gateBox && dp.gateBox.l >= 0 && dp.gateBox.r <= w, JSON.stringify(dp && [dp.vw, dp.box.l, dp.box.r, dp.hscroll, dp.cb.w, dp.lab.h, dp.gateBox && dp.gateBox.r]));
+      if (await page.locator("#declBox").count()) await page.locator("#declBox").screenshot({ path: path.join(OUT, "decl-box-" + w + ".png") });
+    }
+    await page.check("#reviewOk"); await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 20000 });
+    { const dp = await declInfo(), st3 = await state();
+      check("הצהרה: ברוחב 320 אחרי הסימון — עדיין בלי גלילה אופקית, הודעת השער נעלמה והסימון נקלט", !!dp && !dp.hscroll && st3.checked && st3.ready && st3.gate === "" && !st3.gateShown, JSON.stringify([dp && dp.hscroll, st3.ready])); }
+    await page.setViewportSize({ width: 1280, height: 1000 });
+
+    /* ---- שמירה בדרייב: הרשומה declaration בקובץ נתוני הבקשה (גרסה, מועד ISO שזהה למועד הסימון, ושלוש הפסקאות) ובלי פרטים אישיים; ה-Word נושא את האישור ---- */
+    const sAt = (await state()).at;
+    await page.click("#btnDrive");
+    await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
+    const folder = reqFolders(env).find(f => f.files.some(x => !x.trashed && /\.json$/.test(x.name)) && f.files.some(x => !x.trashed && /\.docx$/.test(x.name)));
+    const jf = folder && folder.files.find(f => !f.trashed && /\.json$/.test(f.name)), rec = jf ? JSON.parse(jf.bytes.toString("utf8")) : {}, dc = rec.declaration;
+    check("הצהרה: נתוני הבקשה בדרייב נושאים declaration — version " + DECL.version + ", confirmedAt (ISO) זהה למועד הסימון, text = שלוש הפסקאות המאושרות מחוברות בשורה חדשה", !!dc && dc.version === DECL.version && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(dc.confirmedAt || "") && dc.confirmedAt === sAt && dc.text === DECL.ps.join("\n") && Object.keys(dc).sort().join() === "confirmedAt,text,version", String(JSON.stringify(dc)).slice(0, 200));
+    check("הצהרה: ההצהרה בנתוני הבקשה אינה מכניסה שמות וטלפונים (מבקש, אנשי קשר, משתתפים)", !!jf && !!dc && !/בודק ראשון|בודק שני|בודק שלישי|050-0000001|050-0000002|050-0000003/.test(JSON.stringify(rec)) && !!rec.inputs && rec.inputs.lat !== undefined, Object.keys(rec).join(","));
+    const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), dxf = folder && folder.files.find(f => !f.trashed && /\.docx$/.test(f.name));
+    const doc = dxf ? await (await JZ.loadAsync(dxf.bytes)).file("word/document.xml").async("string") : "", plain = doc.replace(/<[^>]+>/g, "").replace(BID, "");
+    check("הצהרה: קובץ ה-Word בדרייב כולל בסעיף ״אישור סקירה אנושית״ את אישור ההצהרה במועד הסימון, בלי הנוסח הישן", plain.includes("אישור סקירה אנושית") && plain.includes("את ״" + DECL.title + "״") && plain.includes((await state()).atLocal.replace(BID, "")) && !/שעבר על התצ״א, על רשימת המצאי ועל המפה, ושאין/.test(plain), "");
+
+    /* ---- ב. שדה 8 במסך: כותרת מודגשת לכל קבוצה, ואחריה פריט בשורה — מספר ושם בתחילתה והמרחק בקצה ---- */
+    const listGeo = () => page.evaluate(() => {
+      const cell = document.querySelectorAll("#report .paper:first-child table.f tr")[7].cells[1], R = e => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, h: r.height }; };
+      const T = e => { const rg = document.createRange(); rg.selectNodeContents(e); return R(rg); };   // תיבת הטקסט עצמו (בלי הקו המנחה שב-.fd)
+      let g = -1; const rows = [], heads = [];
+      [...cell.children].forEach(e => { if (e.tagName === "B" && /:$/.test(e.textContent) && /האזור/.test(e.textContent)) { g++; heads.push({ t: e.textContent, w: +getComputedStyle(e).fontWeight }); } else if (e.classList.contains("fl")) rows.push({ g, fl: R(e), fn: R(e.querySelector(".fn")), fd: R(e.querySelector(".fd")), fdt: T(e.querySelector(".fd")), fnT: e.querySelector(".fn").textContent, fdT: e.querySelector(".fd").textContent, sw: e.scrollWidth, cw: e.clientWidth }); });
+      const S = window.__REQ.S, O = window.__REQ.O, cap = a => a.slice(0, 25).map(O.itemText), ns = S.res.nearScan;
+      return { cell: R(cell), rows, heads, expect: [cap(ns.inside), cap(ns.ring), cap(ns.near)], sizes: [ns.inside.length, ns.ring.length, ns.near.length], hscroll: document.documentElement.scrollWidth > innerWidth, vw: innerWidth, text: cell.textContent, oldRunOn: /\): 1\. /.test(cell.textContent) }; });
+    const lg = await listGeo(), nItems = lg.rows.length;
+    const expText = [].concat(...lg.expect);
+    check("רשימת מכשולים: בשדה 8 כותרת מודגשת לכל קבוצה (בתוך האזור / בקרבת האזור / אתרים ותשתיות נוספים) ואחריה פריט בשורה — בלי פסקה רצופה", lg.heads.length === lg.sizes.filter(n => n > 0).length && lg.heads.length >= 2 && lg.heads.every(h => h.w >= 700) && /^מכשולים ותשתיות בתוך האזור \(עד 200 מ׳\):$/.test(lg.heads[0].t) && nItems === expText.length && nItems >= 8 && !lg.oldRunOn, JSON.stringify([lg.heads.map(h => h.t), lg.sizes, nItems]));
+    check("רשימת מכשולים: כל פריט בשורה משלו — המספור והמרחקים בדיוק כפי שחושבו (שם עם מספר המפה + מרחק, כמו ב-itemText), באותו סדר, ללא שינוי בתוכן", lg.rows.map(r => r.fnT + " — " + r.fdT).join("\n") === expText.join("\n"), lg.rows.slice(0, 3).map(r => r.fnT + " — " + r.fdT).join(" | "));
+    { const tops = lg.rows.map(r => r.fl.t), mono = tops.length > 0 && tops.every((t, i) => i === 0 || t > tops[i - 1] + 3), tight = lg.rows.every((r, i) => i === 0 || r.g !== lg.rows[i - 1].g || r.fl.t - lg.rows[i - 1].fl.t <= lg.rows[i - 1].fl.h + 8);
+      check("רשימת מכשולים: שורה לפריט, ללא שורות ריקות בין פריטים סמוכים (ה-<br> שאחרי שורה ברוחב מלא לא מוסיף רווח)", mono && tight, JSON.stringify(lg.rows.slice(0, 4).map(r => [Math.round(r.fl.t), Math.round(r.fl.h)])));
+      const fdL = lg.rows.map(r => r.fdt.l), fnR = lg.rows.map(r => r.fn.r);
+      check("רשימת מכשולים: המרחק מיושר בקצה השורה — טקסט כל המרחקים מסתיים באותו קו שמאלי (בקצה התא), והמספר והשם נצמדים לתחילת השורה (ימין)", nItems > 0 && Math.max(...fdL) - Math.min(...fdL) <= 1.5 && lg.rows.every(r => r.fdt.l - r.fl.l <= 1.5 && r.fl.r - r.fn.r <= 1.5 && r.fl.r <= lg.cell.r + 1 && r.fl.l >= lg.cell.l - 1), JSON.stringify([Math.min(...fdL), Math.max(...fdL), Math.max(...fnR), lg.cell.l, lg.cell.r])); }
+    await page.locator("#report .paper:first-child table.f tr").nth(7).screenshot({ path: path.join(OUT, "list-field8-1280.png") });
+    // טלפון: 375 ו-320 — אין גלילה אופקית, אף שורה אינה חורגת מהתא, ובכל שורה המרחק לא נוגע בשם (באותה שורה — משמאל לו; אחרת בשורה משלו)
+    for (const w of [375, 320]) {
+      await page.setViewportSize({ width: w, height: 800 });
+      const lp = await listGeo();
+      check("רשימת מכשולים: ברוחב " + w + " אין גלילה אופקית, כל שורה נכנסת בתא, והמרחק בקצה השורה מבלי לחפוף את השם (באותה שורה משמאלו, או בשורה משלו)", nItems > 0 && lp.rows.length === nItems && !lp.hscroll && lp.vw === w && lp.rows.every(r => r.fl.l >= lp.cell.l - 1 && r.fl.r <= lp.cell.r + 1 && r.sw <= r.cw + 1 && r.fdt.l - r.fl.l <= 1.5 && (r.fdt.t >= r.fn.b - 1 || r.fn.l >= r.fdt.r - 1)), JSON.stringify([lp.vw, lp.hscroll, lp.rows.filter(r => r.sw > r.cw + 1).length, Math.round(lp.cell.l), Math.round(lp.cell.r), lp.rows.filter(r => !(r.fdt.l - r.fl.l <= 1.5)).length]));
+      await page.locator("#report .paper:first-child table.f tr").nth(7).screenshot({ path: path.join(OUT, "list-field8-" + w + ".png") });
+    }
+    await page.setViewportSize({ width: 1280, height: 1000 });
+
+    /* ---- ב. שדה 8 ב-Word (הקובץ שנשמר בדרייב): כותרות מודגשות, פריט בפסקה אחת עם טאב ימני בקצה השורה (בלי טבלה בתוך התא), והטקסט והמספור כפי שבמסך ---- */
+    { const cellX = doc.split("<w:tc>").find(c => c.includes("מכשולים ותשתיות בתוך האזור")) || "";
+      const headRun = cellX.split("</w:r>").find(r => r.replace(/<[^>]+>/g, "").includes("מכשולים ותשתיות בתוך האזור")) || "", cellPlain = cellX.replace(/<[^>]+>/g, "").replace(BID, "");
+      let at = 0, inOrder = lg.rows.length > 0; lg.rows.forEach(r => { const i = cellPlain.indexOf(r.fnT + r.fdT, at); if (i < 0) inOrder = false; else at = i + 1; });
+      check("רשימת מכשולים ב-Word: כותרת קבוצה מודגשת, טאב ימני עם קו מנחה בקצה התא, טאב אחד לכל פריט, בלי טבלה בתוך התא, והמספור והמרחקים כפי שבמסך ובאותו סדר", !!cellX && /<w:b\/>/.test(headRun) && /<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="\d+"\/><\/w:tabs>/.test(cellX) && (cellX.match(/<w:tab\/>/g) || []).length === nItems && !/<w:tbl>/.test(cellX) && inOrder, JSON.stringify([!!cellX, (cellX.match(/<w:tab\/>/g) || []).length, nItems, inOrder])); }
+    await ctx.close();
+  }
+  /* DECL-LIST-END */
+  /* ADV20-BEGIN */
+  /* ===== תרחיש 20: תצוגה מתקדמת (adv) — הכלים הפנימיים (מגבלות המקורות, הבדיקה העצמית וסעיף 5 המלא) רק למי שיש לו תצוגה מתקדמת: מנהל תמיד, עובד ארגון כברירת מחדל, מטיס עצמאי רק אם המנהל הפעיל; השאר מקבלים ״סיכום והגשה״ קצר (במסך וב-Word) והבדיקה העצמית ממשיכה לרוץ ולחסום; ההחלפה בניהול משתמשים נקלטת ברענון מול השרת או בכניסה; שרת ישן — לפי סוג החשבון ===== */
+  if (!LIVE) {
+    const MIN_WD = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")).thresholds.min_working_days;
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    env.call({ action: "addUser", token: admTok, newUser: "avi.org", newPass: "avi-pass-12345" });   // עובד ארגון: חשבון ארגוני שאינו מנהל
+    env.props.WIX_API_KEY = "test-key";                                                              // מטיס עצמאי שנרשם בכרטיס Wix ששולם
+    env.wix.orders.push({ orderNumber: "ORD-ADV-1", status: "PAID", created: new Date(Date.now() - 3 * 86400000).toISOString(), email: "pal@example.com", firstName: "פל", memberId: "m-adv", tickets: [] });
+    env.call({ action: "regStart", email: "pal@example.com" });
+    const regCode = /(\d{6})/.exec(env.mails[env.mails.length - 1].subject)[1], reg = env.call({ action: "regFinish", email: "pal@example.com", code: regCode, user: "pal.pilot", pass: "pal-pass-12345" });
+    env.mails.length = 0;
+    const usersOf = () => Object.fromEntries(env.call({ action: "listUsers", token: admTok }).users.map(u => [u.user, u]));
+    { const la = env.call({ action: "login", user: ADMIN, pass: PASS }), lv = env.call({ action: "login", user: "avi.org", pass: "avi-pass-12345" }), us = usersOf();
+      check("תרחיש 20, חוזה השרת: login מחזיר adv (מנהל וארגוני — כן; מטיס שנרשם לבד — לא), features כולל advView, ו-listUsers מחזירה adv ו-advExplicit (null = ברירת מחדל)",
+        reg.ok && reg.org === false && reg.adv === false && la.adv === true && lv.adv === true && la.features.includes("advView") && us[ADMIN].adv === true && us["avi.org"].adv === true && us["pal.pilot"].adv === false && us["pal.pilot"].advExplicit === null && us["avi.org"].advExplicit === null, JSON.stringify([reg.adv, la.adv, lv.adv, us["pal.pilot"].adv, us["pal.pilot"].advExplicit])); }
+    const openAs = async (user, pass, extra) => {
+      const popts = Object.assign({ env, autosave: true }, extra || {}), { ctx, page } = await newPage(browser, popts);
+      if (popts.pre) await popts.pre(page);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, pass);
+      return { ctx, page, popts };
+    };
+    const n = (page, a) => page._calls.actions.filter(x => x === a).length;
+    const folders = () => reqFolders(env);
+    const ready = page => page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending && !window.__REQ.S.building, null, { timeout: 90000 });
+    const AUTO_RE = /^נשמר אוטומטית בדרייב ✔ \(\d\d:\d\d\)/, autoDone = page => page.waitForFunction(re => new RegExp(re).test(document.getElementById("driveMsg").textContent), AUTO_RE.source, { timeout: 90000 });
+    const runReady = async (page, over) => { await fillExample(page, over); await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 }); await page.check("#reviewOk"); await ready(page); await autoDone(page); };
+    const BIDI = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");
+    // שורות ה-Word (פסקה בכל שורה) של הקובץ השמור בתיקייה בדרייב
+    const docxLines = async folder => { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), f = folder.files.find(x => !x.trashed && /\.docx$/.test(x.name));
+      return (await (await JZ.loadAsync(f.bytes)).file("word/document.xml").async("string")).replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").split("\n"); };
+    const wordSec5 = lines => { const a = lines.findIndex(l => /^5\. (סיכום והגשה|הגשה)$/.test(l)), b = lines.findIndex(l => /^6\. אישור סקירה אנושית$/.test(l)); return a < 0 || b < a ? null : { head: lines[a], body: lines.slice(a + 1, b) }; };
+    // הכלים הפנימיים: מוסתרים באמת (hidden + בלי תיבת פריסה) ובלתי נגישים במקלדת (אי אפשר למקד את הכותרות ואת ״הרץ בדיקה עצמית״), או גלויים ונגישים. focusable: כמה פקדים גלויים ונגישים יש בתוך שתי התיבות
+    const tools = page => page.evaluate(() => {
+      const st = id => { const e = document.getElementById(id); return { hidden: e.hidden, shown: e.getClientRects().length > 0 }; };
+      const focusOn = sel => { const e = document.querySelector(sel); e.focus(); const ok = document.activeElement === e; if (ok) e.blur(); return ok; };
+      const focusable = [...document.querySelectorAll("#limitsBox, #stBox")].flatMap(b => [b, ...b.querySelectorAll("summary,button,a,input,select,textarea,[tabindex]")]).filter(e => e.getClientRects().length > 0 && e.tabIndex >= 0).length;
+      const stList = [...document.querySelectorAll("#stList li")];
+      return { limits: st("limitsBox"), st: st("stBox"), focusLimits: focusOn("#limitsBox > summary"), focusSt: focusOn("#stBox > summary"), focusRun: focusOn("#stRun"), focusable, isAdv: window.ReqAuth.isAdv ? window.ReqAuth.isAdv() : "אין isAdv", limitsText: document.getElementById("limits").textContent.trim().length, stN: stList.length, stOk: stList.every(x => x.classList.contains("ok")) }; });
+    // מגבלות המקורות נמצאות בתוך אזור התוצאות, שמוצג רק אחרי הרצה: לפני הרצה נבדק רק שהן אינן מוסתרות (ran = אחרי הרצה — גם הן גלויות ונגישות)
+    const visible = (t, ran) => !t.limits.hidden && !t.st.hidden && t.st.shown && t.focusSt && t.isAdv === true && t.focusable >= 1 && (!ran || (t.limits.shown && t.focusLimits && t.focusable >= 2));
+    const concealed = t => t.limits.hidden && t.st.hidden && !t.limits.shown && !t.st.shown && !t.focusLimits && !t.focusSt && !t.focusRun && t.focusable === 0 && t.isAdv === false && t.limitsText === 0;
+    const banner = page => page.evaluate(() => { const b = document.getElementById("selftestBanner"); return { shown: b.getClientRects().length > 0 && getComputedStyle(b).display !== "none", text: b.textContent.trim(), open: document.getElementById("stBox").open }; });
+    // סעיף 5 בדף הבדיקות שעל המסך: הכותרת, ואחריה רשימת נקודות (סיכום) או פסקה (הנוסח המלא)
+    const sec5 = page => page.evaluate(() => { const hs = [...document.querySelectorAll("#report .paper.checks h2")].filter(x => /^\d+\. /.test(x.textContent.trim())), h = hs.find(x => /^5\. /.test(x.textContent.trim()));
+      if (!h) return null; const nx = h.nextElementSibling;
+      return { heads: hs.map(x => x.textContent.trim()), head: h.textContent.trim(), tag: nx && nx.tagName, lis: nx && nx.tagName === "UL" ? [...nx.querySelectorAll("li")].map(l => l.textContent.trim()) : null, text: nx ? nx.innerText.replace(/\s+/g, " ").trim() : "" }; });
+    const res0 = page => page.evaluate(() => { const r = window.__REQ.S.res; return { wd: r.workingDays, zones: r.zones.inside.length, notams: r.notams.hits.length + (r.notams.obstacles || []).length, items: r.nearScan.items.length }; });
+    const PMT_REF = /פמ״ת|א-1[0-9]|ב-0[0-9]|סעיף|פרק|עמ'|עדכון|מודיעין טיס|תכנית|שנית|3\.ד|6\(ד\)|7\(ח\)|6\.ב/;
+    const FULL = /3\.ד\.4/;
+    // אחרי כל הרצה: הסיכום (במסך) כולל בדיוק את מה שהניתוח מצא, וימי העבודה מול הסף (✔ / ✘)
+    const summaryOk = (s, r) => !!s && s.head === "5. סיכום והגשה" && s.tag === "UL" && s.lis.length === 2 && s.heads.length === 6 && !PMT_REF.test(s.lis.join("\n") + s.head)
+      && s.lis[0] === "נמצאו בסריקה: אזורי איסור/הגבלה חופפים " + r.zones + " · נוטמים בקרבה " + r.notams + " · מכשולים ותשתיות " + r.items
+      && s.lis[1] === "ימי עבודה עד הפעילות: " + r.wd + " (נדרשים לפחות " + MIN_WD + ") " + (r.wd >= MIN_WD ? "✔" : "✘");
+    const fullOk = s => !!s && s.head === "5. הגשה" && s.tag === "P" && s.lis === null && s.heads.length === 6 && FULL.test(s.text) && /מודיעין טיס/.test(s.text) && /6\(ד\)/.test(s.text) && !/נמצאו בסריקה/.test(s.text);
+    // ניהול משתמשים: עמודת ״תצוגה מתקדמת״ (המצב בפועל, ברירת מחדל מול הכרעה, כפתור + ״!״)
+    const advTable = page => page.evaluate(() => { const ths = [...document.querySelectorAll("#admBody table.admTbl:nth-of-type(1) tr:first-child th")].map(t => t.textContent.trim()), i = ths.indexOf("תצוגה מתקדמת");
+      return { ths, i, rows: Object.fromEntries([...document.querySelectorAll("#admBody table.admTbl:nth-of-type(1) tr")].slice(1).map(r => { const c = i >= 0 ? r.children[i] : null;
+        return [r.querySelector("td").textContent.trim(), { text: c ? c.textContent.replace(/\s+/g, " ").trim() : null, state: c && c.querySelector(".uadv") ? c.querySelector(".uadv").dataset.adv : null, btn: (r.querySelector("[data-setadv]") || {}).textContent || null, help: !!(c && c.querySelector(".hbtn")) }]; })) }; });
+    const waitBtn = (page, who, txt) => page.waitForFunction(([w, t]) => { const b = document.querySelector("[data-setadv='" + w + "']"); return !!b && b.textContent === t; }, [who, txt], { timeout: 15000 });
+    const selfFail = st => async page => page.route(/\/requests\/selftest\/expected\.json/, async r => { if (!st.fail) return r.continue(); const j = await (await r.fetch()).json(); j.ft = 1; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(j) }); });   // כשל מוזרק בבדיקה העצמית: המרת הרגל הצפויה שגויה
+    const pst = { fail: false }, ast = { fail: false }, vst = { fail: false };
+
+    /* ---- א. לפני כניסה: הכלים מוסתרים ובלתי נגישים (גם בלי JS הם מוסתרים ב-HTML) ---- */
+    { const { ctx, page } = await newPage(browser, { env }); await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await page.waitForSelector("#authForm", { timeout: 20000 });
+      check("תרחיש 20, לפני התחברות: מגבלות המקורות והבדיקה העצמית מוסתרות (hidden), בלי תיבת פריסה, ובלתי נגישות במקלדת; isAdv=false", concealed(await tools(page)), JSON.stringify(await tools(page)));
+      await ctx.close(); }
+
+    /* ---- ב. מטיס עצמאי (pal.pilot, בלי תצוגה מתקדמת): בלי הכלים הפנימיים; הבדיקה העצמית רצה; סעיף 5 הוא ״סיכום והגשה״ במסך ובקובץ ה-Word; כשל בבדיקה העצמית עדיין חוסם ---- */
+    const pal = await openAs("pal.pilot", "pal-pass-12345", { pre: selfFail(pst) });
+    { const t = await tools(pal.page);
+      check("תרחיש 20, מטיס עצמאי: אחרי הכניסה מגבלות המקורות והבדיקה העצמית (כולל כפתור ההרצה וה-״!״) מוסתרות באמת — hidden, בלי תיבת פריסה, לא ניתנות למיקוד, בלי תוכן; isAdv=false", concealed(t), JSON.stringify(t));
+      check("תרחיש 20, מטיס עצמאי: הבדיקה העצמית ממשיכה לרוץ אוטומטית ועוברת (כל שלביה ✔ ברשימה המוסתרת) והבאנר שלה מוסתר", t.stN > 8 && t.stOk && !(await banner(pal.page)).shown && (await pal.page.evaluate(() => window.__REQ.S.statuses.selftest.ok)) === true, "stN=" + t.stN); }
+    await runReady(pal.page, { org: "פל צילום" });
+    const palFolder = () => folders().find(f => /^מטיסים\/pal\.pilot\//.test(folderPath(env, f)));
+    { const s = await sec5(pal.page), r = await res0(pal.page);
+      check("תרחיש 20, מטיס עצמאי: בדף הבדיקות סעיף 5 הוא ״סיכום והגשה״ — שתי נקודות (נמצאו בסריקה: אזורי איסור / נוטמים / מכשולים; ימי עבודה עד הפעילות מול הסף ✔/✘) מאותו ניתוח, בלי שום הפניה לפמ״ת, ובלי הנוסח המלא", summaryOk(s, r) && !FULL.test(s.text), JSON.stringify(s));
+      check("תרחיש 20, מטיס עצמאי: בסעיף 5 אין מילה על הגשה מחדש של תכנית טיסה או על פנייה למודיעין טיס", !/תכנית|שנית|מודיעין|לפנות|הגש/.test(s.text.replace(/סיכום והגשה/g, "")), s.text);
+      const f = palFolder(), wl = f ? await docxLines(f) : [], w = wordSec5(wl), sum = s && s.lis ? s.lis.map(l => "• " + l) : [];
+      check("תרחיש 20, מטיס עצמאי: קובץ ה-Word שנשמר בדרייב נבנה לפי תצוגתו — ״5. סיכום והגשה״ ושתי הנקודות זהות למסך, בלי הפניות לפמ״ת ובלי הנוסח המלא", !!f && !!w && w.head === "5. סיכום והגשה" && JSON.stringify(w.body) === JSON.stringify(sum) && !PMT_REF.test(w.body.join("\n")) && !wl.some(l => FULL.test(l)), JSON.stringify(w)); }
+    { // כשל בבדיקה העצמית: הבקשה כבר אינה מוכנה, הפקדים נעולים, הבאנר ניטרלי (בלי פירוט טכני ובלי הוראות), והתיבה נשארת מוסתרת
+      pst.fail = true; const okSelf = await pal.page.evaluate(() => window.__REQ.selfTest());
+      const b = await banner(pal.page), gate = (await pal.page.textContent("#gate")).replace(/\s+/g, " "), t = await tools(pal.page), NEUTRAL = "הנתונים מתעדכנים כעת; נסו שוב בעוד מספר דקות, ואם זה נמשך פנו לתמיכה: " + SUPPORT + ".";
+      check("תרחיש 20, מטיס עצמאי: כשל בבדיקה העצמית עדיין חוסם — הבקשה אינה מוכנה לשליחה, ״שמור בדרייב״ ו״שלח״ נעולים", okSelf === false && (await pal.page.evaluate(() => window.__REQ.S.ready)) === false && (await pal.page.isDisabled("#btnDrive")) && (await pal.page.isDisabled("#btnSend")) && /אינה מוכנה לשליחה/.test(gate), gate.slice(0, 240));
+      check("תרחיש 20, מטיס עצמאי: באנר הכשל בניסוח הניטרלי הקיים (בלי פירוט טכני, בלי הפניה לתיבת הבדיקה העצמית, עם כתובת התמיכה), בשער אין שמות בדיקות שנכשלו, והתיבה נשארת מוסתרת",
+        b.shown && b.text === NEUTRAL && !/בדיקה עצמית|פתחו|המרה לרגל|רגל|office@icd/.test(b.text) && /בדיקה עצמית של החישובים: הנתונים מתעדכנים כעת/.test(gate) && !/המרה לרגל|1 רגל/.test(gate) && !/מנהל המערכת/.test(b.text + gate) && concealed(t), b.text + " | " + gate.slice(0, 260));
+      pst.fail = false; const okBack = await pal.page.evaluate(() => window.__REQ.selfTest()); await ready(pal.page);
+      check("תרחיש 20, מטיס עצמאי: כשהבדיקה העצמית עוברת שוב הבאנר נעלם והבקשה חוזרת להיות מוכנה", okBack === true && !(await banner(pal.page)).shown && (await pal.page.evaluate(() => window.__REQ.S.ready)) === true, ""); }
+
+    /* ---- ג. מנהל: רואה הכול; חלון הניהול — עמודת ״תצוגה מתקדמת״, החלפה עם אישור, שגיאות; החלפה נקלטת אצל המטיס ברענון מול השרת ---- */
+    const adm = await openAs(ADMIN, PASS, { pre: selfFail(ast) });
+    { const t = await tools(adm.page);
+      check("תרחיש 20, מנהל: מגבלות המקורות והבדיקה העצמית גלויות ונגישות (isAdv=true), הבדיקה העצמית רצה ועוברת", visible(t) && t.limitsText === 0 /* מגבלות המקורות מתמלאות אחרי הרצה */ && t.stN > 8 && t.stOk, JSON.stringify(t));
+      ast.fail = true; await adm.page.evaluate(() => window.__REQ.selfTest()); const b = await banner(adm.page); ast.fail = false; await adm.page.evaluate(() => window.__REQ.selfTest());
+      check("תרחיש 20, מנהל: כשל בבדיקה העצמית — הבאנר המפורט שמפנה לתיבת הבדיקה העצמית (שנפתחת), ובשער הפירוט הטכני; ואחרי ההחלמה הבאנר נעלם", b.shown && /פתחו את 'בדיקה עצמית' למטה לפרטים/.test(b.text) && b.open === true && !(await banner(adm.page)).shown, b.text); }
+    await adm.page.click("#ubAdmin"); await adm.page.waitForSelector("#admBody .admTbl");
+    { const T = await advTable(adm.page), R = T.rows;
+      check("תרחיש 20, ניהול משתמשים: עמודה ״תצוגה מתקדמת״ לפני ״פעולות״; מנהל = כן (תמיד) בלי כפתור; עובד ארגון = כן (ברירת מחדל) + ״בטל…״; מטיס עצמאי = לא (ברירת מחדל) + ״הפעל…״; לכל כפתור ״!״",
+        T.i > 0 && T.ths[T.i + 1] === "פעולות" && R[ADMIN].state === "1" && /^כן \(תמיד\)$/.test(R[ADMIN].text) && R[ADMIN].btn === null && R["avi.org"].state === "1" && /^כן \(ברירת מחדל\)/.test(R["avi.org"].text) && R["avi.org"].btn === "בטל תצוגה מתקדמת" && R["avi.org"].help
+        && R["pal.pilot"].state === "0" && /^לא \(ברירת מחדל\)/.test(R["pal.pilot"].text) && R["pal.pilot"].btn === "הפעל תצוגה מתקדמת" && R["pal.pilot"].help, JSON.stringify(T)); }
+    { const h = await adm.page.getAttribute("#admBody tr:has([data-setadv='pal.pilot']) td:has([data-setadv]) .hbtn", "data-help"), lbl = await adm.page.getAttribute("#admBody tr:has([data-setadv='pal.pilot']) td:has([data-setadv]) .hbtn", "aria-label");
+      check("תרחיש 20, ״!״ של התצוגה המתקדמת מסביר: מה היא מציגה (מגבלות המקורות, בדיקה עצמית, סעיף ההגשה המלא), ברירת המחדל לפי הסוג, מתי השינוי נקלט, והמנהל תמיד כן", /מגבלות המקורות/.test(h) && /הבדיקה העצמית/.test(h) && /סעיף ההגשה המלא/.test(h) && /ארגוני — כן, מטיס עצמאי — לא/.test(h) && /בכניסה הבאה או ברענון/.test(h) && /חשבון מנהל תמיד רואה/.test(h) && /^הסבר על: תצוגה מתקדמת — pal\.pilot$/.test(lbl), lbl + " | " + h.slice(0, 100)); }
+    { // ביטול בחלון האישור: שום קריאה לשרת
+      let dm = ""; adm.page.once("dialog", d => { dm = d.message(); d.dismiss(); });
+      await adm.page.click("[data-setadv='pal.pilot']"); await adm.page.waitForTimeout(400);
+      check("תרחיש 20, ניהול: ״הפעל תצוגה מתקדמת״ מבקש אישור (שם המשתמש, מה תראה, מתי ייקלט); ביטול — אין קריאת setAdv והמצב לא משתנה", /pal\.pilot/.test(dm) && /מגבלות המקורות/.test(dm) && /הבדיקה העצמית/.test(dm) && /סעיף ההגשה המלא/.test(dm) && /בכניסה הבאה או ברענון/.test(dm) && n(adm.page, "setAdv") === 0 && usersOf()["pal.pilot"].advExplicit === null, dm.slice(0, 200)); }
+    { // שגיאות השרת בעברית: is_admin ו-bad_adv
+      adm.popts.intercept = b => b.action === "setAdv" ? { ok: false, error: "is_admin", message: "חשבון מנהל תמיד רואה את התצוגה המתקדמת" } : undefined;
+      adm.page.once("dialog", d => d.accept()); await adm.page.click("[data-setadv='pal.pilot']"); await adm.page.waitForFunction(() => document.getElementById("admErr").textContent.length > 0, null, { timeout: 10000 });
+      const e1 = await adm.page.textContent("#admErr");
+      adm.popts.intercept = b => b.action === "setAdv" ? { ok: false, error: "bad_adv" } : undefined;
+      await adm.page.evaluate(() => { document.getElementById("admErr").textContent = ""; });
+      adm.page.once("dialog", d => d.accept()); await adm.page.click("[data-setadv='pal.pilot']"); await adm.page.waitForFunction(() => document.getElementById("admErr").textContent.length > 0, null, { timeout: 10000 });
+      const e2 = await adm.page.textContent("#admErr"); adm.popts.intercept = null;
+      check("תרחיש 20, ניהול: שגיאות setAdv מוצגות בעברית — is_admin (מנהל תמיד רואה) ו-bad_adv — ולא נשארות קודי שגיאה גולמיים", e1 === "חשבון מנהל תמיד רואה את התצוגה המתקדמת — לא ניתן לשנות אותה." && e2 === "ערך התצוגה המתקדמת אינו תקין." && usersOf()["pal.pilot"].advExplicit === null, e1 + " | " + e2); }
+    { // הפעלה אמיתית: setAdv בשרת, והשורה מתעדכנת (הכרעה במפורש — בלי ״ברירת מחדל״, כפתור ״בטל…״)
+      await adm.page.evaluate(() => { document.getElementById("admErr").textContent = ""; });
+      const sa0 = n(adm.page, "setAdv");   // כולל שתי הקריאות שנחסמו בהזרקת השגיאות
+      adm.page.once("dialog", d => d.accept()); await adm.page.click("[data-setadv='pal.pilot']"); await waitBtn(adm.page, "pal.pilot", "בטל תצוגה מתקדמת");
+      const T = await advTable(adm.page), u = usersOf()["pal.pilot"];
+      check("תרחיש 20, ניהול: ההפעלה נשמרת בשרת (adv=true, advExplicit=true) והשורה מציגה ״כן״ בלי ״ברירת מחדל״ עם כפתור ״בטל תצוגה מתקדמת״", n(adm.page, "setAdv") === sa0 + 1 && u.adv === true && u.advExplicit === true && T.rows["pal.pilot"].state === "1" && /^כן(?! \(ברירת מחדל\))/.test(T.rows["pal.pilot"].text) && T.rows["pal.pilot"].btn === "בטל תצוגה מתקדמת", JSON.stringify([u.adv, u.advExplicit, T.rows["pal.pilot"]])); }
+
+    /* ---- ד. ההשפעה אצל המטיס: לא מיידית — רק ברענון מול השרת (me) או בכניסה; ואז הכלים מופיעים, סעיף 5 הופך ל״הגשה״ המלא, והקובץ בדרייב נשמר מחדש לפי התצוגה החדשה ---- */
+    { const sb = n(pal.page, "saveBegin"), t0 = await tools(pal.page), s0 = await sec5(pal.page);
+      check("תרחיש 20, מטיס שהמנהל הפעיל לו: עד הרענון הדף נשאר כפי שהיה (הכלים מוסתרים, סיכום) — השינוי אינו מנתק ואינו מיידי", concealed(t0) && s0.head === "5. סיכום והגשה", s0.head);
+      await pal.page.evaluate(() => window.ReqAuth.refresh());
+      await pal.page.waitForFunction(() => !document.getElementById("stBox").hidden, null, { timeout: 15000 });
+      const t1 = await tools(pal.page), s1 = await sec5(pal.page);
+      check("תרחיש 20, ברענון מול השרת (me): הכלים מופיעים ונגישים (isAdv=true), מגבלות המקורות מתמלאות, ובדף הבדיקות סעיף 5 הוא הנוסח המלא ״הגשה״ (עם 3.ד.4) במקום הסיכום", visible(t1, true) && t1.limitsText > 100 && fullOk(s1), JSON.stringify([t1, s1 && s1.head]));
+      await autoDone(pal.page);
+      const f = palFolder(), wl = await docxLines(f), w = wordSec5(wl);
+      check("תרחיש 20, אחרי ההחלפה הבקשה נשמרת שוב אוטומטית לאותה תיקייה, וקובץ ה-Word בדרייב כולל עכשיו את ״5. הגשה״ המלא (3.ד.4) ולא את הסיכום", n(pal.page, "saveBegin") === sb + 1 && folders().length === 1 && !!w && w.head === "5. הגשה" && w.body.some(l => FULL.test(l)) && !wl.includes("5. סיכום והגשה") && !wl.some(l => /^• נמצאו בסריקה/.test(l)), "saveBegin " + sb + "→" + n(pal.page, "saveBegin") + " " + (w ? w.head : "")); }
+    { // כניסה חדשה (login) אחרי ההפעלה: הכלים גלויים מיד
+      const p2 = await openAs("pal.pilot", "pal-pass-12345"); const t = await tools(p2.page);
+      check("תרחיש 20, מטיס שהמנהל הפעיל לו, כניסה חדשה: הכלים הפנימיים גלויים מיד (השרת מדווח adv=true ב-login)", visible(t) && t.stN > 8 && t.stOk, JSON.stringify(t));
+      await p2.ctx.close(); }
+    { // ביטול ההפעלה בניהול (הכרעה במפורש false), והרענון אצל המטיס מחזיר הכול לתצוגת הסיכום
+      let dm = ""; adm.page.once("dialog", d => { dm = d.message(); d.accept(); });
+      await adm.page.click("[data-setadv='pal.pilot']"); await waitBtn(adm.page, "pal.pilot", "הפעל תצוגה מתקדמת");
+      const T = await advTable(adm.page), u = usersOf()["pal.pilot"], sb = n(pal.page, "saveBegin");
+      check("תרחיש 20, ניהול: ביטול התצוגה מבקש אישור (מה יוסתר, שהבדיקה העצמית תמשיך לרוץ ולחסום), נשמר כהכרעה במפורש (advExplicit=false) והשורה ״לא״ בלי ״ברירת מחדל״", /pal\.pilot/.test(dm) && /לבטל/.test(dm) && /תמשיך לרוץ ברקע ולחסום/.test(dm) && /סיכום קצר/.test(dm) && u.adv === false && u.advExplicit === false && T.rows["pal.pilot"].state === "0" && /^לא(?! \(ברירת מחדל\))/.test(T.rows["pal.pilot"].text), dm.slice(0, 220));
+      await pal.page.evaluate(() => window.ReqAuth.refresh());
+      await pal.page.waitForFunction(() => document.getElementById("stBox").hidden, null, { timeout: 15000 });
+      const t = await tools(pal.page), s = await sec5(pal.page), r = await res0(pal.page); await autoDone(pal.page);
+      const wl = await docxLines(palFolder()), w = wordSec5(wl);
+      check("תרחיש 20, ברענון אחרי הביטול: הכלים מוסתרים שוב, סעיף 5 חוזר לסיכום (מסך ו-Word שנשמר מחדש), וההגשה המלאה נעלמת", concealed(t) && summaryOk(s, r) && n(pal.page, "saveBegin") === sb + 1 && !!w && w.head === "5. סיכום והגשה" && !wl.some(l => FULL.test(l)), JSON.stringify([s && s.head, w && w.head])); }
+    await pal.ctx.close();
+
+    /* ---- ה. עובד ארגון: תצוגה מתקדמת כברירת מחדל (הכלים והנוסח המלא); המנהל יכול לכבות גם לו, והדבר נקלט ברענון ---- */
+    const avi = await openAs("avi.org", "avi-pass-12345", { pre: selfFail(vst) });
+    { const t = await tools(avi.page);
+      check("תרחיש 20, עובד ארגון: ברירת המחדל תצוגה מתקדמת — הכלים הפנימיים גלויים ונגישים והבדיקה העצמית רצה", visible(t) && t.stN > 8 && t.stOk, JSON.stringify(t)); }
+    await runReady(avi.page, { org: "אבי הפקות" });
+    const aviFolder = () => folders().find(f => /^הארגון\//.test(folderPath(env, f)));
+    { const s = await sec5(avi.page), wl = await docxLines(aviFolder()), w = wordSec5(wl);
+      check("תרחיש 20, עובד ארגון: סעיף 5 המלא ״הגשה״ במסך (3.ד.4, ללא הסיכום) ובקובץ ה-Word שנשמר בדרייב", fullOk(s) && !!w && w.head === "5. הגשה" && w.body.some(l => FULL.test(l)) && !wl.includes("5. סיכום והגשה"), JSON.stringify([s && s.head, w && w.head])); }
+    { // כשל בבדיקה העצמית אצל מי שיש לו תצוגה מתקדמת (אינו מנהל): הבאנר המפורט, התיבה נפתחת, ובשער שמות הבדיקות שנכשלו — בניגוד למטיס שבלי תצוגה מתקדמת
+      vst.fail = true; await avi.page.evaluate(() => window.__REQ.selfTest());
+      const b = await banner(avi.page), gate = (await avi.page.textContent("#gate")).replace(/\s+/g, " "), t = await tools(avi.page);
+      vst.fail = false; await avi.page.evaluate(() => window.__REQ.selfTest()); await ready(avi.page);
+      check("תרחיש 20, עובד ארגון עם תצוגה מתקדמת: כשל בבדיקה העצמית — הבאנר המפורט שמפנה לתיבה (שנפתחת), בשער שמות הבדיקות שנכשלו, והבקשה אינה מוכנה; אחרי ההחלמה הבאנר נעלם", b.shown && /פתחו את 'בדיקה עצמית' למטה לפרטים/.test(b.text) && b.open === true && /המרה לרגל/.test(gate) && /אינה מוכנה לשליחה/.test(gate) && t.st.shown && !(await banner(avi.page)).shown, b.text + " | " + gate.slice(0, 200)); }
+    { let dm = ""; adm.page.once("dialog", d => { dm = d.message(); d.accept(); });
+      await adm.page.click("[data-setadv='avi.org']"); await waitBtn(adm.page, "avi.org", "הפעל תצוגה מתקדמת");
+      const u = usersOf()["avi.org"], T = await advTable(adm.page), sb = n(avi.page, "saveBegin");
+      check("תרחיש 20, ניהול: אפשר לכבות תצוגה מתקדמת גם לחשבון ארגוני (הכרעה במפורש; סוג החשבון נשאר ארגוני)", u.org === true && u.adv === false && u.advExplicit === false && T.rows["avi.org"].state === "0" && /ארגוני/.test(await adm.page.textContent("#admBody tr:has([data-setadv='avi.org']) td:nth-child(3)")), JSON.stringify([u.org, u.adv, u.advExplicit]));
+      await avi.page.evaluate(() => window.ReqAuth.refresh());
+      await avi.page.waitForFunction(() => document.getElementById("stBox").hidden, null, { timeout: 15000 }); await autoDone(avi.page);
+      const t = await tools(avi.page), s = await sec5(avi.page), r = await res0(avi.page), w = wordSec5(await docxLines(aviFolder()));
+      check("תרחיש 20, עובד ארגון שכובתה לו התצוגה: ברענון הכלים מוסתרים, סעיף 5 הופך לסיכום (מסך ו-Word) — אבל חשבונו נשאר ארגוני (ברירות המחדל והשמירה בתיקיית ״הארגון״)", concealed(t) && summaryOk(s, r) && !!w && w.head === "5. סיכום והגשה" && n(avi.page, "saveBegin") === sb + 1 && (await avi.page.evaluate(() => window.ReqAuth.isOrg())) === true, JSON.stringify([t.isAdv, s && s.head, w && w.head])); }
+    await avi.ctx.close();
+
+    /* ---- ו. שרת בלי תצוגה מתקדמת (noAdv) ושרת ישן לגמרי (oldServer): בלי adv מהשרת הלקוח נשאר עם ברירת המחדל לפי סוג החשבון (מנהל כן; ארגוני כן; מטיס לא) — גם כשהמנהל כבר הכריע אחרת בשרת הקיים; חלון הניהול בלי עמודה ---- */
+    env.call({ action: "setAdv", token: admTok, target: "pal.pilot", adv: true });   // בשרת הקיים: המטיס מופעל והארגוני מכובה — שרת בלי השדה אינו מדווח זאת
+    for (const [label, ex, aviWant, palWant] of [["שרת בלי advView", { noAdv: true }, true, false], ["שרת ישן לגמרי", { oldServer: true }, false, false]]) {
+      const a = await openAs("avi.org", "avi-pass-12345", ex), ta = await tools(a.page); await a.ctx.close();
+      const p = await openAs("pal.pilot", "pal-pass-12345", ex), tp = await tools(p.page); await p.ctx.close();
+      const m = await openAs(ADMIN, PASS, ex), tm = await tools(m.page);
+      await m.page.click("#ubAdmin"); await m.page.waitForSelector("#admBody .admTbl");
+      const T = await advTable(m.page), cols = await m.page.locator("#admBody [data-setadv], #admBody .uadv").count();
+      check("תרחיש 20, " + label + " (לא מדווח adv): עובד ארגון — " + (aviWant ? "הכלים גלויים (לפי סוג החשבון, גם שהמנהל כיבה אותם בשרת הקיים)" : "הכלים מוסתרים (הסוג לא ידוע ללקוח, וחשבון שאינו מנהל נחשב עצמאי)") + "; מטיס עצמאי — הכלים מוסתרים (גם שהמנהל הפעיל לו בשרת הקיים); מנהל — גלויים; בניהול בלי עמודה וכפתורים",
+        (aviWant ? visible(ta) : concealed(ta)) && (palWant ? visible(tp) : concealed(tp)) && visible(tm) && T.i === -1 && cols === 0, JSON.stringify([ta.isAdv, tp.isAdv, tm.isAdv, T.i, cols]));
+      await m.ctx.close();
+    }
+    await adm.ctx.close();
+  }
+  /* ADV20-END */
   check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();

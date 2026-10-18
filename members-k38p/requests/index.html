@@ -149,11 +149,13 @@ body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לש
 .paper table.ck td:nth-child(n+2),.paper table.ck th:nth-child(n+2){overflow-wrap:anywhere}
 .paper img.mapimg{width:100%;display:block;border:1px solid #555}
 .paper .ph{white-space:nowrap}   /* מספר טלפון בשדות 11 ו-12 לא נשבר באמצע בעמודת הערך הצרה (output.js מוסיף class="ph" לטלפונים) */
-/* שדה 8: שורת פריט (output.js itemLine) — מספר ושם בתחילת השורה, קו מנחה מקווקו, והמרחק בקצה השורה (ב-Word: טאב ימני עם קו מנחה, docx.js). שם ארוך: המרחק יורד לשורה משלו, עדיין בקצה. הטקסט " — " שב-.fs נשאר להעתקה ולטקסט פשוט, והוא מוסתר חזותית */
+/* שדה 8: שורת פריט (output.js itemLine) — מספר ושם בתחילת השורה, ואחריהם קו מנחה מקווקו והמרחק בקצה השורה (ב-Word: טאב ימני עם קו מנחה, docx.js). הקו והמרחק (.fd) נשארים יחידה אחת: כששם ארוך המרחק יורד לשורה משלו, והקו מוביל אליו בקצה.
+   .fs (" — ") הוא המפריד לטקסט פשוט ול-Word בלבד, ולכן מוסתר במסך */
 .paper .fl{display:inline-flex;flex-wrap:wrap;align-items:baseline;width:100%;column-gap:6px}
 .paper .fn{min-width:0;overflow-wrap:anywhere}
-.paper .fs{flex:1 1 14px;min-width:14px;height:0;overflow:hidden;font-size:0;color:transparent;border-bottom:1px dotted #777;align-self:flex-end;margin-bottom:.35em}
-.paper .fd{flex:none;white-space:nowrap}
+.paper .fs{display:none}
+.paper .fd{flex:1 0 auto;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.paper .fd::before{content:"";flex:1 1 10px;min-width:10px;border-bottom:1px dotted #777}
 .paper h3{font-size:13px;margin:10px 0 4px;color:#111}   /* כותרת משנית בדף הבדיקות: "3.1 פריטים נוספים…" */
 .paper .foot{margin-top:8px;font-size:10.5px;color:#555;border-top:1px solid #000;padding-top:3px;display:flex;justify-content:space-between}
 .paper ul{margin:4px 18px}.paper ol{margin:4px 22px}
