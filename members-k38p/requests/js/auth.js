@@ -149,7 +149,7 @@
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("auErr").textContent = "אין חיבור לשרת ההתחברות. נסו שוב."; btn.disabled = false; }
     };
-    const u = $("auUser"); if (u) u.focus();
+    const u = $("auUser"); if (u) u.focus({ preventScroll: true });   // בלי גלילה: בטלפון ב-landscape תיבת ההסבר גבוהה, והפוקוס היה מגלגל את החלון ומסתיר את הכותרת
   }
 
   // דרישת החברות (REQUIRE_MEMBER בשרת): הטקסט על חברות מוצג אלא אם השרת מדווח במפורש שהדרישה כבויה (requireMember === false בתשובת ה-GET הציבורית — שרת שאינו מדווח: מניחים שהדרישה פעילה). זה מידע כללי של המערכת, זהה לכל כתובת
@@ -220,7 +220,7 @@
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("rgErr").textContent = "אין חיבור לשרת. נסו שוב."; } finally { btn.disabled = false; }
     };
-    $("rgEmail").focus();
+    $("rgEmail").focus({ preventScroll: true });
   }
 
   /* ---------- שורת משתמש, החלפת סיסמה וניהול משתמשים ---------- */
