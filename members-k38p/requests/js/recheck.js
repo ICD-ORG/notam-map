@@ -11,6 +11,7 @@
    optsFromCfg(cfg)                        => opts ל-diffSnapshots מ-cfg.recheck (dist_eps_m, dist_eps_pct, rows_screen, rows_word); חסר => ברירות מחדל
 
    --- תמונת מצב ---
+   capture(res, data, cfg, now?)           => לפיזור לתוך הרשומה השמורה: {snapshot} | {snapshotError} | {} כשהדגל כבוי (הרשומה זהה לשלב א׳). לא זורק.
    snapshotOf(res, data, cfg, now?)        => snapshot (אובייקט JSON). res = C.analyze; data = אותו data שהועבר ל-analyze; now (Date|ms) רק לשדה at.
                                               דטרמיניסטי (מיון קבוע, בלי שעון); זורק Error כשהניתוח חסר/חורג מהתקרות (המתקשר עוטף ב-try/catch ושומר בלי תמונת מצב).
    cleanSnapshot(s)                        => {ok, snapshot?, reason?}  reason: not_object | version | malformed — נקי ומוגבל; כל חריגה ← לא תקין (לא משלימים)
@@ -33,7 +34,8 @@
    sinceHtml(model)                        => HTML מוגן של הסעיף (כולל הבאנר)         bannerHtml(sentAt, opts?) / bannerText(sentAt)
    requestModel(rec, ctx?) / requestHtml(m) => סיכום קריאה-בלבד של בקשה שמורה ("הצג בקשה")
    updateSubjectPrefix(sentAt)             => "[עדכון לבקשה מ-dd.mm.yyyy] "           updateBodyLine(sentAt) => "בקשה זו מחליפה את הבקשה שנשלחה ב-dd.mm.yyyy."
-   updateMail(mail, sentAt)                => עותק של {to,subject,body,mailto} עם קידומת הנושא ומשפט ההחלפה (אידמפוטנטי)
+   updateMail(mail, sentAt, {cfg}?)        => עותק של {to,subject,body,mailto} עם קידומת הנושא ומשפט ההחלפה (אידמפוטנטי); cfg עם features.recheck=false => המייל עצמו, ללא שינוי
+   דגל כבוי (ctx.cfg / opts.cfg): sinceModel/requestModel מחזירים null ו-sinceHtml/requestHtml(null) => "" — שום פלט חדש
    fmtDate(ms) / fmtDateTime(ms)           => תאריך / תאריך+שעה בשעון ישראל */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory(require("./core.js"));
@@ -229,6 +231,12 @@
     if (byteLen(JSON.stringify(snap)) > LIMITS.bytes && snap.notams.known.length) { snap.capped.known += snap.notams.known.length; snap.notams.known = []; }
     if (byteLen(JSON.stringify(snap)) > LIMITS.bytes) throw new Error("snapshotOf: תמונת המצב חורגת מהתקרה");
     return snap;
+  }
+
+  // לשילוב ב-inputsForRecord: Object.assign(record, capture(...)). דגל כבוי => {} (הקובץ השמור זהה בדיוק לשלב א׳); כשל בצילום לא חוסם שמירה => {snapshotError}
+  function capture(res, data, cfg, now) {
+    if (!enabled(cfg)) return {};
+    try { return { snapshot: snapshotOf(res, data, cfg, now) }; } catch (e) { return { snapshotError: clean(e && e.message, 120) || "שגיאה" }; }
   }
 
   /* ----- בדיקת תקינות ונרמול (קלט עוין) ----- */
@@ -623,6 +631,7 @@
 
   function sinceModel(diff, ctx) {
     ctx = ctx || {};
+    if (!enabled(ctx.cfg)) return null;
     const maxRows = num(ctx.maxRows) && ctx.maxRows >= 0 ? Math.floor(ctx.maxRows) : LIMITS.rowsScreen;
     const sentMs = toMs(ctx.sentAt), chkMs = toMs(ctx.checkedAt != null ? ctx.checkedAt : diff && diff.dates && diff.dates.checkedAt != null ? diff.dates.checkedAt : NaN);
     const act = ctx.activity || {};
@@ -707,6 +716,7 @@
   /* ================= "הצג בקשה": סיכום קריאה-בלבד ================= */
   function requestModel(rec, ctx) {
     ctx = ctx || {};
+    if (!enabled(ctx.cfg)) return null;
     const v = validateRecord(rec, ctx.cfg);
     if (!v.ok) return { ok: false, reason: v.reason, text: "הנתונים השמורים של הבקשה אינם תקינים, ולכן אי אפשר להציגם." };
     const r = v.rec, i = r.inputs, rows = [];
@@ -748,7 +758,8 @@
   const PREFIX_RE = /^\s*\[עדכון לבקשה[^\]]*\]\s*/;
   function updateSubjectPrefix(sentAt) { const d = fmtDate(sentAt); return d ? "[עדכון לבקשה מ-" + d + "] " : "[עדכון לבקשה קודמת] "; }
   function updateBodyLine(sentAt) { const d = fmtDate(sentAt); return d ? "בקשה זו מחליפה את הבקשה שנשלחה ב-" + d + "." : "בקשה זו מחליפה את הבקשה הקודמת שנשלחה."; }
-  function updateMail(mail, sentAt) {
+  function updateMail(mail, sentAt, opts) {
+    if (!enabled(opts && opts.cfg)) return mail;   // דגל כבוי: המייל בדיוק כמו בשלב א׳ (אותו אובייקט)
     const m = Object.assign({}, mail), line = updateBodyLine(sentAt);
     m.subject = updateSubjectPrefix(sentAt) + String(mail.subject == null ? "" : mail.subject).replace(PREFIX_RE, "");
     let body = String(mail.body == null ? "" : mail.body);
@@ -764,7 +775,7 @@
   }
 
   return {
-    VERSION, LIMITS, STR, SCAN_TH, enabled, optsFromCfg, snapshotOf, cleanSnapshot, diffSnapshots, validateRecord, restoreInputs,
+    VERSION, LIMITS, STR, SCAN_TH, enabled, optsFromCfg, snapshotOf, capture, cleanSnapshot, diffSnapshots, validateRecord, restoreInputs,
     sinceModel, sinceHtml, bannerText, bannerHtml, requestModel, requestHtml, updateSubjectPrefix, updateBodyLine, updateMail, fmtDate, fmtDateTime, clean
   };
 });
