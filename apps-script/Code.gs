@@ -182,14 +182,14 @@ function rateRefund_(cache, key) {
 }
 // נמענים לפי סוג החשבון, המצב והיעד. stored = כתובת המשתמש השמורה (או ''), orgA = כתובת הארגון; אותה כתובת (באותיות קטנות) לא מופיעה פעמיים (addRcpt_).
 //  ארגוני — חי + משרד: to = משרד נוטאם (קבוע בקוד), cc = כתובת הארגון (וגם כתובת המשתמש השמורה אם שונה), בלי BCC, replyTo = כתובת הארגון.
-//           בדיקה + משרד, או "לעצמי": to = כתובת המשתמש השמורה, ובלי — כתובת הארגון; בלי BCC; replyTo = כתובת הארגון.
+//           בדיקה + משרד, או "לעצמי": to = כתובת המשתמש השמורה, ובלי — כתובת הארגון; cc = כתובת הארגון (אם שונה, כדי שהארגון יקבל עותק מכל שליחה של עובד, גם בדיקה); בלי BCC; replyTo = כתובת הארגון.
 //  עצמאי — חי + משרד: to = משרד נוטאם, cc = המבקש (הכתובת השמורה), BCC = כתובת הארגון, replyTo = המבקש.
 //           בדיקה + משרד, או "לעצמי": to = המבקש, BCC = כתובת הארגון, replyTo = המבקש. (המבקש בלי כתובת שמורה = כתובת הארגון.)
 function mailPlan_(org, mode, target, stored, orgA) {
   var seen = {}, to = [], cc = [], bcc = [], live = target === 'office' && mode === 'live', requester = stored || orgA;
   if (live) CFG.MAIL_TO.forEach(function (x) { addRcpt_(to, seen, x); });
   if (org) {
-    if (live) { addRcpt_(cc, seen, orgA); addRcpt_(cc, seen, stored); } else addRcpt_(to, seen, requester);
+    if (live) { addRcpt_(cc, seen, orgA); addRcpt_(cc, seen, stored); } else { addRcpt_(to, seen, requester); addRcpt_(cc, seen, orgA); }
     return { to: to, cc: cc, bcc: bcc, replyTo: orgA };
   }
   addRcpt_(live ? cc : to, seen, requester);

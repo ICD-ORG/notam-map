@@ -2313,9 +2313,9 @@ function manualPilot(env, token, name = "manual.pilot") {
 test("חשבון ארגוני × מצב × יעד: to/cc/bcc/replyTo/שם שולח/נושא — כתובת הארגון ב-cc גלוי (שליחה חיה), בלי BCC, השב-ל הארגון, ושם הארגון; גם כשנשלח fromName", () => {
   // מקרים: מנהל בלי כתובת שמורה; חשבון ארגוני עם כתובת שמורה שונה; חשבון ארגוני שכתובתו השמורה היא כתובת הארגון עצמה (בלי כפילות)
   const variants = [
-    { who: "admin", stored: "", liveCc: [ORG], softTo: [ORG] },
-    { who: "org-with-email", stored: "staff@example.com", liveCc: [ORG, "staff@example.com"], softTo: ["staff@example.com"] },
-    { who: "org-is-org-addr", stored: "Office@ICD.org.il", liveCc: [ORG], softTo: [ORG] },
+    { who: "admin", stored: "", liveCc: [ORG], softTo: [ORG], softCc: [] },
+    { who: "org-with-email", stored: "staff@example.com", liveCc: [ORG, "staff@example.com"], softTo: ["staff@example.com"], softCc: [ORG] },   // עובד ארגון עם כתובת משלו: הארגון מקבל עותק גם מבדיקה ומ"לעצמי"
+    { who: "org-is-org-addr", stored: "Office@ICD.org.il", liveCc: [ORG], softTo: [ORG], softCc: [] },
   ];
   for (const v of variants) for (const [mode, target] of [["test", "office"], ["test", "self"], ["live", "office"], ["live", "self"]]) {
     const { env, token } = withWix(); if (mode === "live") goLive(env, token);
@@ -2327,7 +2327,7 @@ test("חשבון ארגוני × מצב × יעד: to/cc/bcc/replyTo/שם שול
     assert.ok(r.ok, tag + " " + JSON.stringify(r));
     const m = env.mails[env.mails.length - 1], live = mode === "live" && target === "office";
     assert.deepEqual(rcpts(m.to), live ? OFFICE : v.softTo, tag + " to");
-    assert.deepEqual(rcpts(m.cc), live ? v.liveCc : [], tag + " cc");
+    assert.deepEqual(rcpts(m.cc), live ? v.liveCc : v.softCc, tag + " cc");
     assert.equal(m.bcc, undefined, tag + ": חשבון ארגוני — אין BCC");
     assert.equal(m.replyTo, ORG, tag + ": השב-ל הארגון");
     assert.equal(m.name, ORG_NAME, tag + ": שם הארגון, fromName מתעלמים");
