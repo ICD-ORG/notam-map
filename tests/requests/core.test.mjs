@@ -1375,7 +1375,7 @@ test("n=12: ערך support_email לא תקין (HTML, סכמה, רווחים, ח
     const A = loadAuth({ support_email: bad });
     assert.equal(A.supportEmail(), "", JSON.stringify(bad));
     assert.equal(A.withSupport("פנו לתמיכה."), "פנו לתמיכה.", JSON.stringify(bad));
-    assert.equal(A.msg({ error: "blocked" }), "המשתמש חסום מבקשות טיסה. יש לפנות למנהל המערכת.", JSON.stringify(bad));
+    assert.equal(A.msg({ error: "blocked" }), "המשתמש חסום מבקשות טיסה. פנו לתמיכה.", JSON.stringify(bad));
   }
   assert.equal(loadAuth(null).supportEmail(), "", "בלי הגדרות");
 });

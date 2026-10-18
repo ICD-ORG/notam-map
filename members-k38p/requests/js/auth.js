@@ -8,7 +8,7 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
-    bad_login: "שם משתמש או סיסמה שגויים.", locked: "יותר מדי ניסיונות כושלים — נסו שוב בעוד כרבע שעה.", blocked: "המשתמש חסום מבקשות טיסה. יש לפנות למנהל המערכת.",
+    bad_login: "שם משתמש או סיסמה שגויים.", locked: "יותר מדי ניסיונות כושלים — נסו שוב בעוד כרבע שעה.", blocked: "המשתמש חסום מבקשות טיסה. פנו לתמיכה.",
     expired: "פג תוקף ההתחברות — יש להתחבר מחדש.", auth: "ההתחברות אינה תקפה — יש להתחבר מחדש.", weak_pass: "הסיסמה קצרה מדי (לפחות 10 תווים).",
     bad_user: "שם משתמש לא תקין (3–40 תווים: אותיות, ספרות, נקודה, מקף).", exists: "המשתמש כבר קיים.", no_user: "המשתמש לא נמצא.", self: "לא ניתן לבצע פעולה זו על המשתמש שלך.",
     forbidden: "הפעולה מותרת למנהל בלבד.", bad_code: "הקוד שגוי או שפג תוקפו.", no_setup: "המערכת אינה במצב הקמה.", busy: "השרת עסוק, נסו שוב.", bad_folder: "התיקייה בדרייב אינה תקפה.",
@@ -327,7 +327,7 @@
         if (!confirm(to ? "להפוך את " + who + " לחשבון ארגוני? מעכשיו הבקשות שלו יישלחו בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״), התשובות והעותק יחזרו אל הארגון, ברירות המחדל של הארגון ייטענו בטופס שלו, והבקשות החדשות יישמרו בתיקיית ״הארגון״ בדרייב. בקשות שכבר נשמרו נשארות במקומן." : "להפוך את " + who + " לחשבון עצמאי? מעכשיו הבקשות שלו יישלחו בשם הגורם שהוא מצהיר עליו, התשובות והעותק יחזרו אליו, הארגון יקבל עותק סמוי לצורכי תמיכה בלבד, והבקשות החדשות יישמרו בתיקיית ״מטיסים״ תחת שמו בדרייב. בקשות שכבר נשמרו נשארות במקומן.")) return;
         const rr = await call("setOrg", { target: who, org: to }); rr.ok ? draw() : fail(rr);
       });
-      if ($("adA")) $("adA").onchange = () => { const a = $("adA").checked; if (a) $("adO").checked = true; $("adO").disabled = a; };   // מנהל הוא תמיד ארגוני (נאכף בשרת)
+      if ($("adA")) $("adA").onchange = () => { const a = $("adA").checked, o = $("adO"); if (o) { if (a) o.checked = true; o.disabled = a; } };   // מנהל הוא תמיד ארגוני (נאכף בשרת)
       body.querySelectorAll("[data-blk]").forEach(b => b.onclick = async () => { const rr = await call("setBlocked", { target: b.dataset.blk, blocked: b.dataset.to === "1" }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-exp]").forEach(b => b.onclick = async () => {
         const v = prompt("תאריך סיום המנוי של " + b.dataset.exp + " (YYYY-MM-DD). ריק = ללא הגבלה:", ""); if (v === null) return;

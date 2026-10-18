@@ -2575,6 +2575,11 @@ try {
     await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
     v = await vals();
     check("אחרי המחיקה והרענון (אין ערך שמור): ברירות המחדל הארגוניות חוזרות", v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "ICD", JSON.stringify(v));
+    // רשומה שנכתבה בגרסה שלפני ההפרדה (בלי מפתח org, עם שדות ריקים): אצל חשבון ארגוני הריק אינו בחירה — ברירות המחדל נטענות; ערך שאינו ריק נשמר
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ reqName: "", reqPhone: "", reqOrg: "", reqCallsign: "", reqReg: "4X-OLD", contacts: [] })), await uk(page, "icd_req_person_v1"));
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    v = await vals();
+    check("רשומה ישנה (בלי org) עם שדות ריקים אצל המנהל: שם הארגון ואות הקריאה נטענים מברירות המחדל, והרישום שאינו ריק (4X-OLD) נשמר", v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "4X-OLD", JSON.stringify(v));
     // החלפת חשבון באותו דפדפן: ארגוני -> עצמאי (dana): הכול ריק; הפרטים של dana נשמרים אצלה בלבד
     await page.fill("#reqReg", "4X-ADM");   // שומר גם את שאר הערכים של המנהל (ברירות המחדל) ברשומה שלו
     await logout(); await login(page, "dana.pilot", "dana-pass-1234");
@@ -2696,7 +2701,7 @@ try {
     await readyRequest(page, { org: "דנה לוי צילום", callsign: "", registration: "" });
     opts.noSplit = true;
     t = await dlg();
-    check("שרת בלי orgSplit (sendTarget בלבד): הדיאלוג הקודם (״עותק נשמר גם אצל מנהל המערכת לצורכי תמיכה״), בלי שורת שם השולח", t.includes("עותק אליך: dana@example.com · התשובות יגיעו אליך · עותק נשמר גם אצל מנהל המערכת לצורכי תמיכה") && !t.includes("שם השולח במייל") && (await page.evaluate(() => ReqAuth.hasFeature("orgSplit"))) === false, t.slice(0, 400));
+    check("שרת בלי orgSplit (sendTarget בלבד): הדיאלוג הקודם (״עותק נשמר גם אצל בעל המערכת לצורכי תמיכה״), בלי שורת שם השולח", t.includes("עותק אליך: dana@example.com · התשובות יגיעו אליך · עותק נשמר גם אצל בעל המערכת לצורכי תמיכה") && !t.includes("שם השולח במייל") && (await page.evaluate(() => ReqAuth.hasFeature("orgSplit"))) === false, t.slice(0, 400));
     await sendSelf("נשלח|נכשלה");
     check("שרת בלי orgSplit: sendRequest נשלח בלי fromName (אבל עם target)", lastSend().target === "self" && !("fromName" in lastSend()), JSON.stringify(Object.keys(lastSend())));
     await closeDlg(); opts.noSplit = false;

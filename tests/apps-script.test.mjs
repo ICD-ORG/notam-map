@@ -2177,7 +2177,7 @@ test("מיילי מערכת (קוד הרשמה, תזכורת, 'כבר קיים �
   env.advance(25 * HOUR);
   assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);      // כבר קיים חשבון
   m = env.mails[env.mails.length - 1];
-  assert.match(m.subject, /כבר קיים חשבון/); assert.equal(m.name, ORG_NAME); assert.equal(m.replyTo, ORG); assert.ok(m.body.includes(ORG), "הודעת 'כבר קיים חשבון' מפנה לכתובת הארגון");
+  assert.match(m.subject, /כבר קיים חשבון/); assert.equal(m.name, ORG_NAME); assert.equal(m.replyTo, ORG); assert.ok(m.body.includes("info@icd.org.il") && !m.body.includes(ORG) && !m.body.includes(OWNER), "הודעת 'כבר קיים חשבון' מפנה לכתובת התמיכה ולא לכתובת הארגון או הבעלים");
   const u = userRec(env, "dana.pilot"); u.until = env.now() + 20 * DAY; env.props["U:dana.pilot"] = JSON.stringify(u);
   env.mails.length = 0; env.run("dailyCheck");
   assert.equal(env.mails.length, 1); assert.equal(env.mails[0].name, ORG_NAME); assert.equal(env.mails[0].replyTo, ORG);

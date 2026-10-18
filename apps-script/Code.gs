@@ -31,6 +31,8 @@ var CFG = {
   // כתובת הארגון: מקבלת עותק מכל שליחה (סמוי ממטיס עצמאי, גלוי מחשבון ארגוני בשליחה חיה) והיא "המבקש" של חשבון ארגוני בלי כתובת שמורה. מפורשת — לא תלויה בבעל הסקריפט.
   // ריקה/לא תקינה: נופלים לכתובת הבעלים (Session.getEffectiveUser). אם גם היא לא ידועה — השליחה נכשלת סגור (no_owner). לעולם לא מוחזרת ללקוח אלא לחשבון ארגוני.
   ADMIN_COPY_TO: 'office@icd.org.il',
+  // כתובת התמיכה שמוצגת למטיסים בגוף המיילים (זהה ל-support_email ב-config.json). כתובת הארגון עצמה לעולם לא מודפסת למטיס
+  SUPPORT_EMAIL: 'info@icd.org.il',
   // תיקיות הדרייב החדשות מתחת ל-ROOT_FOLDER_ID: בקשות ארגוניות ב-ORG_FOLDER_NAME, בקשות מטיסים ב-PILOTS_FOLDER_NAME/<שם המשתמש>. נוצרות לפי דרישה; תיקיות בקשה ישנות (ישירות תחת התיקייה הראשית) נשארות במקומן
   ORG_FOLDER_NAME: 'הארגון',
   PILOTS_FOLDER_NAME: 'מטיסים',
@@ -772,7 +774,7 @@ var ACTIONS = {
         // הודעת נימוס בלבד: פעם ב-REG_EXISTS_HOURS לכתובת (בלי להפריע לקודים), ומשאירה את הרזרבה של עותקים; אחרת מדלגים בשקט
         if (t0 - lastExists < CFG.REG_EXISTS_HOURS * 3600000 || !mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE)) return regOk_();
         msg = { to: email, name: CFG.SENDER_NAME, replyTo: orgAddr_() || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
-          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון' + (orgAddr_() ? ' (' + orgAddr_() + ')' : '') + ' ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
+          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה לתמיכה' + (normEmail_(CFG.SUPPORT_EMAIL) ? ' (' + normEmail_(CFG.SUPPORT_EMAIL) + ')' : '') + ' ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
       } else {
         if (codes >= CFG.REG_MAILS_PER_EMAIL_DAY) return regOk_();      // מכסת קודים יומית לכתובת: נדחה בשקט (אחרת התשובה הייתה מבדילה כתובת עם כרטיס)
         var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
