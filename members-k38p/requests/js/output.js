@@ -80,8 +80,9 @@
   // משתתפים נוספים: רק שורה מלאה (שם פרטי, שם משפחה וטלפון); שורה ריקה או חלקית לא נכנסת לפלט
   const fullParticipants = inp => (Array.isArray(inp.participants) ? inp.participants : []).map(p => ({ first: String((p && p.first) || "").trim(), last: String((p && p.last) || "").trim(), phone: String((p && p.phone) || "").trim() }))
     .filter(p => p.first && p.last && p.phone).map(p => ({ name: p.first + " " + p.last, phone: p.phone }));
-  // מכשולים שידועים למבקש כשורה אחת: שורות חדשות מוחלפות ב-"; "
-  const knownObstaclesText = inp => String(inp.knownObstacles || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).join("; ");
+  // מכשולים שידועים למבקש: שורה לכל פריט כפי שהוקלד (בלי שורות ריקות), בשדה 8; knownObstaclesText = אותם פריטים בשורה אחת מופרדים ב-"; " (לשימושים אחרים)
+  const knownObstaclesLines = inp => String(inp.knownObstacles || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const knownObstaclesText = inp => knownObstaclesLines(inp).join("; ");
   // שם הגורם המבקש (שדה 2, מייל, חתימה, יוצר המסמך): מה שהמבקש הקליד, אחרי trim — אין ברירת מחדל של הארגון (האימות ב-core.js דורש ערך)
   const orgName = inp => String((inp && inp.requesterOrg) || "").trim();
   // אות קריאה / מס׳ רישום (שדות 13 ו-14): אופציונליים; ריק => "לא רלוונטי" (cfg.fixed.not_relevant, ובהיעדרו הנוסח הקבוע)
@@ -100,8 +101,8 @@
     if (ring.length) f8 += "<br><b>בקרבת האזור (עד " + 2 * R + " מ׳):</b>" + listLines(ring, 25);
     const sites = res.nearScan.near;
     if (sites.length) f8 += "<br><b>אתרים ותשתיות נוספים בקרבת האזור (עד " + C.fmtDist(R + cfg.thresholds.site_near_m) + " מהנקודה):</b>" + listLines(sites, 25);
-    const ko = knownObstaclesText(inp);   // מכשולים שהמבקש מכיר — הטקסט כלשונו, בלי תוצאות הצלבה (ההצלבה בדף הבדיקות)
-    if (ko) f8 += "<br>מכשולים שידועים למבקש: " + E(ko);
+    const ko = knownObstaclesLines(inp);   // מכשולים שהמבקש מכיר — הטקסט כלשונו, שורה לכל פריט, בלי תוצאות הצלבה (ההצלבה בדף הבדיקות)
+    if (ko.length) f8 += "<br><b>מכשולים שידועים למבקש:</b>" + ko.map(x => "<br>• " + E(x)).join("");
     const vl = inp.vlos ? "קיים קשר עין" : "ללא קשר עין";
     // שדה 11: משתתפים נוספים בטיסה (אם יש שורה מלאה), כל אחד בשורה ממוספרת; שדה 12: אנשי קשר, כל אחד בשורה ממוספרת.
     // class='ph' על כל טלפון: ב-index.html (.paper .ph) הוא white-space:nowrap, כדי שהמספר לא יישבר באמצע בעמודה צרה
@@ -321,11 +322,12 @@
   }
   /* ---------- סיכום והגשה: סעיף 5 בדף הבדיקות למי שאין לו תצוגה מתקדמת ---------- */
   // במקום סעיף ההגשה המלא (submissionHtml, עם הפניות לנוהל) — סיכום קצר בנקודות: מה נמצא בסריקה וכמה ימי עבודה יש עד הפעילות. בלי שום הפניה לפרק, סעיף או עמוד בפמ״ת, ובלי הנחיה להגיש מחדש תכנית טיסה או לפנות למודיעין טיס (החלטת בעל המערכת).
+  // אזורי איסור/הגבלה = בלי אזורי טיסה לכטב״ם של פרק ב-09 (src "b09"): אלה אזורים ייעודיים לטיסה ואינם איסור, ולכן אינם נספרים כאן
   // הכול מאותו ניתוח של הטופס: הספירות מ-res (אזורים החופפים לסגירה, נוטמים בקרבה — סגירות ומכשולים שפורסמו, ומכשולים ותשתיות שבשדה 8), וימי העבודה מ-res.workingDays מול cfg.thresholds.min_working_days (כמו בנוסח המלא; בלי ערך — אין שורה)
   const SUBMIT_HEAD = "הגשה", SUMMARY_HEAD = "סיכום והגשה";
   function summaryModel(res, cfg) {
     const min = cfg.thresholds.min_working_days, wd = res.workingDays;
-    const counts = { zones: res.zones.inside.length, notams: res.notams.hits.length + (res.notams.obstacles || []).length, items: res.nearScan.items.length };
+    const counts = { zones: res.zones.inside.filter(z => z.src !== "b09").length, notams: res.notams.hits.length + (res.notams.obstacles || []).length, items: res.nearScan.items.length };
     const ok = wd == null ? null : wd >= min;
     const lines = ["<b>נמצאו בסריקה:</b> אזורי איסור/הגבלה חופפים " + counts.zones + " · נוטמים בקרבה " + counts.notams + " · מכשולים ותשתיות " + counts.items];
     if (wd != null) lines.push("<b>ימי עבודה עד הפעילות:</b> " + wd + " (נדרשים לפחות " + min + ") " + (ok ? "✔" : "✘"));

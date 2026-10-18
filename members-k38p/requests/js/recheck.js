@@ -59,8 +59,8 @@
     limit: "ההשוואה היא בין נתוני המערכת (נוטמים, פמ״ת, OpenStreetMap) בהגשה לנתונים כעת. היא אינה מחליפה את בדיקת הטייס.",
     osm: "לפי OpenStreetMap — שינוי יכול לנבוע מעדכון המפה ולא משינוי בשטח.",
     excessive: "כמות שינויים חריגה — ייתכן שמקור הנתונים או הגדרות המערכת השתנו.",
-    capped: "חלק מהמכשולים והתשתיות לא נשמרו בהגשה (מעל התקרה), ולכן ההשוואה שלהם חלקית ומוגבלת לקרוב יותר.",
-    cappedKnown: "רשימת הנוטמים בהגשה נחתכה, ולכן סיווג נוטם שנעלם הוא כללי.",
+    capped: "בהגשה נשמרו רק המכשולים והתשתיות הקרובים ביותר, ולכן ההשוואה שלהם חלקית.",
+    cappedKnown: "רשימת הנוטמים שנשמרה בהגשה חלקית, ולכן הסיבה להיעלמות נוטם אינה מפורטת.",
     noBase: "לא נשמרה תמונת מצב בהגשה, ולכן אי אפשר לדעת מה השתנה. מוצגים הממצאים הנוכחיים בלבד.",
     badBase: "תמונת המצב שנשמרה בהגשה פגומה, ולכן אי אפשר לדעת מה השתנה. מוצגים הממצאים הנוכחיים בלבד.",
     oldBase: "תמונת המצב שנשמרה בהגשה היא מגרסה שאינה נתמכת, ולכן אי אפשר לדעת מה השתנה. מוצגים הממצאים הנוכחיים בלבד.",
@@ -72,7 +72,7 @@
     catShort: { notams: "נוטמים", zones: "אזורי איסור/הגבלה", items: "מכשולים ותשתיות", other: "אחר" },
     cols: ["סטטוס", "פריט", "פירוט", "מרחק מהנקודה"],
     sev: { high: "חומרה גבוהה", mid: "חומרה בינונית", low: "" },
-    sources: "מקורות הנתונים (בהגשה ← כעת)",
+    sources: "מקורות הנתונים", srcCols: ["מקור", "בהגשה", "כעת"],
     srcLabel: { ni: "נוטמים נמשכו", ob: "OpenStreetMap", of: "OpenStreetMap (שדות תעופה)", ox: "OpenStreetMap (גבולות)", mv: "גרסת מפה", ed: "מהדורת הפמ״ת בנתוני המערכת", zh: "נתוני האזורים", cv: "הגדרות המערכת" },
     unchangedWord: "ללא שינוי", updatedWord: "עודכנו",
     more: "הצג את כל השורות",
@@ -693,7 +693,7 @@
     if (m.checkedLine) h += '<p class="rc-checked" style="margin:4px 0">' + E(m.checkedLine) + "</p>";
     m.notes.forEach(n => { h += '<p class="rc-note" style="margin:4px 0;font-size:90%">' + E(n) + "</p>"; });
     if (m.sources.length) {
-      h += '<table class="rc-sources" style="' + S_TBL + '"><caption style="text-align:right;font-weight:700">' + E(STR.sources) + "</caption><tbody>" +
+      h += '<table class="rc-sources" style="' + S_TBL + '"><caption style="text-align:right;font-weight:700">' + E(STR.sources) + "</caption><thead><tr>" + STR.srcCols.map(c => '<th scope="col" style="' + S_CELL + ';background:#eee;color:#222">' + E(c) + "</th>").join("") + "</tr></thead><tbody>" +
         m.sources.map(s => '<tr><td style="' + S_CELL + '">' + E(s.label) + '</td><td style="' + S_CELL + '">' + E(s.before) + '</td><td style="' + S_CELL + (s.changed ? ";font-weight:700" : "") + '">' + E(s.after) + "</td></tr>").join("") + "</tbody></table>";
     }
     m.sections.forEach(s => {

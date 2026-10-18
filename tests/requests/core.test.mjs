@@ -749,8 +749,9 @@ test("טופס שדות 8, 11, 12: מכשולים שידועים (טקסט כל�
   const data = mkData(fixture("yarkon"));
   const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה <b>x</b>\n  קו מתח  \n\nמגדל מים & אחר" }), data, cfg, now), f = O.buildForm(res, cfg);
   assert.equal(f.length, 17);
-  // שדה 8: בסוף השורה, שורות חדשות כ-"; ", בלי תוצאות הצלבה, ו-HTML מנוטרל
-  assert.ok(f[7].html.endsWith("<br>מכשולים שידועים למבקש: עגורן בנייה &lt;b&gt;x&lt;/b&gt;; קו מתח; מגדל מים &amp; אחר"), f[7].html.slice(-160));
+  // שדה 8: בסוף השדה, כותרת מודגשת ואחריה פריט בשורה (• לכל שורה שהוקלדה, בלי שורות ריקות), בלי תוצאות הצלבה, ו-HTML מנוטרל
+  assert.ok(f[7].html.endsWith("<br><b>מכשולים שידועים למבקש:</b><br>• עגורן בנייה &lt;b&gt;x&lt;/b&gt;<br>• קו מתח<br>• מגדל מים &amp; אחר"), f[7].html.slice(-200));
+  assert.ok(f[7].text.includes("מכשולים שידועים למבקש:") && f[7].text.split("\n").some(l => l.trim() === "• קו מתח") || /• קו מתח/.test(f[7].text), f[7].text.slice(-200));
   assert.ok(!/<b>x<\/b>/.test(f[7].html)); assert.ok(!/התאמה אפשרית|לא נמצא בסריקה/.test(f[7].text));
   // שדה 11: מבקש + משתתפים נוספים (שורה ריקה מתעלמים), כל אחד בשורה ממוספרת, הטלפון ב-ltr, בלי הערה
   assert.equal(f[10].html, "בודק, " + ltrSpan("050-0000000") + "<br><b>משתתפים נוספים בטיסה:</b><br>1. נועה אברהם, " + ltrSpan("050-9998877") + "<br>2. אלון שמעוני, " + ltrSpan("053-4445566"));
@@ -1625,7 +1626,7 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=10/);
+  assert.match(html, /js\/ui\.js\?v=11/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
@@ -1646,7 +1647,7 @@ test("סיכום והגשה: הספירות וימי העבודה מאותו נ�
   for (const res of [far, nearD, inZone]) {
     const s = O.summaryModel(res, cfg), t = s.lines.map(O.toText);
     assert.equal(s.head, "סיכום והגשה");
-    assert.deepEqual(s.counts, { zones: res.zones.inside.length, notams: res.notams.hits.length + res.notams.obstacles.length, items: res.nearScan.items.length });
+    assert.deepEqual(s.counts, { zones: res.zones.inside.filter(z => z.src !== "b09").length, notams: res.notams.hits.length + res.notams.obstacles.length, items: res.nearScan.items.length });
     assert.equal(t.length, 2);
     assert.equal(t[0], "נמצאו בסריקה: אזורי איסור/הגבלה חופפים " + s.counts.zones + " · נוטמים בקרבה " + s.counts.notams + " · מכשולים ותשתיות " + s.counts.items);
     assert.equal(s.workingDays, res.workingDays); assert.equal(s.minWorkingDays, cfg.thresholds.min_working_days);
@@ -1657,6 +1658,10 @@ test("סיכום והגשה: הספירות וימי העבודה מאותו נ�
   assert.equal(O.summaryModel(far, cfg).daysOk, true); assert.equal(O.summaryModel(nearD, cfg).daysOk, false);
   assert.ok(O.toText(O.summaryModel(far, cfg).lines[1]).endsWith("✔") && O.toText(O.summaryModel(nearD, cfg).lines[1]).endsWith("✘"));
   assert.ok(O.summaryModel(inZone, cfg).counts.zones > 0);
+  // אזורי טיסה לכטב״ם של פרק ב-09 (src "b09") הם אזורים ייעודיים לטיסה ולא איסור: אינם נספרים כ״אזורי איסור/הגבלה חופפים״
+  { const b09 = { src: "b09", id: "B09-1" }, a17 = { src: "a17", id: "LLR1" }, mix = Object.assign({}, far, { zones: Object.assign({}, far.zones, { inside: [b09, b09, a17] }) }), only = Object.assign({}, far, { zones: Object.assign({}, far.zones, { inside: [b09, b09] }) });
+    assert.equal(O.summaryModel(mix, cfg).counts.zones, 1); assert.equal(O.summaryModel(only, cfg).counts.zones, 0);
+    assert.match(O.toText(O.summaryModel(only, cfg).lines[0]), /אזורי איסור\/הגבלה חופפים 0 ·/); }
   // ימי עבודה לא ידועים (אין תאריך תקין): בלי שורה (כמו בנוסח המלא), בלי ✔ / ✘ מומצא
   const unk = O.summaryModel(Object.assign({}, far, { workingDays: null }), cfg);
   assert.equal(unk.lines.length, 1); assert.equal(unk.daysOk, null); assert.ok(!/✔|✘|ימי עבודה/.test(unk.lines.join("")));
@@ -1749,9 +1754,9 @@ test("הצהרת המבקש: index.html — #declBox זהה לנוסח המאו�
   assert.ok(m, "#declBox");
   assert.match(m[1], /role="group"/); assert.match(m[1], /aria-labelledby="declTitle"/);
   assert.equal((m[2].match(/<h3 id="declTitle">([^<]*)<\/h3>/) || [])[1], DECL.title);
-  assert.deepEqual([...m[2].matchAll(/<p>([^<]*)<\/p>/g)].map(x => x[1]), DECL.ps, "שלוש הפסקאות כלשונן");
+  assert.deepEqual([...m[2].matchAll(/<p id="declP\d">([^<]*)<\/p>/g)].map(x => x[1]), DECL.ps, "שלוש הפסקאות כלשונן");
   const lab = m[2].match(/<label class="declok" for="reviewOk"><input ([^>]*)><b>([^<]*)<\/b>$/);
-  assert.ok(lab, "תווית עם תיבת סימון"); assert.match(lab[1], /type="checkbox"/); assert.match(lab[1], /id="reviewOk"/); assert.match(lab[1], /aria-required="true"/); assert.equal(lab[2], DECL.label);
+  assert.ok(lab, "תווית עם תיבת סימון"); assert.match(lab[1], /type="checkbox"/); assert.match(lab[1], /id="reviewOk"/); assert.match(lab[1], /aria-required="true"/); assert.match(lab[1], /aria-describedby="declP1 declP2 declP3"/, "תיבת הסימון מקושרת לנוסח ההצהרה (קורא מסך)"); assert.equal(lab[2], DECL.label);
   assert.equal((html.match(/id="reviewOk"/g) || []).length, 1, "מזהה reviewOk פעם אחת");
   assert.ok(!/עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר/.test(html), "השורה הקטנה הישנה הוסרה");
   // בולטות: מסגרת ענבר 2px, רקע מוטה בענבר, פסקאות ≥15px, תיבת סימון ≥28px, שורת סימון גבוהה (מגע)
@@ -1761,7 +1766,7 @@ test("הצהרת המבקש: index.html — #declBox זהה לנוסח המאו�
   assert.ok(parseFloat((html.match(/\.declok\{[^}]*min-height:(\d+)px/) || [])[1]) >= 44, "שורת סימון ≥44px");
   assert.match(html, /\.declok b\{[^}]*overflow-wrap:anywhere/); assert.match(html, /\.declgate:empty\{display:none\}/);
   // הודעת השער: בכרטיס ההפקות, אחרי שורת הכפתורים ולפני ההסבר
-  assert.match(html, /id="actions"[\s\S]*?id="btnMore"[\s\S]*?<p class="declgate" id="declGate" role="status"><\/p>\s*<p class="small" id="actionsHint"/);
+  assert.match(html, /id="actions"[\s\S]*?id="btnMore"[\s\S]*?<div role="status" aria-live="polite"><p class="declgate" id="declGate"><\/p><\/div>\s*<p class="small" id="actionsHint"/);
 });
 
 test("הצהרת המבקש: declarationRecord (גרסה, מועד ISO, שלוש הפסקאות מחוברות ב-\\n; null בלי אישור) ו-reviewText קצר ועובדתי — מי אישר ומתי, בלי סעיף הוויתור ובלי כתובת הארגון", () => {
@@ -1900,7 +1905,8 @@ test("״שמור הכול במחשב״: כפתור ZIP בתוך ״אפשרויו
   assert.match(html, /<div id="moreOptions" hidden>\s*<div class="row">\s*<button type="button" class="primary" id="btnZip" disabled>שמור הכול במחשב/, "הכפתור ראשון בלוח ״אפשרויות נוספות״ ומושבת בקובץ");
   assert.match(ui, /async function requestFiles\(withData\)/); assert.match(ui, /const files = await requestFiles\(true\);/, "הדרייב משתמש באותה רשימת קבצים (כולל נתוני הבקשה)");
   assert.match(ui, /\(await requestFiles\(false\)\)\.forEach\(f => zip\.file\(f\.name, f\.b64, \{ base64: true \}\)\)/, "ה-ZIP בלי קובץ הנתונים הפנימי");
-  assert.match(ui, /if \(!authed\(\) \|\| !S\.res \|\| !S\.ready \|\| !window\.JSZip\) return;/, "בלי התחברות או בלי מוכנות אין הורדה");
+  assert.match(ui, /if \(!authed\(\) \|\| !S\.res \|\| !S\.ready \|\| !window\.JSZip \|\| S\.zipping\) return;/, "בלי התחברות או בלי מוכנות אין הורדה");
+  assert.match(ui, /if \(S\.rev !== rev0 \|\| S\.res !== res0\) \{[^}]*הבקשה שונתה בזמן הכנת הקובץ/, "עריכה בזמן הבנייה: לא מורידים קובץ מעורב");
   assert.match(ui, /\$\("btnZip"\)\.onclick = downloadZip;/);
   assert.ok(/btnZip: "שומר במחשב שלכם קובץ ZIP אחד/.test(ui) && /btnZip: "שמירת כל הקבצים במחשב"/.test(ui), "הסבר ״!״ ושם נגיש");
 });
