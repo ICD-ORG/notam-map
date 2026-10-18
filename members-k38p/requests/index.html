@@ -12,17 +12,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0b1220;--panel:#121c2e;--panel-2:#0f1726;--line:#22304a;--ink:#e9eff9;--muted:#8fa0ba;--amber:#ffb84d;--red:#ff3b3b;--green:#4ade80;--cyan:#67d8e8;--radius:14px}
+:root{--bg:#0b1220;--panel:#121c2e;--panel-2:#0f1726;--line:#22304a;--ink:#e9eff9;--muted:#8fa0ba;--amber:#ffb84d;--red:#ff3b3b;--green:#4ade80;--cyan:#67d8e8;--radius:14px;
+  /* אזורים בטוחים (חריץ/שורת סטטוס/פינות מעוגלות/פס הבית). viewport-fit=cover מצייר מתחת להם, ולכן כל מה שעומד בקצה (כותרת, קישור חזרה, חלונות, כיסוי הכניסה) מרוחק בהם.
+     משתנים (ולא env() ישירות) כדי שאפשר יהיה לדמות חריץ בבדיקה: documentElement.style.setProperty("--safe-top","50px") */
+  --safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
 html,body{background:var(--bg);color:var(--ink);font-family:'Rubik',system-ui,'Segoe UI',Arial,sans-serif;overflow-x:hidden;max-width:100%}
 a{color:var(--cyan)}
-.wrap{max-width:1180px;margin:0 auto;padding:0 18px;width:100%}
-header{padding:16px 0 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,184,77,.06),transparent 60%),var(--panel-2)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 max(18px,var(--safe-right)) 0 max(18px,var(--safe-left));width:100%}   /* מצב landscape בטלפון עם חריץ: הצדדים הבטוחים */
+header{padding:calc(16px + var(--safe-top)) 0 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,184,77,.06),transparent 60%),var(--panel-2)}
 header h1{font-size:23px;font-weight:900}header h1 span{color:var(--amber)}
 header .sub{color:var(--muted);font-size:13px;margin-top:4px}
-header .back{display:inline-block;margin-bottom:8px;font-size:13px;text-decoration:none;font-weight:700}
+header .back{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 4px;margin-bottom:4px;font-size:14px;text-decoration:none;font-weight:700}   /* אזור לחיצה של 44px לפחות (הנחיית מגע), מתחת לאזור הבטוח העליון */
 main{padding:16px 0 40px}
+body{padding-bottom:var(--safe-bottom)}   /* תחתית הדף לא מוסתרת מתחת לפס הבית */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
 .card h2{font-size:15px;font-weight:700;color:var(--amber);margin-bottom:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
@@ -47,6 +51,30 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #map{height:min(420px,52vh);min-height:280px;border-radius:12px;border:1px solid var(--line);background:#060a12}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:8px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-left:5px;border:1px solid #fff3}
+/* ===== שכבות איסורים ונוטמים על מפת הבקשות + פס סיכום לנקודה (js/maplayers.js; תצוגה מקדימה בלבד — לא חלק מהדוח, מהטופס או מההדפסה) ===== */
+.lyrbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;margin-bottom:8px}
+.lyrit{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;max-width:100%}
+.lyrchk{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;color:var(--ink);cursor:pointer;min-height:36px}
+.lyrchk input{width:18px;height:18px;accent-color:var(--cyan);flex:none}
+.lyrchk input:disabled{cursor:not-allowed}
+.lyrnote{font-size:12px;color:var(--muted);line-height:1.6;max-width:100%}
+.lyrkey{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:var(--muted);flex-basis:100%}
+.lyrkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-left:5px;border:1px solid #fff3}
+.psum{margin-top:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.psum .pst{font-weight:700;color:var(--amber);font-size:12.5px;margin-bottom:2px}
+.psl b{color:var(--ink);font-weight:700}
+.psl.hit{color:#ffc2c2}.psl.near{color:#ffe0b0}.psl.ok{color:#bff5d3}.psl.warn{color:#ffd27a}.psl.last{color:var(--muted);font-size:12px;margin-top:3px;border-top:1px dashed var(--line);padding-top:3px}
+.lpop .leaflet-popup-content-wrapper{text-align:right;border-radius:10px}
+.lpop .leaflet-popup-content{margin:10px 12px;font-family:'Rubik',system-ui,'Segoe UI',Arial,sans-serif}
+.lp{direction:rtl;text-align:right;font-size:13px;line-height:1.55;color:#111}
+.lp-t{font-weight:900;border-bottom:1px solid #bbb;padding-bottom:3px;margin-bottom:3px}
+.lp-i{padding:5px 0;border-bottom:1px dashed #ccc}.lp-i:last-of-type{border-bottom:0}
+.lp-sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:6px;border:1px solid #0004}
+.lp-k{color:#555;font-size:12px}
+.lp-q{background:#f4f4f4;border-right:3px solid #999;padding:3px 7px;margin:3px 0;white-space:pre-line;font-size:12px}
+.lp-w{color:#8a1010;font-weight:700;font-size:12px;margin-top:2px}
+.lp-n{font-size:11.5px;color:#444;margin-top:3px;white-space:pre-line}
+.lp-more{color:#555;font-size:12px;padding-top:3px}
 .err{color:#ffb3b3;font-size:12.5px;margin-top:4px}
 #progress{list-style:none;margin-top:10px;display:grid;gap:5px;font-size:13.5px}
 #progress li{display:flex;gap:8px;align-items:baseline}
@@ -68,6 +96,9 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .prow button.xbtn,button.xbtn{min-height:34px;width:34px;padding:0;font-size:18px;line-height:1;flex:none}
 .acx{display:inline-flex;align-items:center;gap:4px}
 .acx button.xbtn{min-height:24px;width:24px;font-size:15px;border-radius:50%}
+.pux{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;font-size:13px;color:var(--ink);max-width:100%}   /* צ׳יפ של מהות פעילות שנוספה (עם × להסרה) */
+.pux>span{overflow-wrap:anywhere}
+#puList{max-height:9.5rem;overflow-y:auto;padding:2px}   /* עד 30 מהויות שמורות בתא צר: הרשימה גוללת (כ-4–5 צ׳יפים נראים) ולא מנפחת את כל סעיף "מה מבקשים" */
 @media (max-width:640px){
   /* משתתף: שני שדות שם בשורה, טלפון ו-× מתחת; כל משתתף בכרטיס משלו (מסגרת ורקע) כדי שיהיה ברור לאיזה שם שייך כל טלפון */
   .prow.part{flex-wrap:wrap;border:1px solid #34486b;border-radius:10px;padding:8px;background:rgba(255,255,255,.045)}
@@ -87,6 +118,8 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .paper h1{font-size:19px;margin:0 0 4px}.paper h2{font-size:14.5px;margin:14px 0 6px;color:#111}
 .paper .hdr{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px;font-weight:700}
 .paper .draft{background:#ffe3e3;border:2px solid #d92d20;color:#8a1010;padding:6px 10px;margin-bottom:8px;font-weight:700}
+/* חלון העריכה הרכה (450 מ״ש אחרי הקלדה, עד שהדוח נבנה מחדש): הדוח על המסך עדיין של הגרסה הקודמת, ולכן ui.js מסמן את ה-body במחלקה pendDraft והבאנר בא מ-CSS — גם על המסך וגם בהדפסה (Ctrl+P), בלי לגעת ב-DOM של הדוח (המחלקה על ה-body, לא על #report) ובלי להזיז שדות (הדוח בתחתית הדף, מתחת לכל שדות הקלט) */
+body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לשליחה: הדוח מתעדכן לפי השינוי האחרון";display:block;background:#ffe3e3;border:2px solid #d92d20;color:#8a1010;padding:6px 10px;margin-bottom:8px;font-weight:700;font-size:13px;line-height:1.55}
 .paper table.f{width:100%;border-collapse:collapse}
 .paper table.f td{border:1px solid #000;padding:6px 9px;vertical-align:middle}
 .paper td.k{width:40%;background:#efefef;font-weight:700}
@@ -136,15 +169,17 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
   .paper h2{break-after:avoid;page-break-after:avoid}
   .paper table.t td,.paper table.t th{font-size:10.8px}
   .paper td.k,.paper table.t th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .paper .draft{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .paper .draft,body.pendDraft #report .paper::before{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); pointer-events: none; user-select: none; }
-#authCover, .authCover2 { position: fixed; inset: 0; z-index: 3200; background: rgba(8,16,28,.96); display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+#authCover, .authCover2 { position: fixed; inset: 0; z-index: 3200; background: rgba(8,16,28,.96); display: flex; align-items: flex-start; justify-content: center; padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left)); overflow: auto; }   /* כיסוי הכניסה והחלונות: התוכן מתחת לחריץ ולשורת הסטטוס */
 .authCover2 { background: rgba(8,16,28,.88); z-index: 3100; }   /* מסך הכניסה (3200) תמיד מעל חלון פתוח, כדי שאפשר להתחבר מחדש באמצע שליחה */
+#authCover > .authBox, .authCover2 > .authBox { margin: auto; }   /* מרכוז במרווחי auto (ולא align-items:center): כשהחלון גבוה מהמסך (טלפון ב-landscape) הוא מתחיל בראש האזור הבטוח ונגלל, ולא נחתך למעלה */
 .authBox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(420px, 100%); color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .linkBtn { background: none; border: 0; color: #7cc4ff; text-decoration: underline; cursor: pointer; padding: 6px 0; font-size: 13px; min-height: 0; }
-.authBox.wide { width: min(860px, 100%); display: block; max-height: 92vh; overflow: auto; }
+.authBox a.backMap { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 8px; font-size: 14px; font-weight: 700; text-decoration: none; }   /* "← חזרה למפה" בתוך כיסוי הכניסה/ההרשמה (הכותרת מכוסה): אזור לחיצה של 44px; הכיסוי עצמו כבר מרוחק מהאזורים הבטוחים */
+.authBox.wide { width: min(860px, 100%); display: block; max-height: calc(92vh - var(--safe-top) - var(--safe-bottom)); overflow: auto; }
 .admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
 .userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .userBar button { min-height: 30px; padding: 3px 10px; font-size: 12px; }
@@ -160,7 +195,7 @@ button.hbtn, .userBar button.hbtn, .authBox button.hbtn { width: 21px; height: 2
 button.hbtn:hover:not(:disabled), button.hbtn[aria-expanded=true] { background: var(--amber); color: #1a1204; border-color: var(--amber); }
 button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (pointer: coarse) { .hw { gap: 8px; } button.hbtn, .userBar button.hbtn, .authBox button.hbtn { width: 32px; height: 32px; min-width: 32px; font-size: 15px; } }   /* מגע: אזור לחיצה גדול יותר (הכפתור עצמו, בלי שטח שחופף את הכפתור שלידו) */
-.hbubble { position: fixed; z-index: 3400; background: #fff8e6; color: #1f1608; border: 1px solid var(--amber); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.65; font-weight: 500; text-align: right; box-shadow: 0 8px 28px rgba(0,0,0,.5); max-height: calc(100vh - 20px); overflow: auto; width: max-content; }
+.hbubble { position: fixed; z-index: 3400; background: #fff8e6; color: #1f1608; border: 1px solid var(--amber); border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.65; font-weight: 500; text-align: right; box-shadow: 0 8px 28px rgba(0,0,0,.5); max-height: calc(100vh - 20px - var(--safe-top) - var(--safe-bottom)); overflow: auto; width: max-content; }
 .hbubble[hidden] { display: none; }
 @media print { .hbubble, button.hbtn { display: none !important; } }
 </style>
@@ -170,7 +205,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="wrap">
     <a class="back" href="../">← חזרה למפה</a>
     <h1>בקשות טיסה — <span>סגירה אווירית</span> · נספח ג׳ לפמ״ת א-11</h1>
-    <div class="sub">כל שדות הטופס חובה. אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושומרת אותה בדרייב בלחיצה.</div>
+    <div class="sub">כל שדות הטופס חובה (פרט לאות קריאה ולמס׳ רישום כלי הטיס). אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושולחת אותה במייל בלחיצה (למשרד נוטאם, או רק אליכם).</div>
   </div>
 </header>
 
@@ -190,39 +225,45 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <span class="row" style="flex-wrap:nowrap"><input type="text" id="q" placeholder="למשל: גבעת המופעים" autocomplete="off"><button type="button" id="qBtn">חפש</button></span>
       <span class="hint" id="qMsg"></span></label>
     <label class="f"><b>רדיוס (מטר)</b>
-      <input type="number" id="radius" min="10" max="5000" step="10" value="100">
+      <input autocomplete="off" type="number" id="radius" min="10" max="5000" step="10" value="100">
       <span class="hint">ירוק = הרדיוס · כתום = אותו מרחק שוב (עד פי 2) · אדום = אזורי איסור (א-17)</span>
       <span class="err" id="e_radius"></span></label>
     <label class="f"><b>גובה טיסה מרבי (מטר, מעל הקרקע)</b>
-      <input type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
+      <input autocomplete="off" type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
       <span class="hint" id="ftHint"></span>
       <span class="err" id="e_height"></span></label>
-    <label class="f"><b>מתאריך</b><input type="date" id="dateFrom"><span class="err" id="e_dateFrom"></span></label>
-    <label class="f"><b>עד תאריך</b><input type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
-    <label class="f"><b>משעה (שעון מקומי)</b><input type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
-    <label class="f"><b>עד שעה (שעון מקומי)</b><input type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
-    <label class="f"><b>מהות הפעילות</b><select id="purpose"></select><span class="err" id="e_purpose"></span></label>
-    <label class="f"><b>קשר עין (VLOS)</b><select id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
+    <label class="f"><b>מתאריך</b><input autocomplete="off" type="date" id="dateFrom"><span class="err" id="e_dateFrom"></span></label>
+    <label class="f"><b>עד תאריך</b><input autocomplete="off" type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
+    <label class="f"><b>משעה (שעון מקומי)</b><input autocomplete="off" type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
+    <label class="f"><b>עד שעה (שעון מקומי)</b><input autocomplete="off" type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
+    <div class="fld" id="puBox"><label for="purpose"><b>מהות הפעילות</b></label><select autocomplete="off" id="purpose"></select><span class="err" id="e_purpose"></span>
+      <div class="row"><input type="text" id="puNew" maxlength="320" placeholder="למשל: לצורך …" aria-label="מהות פעילות נוספת" autocomplete="off" style="flex:1 1 150px;min-width:0"><button type="button" id="puAdd">➕ הוסף מהות פעילות</button></div>
+      <span class="hint" id="puMsg" role="status"></span>
+      <div id="puSaved" hidden><span class="hint">שמורות בדפדפן הזה (× להסרה):</span><div class="checks" id="puList" style="margin-top:4px"></div></div></div>
+    <label class="f"><b>קשר עין (VLOS)</b><select autocomplete="off" id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
     <label class="f"><b>ישוב / אתר (ימולא אוטומטית, אפשר לערוך)</b>
-      <input type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
+      <input autocomplete="off" type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
       <span class="err" id="e_siteName"></span></label>
   </div>
-  <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b>
+  <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b> <span class="hint" id="acHint">(חובה) סמנו את כלי הטיס שבו תבצעו את הטיסה. הרשימה היא הצעות בלבד — אף כלי אינו מסומן מראש, ואפשר להוסיף כלי טיס משלכם.</span>
     <div class="checks" id="aircraft" style="margin-top:6px"></div><span class="err" id="e_aircraft"></span>
     <div class="row" style="margin-top:8px"><input type="text" id="acNew" maxlength="60" placeholder="כלי טיס נוסף (שם הדגם)" aria-label="שם כלי טיס נוסף" autocomplete="off" style="flex:1 1 220px;max-width:340px"><button type="button" id="acAdd">➕ הוסף כלי טיס</button></div>
     <span class="hint" id="acMsg" role="status"></span></div>
 
   <div class="fld" style="margin-top:12px">
     <span class="flh"><label for="knownObs"><b>מכשולים שידועים למבקש</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
-    <textarea id="knownObs" rows="3" placeholder="למשל: עגורן ליד הכניסה, אנטנה על גג הבניין, קו חשמל מעל החניון — מופרדים בפסיק או בשורה חדשה"></textarea>
+    <textarea autocomplete="off" id="knownObs" rows="3" placeholder="למשל: עגורן ליד הכניסה, אנטנה על גג הבניין, קו חשמל מעל החניון — מופרדים בפסיק או בשורה חדשה"></textarea>
     <span class="hint">עד 20 פריטים, מופרדים בפסיק או בשורה חדשה. כל פריט נבדק מול הסריקה לפי מילים בלבד (בלי מיקום). פריט שלא נמצא יוצג כאזהרה — ואז יש להוסיף אותו ידנית בסעיף 4.</span>
     <span class="err" id="e_knownObstacles"></span></div>
 
   <details class="person" id="personBox" open>
-    <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה (לא באתר)</summary>
+    <summary>פרטי המבקש ואנשי הקשר — נשמרים רק בדפדפן הזה, ורק עבור החשבון שלכם (לא באתר)</summary>
     <div class="grid" style="margin-top:10px">
       <label class="f"><b>שם המבקש</b><input type="text" id="reqName" autocomplete="off"></label>
       <label class="f"><b>טלפון המבקש</b><input type="tel" id="reqPhone" dir="ltr" autocomplete="off"></label>
+      <label class="f"><b>שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)</b><input type="text" id="reqOrg" autocomplete="off"><span class="hint">נספח ג׳ שדה 2 — חובה, עד 80 תווים. כל מבקש מקליד כאן את שמו; אין ברירת מחדל.</span><span class="err" id="e_requesterOrg"></span></label>
+      <label class="f"><b>אות קריאה (אופציונלי)</b><input type="text" id="reqCallsign" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 13 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_callsign"></span></label>
+      <label class="f"><b>מס׳ רישום כלי הטיס (אופציונלי)</b><input type="text" id="reqReg" autocomplete="off" placeholder="לא רלוונטי"><span class="hint">נספח ג׳ שדה 14 — עד 40 תווים. ריק = ״לא רלוונטי״.</span><span class="err" id="e_registration"></span></label>
     </div>
     <span class="err" id="e_requester"></span>
     <div class="plh"><b>אנשי קשר בשטח</b><span class="hint">נספח ג׳ שדה 12 — לפחות שניים, עם שם וטלפון לכל אחד</span></div>
@@ -233,13 +274,22 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="plist" id="partList"></div>
     <div class="row" style="margin-top:6px"><button type="button" id="addPart">➕ הוסף משתתף</button></div>
     <span class="err" id="e_participants"></span>
-    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים לא נשלחים לשום שרת; הם נכנסים לטופס ולמייל בלבד. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
+    <div class="row" style="margin-top:12px"><button type="button" id="wipePerson">מחק פרטים אלה מהמכשיר</button><span class="hint">הפרטים (כולל שם הגורם המבקש, אות הקריאה ומס׳ הרישום) נשמרים בדפדפן הזה בלבד ורק עבור החשבון המחובר (משתמש אחר באותו דפדפן אינו רואה אותם); הם נשלחים רק כחלק מהבקשה עצמה — הטופס, קובץ ה-Word והמייל. רשימת המשתתפים אינה נשמרת בדפדפן.</span></div>
   </details>
 </section>
 
 <section class="card">
   <h2>2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
+  <div class="lyrbar nonprint" id="layerBar">
+    <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrZones" checked> איסורים (פמ״ת)</label><span class="lyrnote" id="lyrZonesNote"></span></span>
+    <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrNotams" checked> נוטמים</label><span class="lyrnote" id="lyrNotamsNote"></span></span>
+    <div class="lyrkey" id="lyrKey">
+      <span data-lyr="zones"><i style="background:#ff3b30"></i>א-17 (אסור/מוגבל)</span><span data-lyr="zones"><i style="background:#3b82f6"></i>ב-09 (אזורי טיסה לכטב״ם)</span><span data-lyr="zones"><i style="background:#a855f7"></i>שמורות וגנים (רט״ג)</span><span data-lyr="zones">קו מקווקו = שרטוט בקירוב</span>
+      <span data-lyr="notams"><i style="background:#ffd400"></i>נוטמים</span>
+    </div>
+  </div>
   <div id="map"></div>
+  <div id="pointSummary" class="psum nonprint" role="status" aria-live="polite" aria-label="סיכום מקדים לנקודה שנבחרה"></div>
   <div class="legend"><span><i style="background:#22c55e"></i>רדיוס הסגירה</span><span><i style="background:#ff9500"></i>עד פי 2 מהרדיוס</span>
     <span class="row" style="gap:6px"><button type="button" id="baseSat" style="min-height:30px;padding:3px 10px;font-size:12px">צילום אוויר</button><button type="button" id="baseOsm" style="min-height:30px;padding:3px 10px;font-size:12px">מפת רחובות</button></span></div>
   <div id="places"></div>
@@ -250,6 +300,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="row"><button type="button" class="primary" id="runBtn">הרץ את כל הבדיקות והכן את הבקשה</button></div>
   <ul id="progress"></ul>
   <div class="err" id="e_run"></div>
+  <p class="hint" id="reviewHint">אחרי ההרצה יופיע בהמשך הדף סעיף 4 — סקירה אנושית, תאריך סיור והערות המבקש (אופציונלי) — ואחריו סעיף 5 (הפקות). <a href="#reviewBox" id="toReview" hidden>קפיצה לסעיף 4 ↓</a></p>
 </section>
 
 <section id="resultsSec" style="display:none">
@@ -259,37 +310,37 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <h2>4 · סקירה אנושית ותוספות</h2>
     <p class="small">המערכת סורקת את פמ״ת א-17, רט״ג, מנחתים חקלאיים, נוטמים ו-OpenStreetMap, ומציגה את כל מה שנמצא (ראו "דף בדיקות" ו"מצאי לפי קבוצות"). מכשול חדש או זמני — עגורן, אנטנה, בלון, מתקן אירוע — עלול לא להופיע באף מקור. <b>עברו על התצ״א ועל הרשימה, והוסיפו כאן כל דבר שהמערכת לא מצאה.</b> הוספות נכנסות לטופס, למפה ול-KML.</p>
     <div class="grid" style="margin-top:8px">
-      <label class="f"><b>מה (שם/תיאור)</b><input type="text" id="mName" placeholder="למשל: עגורן בנייה, אנטנה, בלון זמני"></label>
-      <label class="f"><b>נ״צ</b><input type="text" id="mCoord" dir="ltr" placeholder="32.0991, 34.8166"></label>
-      <label class="f"><b>גובה (מטר, אופציונלי)</b><input type="number" id="mHeight" min="1" step="1"></label>
+      <label class="f"><b>מה (שם/תיאור)</b><input autocomplete="off" type="text" id="mName" placeholder="למשל: עגורן בנייה, אנטנה, בלון זמני"></label>
+      <label class="f"><b>נ״צ</b><input autocomplete="off" type="text" id="mCoord" dir="ltr" placeholder="32.0991, 34.8166"></label>
+      <label class="f"><b>גובה (מטר, אופציונלי)</b><input autocomplete="off" type="number" id="mHeight" min="1" step="1"></label>
     </div>
     <div class="row" style="margin-top:8px"><button type="button" id="mPick">בחר מיקום מהמפה</button><button type="button" id="mAdd" class="primary">הוסף לבקשה</button><span class="err" id="e_manual"></span></div>
     <ul id="manualList" class="st-list" style="margin-top:8px"></ul>
     <div class="grid" style="margin-top:14px">
-      <label class="f"><b>תאריך סיור באתר (אופציונלי)</b><input type="date" id="visitDate"></label>
+      <label class="f"><b>תאריך סיור באתר (אופציונלי)</b><input autocomplete="off" type="date" id="visitDate"></label>
     </div>
     <div class="fld" style="margin-top:10px">
       <span class="flh"><label for="visitNotes"><b>הערות המבקש / ממצאי סיור באתר</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
-      <textarea id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
+      <textarea autocomplete="off" id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
       <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף "הנקודה") ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
       <span class="err" id="e_visitNotes"></span></div>
-    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
+    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input autocomplete="off" type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
   </div>
   <div class="card nonprint" id="actions">
     <h2>5 · הפקות</h2>
     <div class="row">
-      <button type="button" class="primary" id="btnPrint">הדפס / שמור כ-PDF</button>
-      <button type="button" class="primary" id="btnDocx">הורד Word (ניתן לעריכה)</button>
-      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
-      <button type="button" id="btnKml">הורד KML (Google Earth)</button>
-      <button type="button" id="btnAerial">הורד תצ״א — תקריב (PNG)</button>
-      <button type="button" id="btnStreet">הורד מפת רחובות — תקריב (PNG)</button>
-      <button type="button" id="btnOverview">הורד הדמיה וסימונים — מבט כללי (PNG)</button>
-      <button type="button" id="btnRegion">הורד מפת אזור — מרוחק (PNG)</button>
-      <button type="button" id="btnCopy">העתק טקסט מייל</button>
+      <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
+      <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
+      <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
+      <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
+      <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
+      <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
+      <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
+      <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
       <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
-      <a id="btnMail" href="#" role="button" style="text-decoration:none"><button type="button" tabindex="-1">פתח מייל</button></a>
+      <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
     </div>
     <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
     <p class="small" id="mailInfo"></p>
@@ -311,13 +362,14 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
-<script src="js/help.js?v=1"></script>
-<script src="js/auth.js?v=2"></script>
-<script src="js/sync.js?v=1"></script>
-<script src="js/core.js?v=4"></script>
-<script src="js/output.js?v=4"></script>
+<script src="js/help.js?v=2"></script>
+<script src="js/auth.js?v=5"></script>
+<script src="js/sync.js?v=2"></script>
+<script src="js/core.js?v=6"></script>
+<script src="js/maplayers.js?v=1"></script>
+<script src="js/output.js?v=5"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=4"></script>
+<script src="js/ui.js?v=7"></script>
 </body>
 </html>

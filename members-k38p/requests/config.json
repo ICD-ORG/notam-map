@@ -1,12 +1,8 @@
 {
  "version": "1.0",
  "form": "פמ\"ת פנים ארצי א-11 · נספח ג' · בקשה לסגירה אווירית · עדכון 1/26",
- "org": {
-  "name": "הארגון הישראלי לרב להב",
-  "registration": "ICD",
-  "callsign": "לא רלוונטי"
- },
  "fixed": {
+  "not_relevant": "לא רלוונטי",
   "balloon": "לא רלוונטי",
   "crane": "לא רלוונטי",
   "warning_markings": "קיים אור על הרחפן, כולל נצנץ (מהבהב) הנראה למרחק 3 ק״מ ביום ו-5 ק״מ בלילה.",
@@ -71,6 +67,7 @@
  },
  "api_url": "https://script.google.com/macros/s/AKfycbz2epzwtTWGhbTYoQwzkwrfPI7lNfkUKKTP70nDT8o43f-UlFmjKH48V8RVzW0nMXhy/exec",
  "renew_url": "https://www.icd.org.il/events-1/bqst-yswry-tysh",
+ "support_email": "office@icd.org.il",
  "drive_folder_url": "https://drive.google.com/drive/folders/1UvfFhmCau9P_mbfhSFP2AmOHMbvkVbtL",
  "pmt_editions": {
   "package": {

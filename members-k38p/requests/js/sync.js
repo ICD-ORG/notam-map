@@ -33,38 +33,41 @@
   // in: {html, meta, zones, cfg, mapNotam, notamAll}   — כולם טריים מהרשת (עם עקיפת מטמון)
   //     loaded: {zonesHash, notamIso}                  — הנתונים שבזיכרון הדף (נטענו בטעינה/ברענון האחרון)
   //     analysis: {zonesHash, notamIso} | null         — הנתונים שעליהם נעשה הניתוח האחרון של הבקשה
-  // מחזיר {ok, problems, reload (נתוני הדף ישנים מהעדכניים — לטעון מחדש), analysisStale (הבקשה נבדקה על נתונים ישנים — להריץ שוב)}
+  // מחזיר {ok, problems, items, reload (נתוני הדף ישנים מהעדכניים — לטעון מחדש), analysisStale (הבקשה נבדקה על נתונים ישנים — להריץ שוב)}
+  // problems = נוסח מלא למנהל (פירוט תחזוקה: קבצים, מהדורות, הוראות). items = אותן בעיות עם kind: "maint" = תחזוקה שרק המנהל יכול לטפל בה (למטיס רגיל מוצג ניסוח ניטרלי במקומה — ui.js: pilotProblems);
+  // "user" = הודעה שמטיס יכול לפעול לפיה כלשונה (הדף טוען מחדש / יש להריץ את הבדיקות שוב)
   async function check(inp) {
-    const problems = [];
+    const problems = [], items = [];
+    const add = (kind, text) => { problems.push(text); items.push({ kind, text }); };
     let reload = false, analysisStale = false;
     const zhash = inp.zones && inp.zones.dataHash;
     try {
       const h = await sha256Hex(dataText(inp.html));
-      if (h !== zhash) problems.push("נתוני האזורים במפה עודכנו (" + (inp.zones.mapVersion ? "הקובץ שלנו נגזר ממפה v" + inp.zones.mapVersion : "הקובץ שלנו ישן") + ") ועדיין לא יוצאו לבקשות — הייצוא האוטומטי רץ אחרי כל עדכון של המפה; נסו שוב בעוד כמה דקות");
-    } catch (e) { problems.push(e.message); }
+      if (h !== zhash) add("maint", "נתוני האזורים במפה עודכנו (" + (inp.zones.mapVersion ? "הקובץ שלנו נגזר ממפה v" + inp.zones.mapVersion : "הקובץ שלנו ישן") + ") ועדיין לא יוצאו לבקשות — הייצוא האוטומטי רץ אחרי כל עדכון של המפה; נסו שוב בעוד כמה דקות");
+    } catch (e) { add("maint", e.message); }
     const meta = inp.meta || {}, zp = inp.zones.pamat || {}, hs = htmlStamp(inp.html);
-    if (meta.pamat_update !== zp.update || meta.pamat_date !== zp.date) problems.push("מהדורת הפמ״ת במפה (" + meta.pamat_update + " · " + meta.pamat_date + ") שונה ממה שבקובץ האזורים (" + zp.update + " · " + zp.date + ")");
-    if (!hs) problems.push("מבנה המפה השתנה: לא נמצאה חותמת מהדורת הפמ״ת (UPDATE …) בדף המפה");
-    else if (hs.update !== meta.pamat_update || hs.date !== meta.pamat_date) problems.push("מהדורת הפמ״ת המוצגת בדף המפה (" + hs.update + " · " + hs.date + ") שונה מ-pamat-meta.json (" + meta.pamat_update + " · " + meta.pamat_date + ") — יש לעדכן את הקובץ");
+    if (meta.pamat_update !== zp.update || meta.pamat_date !== zp.date) add("maint", "מהדורת הפמ״ת במפה (" + meta.pamat_update + " · " + meta.pamat_date + ") שונה ממה שבקובץ האזורים (" + zp.update + " · " + zp.date + ")");
+    if (!hs) add("maint", "מבנה המפה השתנה: לא נמצאה חותמת מהדורת הפמ״ת (UPDATE …) בדף המפה");
+    else if (hs.update !== meta.pamat_update || hs.date !== meta.pamat_date) add("maint", "מהדורת הפמ״ת המוצגת בדף המפה (" + hs.update + " · " + hs.date + ") שונה מ-pamat-meta.json (" + meta.pamat_update + " · " + meta.pamat_date + ") — יש לעדכן את הקובץ");
     const ed = inp.cfg && inp.cfg.pmt_editions && inp.cfg.pmt_editions.package;
-    if (!ed) problems.push("חסרה בהגדרות המהדורה שעליה אומתו נוהל א-11, פרק ב-09 וטופס הבקשה");
+    if (!ed) add("maint", "חסרה בהגדרות המהדורה שעליה אומתו נוהל א-11, פרק ב-09 וטופס הבקשה");
     else {
       for (const [lbl, st] of [["pamat-meta.json", meta], ["חותמת דף המפה", hs ? { pamat_update: hs.update, pamat_date: hs.date } : null]]) {
-        if (st && (ed.update !== st.pamat_update || ed.date !== st.pamat_date)) problems.push("פורסם עדכון פמ״ת (" + lbl + ": " + st.pamat_update + " · " + st.pamat_date + "), ונוהל א-11, פרק ב-09 וטופס הבקשה אומתו מול " + ed.update + " · " + ed.date + " — יש לאמת אותם מחדש לפני שליחה");
+        if (st && (ed.update !== st.pamat_update || ed.date !== st.pamat_date)) add("maint", "פורסם עדכון פמ״ת (" + lbl + ": " + st.pamat_update + " · " + st.pamat_date + "), ונוהל א-11, פרק ב-09 וטופס הבקשה אומתו מול " + ed.update + " · " + ed.date + " — יש לאמת אותם מחדש לפני שליחה");
       }
     }
     const a = inp.mapNotam && Date.parse(inp.mapNotam.fetched_iso), b = inp.notamAll && Date.parse(inp.notamAll.fetched_iso);
-    if (!(a > 0) || !(b > 0)) problems.push("לא ניתן להשוות את מועד משיכת הנוטמים של המפה ושל הבקשות");
-    else if (a - b > MAX_NOTAM_LAG_MS) problems.push("קובץ הנוטמים של הבקשות מפגר אחרי קובץ הנוטמים של המפה (" + Math.round((a - b) / 60000) + " דקות)");
+    if (!(a > 0) || !(b > 0)) add("maint", "לא ניתן להשוות את מועד משיכת הנוטמים של המפה ושל הבקשות");
+    else if (a - b > MAX_NOTAM_LAG_MS) add("maint", "קובץ הנוטמים של הבקשות מפגר אחרי קובץ הנוטמים של המפה (" + Math.round((a - b) / 60000) + " דקות)");
     // הנתונים שבזיכרון הדף ושעליהם נעשה הניתוח מול הנתונים העדכניים ברשת
     const freshN = inp.notamAll && inp.notamAll.fetched_iso;
     if (inp.loaded && ((inp.loaded.zonesHash && zhash && inp.loaded.zonesHash !== zhash) || (inp.loaded.notamIso && freshN && Date.parse(freshN) > Date.parse(inp.loaded.notamIso)))) {
-      reload = true; problems.push("הנתונים התעדכנו מאז טעינת הדף (אזורים או נוטמים) — הדף טוען אותם מחדש");
+      reload = true; add("user", "הנתונים התעדכנו מאז טעינת הדף (אזורים או נוטמים) — הדף טוען אותם מחדש");
     }
     if (inp.analysis && ((inp.analysis.zonesHash && zhash && inp.analysis.zonesHash !== zhash) || (inp.analysis.notamIso && freshN && Date.parse(freshN) > Date.parse(inp.analysis.notamIso)))) {
-      analysisStale = true; problems.push("הנתונים התעדכנו אחרי שהבקשה נבדקה — יש להריץ את הבדיקות מחדש");
+      analysisStale = true; add("user", "הנתונים התעדכנו אחרי שהבקשה נבדקה — יש להריץ את הבדיקות מחדש");
     }
-    return { ok: problems.length === 0, problems, reload, analysisStale };
+    return { ok: problems.length === 0, problems, items, reload, analysisStale };
   }
   return { check, dataText, sha256Hex, htmlStamp, MARKS };
 });

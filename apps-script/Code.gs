@@ -4,7 +4,8 @@
  *  - ניהול משתמשים: הוספה, חסימה/ביטול חסימה, איפוס סיסמה, החלפת סיסמה עצמית, מחיקה — הכול נאכף כאן, בשרת, בכל קריאה.
  *  - שמירת קבצי הבקשה (Word, KML, תמונות) בתיקייה בדרייב: תת-תיקייה בשם "<מקום> — <תאריך>".
  *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות) — המנהל רואה את כולם.
- *  - שליחה למשרד נוטאם במייל, עם הקבצים מהתיקייה, לכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד.
+ *  - שליחה במייל, עם הקבצים מהתיקייה: למשרד נוטאם (הכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד) או רק למבקש עצמו.
+ *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד); הבעלים מקבל תמיד עותק סמוי (BCC).
  * התקנה: ראו apps-script/README.md. הקוד אינו מכיל סיסמאות או מזהים סודיים; הם נשמרים ב-Script Properties בלבד.
  */
 
@@ -21,11 +22,27 @@ var CFG = {
   // notamoffice@iaa.gov.il, nofm@iaa.gov.il על גבי טופס כמפורט בנספח ג'". הנמענים קבועים כאן ואינם מתקבלים מהדפדפן.
   MAIL_TO: ['notamoffice@iaa.gov.il', 'nofm@iaa.gov.il'],
   SENDER_NAME: 'הארגון הישראלי לרב להב',
-  MAX_SENDS_PER_HOUR: 10,
+  // הגבלת קצב שעתית בשני דליים נפרדים: 'o' = שליחה חיה למשרד נוטאם (בקשה אמיתית), 'c' = עותקים ("שלח רק לעצמי", וגם "שלח למשרד" במצב בדיקה שנשלח למבקש בלבד).
+  // כך עיון בעותקים (הפעולה השכיחה ביותר) לא חוסם שליחה אמיתית — לא של אותו מטיס ולא של אחרים. אלה תקרות קצב בלבד; מכסת המיילים היומית של גוגל נבדקת בנפרד (MAIL_QUOTA_RESERVE).
+  MAX_OFFICE_PER_HOUR: 10,       // שליחות חיות למשרד נוטאם — לכל משתמש בנפרד
+  MAX_OFFICE_PER_HOUR_ALL: 60,   // ... ובסך הכול לכל המערכת
+  MAX_COPIES_PER_HOUR: 10,       // עותקים (לעצמו / בדיקה) — לכל משתמש בנפרד
+  MAX_COPIES_PER_HOUR_ALL: 120,  // ... ובסך הכול לכל המערכת (לא נמוכה מ-60: עיון בעותקים הוא הפעולה השכיחה, ומאה מטיסים לא אמורים לחסום זה את זה)
+  MAX_SEND_ATTEMPTS_PER_HOUR: 40, // ניסיונות שליחה שהגיעו עד MailApp (גם כושלים) לכל משתמש — שליחה שנכשלה אינה צורכת את הדליים למעלה, אבל לולאת ניסיונות לא תציף את היומן
+  MAIL_QUOTA_RESERVE: 20,        // רזרבה במכסת המיילים היומית של גוגל (נמענים) שעותקים אינם צורכים — כדי שהשליחה האמיתית למשרד וקודי ההרשמה לא יורעבו
+  FEATURES: ['sendTarget'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי")
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
-  LOG_MAX: 1000,           // מעבר לכך נמחקות הישנות ביותר שלא נשלחו; רשומה עם שליחה חיה נשמרת תמיד
+  LOG_MAX: 2000,           // יעד רך: מעבר לכך נמחקות רק הישנות ביותר שלא נשלחו חי ולא נגעו בהן LOG_KEEP_DAYS ימים; כשהכול מוגן היומן פשוט גדל
+  LOG_KEEP_DAYS: 30,       // בקשה שלא נשלחה חי ושונתה/נשלחה לעצמה בתקופה הזו לעולם אינה נמחקת בגיזום (של אף משתמש)
   MAX_NEW_FOLDERS_PER_HOUR: 30,  // תקרת תיקיות בקשה חדשות למשתמש בשעה — מונע הצפה של הדרייב והיומן
+  // --- תקרות אחסון (saveFile / saveBegin): מטיס אחד לא ממלא את הדרייב של הבעלים, לא מנפח את היומן ולא מאט את השרת (נעילת הסקריפט) לאחרים. מנהל פטור מהמכסות האישיות (לא מהתקרות לתיקייה).
+  MAX_FOLDER_FILES: 12,          // קבצי בקשה (Word, KML, תמונות, JSON) בתיקייה אחת — הלקוח כותב 7 (Word, KML, 4 תמונות, JSON); סימוני "נשלח — ....txt" אינם נספרים
+  MAX_FOLDER_BYTES: 24 * 1024 * 1024,   // נפח כולל של קבצי הבקשה בתיקייה — לא מעל תקרת המייל (MAX_MAIL_BYTES): בקשה גדולה יותר לא תישלח בכל מקרה
+  MAX_UPLOAD_BYTES_PER_HOUR: 200 * 1024 * 1024,   // בייטים שנכתבו בשעה לכל משתמש (נמדדים בכתיבה, לא בנפח שנשמר: גרסה ישנה שנזרקה לאשפה עדיין תופסת מקום בדרייב)
+  MAX_UPLOAD_BYTES_PER_DAY: 500 * 1024 * 1024,    // ... וביום (שעון ישראל) לכל משתמש
+  MAX_OPEN_REQUESTS_PER_USER: 60, // בקשות של משתמש שלא נשלחו חי ושנגעו בהן ב-LOG_KEEP_DAYS הימים האחרונים — מעבר לכך אין תיקייה חדשה (בקשה שנשלחה חי משחררת מקום)
+  MAX_SENT_PER_REQUEST: 100,     // רשומות שליחה בבקשה אחת ביומן; מעבר לכך נמחקות הישנות ביותר שאינן שליחה חיה
   // --- מנוי מטיס מסחרי: כרטיס "בקשת אישורי טיסה" באתר הארגון (Wix Events). הרשמה רק למי שיש לו הזמנה ששולמה בפועל.
   WIX_SITE_ID: '29dca6d8-08d4-4679-a6e5-c5f4f3317d90',        // icd.org.il
   WIX_EVENT_ID: 'fbcb2cc1-4dc7-4545-b9d5-08febf9f8153',       // האירוע "בקשת אישורי טיסה"
@@ -34,7 +51,15 @@ var CFG = {
   VALID_MONTHS: 12,             // כל כרטיס ששולם מזכה בתקופה הזו, מיום הרכישה (ובחידוש מוקדם — מתווסף לסוף התקופה הנוכחית)
   REMIND_DAYS: [30, 3],         // תזכורות: חודש לפני הסיום, ו-3 ימים לפני
   CODE_TTL_MIN: 15, CODE_MAX_TRIES: 5,
-  REG_PER_EMAIL_HOUR: 5, REG_PER_HOUR: 60,
+  CODE_FAIL_MAX: 10, CODE_FAIL_HOURS: 6,   // ניחושי קוד שגויים לכתובת מצטברים בין קודים: אחרי CODE_FAIL_MAX כשלונות מושהית ההרשמה לכתובת (בשקט) עד שחלון CODE_FAIL_HOURS חולף
+  // --- הרשמה (regStart, ללא התחברות). כל שער כאן זהה לכל כתובת: אסור שתשובה כלשהי תגלה מי רכש כרטיס או מי רשום.
+  REG_PER_EMAIL_HOUR: 5,         // בקשות תקינות לכתובת בשעה — נספרות בכל בקשה, בלי קשר לכרטיס (ספירה רק של מיילים שנשלחו הייתה מגלה בעלי כרטיס)
+  REG_WIX_PER_HOUR: 600,         // שאילתות Wix בשעה לכל המערכת (כל בקשה שעוברת את שאר השערים) — מגן על מכסת UrlFetch היומית (20,000 בחשבון Gmail רגיל) ועל נעילת הסקריפט; חריגה = אותה תשובה לכולם
+  REG_MAILS_PER_HOUR: 150,       // מיילי הרשמה שנשלחו בפועל (קודים והודעת "כבר קיים חשבון") בשעה, בסך הכול — מותאם להשקה של כ-100 נרשמים בשעה אחת
+  REG_MAILS_PER_DAY: 400,        // ... וביום (שעון ישראל)
+  REG_MAILS_PER_EMAIL_DAY: 10,   // קודי הרשמה/חידוש שנשלחו בפועל לכתובת ביום — מעבר לכך נדחה בשקט (אותה תשובה), כדי שכתובת אחת לא תצרוך את התקציב הכללי ולא תוצף
+  REG_EXISTS_HOURS: 24,          // הודעת "כבר קיים חשבון" לכל היותר פעם בחלון הזה לכתובת (חותמת ב-Script Properties; המטמון מוגבל ל-6 שעות)
+  MAIL_QUOTA_RESERVE_REG: 8,     // רזרבה במכסת המיילים היומית שקודי הרשמה אינם צורכים (שתי שליחות חיות למשרד נוטאם); הודעת "כבר קיים חשבון" משאירה MAIL_QUOTA_RESERVE כמו עותקים
   RECHECK_ORDERS: true,         // בבדיקה היומית: הזמנה שבוטלה/הוחזרה — החשבון נחסם
   WIX_MAX_PAGES: 5
 };
@@ -61,10 +86,77 @@ function getUser_(name) { var v = props_().getProperty(UP + name); if (!v) retur
 function putUser_(name, u) { props_().setProperty(UP + name, JSON.stringify(u)); }
 function delUser_(name) { props_().deleteProperty(UP + name); }
 function countUsers_() { return Object.keys(users_()).length; }
+// הקמה ראשונה נדרשת כשאין אף מנהל *פעיל* (לא כשאין אף משתמש): מי ששכח את סיסמת המנהל מוחק רק את חשבון המנהל, ומאות המטיסים נשארים.
+// מנהל חסום או שפג תוקפו אינו נספר: הוא לא יכול להתחבר, ואם אין עוד מי שישחרר אותו הספירה שלו הייתה נועלת את השחזור ("כבר מאותחל ויש מנהל") בלי רמז.
+// אין בכך פתח לתוקף: הקמה דורשת את SETUP_CODE, שרק הבעלים מנפיק (initialize מהעורך, ואין לו מקבילה בשרת), ו-initialize מוחק קוד ישן כשיש מנהל פעיל. ראו גם bootstrap.
+function isActiveAdmin_(u) { return !!u && u.role === 'admin' && !u.blocked && !(u.until && Number(u.until) < now_()); }
+function countAdmins_() { var us = users_(), n = 0; for (var k in us) if (isActiveAdmin_(us[k])) n++; return n; }
+// כל מנהלי ה-U: (גם חסומים/שפג תוקפם) עם הסטטוס — להדפסה ביומן ההרצה של initialize, כדי שהבעלים יידע מה עוד מחזיק את הנעילה
+function adminSummary_() {
+  var us = users_(), out = [];
+  Object.keys(us).sort().forEach(function (k) { if (us[k] && us[k].role === 'admin') out.push(k + (us[k].blocked ? ' (חסום)' : (us[k].until && Number(us[k].until) < now_()) ? ' (פג תוקף)' : ' (פעיל)')); });
+  return out;
+}
 function secret_() { var s = props_().getProperty('SECRET'); if (!s) throw new Error('לא בוצעה אתחול — להריץ initialize()'); return s; }
 function ownerEmail_() { try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; } }
-// מצב שליחה: 'test' (ברירת מחדל) — המייל נשלח רק לבעלים; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
+// מצב שליחה: 'test' (ברירת מחדל) — "שלח למשרד" נשלח רק למבקש עצמו; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
 function mailMode_() { return props_().getProperty('MAIL_MODE') === 'live' ? 'live' : 'test'; }
+// כתובת המבקש = הכתובת ששמורה אצל המשתמש (נשמרת רק ברישום עם כרטיס, אחרי אימות קוד שנשלח אליה). אין שום קלט בבקשה שקובע אותה —
+// אחרת השרת היה הופך לממסר דואר זבל. נבדקת שוב בכל שימוש. משתמש בלי כתובת (נוצר ידנית ע"י המנהל, כולל המנהל עצמו) — מחזיר ''.
+function requesterEmail_(u) { return normEmail_(u && u.email); }
+// מה שהלקוח צריך לדעת על המייל: email = כתובת המבקש השמורה (או ''), copyTo = לאן יישלחו עותקים/"שלח לעצמי" (בלי כתובת — כתובת הבעלים).
+function mailInfo_(u) {
+  var email = requesterEmail_(u);
+  return { email: email, copyTo: email || ownerEmail_(), copyToIsOwner: !email, features: CFG.FEATURES.slice() };
+}
+function withMailInfo_(o, u) { var m = mailInfo_(u); for (var k in m) o[k] = m[k]; return o; }
+// מוסיף כתובת לרשימה אם אינה ריקה ועדיין לא נכללה (השוואה באותיות קטנות) — אותה כתובת לא מופיעה פעמיים באותה הודעה
+function addRcpt_(list, seen, addr) {
+  var a = String(addr || '').trim(), k = 'k:' + a.toLowerCase();
+  if (!a || seen[k]) return;
+  seen[k] = true; list.push(a);
+}
+// מכסת המיילים היומית של גוגל (MailApp סופר כל נמען: to+cc+bcc). מספר, או null כשלא ידוע (שרת/מדמה בלי הפונקציה, או שהקריאה נכשלה) —
+// אז מדלגים על הבדיקה המוקדמת; השליחה עצמה עדיין נכשלת סגור כי MailApp זורק כשהמכסה נגמרה.
+function mailQuotaLeft_() {
+  try {
+    if (typeof MailApp.getRemainingDailyQuota !== 'function') return null;
+    var q = MailApp.getRemainingDailyQuota();
+    return (typeof q === 'number' && q === q) ? q : null;      // null / '' / NaN = לא ידוע (Number(null) === 0 היה נקרא "המכסה נגמרה" ונועל את כל ההרשמות)
+  } catch (e) { return null; }
+}
+// להרצה ידנית מהעורך (בוחרים showMailQuota ← הפעלה ← יומן ביצוע): כמה נמענים נשארו היום במכסת המייל של גוגל — אותו מספר שהמנהל מקבל כ-mailQuotaLeft
+function showMailQuota() {
+  var q = mailQuotaLeft_();
+  Logger.log(q === null ? 'לא ניתן לקרוא את מכסת המייל היומית' : 'נשארו להיום ' + q + ' נמענים במכסת המייל היומית של גוגל');
+  return q;
+}
+function quotaErr_() { return { ok: false, error: 'mail_quota', message: 'מכסת המיילים היומית של המערכת התמלאה — נסו שוב מחר או פנו למנהל' }; }
+// האם נשארו מספיק נמענים ביום (need) מעבר לרזרבה (reserve); null = לא ידוע = כן
+function mailQuotaOk_(need, reserve) { var left = mailQuotaLeft_(); return left === null || left >= need + (reserve || 0); }
+// שגיאת קצב בשליחה. scope: 'user' = המגבלה האישית של המשתמש, 'all' = מגבלה כללית של המערכת (לא קשורה אליו). kind: 'o' = שליחה למשרד נוטאם, 'c' = עותקים, 't' = ניסיונות שליחה
+function rateErr_(scope, kind) {
+  var what = kind === 'o' ? 'השליחות למשרד נוטאם' : kind === 'c' ? 'העותקים' : 'ניסיונות השליחה';
+  var msg = scope === 'all'
+    ? 'המערכת הגיעה למגבלה הכללית של ' + what + ' בשעה האחרונה (המגבלה אינה אישית ואינה קשורה אליכם) — נסו שוב בעוד זמן קצר'
+    : 'הגעתם למגבלה האישית של ' + what + ' בשעה האחרונה — נסו שוב בעוד שעה';
+  return { ok: false, error: 'rate', scope: scope, kind: kind === 'o' ? 'office' : kind === 'c' ? 'copy' : 'attempts', message: msg };
+}
+// מחזיר שליחה אחת לדלי קצב (כשהמייל לא יצא). מיטב המאמץ: בכשל המונה נשאר גבוה — שמרני
+function rateRefund_(cache, key) {
+  try { var n = Number(cache.get(key)) || 0; if (n > 0) cache.put(key, String(n - 1), 3600); } catch (e) { /* שמרני */ }
+}
+// נמענים לפי מצב ויעד. תמיד: replyTo = המבקש, והבעלים ב-BCC (אלא אם הוא כבר ב-to/cc, כשהוא עצמו המבקש).
+//  חי + משרד: to = משרד נוטאם (קבוע בקוד), cc = המבקש.  בדיקה + משרד, או "לעצמי" (בכל מצב): to = המבקש בלבד.
+function mailPlan_(mode, target, requester, owner) {
+  var seen = {}, to = [], cc = [], bcc = [];
+  if (target === 'office' && mode === 'live') {
+    CFG.MAIL_TO.forEach(function (x) { addRcpt_(to, seen, x); });
+    addRcpt_(cc, seen, requester);
+  } else addRcpt_(to, seen, requester);
+  addRcpt_(bcc, seen, owner);
+  return { to: to, cc: cc, bcc: bcc, replyTo: requester };
+}
 
 /* ---------- אסימון חתום ---------- */
 function sign_(payload) {
@@ -108,33 +200,43 @@ function clearFails_(name) { CacheService.getScriptCache().remove(failsKey_(name
 /* ---------- בדיקות קלט ---------- */
 function validName_(n) { return typeof n === 'string' && /^[A-Za-z0-9._\-\u0590-\u05FF ]{3,40}$/.test(n) && n === n.trim(); }
 function validPass_(p) { return typeof p === 'string' && p.length >= CFG.MIN_PASS && p.length <= 200; }
-function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|\u200e\u200f\u202a-\u202e]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
+// תווים בלתי נראים שאסור להשאיר בשמות תיקיות/קבצים ובנושא המייל: בקרה (C0 ו-C1, כולל NUL ו-NEL), סימוני כיווניות (U+200B-200F, U+202A-202E, U+2066-2069, U+061C),
+// מפרידי שורה/פסקה (U+2028-2029) ו-BOM. הטווחים נבנים ב-String.fromCharCode כדי שהקוד עצמו לא יכיל תווים בלתי נראים (או רצפי escape שכלי עריכה מפענחים)
+var HIDDEN_CHARS_ = [[0, 0x1f], [0x7f, 0x9f], [0x61c, 0x61c], [0x200b, 0x200f], [0x2028, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]]
+  .map(function (r) { return String.fromCharCode(r[0]) + (r[1] > r[0] ? '-' + String.fromCharCode(r[1]) : ''); }).join('');
+var HIDDEN_RE_ = new RegExp('[' + HIDDEN_CHARS_ + ']', 'g');
+function cleanFolderName_(s) { return String(s || '').replace(/[\\/:*?"<>|]/g, ' ').replace(HIDDEN_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, 120); }
 function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסיומת (אחרת הקובץ לא יזוהה כ-Word/תמונה בשליחה)
   var raw = String(s || '').trim(), m = /\.[A-Za-z0-9]{1,5}$/.exec(raw), ext = m ? m[0].toLowerCase() : '';
   var base = cleanFolderName_(ext ? raw.slice(0, -ext.length) : raw).slice(0, 110).trim();
   return (base || 'file') + ext;
 }
-// נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה
-function cleanSubject_(s) { return String(s || '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
+// נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה — כולל תווי C1 (ביניהם NEL), מפרידי השורה של יוניקוד וסימוני כיווניות (שמסתירים/הופכים טקסט)
+function cleanSubject_(s) { return String(s || '').replace(HIDDEN_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
 function cleanBody_(s) { return String(s || '').replace(/\r\n?/g, '\n').replace(/\r/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, 20000); }
 
 /* ---------- אתחול (פעם אחת, מהעורך) ---------- */
+// קוד ההקמה הוא הדבר היחיד שמאפשר ליצור מנהל מרחוק, ולכן הוא ארוך (128 ביט) ו*אין נעילה לניסיונות שגויים* ב-bootstrap: כל נעילה ללא זהות (Apps Script לא מוסר כתובת IP)
+// היא כפתור שכל אחד לוחץ עליו כדי לחסום את שחזור המנהל לצמיתות; את ניחוש הקוד עוצרת האנטרופיה, לא ספירת ניסיונות. הקוד אינו נשלח לאף מקום והוא נשמר מגובב.
 function initialize() {
   var p = props_();
   if (!p.getProperty('SECRET')) p.setProperty('SECRET', randHex_(64));
-  if (!countUsers_()) {
-    var code = randHex_(10);
+  if (!countAdmins_()) {
+    var code = randHex_(32);
     p.setProperty('SETUP_CODE', sha256Hex_(code));
     Logger.log('קוד הקמה חד-פעמי (להקליד בדף ההתחברות בשדה "קוד הקמה"): ' + code);
+    var held = adminSummary_();
+    if (held.length) Logger.log('שימו לב: קיימים חשבונות מנהל לא פעילים (' + held.join(', ') + '). הם נשארים ואינם נספרים; מנהל חדש ייווצר בשם אחר.');
     return code;
   }
-  Logger.log('כבר מאותחל. אם אין לך מנהל — מחק את המאפיינים שמתחילים ב-"U:" ב-Script Properties והרץ שוב.');
+  p.deleteProperty('SETUP_CODE');      // קוד הקמה ישן שלא נוצל: כשיש מנהל פעיל הוא לא אמור להישאר (אחרת יופעל אם כל המנהלים יחסמו בעתיד)
+  Logger.log('כבר מאותחל ויש מנהל פעיל (' + adminSummary_().join(', ') + '). אם שכחת את סיסמת המנהל — ב-Script Properties מחק רק את המאפיין של המנהל ("U:" ואחריו שם המשתמש שלו), והרץ שוב. מטיסים רשומים נשארים. מנהל חסום או שפג תוקפו אינו נספר כמנהל פעיל.');
   return null;
 }
 
 /* ---------- נקודות כניסה ---------- */
 function doGet() {
-  return json_({ ok: true, app: CFG.APP, needsBootstrap: countUsers_() === 0 && !!props_().getProperty('SETUP_CODE') });
+  return json_({ ok: true, app: CFG.APP, needsBootstrap: countAdmins_() === 0 && !!props_().getProperty('SETUP_CODE') });
 }
 
 function doPost(e) {
@@ -156,7 +258,8 @@ function doPost(e) {
 
 /* ---------- מנוי מטיס מסחרי: אימות כרטיס מול Wix ---------- */
 // המפתח (API key של Wix עם הרשאת "Read Basic Events Order Info") נשמר ב-Script Properties בשם WIX_API_KEY — לא בקוד ולא ביומן.
-function normEmail_(e) { e = String(e || '').trim().toLowerCase(); return (e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) ? e : ''; }
+// כתובת אחת בלבד: בלי פסיק/נקודה-פסיק/סוגריים/מירכאות — כתובת כזו יכלה להפוך נמען אחד לכמה נמענים כשהיא משמשת בשדה to/cc
+function normEmail_(e) { e = String(e || '').trim().toLowerCase(); return (e.length <= 120 && /^[^\s@,;:<>()\[\]"\\]+@[^\s@,;:<>()\[\]"\\]+\.[^\s@,;:<>()\[\]"\\]{2,}$/.test(e)) ? e : ''; }
 function addMonths_(ms, n) { var d = new Date(ms); d.setUTCMonth(d.getUTCMonth() + n); return d.getTime(); }
 // YYYY-MM-DD (או מספר מילישניות) -> סוף אותו יום בשעון ישראל (בקירוב: 21:00 UTC)
 function parseUntil_(v) {
@@ -205,11 +308,60 @@ function wixOrderStatus_(orderNumber) {
   var o = r && r.orders && r.orders[0];
   return o ? String(o.status || '') : '';
 }
-function emailUser_(email) { var n = props_().getProperty(emailKey_(email)); return n ? { name: n, user: getUser_(n) } : null; }
+// החשבון של כתובת מייל — רק אם המיפוי E: עדיין נכון: המשתמש קיים והכתובת השמורה אצלו זהה. מיפוי עקר (חשבון שנמחק ידנית ב-Script Properties,
+// או שמו נתפס מחדש בידי מטיס אחר) אינו חשבון: אחרת הרשמה שקטה נכשלת, וכרטיס חדש היה מתווסף לחשבון של אדם אחר.
+function emailUser_(email) {
+  var n = props_().getProperty(emailKey_(email));
+  if (!n) return null;
+  var u = getUser_(n);
+  return (u && normEmail_(u.email) === email) ? { name: n, user: u } : null;
+}
 function orderOwner_(orderNumber) { return props_().getProperty(orderKey_(orderNumber)); }
-// ההזמנות שזכאות להרשמה/חידוש: שולמו, הרוכש חבר (אם נדרש), ועדיין לא נוצלו ע"י אף חשבון
+// בעל ההזמנה בפועל: שם חשבון קיים שההזמנה רשומה אצלו. מיפוי עקר (O: שנשאר אחרי מחיקת חשבון, גם אם השם נתפס מחדש) — אין בעלים, וההזמנה פנויה
+function orderHolder_(orderNumber) {
+  var n = orderOwner_(orderNumber);
+  if (!n) return '';
+  var u = getUser_(n);
+  return (u && (u.orders || []).indexOf(String(orderNumber)) >= 0) ? n : '';
+}
+// ההזמנות שזכאות להרשמה/חידוש: שולמו, הרוכש חבר (אם נדרש), ועדיין לא נוצלו ע"י אף חשבון קיים
 function eligibleOrders_(orders) {
-  return orders.filter(function (o) { return (!CFG.REQUIRE_MEMBER || o.member) && !orderOwner_(o.orderNumber); });
+  return orders.filter(function (o) { return (!CFG.REQUIRE_MEMBER || o.member) && !orderHolder_(o.orderNumber); });
+}
+// רשומת קוד ההרשמה לכתובת (R:) — הקוד המגובב, תוקפו, ניסיונות, ומונה כשלונות מצטבר לכתובת (f עד fx) שאינו מתאפס בבקשת קוד חדשה
+function regKey_(email) { return 'R:' + sha256Hex_(email).slice(0, 30); }
+function readJsonProp_(k) { var raw = props_().getProperty(k); if (!raw) return null; try { var o = JSON.parse(raw); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; } }
+function readReg_(rk) { return readJsonProp_(rk); }
+function regLocked_(rec) { return !!rec && rec.fx > now_() && (Number(rec.f) || 0) >= CFG.CODE_FAIL_MAX; }
+// סוגרים רשומת קוד שאינה בשימוש: אם יש מונה כשלונות בתוקף — נשאר רק המונה (בלי הקוד), אחרת נמחקת
+function closeReg_(rk, rec) {
+  if (rec && rec.fx > now_() && (Number(rec.f) || 0) > 0) props_().setProperty(rk, JSON.stringify({ f: Number(rec.f), fx: rec.fx, exp: 0, tries: 0 }));
+  else props_().deleteProperty(rk);
+}
+// ----- הרשמה: תקציבי מיילים ושערים כלליים (regStart). כולם תלויים רק במצב המערכת, אף פעם לא בכתובת/כרטיס/חשבון — כדי שאי אפשר יהיה לגלות דרכם מי רכש כרטיס או מי רשום -----
+function dayKey_() { return Utilities.formatDate(new Date(now_()), 'Asia/Jerusalem', 'yyyy-MM-dd'); }
+// סיכום מיילי הרשמה לכתובת שהמערכת שלחה לה בפועל (M:): d = יום, n = קודים שנשלחו באותו יום, x = מתי נשלחה לאחרונה הודעת "כבר קיים חשבון".
+// נוצר רק אחרי שליחה אמיתית — בקשות זבל לכתובות שרירותיות לא יוצרות אותו, ולכן מספרו חסום במספר בעלי הכרטיסים/החשבונות
+function mailRecKey_(email) { return 'M:' + sha256Hex_(email).slice(0, 30); }
+// תקציב מיילי ההרשמה הכללי (קודים והודעת "כבר קיים חשבון" שיצאו בפועל): שעתי במטמון ויומי ב-Script Properties (המטמון מוגבל ל-6 שעות). נבדק בתחילת regStart ונספר רק אחרי ש-MailApp הצליח
+function regBudgetFull_(cache, hk) {
+  if ((Number(cache.get('regM:' + hk)) || 0) >= CFG.REG_MAILS_PER_HOUR) return true;
+  var d = readJsonProp_('REG_MAILS');
+  return (d && d.d === dayKey_() ? Number(d.n) || 0 : 0) >= CFG.REG_MAILS_PER_DAY;
+}
+function regBudgetAdd_(cache, hk) {
+  cache.put('regM:' + hk, String((Number(cache.get('regM:' + hk)) || 0) + 1), 3600);
+  var d = readJsonProp_('REG_MAILS'), day = dayKey_();
+  props_().setProperty('REG_MAILS', JSON.stringify({ d: day, n: (d && d.d === day ? Number(d.n) || 0 : 0) + 1 }));
+}
+function regOk_() { return { ok: true, sent: true }; }
+// חריגה במכסה כללית (שאילתות Wix / תקציב מיילי ההרשמה): אותה תשובה לכל כתובת. scope:'all' = המגבלה אינה אישית (הדף מציג את ההודעה כפי שהיא)
+function regBusyErr_() { return { ok: false, error: 'rate', scope: 'all', message: 'המערכת עמוסה כרגע בבקשות הרשמה — המגבלה אינה אישית; נסו שוב בעוד זמן קצר' }; }
+// בעת מחיקת משתמש: מונים שעתיים/יומיים ששמורים לפי שם המשתמש לא עוברים למי שיתפוס את השם אחריו
+function clearUserCounters_(name) {
+  var c = CacheService.getScriptCache(), uh = sha256Hex_(name).slice(0, 16), h = Math.floor(now_() / 3600000);
+  ['nf:' + uh + ':' + h, 'up:' + uh + ':' + h, 'sends:u:o:' + uh + ':' + h, 'sends:u:c:' + uh + ':' + h, 'sends:t:' + uh + ':' + h].forEach(function (k) { c.remove(k); });
+  props_().deleteProperty('B:' + uh);
 }
 // תוקף חדש אחרי הוספת הזמנות: כל הזמנה מוסיפה VALID_MONTHS, מהמאוחר מבין (סוף התקופה הנוכחית, יום ההזמנה)
 function applyOrders_(until, orders) {
@@ -231,42 +383,67 @@ function subscriptionMail_(u, name, days, until) {
     renew, '', 'אם כבר חידשת — תודה, ואפשר להתעלם מהמייל.', 'צוות הארגון הישראלי לרחפנים'].join('\n') };
 }
 // בדיקה יומית (טריגר): תזכורות חודש ו-3 ימים לפני הסיום, וחסימת חשבון שהזמנתו בוטלה. להתקנה — להריץ פעם אחת installTrigger().
+// נעילת הסקריפט הגלובלית (שאותה לוקח כל doPost) אינה מוחזקת בזמן קריאות רשת: עד 200 שאילתות Wix ומאות מיילים הן דקות, ובהן כל מטיס היה מקבל "השרת עסוק".
+//  שלב א' — בלי נעילה: צילום קריא-בלבד של המשתמשים ושאילתות Wix; יוצא ממנו רק מי שיש לגביו מה לעשות (חסימה / תזכורת).
+//  שלב ב' — לכל משתמש כזה נעילה קצרה: קוראים את הרשומה מחדש (לא את הצילום — חידוש, איפוס סיסמה או חסימה שהגיעו בינתיים לא נדרסים; כתיבת הצילום החזירה
+//  למשל הזמנה שנוצלה לפנויה ושחזרה סיסמה ישנה), בודקים שהתנאי עדיין נכון, משנים ושולחים את התזכורת (מייל אחד), ומשחררים. הרשמה במקביל מחכה לכל היותר מייל אחד.
+// מגבלת 200 השאילתות מסתובבת בין המשתמשים (DC_CURSOR): מי שנבדק אתמול נבדק שוב רק אחרי שהאחרים קיבלו תור, כך שאף משתמש לא נשאר בסוף הרשימה ללא בדיקה.
+var DAILY_WIX_CALLS = 200;
+function rotateFrom_(names, after) {
+  if (!after) return names;
+  var i = 0; while (i < names.length && names[i] <= after) i++;
+  return names.slice(i).concat(names.slice(0, i));
+}
 function dailyCheck() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) return { skipped: 'busy' };
-  var stat = { checked: 0, reminded: 0, blocked: 0, errors: 0 };
-  try {
-    var us = users_(), now = now_(), calls = 0, owner = ownerEmail_();
-    Object.keys(us).forEach(function (name) {
-      var u = us[name], changed = false;
-      if (!u.until) return;
-      stat.checked++;
-      if (CFG.RECHECK_ORDERS && !u.blocked && u.orders && u.orders.length && calls < 200) {
-        try {
-          for (var i = 0; i < u.orders.length && calls < 200; i++) {
-            calls++;
-            var st = wixOrderStatus_(u.orders[i]);
-            if (st === 'CANCELED' || st === 'DECLINED' || st === 'VOIDED') { u.blocked = true; u.blockedWhy = 'order_' + st; u.tv = (Number(u.tv) || 1) + 1; changed = true; stat.blocked++; break; }
-          }
-        } catch (e) { stat.errors++; /* תקלה ב-Wix אינה חוסמת משתמשים */ }
-      }
-      var days = Math.ceil((u.until - now) / 86400000), rem = u.reminded || {};
-      if (u.email && days >= 0 && !u.blocked) {
-        var step = days <= CFG.REMIND_DAYS[1] ? 'd3' : days <= CFG.REMIND_DAYS[0] ? 'd30' : '';
-        if (step && !rem[step] && !(step === 'd30' && rem.d3)) {
-          try {
-            var m = subscriptionMail_(u, name, days, u.until);
-            MailApp.sendEmail({ to: u.email, subject: m.subject, body: m.body, name: CFG.SENDER_NAME, replyTo: owner || '' });
-            rem[step] = now; if (step === 'd3') rem.d30 = rem.d30 || now;
-            u.reminded = rem; changed = true; stat.reminded++;
-          } catch (e) { stat.errors++; }
+  var stat = { checked: 0, reminded: 0, blocked: 0, errors: 0, busy: 0 };
+  var us = users_(), now = now_(), calls = 0, cut = false, lastDone = '', owner = ownerEmail_(), jobs = [];
+  rotateFrom_(Object.keys(us).sort(), props_().getProperty('DC_CURSOR')).forEach(function (name) {
+    var u = us[name], job = { name: name, bad: '', remind: false };
+    if (!u || !u.until) return;
+    stat.checked++;
+    if (CFG.RECHECK_ORDERS && !u.blocked && u.orders && u.orders.length && !cut) {
+      try {
+        for (var i = 0; i < u.orders.length; i++) {
+          if (calls >= DAILY_WIX_CALLS) { cut = true; break; }
+          calls++;
+          var st = wixOrderStatus_(u.orders[i]);
+          if (st === 'CANCELED' || st === 'DECLINED' || st === 'VOIDED') { job.bad = String(u.orders[i]); job.why = 'order_' + st; break; }
         }
+      } catch (e) { stat.errors++; /* תקלה ב-Wix אינה חוסמת משתמשים */ }
+      if (!cut) lastDone = name;
+    }
+    if (job.bad || reminderStep_(u, now)) jobs.push(job);
+  });
+  if (cut) props_().setProperty('DC_CURSOR', lastDone); else props_().deleteProperty('DC_CURSOR');
+  jobs.forEach(function (job) {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) { stat.busy++; return; }       // השרת עסוק מאוד: המשתמש הזה יטופל בריצה הבאה
+    try {
+      var u = getUser_(job.name), changed = false;
+      if (!u) return;
+      if (job.bad && !u.blocked && (u.orders || []).indexOf(job.bad) >= 0) { u.blocked = true; u.blockedWhy = job.why; u.tv = (Number(u.tv) || 1) + 1; changed = true; stat.blocked++; }
+      var step = u.blocked ? '' : reminderStep_(u, now);
+      if (step) {
+        try {
+          var days = Math.ceil((u.until - now) / 86400000), rem = u.reminded || {}, m = subscriptionMail_(u, job.name, days, u.until);
+          MailApp.sendEmail({ to: u.email, subject: m.subject, body: m.body, name: CFG.SENDER_NAME, replyTo: owner || '' });
+          rem[step] = now; if (step === 'd3') rem.d30 = rem.d30 || now;
+          u.reminded = rem; changed = true; stat.reminded++;
+        } catch (e) { stat.errors++; }
       }
-      if (changed) putUser_(name, u);
-    });
-  } finally { lock.releaseLock(); }
+      if (changed) putUser_(job.name, u);
+    } finally { lock.releaseLock(); }
+  });
   Logger.log('dailyCheck ' + JSON.stringify(stat));
   return stat;
+}
+// איזו תזכורת מגיעה למשתמש עכשיו ('d30' / 'd3'), או '' — יש כתובת מאומתת, המנוי לא הסתיים, החשבון פעיל והתזכורת הזו (או המאוחרת ממנה) עוד לא נשלחה
+function reminderStep_(u, now) {
+  if (!u || !u.email || !u.until || u.blocked) return '';
+  var days = Math.ceil((u.until - now) / 86400000), rem = u.reminded || {};
+  if (days < 0) return '';
+  var step = days <= CFG.REMIND_DAYS[1] ? 'd3' : days <= CFG.REMIND_DAYS[0] ? 'd30' : '';
+  return (step && !rem[step] && !(step === 'd30' && rem.d3)) ? step : '';
 }
 function installTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'dailyCheck') ScriptApp.deleteTrigger(t); });
@@ -292,34 +469,57 @@ function readLog_() {
 }
 // שליחה "פעילה" = לא נכשלה (כולל שליחה שהתחילה ולא ידוע אם הסתיימה — לכן שמרנית)
 function sentOk_(s) { return s.st !== 'failed'; }
-function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (s.mode === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
-// גיזום: מוחקים קודם את הישנות ביותר שלא נשלחו חי. לעולם לא נמחקת רשומה עם שליחה חיה, ולא הרשומה שזה עתה נכתבה (keepId) —
-// כשהיומן מלא ברשומות כאלה הוא פשוט גדל מעבר ל-LOG_MAX.
+// סוג שליחה ברשומת יומן: 'live' = נשלחה חי למשרד נוטאם; 'test' = מצב בדיקה (למבקש בלבד); 'self' = "שלח רק לעצמי" (target:'self').
+// שליחה לעצמו נרשמת עם mode:'self' (ולא 'live') — כך גם קוד שאינו מכיר את target לעולם לא יחשיב אותה כשליחה למשרד נוטאם.
+// רשומות ישנות (בלי target) הן שליחות למשרד נוטאם: 'live' או 'test' לפי mode.
+function sendKind_(s) { return (s.target === 'self' || s.mode === 'self') ? 'self' : (s.mode === 'live' ? 'live' : 'test'); }
+// רק שליחה חיה למשרד נוטאם נועלת עריכה וחוסמת שליחה כפולה; שליחה לעצמו/בדיקה לא
+function liveSentAt_(entry) { var last = 0; ((entry && entry.sent) || []).forEach(function (s) { if (sendKind_(s) === 'live' && sentOk_(s) && s.t > last) last = s.t; }); return last; }
+// מתי נגעו ברשומה לאחרונה: שמירה, יצירה, או שליחה (גם לעצמו / בדיקה)
+function lastTouch_(e) {
+  var t = Math.max(Number(e && e.saved) || 0, Number(e && e.created) || 0);
+  ((e && e.sent) || []).forEach(function (s) { var st = Number(s && s.t) || 0; if (st > t) t = st; });
+  return t;
+}
+// גיזום: LOG_MAX הוא יעד רך. נמחקות רק הרשומות הישנות ביותר שאין סיבה לשמור: לא נשלחו חי, לא נגעו בהן LOG_KEEP_DAYS ימים, ואינן הרשומה שזה עתה נכתבה (keepId).
+// בקשה של מטיס אחר שנשמרה/הוכנה לשליחה ועדיין צעירה לעולם אינה נמחקת בכתיבה של מישהו אחר; כשכל מה שנשאר מוגן — היומן פשוט גדל מעבר ל-LOG_MAX.
 function trimLog_(arr, keepId) {
-  var drop = arr.length - CFG.LOG_MAX, out = [];
+  var drop = arr.length - CFG.LOG_MAX;
   if (drop <= 0) return arr;
-  arr.forEach(function (e) { if (drop > 0 && e.id !== keepId && !liveSentAt_(e)) { drop--; return; } out.push(e); });
-  return out;
+  var cutoff = now_() - CFG.LOG_KEEP_DAYS * 86400000;
+  var victims = arr.filter(function (e) { return e.id !== keepId && !liveSentAt_(e) && lastTouch_(e) < cutoff; })
+    .sort(function (x, y) { return lastTouch_(x) - lastTouch_(y); }).slice(0, drop);
+  if (!victims.length) return arr;
+  return arr.filter(function (e) { return victims.indexOf(e) < 0; });
 }
 function writeLog_(arr, keepId) { logFile_().setContent(JSON.stringify(trimLog_(arr, keepId))); }
 function findByRid_(log, rid) { for (var i = 0; i < log.length; i++) if (log[i].rid === rid) return log[i]; return null; }
 function findById_(log, id) { for (var i = 0; i < log.length; i++) if (log[i].id === id) return log[i]; return null; }
 // שם תיקייה ייחודי ליומן: בקשה אחרת באותו מקום ותאריך מקבלת סיומת (2), (3)…
-function uniqueName_(log, name, rid) {
+// owner (לא חובה): מתחשב רק בבקשות של אותו משתמש — כך מטיס אינו יכול ללמוד משם שקיבל (סיומת "(2)") שבקשה של מישהו אחר כבר קיימת
+function uniqueName_(log, name, rid, owner) {
   var taken = {};
-  log.forEach(function (e) { if (e.rid !== rid) taken[e.name] = true; });
+  log.forEach(function (e) { if (e.rid !== rid && (owner === undefined || e.user === owner)) taken[e.name] = true; });
   var u = name, n = 1;
   while (taken[u]) u = name.slice(0, 112) + ' (' + (++n) + ')';
   return u;
 }
 // "השליחה התחילה" נרשמת לפני שהמייל יוצא; בסיום מתעדכנת ל-sent, ובכשל ל-failed
-function logSentBegin_(user, folderId, name, mode, to, sid) {
+function logSentBegin_(user, folderId, name, mode, target, to, sid) {
   var log = readLog_(), t = now_(), e = findById_(log, folderId);
   if (!e) { e = { id: folderId, rid: '', name: name, user: user, created: t, saved: t, lastUser: user, ready: false, sent: [] }; log.push(e); }
   e.sent = e.sent || [];
-  e.sent.push({ sid: sid, t: t, user: user, mode: mode, to: to, st: 'sending' });
+  e.sent.push({ sid: sid, t: t, user: user, mode: mode, target: target, to: to, st: 'sending' });
+  trimSent_(e);
   writeLog_(log, folderId);
   return t;
+}
+// תקרת רשומות שליחה בבקשה אחת (MAX_SENT_PER_REQUEST): מטיס שמשגר שוב ושוב עותקים/בדיקות/ניסיונות כושלים לא מנפח את היומן. נמחקות הישנות ביותר שאינן שליחה חיה פעילה —
+// שליחה חיה נועלת עריכה וחוסמת כפילות, ולכן לעולם אינה נמחקת כאן
+function trimSent_(e) {
+  var drop = (e.sent || []).length - CFG.MAX_SENT_PER_REQUEST;
+  if (drop <= 0) return;
+  e.sent = e.sent.filter(function (x) { if (drop > 0 && !(sendKind_(x) === 'live' && sentOk_(x))) { drop--; return false; } return true; });
 }
 function logSentEnd_(folderId, sid, st) {
   var log = readLog_(), e = findById_(log, folderId);
@@ -330,14 +530,15 @@ function logSentEnd_(folderId, sid, st) {
 
 /* ---------- פעולות ---------- */
 var ACTIONS = {
+  // הקמת מנהל ראשון/שחזור: רק כשאין מנהל פעיל וקיים SETUP_CODE (שרק הבעלים יכול להנפיק, מהעורך). בכוונה בלי נעילה אחרי קודים שגויים — ראו הערה ב-initialize
   bootstrap: function (r) {
-    if (countUsers_()) return { ok: false, error: 'exists' };
+    if (countAdmins_()) return { ok: false, error: 'exists' };
     var sc = props_().getProperty('SETUP_CODE');
     if (!sc) return { ok: false, error: 'no_setup' };
-    if (lockedFor_('bootstrap')) return { ok: false, error: 'locked' };
-    if (!safeEq_(sha256Hex_(String(r.code || '')), sc)) { noteFail_('bootstrap'); return { ok: false, error: 'bad_code' }; }
+    if (!safeEq_(sha256Hex_(String(r.code || '')), sc)) return { ok: false, error: 'bad_code' };
     if (!validName_(r.user)) return { ok: false, error: 'bad_user' };
     if (!validPass_(r.pass)) return { ok: false, error: 'weak_pass' };
+    if (getUser_(r.user)) return { ok: false, error: 'exists' };      // לא דורסים חשבון קיים (מטיס) בשם שנבחר למנהל
     var salt = randHex_(24), u = { role: 'admin', blocked: false, tv: now_(), salt: salt, hash: hashPass_(salt, r.pass), created: now_(), changed: now_() };
     putUser_(r.user, u);
     props_().deleteProperty('SETUP_CODE');
@@ -345,21 +546,23 @@ var ACTIONS = {
   },
 
   login: function (r) {
-    var name = String(r.user || '');
-    if (lockedFor_(name)) return { ok: false, error: 'locked', message: 'יותר מדי ניסיונות — נסו שוב בעוד ' + CFG.LOCK_MINUTES + ' דקות' };
+    var name = String(r.user || ''), fk = 'u:' + name;     // מפתח הנעילה של כניסה בקידומת משלו: שם שמוקלד בדף ("bootstrap", "pw:...") לא מתנגש במפתחות נעילה אחרים (שחזור מנהל, החלפת סיסמה)
+    if (lockedFor_(fk)) return { ok: false, error: 'locked', message: 'יותר מדי ניסיונות — נסו שוב בעוד ' + CFG.LOCK_MINUTES + ' דקות' };
     var u = getUser_(name);
     var good = !!u && safeEq_(hashPass_(u.salt, String(r.pass || '')), u.hash);
-    if (!good) { noteFail_(name); return { ok: false, error: 'bad_login' }; }
+    if (!good) { noteFail_(fk); return { ok: false, error: 'bad_login' }; }
     if (u.blocked) return { ok: false, error: 'blocked' };
-    if (u.until && Number(u.until) < now_()) { clearFails_(name); return { ok: false, error: 'sub_expired', until: u.until, renewUrl: CFG.RENEW_URL }; }
-    clearFails_(name);
+    if (u.until && Number(u.until) < now_()) { clearFails_(fk); return { ok: false, error: 'sub_expired', until: u.until, renewUrl: CFG.RENEW_URL }; }
+    clearFails_(fk);
     u.lastLogin = now_(); putUser_(name, u);
     return loginOk_(name, u);
   },
 
   me: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
-    return { ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: a.user.until || null, renewUrl: CFG.RENEW_URL };
+    var out = withMailInfo_({ ok: true, user: a.name, role: a.user.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: a.user.until || null, renewUrl: CFG.RENEW_URL }, a.user);
+    if (a.user.role === 'admin') out.mailQuotaLeft = mailQuotaLeft_();      // מכסת המייל היומית שנותרה (נמענים): למנהל בלבד; null = לא ידוע
+    return out;
   },
 
   changePassword: function (r) {
@@ -382,13 +585,15 @@ var ACTIONS = {
     log.forEach(function (e) {
       var s = st[e.user] || (st[e.user] = { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 });
       s.requests++; if (e.saved > s.lastRequest) s.lastRequest = e.saved;
-      (e.sent || []).forEach(function (x) { if (x.mode === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });
+      (e.sent || []).forEach(function (x) { if (sendKind_(x) === 'live' && sentOk_(x)) { s.sent++; if (x.t > s.lastSent) s.lastSent = x.t; } });   // רק שליחות חיות למשרד נוטאם
     });
-    return { ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
+    var out = withMailInfo_({ ok: true, mailMode: mailMode_(), logError: logError, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
       return { user: k, role: u.role, blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
         email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '' };
-    }) };
+    }) }, a.user);
+    out.mailQuotaLeft = mailQuotaLeft_();      // מכסת המייל היומית שנותרה (נמענים), למנהל בלבד; null = לא ידוע
+    return out;
   },
 
   // יומן הבקשות: כל מי שהגיש בקשה (או רק משתמש מסוים), מהחדשה לישנה
@@ -398,10 +603,14 @@ var ACTIONS = {
     var rows = readLog_().filter(function (e) { return !who || e.user === who || e.lastUser === who || (e.sent || []).some(function (s) { return s.user === who; }); })
       .sort(function (x, y) { return y.saved - x.saved; }).slice(0, limit)
       .map(function (e) {
-        var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null;
+        // sentLive = שליחות חיות למשרד נוטאם; sentTest = מצב בדיקה (למבקש); sentSelf = "שלח רק לעצמי". כל שליחה נספרת באחד בלבד.
+        // lastSent = השליחה החיה האחרונה למשרד אם יש (כדי שהזמן שמוצג ליד "נשלחה למשרד נוטאם" לא יהיה של שליחה לעצמו); אחרת האחרונה מכל סוג.
+        var sent = e.sent || [], last = sent.length ? sent[sent.length - 1] : null, lastLive = null;
+        sent.forEach(function (s) { if (sendKind_(s) === 'live' && sentOk_(s)) lastLive = s; });
+        var shown = lastLive || last, kinds = sent.filter(sentOk_).map(sendKind_);
         return { name: e.name, user: e.user, lastUser: e.lastUser, created: e.created, saved: e.saved, url: 'https://drive.google.com/drive/folders/' + e.id,
-          sentLive: sent.filter(function (s) { return s.mode === 'live' && sentOk_(s); }).length, sentTest: sent.filter(function (s) { return s.mode !== 'live' && sentOk_(s); }).length,
-          lastSent: last ? { t: last.t, user: last.user, mode: last.mode, st: last.st || 'sent' } : null, ready: !!e.ready };
+          sentLive: kinds.filter(function (k) { return k === 'live'; }).length, sentTest: kinds.filter(function (k) { return k === 'test'; }).length, sentSelf: kinds.filter(function (k) { return k === 'self'; }).length,
+          lastSent: shown ? { t: shown.t, user: shown.user, mode: shown.mode, target: sendKind_(shown) === 'self' ? 'self' : 'office', st: shown.st || 'sent' } : null, ready: !!e.ready };
       });
     return { ok: true, requests: rows };
   },
@@ -439,59 +648,111 @@ var ACTIONS = {
     return { ok: true };
   },
 
+  // מחיקת משתמש משחררת את השם: מטיס חדש יכול להירשם באותו שם. לכן ביומן הבקשות שם המשתמש של הנמחק מוחלף בשם מוחלף ("<שם>:נמחק:<מזהה>") — validName_ אוסר ':', אז אי אפשר להירשם בשם הזה —
+  // וכך המשתמש החדש לא יורש יומן: לא רואה, לא עורך ולא שולח את הבקשות של הקודם, ואין חשיפה של "כבר נשלח"/שעת שליחה שלו. הרשומות והתיקיות נשארות למנהל (listRequests מציג את השם המוחלף).
+  // נעשה לפני מחיקת החשבון: אם היומן פגום/הדרייב נופל — המחיקה נכשלת (נכשל סגור, ואפשר לחסום את המשתמש במקום). מחיר מוסכם: מטיס שנמחק ונרשם מחדש מאבד את אזהרת הכפילות על בקשות שכבר שלח.
   deleteUser: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
     if (!getUser_(String(r.target || ''))) return { ok: false, error: 'no_user' };
     if (r.target === a.name) return { ok: false, error: 'self' };
     var du = getUser_(r.target);
-    (du && du.orders || []).forEach(function (o) { props_().deleteProperty(orderKey_(o)); });    // הכרטיסים משתחררים: אפשר להירשם מחדש איתם
-    if (du && du.email) props_().deleteProperty(emailKey_(du.email));
+    var tomb = r.target + ':נמחק:' + randHex_(8), log = readLog_(), touched = false;
+    log.forEach(function (e) {
+      if (e.user === r.target) { e.user = tomb; touched = true; }
+      if (e.lastUser === r.target) { e.lastUser = tomb; touched = true; }
+      (e.sent || []).forEach(function (x) { if (x.user === r.target) { x.user = tomb; touched = true; } });
+    });
+    if (touched) writeLog_(log, '');
+    // הכרטיסים משתחררים: אפשר להירשם מחדש איתם. מנקים רק מיפויים ששייכים לחשבון הזה (לא של מי שתפס את השם או הכתובת בעקבות מיפוי עקר)
+    (du && du.orders || []).forEach(function (o) { if (orderOwner_(o) === r.target) props_().deleteProperty(orderKey_(o)); });
+    if (du && du.email) {
+      if (props_().getProperty(emailKey_(du.email)) === r.target) props_().deleteProperty(emailKey_(du.email));
+      props_().deleteProperty(regKey_(normEmail_(du.email)));      // קוד הרשמה פתוח/מונה כשלונות של הכתובת
+      props_().deleteProperty(mailRecKey_(normEmail_(du.email)));  // וסיכום מיילי ההרשמה של הכתובת (מכסת קודים יומית, חותמת "כבר קיים חשבון")
+    }
+    clearUserCounters_(r.target);
     delUser_(r.target);
     return { ok: true };
   },
 
-  // מצב שליחה (מנהל בלבד): test = המייל נשלח רק לבעלים; live = למשרד נוטאם
+  // מצב שליחה (מנהל בלבד): test = "שלח למשרד" נשלח רק למבקש עצמו (והבעלים בעותק סמוי); live = למשרד נוטאם
   setMailMode: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
     var m = r.mode === 'live' ? 'live' : 'test';
     props_().setProperty('MAIL_MODE', m);
-    return { ok: true, mailMode: m };
+    return withMailInfo_({ ok: true, mailMode: m }, a.user);
   },
 
   // ----- הרשמה וחידוש מנוי (ללא התחברות): רק למי שרכש כרטיס "בקשת אישורי טיסה" ששולם בפועל -----
-  // התשובה כאן זהה בין אם יש כרטיס ובין אם אין, כדי שאי אפשר לברר דרכה מי רכש כרטיס. הקוד נשלח רק לכתובת שבהזמנה.
+  // כלל ברזל: התשובה כאן זהה בין אם יש כרטיס, חשבון או שום דבר, כדי שאי אפשר לברר דרכה מי רכש כרטיס או מי רשום. מייל יוצא רק לכתובת שהשרת אימת: זו שבהזמנה ששולמה ב-Wix
+  // (נבדקת בשוויון מלא, ראו wixPaidOrders_) או זו ששמורה בחשבון (emailUser_) — מה שהוקלד בדף לא נשלח אליו כלום בלי אחד משני אלה.
+  // לכן כל השערים שמחזירים שגיאה עומדים *לפני* בדיקת הכרטיס ותלויים רק בכתובת שהוקלדה (מספר בקשות) ובמצב המערכת הכללי; מה שתלוי בכרטיס/חשבון (מכסת קודים לכתובת,
+  // חותמת "כבר קיים חשבון", נעילת ניחושים, כשל שליחה) נדחה או נכשל *בשקט* — עם אותה תשובה { ok:true, sent:true } שמקבלת גם כתובת בלי כרטיס.
+  //  1. מכסה לכתובת (REG_PER_EMAIL_HOUR) — נספרת בכל בקשה תקינה, גם בלי כרטיס (ספירה רק של מיילים שנשלחו הייתה מגלה בעלי כרטיס).
+  //  2. מכסת המייל היומית של גוגל (עם רזרבה למשרד נוטאם) · 3. תקציב מיילי ההרשמה הכללי (נספר רק על מיילים שיצאו) · 4. שאילתות Wix (REG_WIX_PER_HOUR) — כולן כלליות.
+  // בקשות זבל לכתובות שרירותיות אינן צורכות את תקציב המיילים, ולכן אינן חוסמות מטיס אמיתי; הן צורכות רק שאילתות Wix (מאות בשעה).
   regStart: function (r) {
     var email = normEmail_(r.email);
     if (!email) return { ok: false, error: 'bad_email' };
-    var cache = CacheService.getScriptCache(), hk = Math.floor(now_() / 3600000), ek = 'regE:' + sha256Hex_(email).slice(0, 20) + ':' + hk, gk = 'regG:' + hk;
-    var ne = Number(cache.get(ek)) || 0, ng = Number(cache.get(gk)) || 0;
-    if (ne >= CFG.REG_PER_EMAIL_HOUR || ng >= CFG.REG_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי ניסיונות — נסו שוב בעוד שעה' };
-    cache.put(ek, String(ne + 1), 3600); cache.put(gk, String(ng + 1), 3600);
-    var orders;
+    var cache = CacheService.getScriptCache(), t0 = now_(), hk = Math.floor(t0 / 3600000), ek = 'regE:' + sha256Hex_(email).slice(0, 20) + ':' + hk, wk = 'regW:' + hk;
+    var ne = Number(cache.get(ek)) || 0, nw = Number(cache.get(wk)) || 0;
+    if (ne >= CFG.REG_PER_EMAIL_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי ניסיונות לכתובת הזו — נסו שוב בעוד זמן מה (עד שעה)' };
+    // מכסת המיילים היומית של גוגל, עם רזרבה לשליחה האמיתית למשרד נוטאם: תנאי כללי שנבדק בתחילה, זהה לכל כתובת
+    if (!mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE_REG)) return quotaErr_();
+    if (regBudgetFull_(cache, hk) || nw >= CFG.REG_WIX_PER_HOUR) return regBusyErr_();
+    cache.put(ek, String(ne + 1), 3600); cache.put(wk, String(nw + 1), 3600);
+    var rk = regKey_(email), prevRaw = props_().getProperty(rk), prev = readReg_(rk), orders;
     try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
-    var eu = emailUser_(email), fresh = eligibleOrders_(orders), owner = ownerEmail_(), mode = '';
+    // כשלונות קוד מצטברים לכתובת בין קודים (חלון CODE_FAIL_HOURS): אחרי CODE_FAIL_MAX כשלונות לא נוצר קוד ולא נשלח מייל, והתשובה זהה לכתובת בלי כרטיס.
+    // הבדיקה אחרי שאילתת Wix (ולא לפניה) כדי שגם כשל Wix יהיה זהה לכל הכתובות, כולל נעולות
+    if (regLocked_(prev)) return regOk_();
+    var eu = emailUser_(email), fresh = eligibleOrders_(orders), mode = '';
     if (eu && eu.user) mode = fresh.length ? 'renew' : 'exists';
     else if (fresh.length) mode = 'register';
-    if (mode === 'exists') {
-      MailApp.sendEmail({ to: email, name: CFG.SENDER_NAME, replyTo: owner || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
-        body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון (office@icd.org.il) ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' });
-    } else if (mode) {
-      var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
-      props_().setProperty('R:' + sha256Hex_(email).slice(0, 30), JSON.stringify({ h: sha256Hex_(salt + ':' + code), s: salt, exp: now_() + CFG.CODE_TTL_MIN * 60000, tries: 0 }));
-      MailApp.sendEmail({ to: email, name: CFG.SENDER_NAME, replyTo: owner || '', subject: (mode === 'renew' ? 'קוד לחידוש המנוי לבקשות טיסה' : 'קוד הרשמה לבקשות טיסה') + ': ' + code,
-        body: 'שלום,\n\nהקוד שלך ' + (mode === 'renew' ? 'לחידוש המנוי' : 'להרשמה לבקשות טיסה') + ': ' + code + '\nהקוד תקף ל-' + CFG.CODE_TTL_MIN + ' דקות. אם לא ביקשת — אפשר להתעלם מהמייל.\n\nצוות הארגון הישראלי לרחפנים' });
+    if (!mode) return regOk_();
+    var mk = mailRecKey_(email), mrec = readJsonProp_(mk), day = dayKey_(), codes = (mrec && mrec.d === day) ? Number(mrec.n) || 0 : 0, lastExists = Number(mrec && mrec.x) || 0;
+    var msg, wroteReg = false;
+    try {
+      if (mode === 'exists') {
+        // הודעת נימוס בלבד: פעם ב-REG_EXISTS_HOURS לכתובת (בלי להפריע לקודים), ומשאירה את הרזרבה של עותקים; אחרת מדלגים בשקט
+        if (t0 - lastExists < CFG.REG_EXISTS_HOURS * 3600000 || !mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE)) return regOk_();
+        msg = { to: email, name: CFG.SENDER_NAME, replyTo: ownerEmail_() || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
+          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה למשרד הארגון (office@icd.org.il) ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
+      } else {
+        if (codes >= CFG.REG_MAILS_PER_EMAIL_DAY) return regOk_();      // מכסת קודים יומית לכתובת: נדחה בשקט (אחרת התשובה הייתה מבדילה כתובת עם כרטיס)
+        var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
+        var carry = (prev && prev.fx > t0) ? { f: Number(prev.f) || 0, fx: prev.fx } : { f: 0, fx: 0 };   // מונה הכשלונות עובר לקוד החדש — לא מתאפס
+        props_().setProperty(rk, JSON.stringify({ h: sha256Hex_(salt + ':' + code), s: salt, exp: t0 + CFG.CODE_TTL_MIN * 60000, tries: 0, f: carry.f, fx: carry.fx })); wroteReg = true;
+        msg = { to: email, name: CFG.SENDER_NAME, replyTo: ownerEmail_() || '', subject: (mode === 'renew' ? 'קוד לחידוש המנוי לבקשות טיסה' : 'קוד הרשמה לבקשות טיסה') + ': ' + code,
+          body: 'שלום,\n\nהקוד שלך ' + (mode === 'renew' ? 'לחידוש המנוי' : 'להרשמה לבקשות טיסה') + ': ' + code + '\nהקוד תקף ל-' + CFG.CODE_TTL_MIN + ' דקות. אם לא ביקשת — אפשר להתעלם מהמייל.\n\nצוות הארגון הישראלי לרחפנים' };
+      }
+      MailApp.sendEmail(msg);
+      wroteReg = false;
+      // נספר רק אחרי שהמייל יצא
+      regBudgetAdd_(cache, hk);
+      props_().setProperty(mk, JSON.stringify({ d: day, n: mode === 'exists' ? codes : codes + 1, x: mode === 'exists' ? t0 : lastExists }));
+    } catch (err) {
+      // כשל שליחה (MailApp זרק, מכסה, כתיבה): לא מגלים אותו — אותה תשובה כמו לכתובת בלי כרטיס. הרשומה הקודמת חוזרת במקום להימחק (מוני הכשלונות וקוד קודם שעדיין תקף נשמרים)
+      Logger.log('regStart: שליחת מייל נכשלה — ' + String(err && err.message || err));
+      if (wroteReg) { try { if (prevRaw) props_().setProperty(rk, prevRaw); else props_().deleteProperty(rk); } catch (e2) { /* שמרני: ממשיכים */ } }
     }
-    return { ok: true, sent: true };
+    return regOk_();
   },
 
   regFinish: function (r) {
     var email = normEmail_(r.email), code = String(r.code || '').replace(/\D/g, '');
     if (!email || code.length !== 6) return { ok: false, error: 'bad_code' };
-    var rk = 'R:' + sha256Hex_(email).slice(0, 30), raw = props_().getProperty(rk), rec = null;
-    try { rec = raw ? JSON.parse(raw) : null; } catch (e) { rec = null; }
-    if (!rec || rec.exp < now_()) { props_().deleteProperty(rk); return { ok: false, error: 'bad_code' }; }
-    if (rec.tries >= CFG.CODE_MAX_TRIES) { props_().deleteProperty(rk); return { ok: false, error: 'bad_code' }; }
-    if (!safeEq_(sha256Hex_(rec.s + ':' + code), rec.h)) { rec.tries++; props_().setProperty(rk, JSON.stringify(rec)); return { ok: false, error: 'bad_code' }; }
+    var rk = regKey_(email), rec = readReg_(rk), t0 = now_();
+    if (!rec) return { ok: false, error: 'bad_code' };
+    if (regLocked_(rec)) return { ok: false, error: 'bad_code' };          // יותר מדי כשלונות לכתובת בחלון — בלי להשוות בכלל (גם לקוד הנכון)
+    if (!rec.h || rec.exp < t0 || rec.tries >= CFG.CODE_MAX_TRIES) { closeReg_(rk, rec); return { ok: false, error: 'bad_code' }; }
+    if (!safeEq_(sha256Hex_(rec.s + ':' + code), rec.h)) {
+      rec.tries++;
+      if (!(rec.fx > t0)) { rec.f = 0; rec.fx = t0 + CFG.CODE_FAIL_HOURS * 3600000; }     // כשלון ראשון בחלון חדש
+      rec.f = (Number(rec.f) || 0) + 1;
+      props_().setProperty(rk, JSON.stringify(rec));
+      return { ok: false, error: 'bad_code' };
+    }
     // הקוד נכון: בודקים שוב מול Wix (ייתכן שההזמנה בוטלה/נוצלה בינתיים)
     var orders;
     try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
@@ -541,7 +802,7 @@ var ACTIONS = {
     var orders;
     try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
     return { ok: true, requireMember: CFG.REQUIRE_MEMBER, orders: orders.map(function (o) {
-      return { orderNumber: o.orderNumber, created: o.created, member: o.member, used: !!orderOwner_(o.orderNumber), by: orderOwner_(o.orderNumber) || '', eligible: (!CFG.REQUIRE_MEMBER || o.member) && !orderOwner_(o.orderNumber) };
+      return { orderNumber: o.orderNumber, created: o.created, member: o.member, used: !!orderHolder_(o.orderNumber), by: orderHolder_(o.orderNumber), eligible: (!CFG.REQUIRE_MEMBER || o.member) && !orderHolder_(o.orderNumber) };
     }), account: (emailUser_(email) || {}).name || '' };
   },
 
@@ -564,17 +825,23 @@ var ACTIONS = {
     if (!folder) {
       var cache = CacheService.getScriptCache(), nk = 'nf:' + sha256Hex_(a.name).slice(0, 16) + ':' + Math.floor(t / 3600000), made = Number(cache.get(nk)) || 0;
       if (made >= CFG.MAX_NEW_FOLDERS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי בקשות חדשות בשעה האחרונה' };
+      // תקרת בקשות פתוחות למשתמש (לא נשלחו חי, ונגעו בהן בחודש האחרון): מטיס אחד לא מנפח את היומן ואת הדרייב. רק בקשה חדשה נבדקת (שמירה חוזרת לא), ומנהל פטור.
+      // בקשה שנשלחה חי, או שלא נגעו בה LOG_KEEP_DAYS ימים, אינה "פתוחה" — כך שימוש רגיל לעולם לא נתקע בתקרה
+      if (!entry && a.user.role !== 'admin' && openRequests_(log, a.name, t) >= CFG.MAX_OPEN_REQUESTS_PER_USER)
+        return { ok: false, error: 'too_many_open', message: 'יש לכם יותר מדי בקשות שמורות שעדיין לא נשלחו (' + CFG.MAX_OPEN_REQUESTS_PER_USER + ') — שלחו או המתינו, ואם נדרש פנו לתמיכה' };
       cache.put(nk, String(made + 1), 3600);
       folder = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID).createFolder(unique);
     } else {
       if (folder.getName() !== unique) folder.setName(unique);
       var old = folder.getFiles();
-      while (old.hasNext()) { var of = old.next(); if (/\.(docx|kml|png|jpe?g|json)$/i.test(of.getName())) of.setTrashed(true); }   // אין שאריות מגרסה קודמת (שם אחר) שיצורפו בטעות
+      while (old.hasNext()) { var of = old.next(); if (REQ_FILE_RE_.test(of.getName())) of.setTrashed(true); }   // אין שאריות מגרסה קודמת (שם אחר) שיצורפו בטעות
     }
     if (!entry) { entry = { id: folder.getId(), rid: rid, name: unique, user: a.name, created: t, sent: [] }; log.push(entry); }
     entry.id = folder.getId(); entry.name = unique; entry.base = name; entry.saved = t; entry.lastUser = a.name; entry.ready = false; entry.readyAt = 0;
     writeLog_(log, entry.id);
-    return { ok: true, folderId: folder.getId(), url: folder.getUrl(), name: unique };
+    // השם בדרייב ייחודי גלובלית (כדי שהמנהל יבדיל בין תיקיות), אבל מטיס רגיל מקבל בחזרה שם שחושב מהבקשות שלו בלבד —
+    // סיומת "(2)" שנגרמה מבקשה של מישהו אחר הייתה מגלה לו שקיימת בקשה כזו
+    return { ok: true, folderId: folder.getId(), url: folder.getUrl(), name: a.user.role === 'admin' ? unique : uniqueName_(log, name, rid, a.name) };
   },
 
   // סוף שמירה: מסמן את הבקשה "מוכנה לשליחה" רק אם הלקוח אישר שהיא מוכנה והתיקייה מכילה Word ותמונה
@@ -586,11 +853,14 @@ var ACTIONS = {
     if (!e) return { ok: false, error: 'bad_folder' };
     if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     var c = folderFiles_(folder);
+    if (c.tooMany) return { ok: false, error: 'folder_full', message: folderFullMsg_() };      // תיקייה מנופחת (לא נוצרה דרך saveFile): לא מסמנים מוכנה
     e.ready = !!r.ready && c.hasDocx && c.hasImage; e.readyAt = e.ready ? now_() : 0;
     writeLog_(log, e.id);
     return { ok: true, ready: e.ready };
   },
 
+  // שמירת קובץ בתיקיית בקשה. רק סוגי הקבצים של בקשה (Word, KML, תמונות, JSON), ותקרות: קבצים ונפח לתיקייה (folder_full), ונפח העלאה לשעה וליום לכל משתמש (rate, kind:'upload').
+  // חריגה מחזירה שגיאה ברורה ואינה מוחקת דבר ממה שכבר נשמר (גם לא מבטלת "מוכנה"). הסוגים המותרים סוגרים גם זיוף/דריסה של סימון "נשלח — ....txt" שהשרת כותב בתיקייה.
   saveFile: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
     var b64 = String(r.b64 || '');
@@ -602,22 +872,35 @@ var ACTIONS = {
     if (!e) return { ok: false, error: 'bad_folder' };
     if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     if (liveSentAt_(e)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(e) };
+    var fname = cleanFileName_(r.name);
+    if (!REQ_FILE_RE_.test(fname)) return { ok: false, error: 'bad_file', message: 'סוג קובץ לא נתמך (נשמרים רק Word, KML, תמונות ו-JSON של הבקשה)' };
+    var size = Math.floor(b64.length * 3 / 4), use = folderUsage_(folder, fname);      // use: הקבצים שכבר בתיקייה, בלי הקובץ שיוחלף באותו שם
+    if (use.count >= CFG.MAX_FOLDER_FILES || use.bytes + size > CFG.MAX_FOLDER_BYTES) return { ok: false, error: 'folder_full', message: folderFullMsg_() };
+    var up = a.user.role === 'admin' ? null : uploadUsed_(a.name);
+    if (up && (up.h + size > CFG.MAX_UPLOAD_BYTES_PER_HOUR || up.d + size > CFG.MAX_UPLOAD_BYTES_PER_DAY))
+      return { ok: false, error: 'rate', scope: 'user', kind: 'upload', message: 'הגעתם למגבלת נפח ההעלאה ה' + (up.h + size > CFG.MAX_UPLOAD_BYTES_PER_HOUR ? 'שעתית (' + Math.round(CFG.MAX_UPLOAD_BYTES_PER_HOUR / 1048576) + 'MB בשעה)' : 'יומית (' + Math.round(CFG.MAX_UPLOAD_BYTES_PER_DAY / 1048576) + 'MB ביום)') + ' — נסו שוב מאוחר יותר' };
     if (e.ready) { e.ready = false; e.readyAt = 0; writeLog_(log, e.id); }
-    var fname = cleanFileName_(r.name), old = folder.getFilesByName(fname);
+    var old = folder.getFilesByName(fname);
     while (old.hasNext()) old.next().setTrashed(true);           // גרסה חדשה מחליפה ישנה באותו שם
     var blob = Utilities.newBlob(Utilities.base64Decode(b64), String(r.mime || 'application/octet-stream'), fname);
     var file = folder.createFile(blob);
+    if (up) uploadAdd_(up, size);
     return { ok: true, id: file.getId(), url: file.getUrl() };
   },
 
-  // שליחת הבקשה למשרד נוטאם. הנמענים קבועים (CFG.MAIL_TO); הקבצים נלקחים מהתיקייה שנשמרה בדרייב.
+  // שליחת הבקשה במייל. target: 'office' (ברירת מחדל; כמו בשרת הישן) = "שלח למשרד", 'self' = "שלח רק לעצמי"; כל ערך אחר => bad_target.
+  // הנמענים נקבעים בשרת בלבד (ראו mailPlan_): משרד נוטאם = CFG.MAIL_TO הקבוע (רק במצב חי + office), המבקש = כתובת המשתמש המחובר
+  // השמורה אצלו (או הבעלים, למשתמש בלי כתובת), והבעלים תמיד בעותק סמוי. שום שדה בבקשה לא קובע נמען.
   // תנאים שנאכפים כאן ולא רק בדפדפן: הבקשה ביומן ונשמרה כ"מוכנה" (saveEnd), רק בעליה או מנהל שולחים אותה,
-  // הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
-  // ושליחה חוזרת של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. במצב test המייל נשלח רק לבעלים.
+  // ב-office הלקוח חייב לציין באיזה מצב (test/live) הוצג למשתמש — אם המצב השתנה השרת לא שולח (mode_changed),
+  // ושליחה חוזרת למשרד של בקשה שכבר נשלחה "חי" דורשת again:true במפורש. שליחה לעצמו אינה נחשבת "נשלחה למשרד נוטאם":
+  // היא לא נועלת את הבקשה, לא חוסמת שליחה אמיתית ולא נבדקת מול expectMode — אבל נספרת בהגבלת הקצב וב"נשלח — ....txt".
   sendRequest: function (r) {
     var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
-    var mode = mailMode_();
-    if (r.expectMode !== mode) return { ok: false, error: 'mode_changed', mailMode: mode };
+    var target = r.target === undefined ? 'office' : r.target;      // חסר => office (לקוח ישן); null/ריק/מחרוזת אחרת => נדחה
+    if (target !== 'office' && target !== 'self') return { ok: false, error: 'bad_target' };
+    var mode = mailMode_(), toOffice = target === 'office';
+    if (toOffice && r.expectMode !== mode) return withMailInfo_({ ok: false, error: 'mode_changed', mailMode: mode }, a.user);
     var folder = requestFolder_(r.folderId);
     if (!folder) return { ok: false, error: 'bad_folder' };
     var subject = cleanSubject_(r.subject), body = cleanBody_(r.body);
@@ -627,60 +910,112 @@ var ACTIONS = {
     if (!entry) return { ok: false, error: 'bad_folder' };
     if (entry.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     if (!entry.ready) return { ok: false, error: 'not_ready', message: 'הבקשה לא נשמרה כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב' };
-    if (mode === 'live' && !r.again) {
+    if (toOffice && mode === 'live' && !r.again) {
       if (liveSentAt_(entry)) return { ok: false, error: 'already_sent', sentAt: liveSentAt_(entry) };
-      // אותו מקום ותאריך שכבר נשלחו חי מבקשה אחרת (למשל אחרי רענון הדף, כשמזהה הבקשה אבד) — גם זו כפילות אפשרית למשרד נוטאם
+      // אותו מקום ותאריך שכבר נשלחו חי מבקשה אחרת של אותו מבקש (למשל אחרי רענון הדף, כשמזהה הבקשה אבד) — גם זו כפילות אפשרית למשרד נוטאם.
+      // רק של אותו מבקש (entry.user): מטיסים שונים הם בקשות שונות ולגיטימיות, ומטיס לעולם לא מקבל הודעה או שעה על שליחה של מטיס אחר
       var base = entry.base || entry.name, twin = 0;
-      log.forEach(function (e) { if (e.id !== entry.id && (e.base || e.name) === base) twin = Math.max(twin, liveSentAt_(e)); });
+      log.forEach(function (e) { if (e.id !== entry.id && e.user === entry.user && (e.base || e.name) === base) twin = Math.max(twin, liveSentAt_(e)); });
       if (twin) return { ok: false, error: 'already_sent', sentAt: twin, similar: true };
     }
 
-    var cache = CacheService.getScriptCache(), hourKey = 'sends:' + Math.floor(now_() / 3600000), sends = Number(cache.get(hourKey)) || 0;
-    if (sends >= CFG.MAX_SENDS_PER_HOUR) return { ok: false, error: 'rate', message: 'יותר מדי שליחות בשעה האחרונה' };
+    // הגבלת קצב שעתית בדליים נפרדים לפי סוג ('o' = שליחה חיה למשרד נוטאם, 'c' = עותקים: לעצמו / בדיקה), כל אחד לכל משתמש ובסך הכול — עיון בעותקים לא חוסם שליחה אמיתית.
+    // הדליים עולים לפני היציאה ויורדים בחזרה אם MailApp נכשל (שליחה שלא יצאה לא צורכת מכסה); ניסיונות שהגיעו עד MailApp נספרים בנפרד (tryKey) ואינם יורדים — תקרה נגד לולאת ניסיונות.
+    var kind = (toOffice && mode === 'live') ? 'o' : 'c', lim = kind === 'o' ? { u: CFG.MAX_OFFICE_PER_HOUR, a: CFG.MAX_OFFICE_PER_HOUR_ALL } : { u: CFG.MAX_COPIES_PER_HOUR, a: CFG.MAX_COPIES_PER_HOUR_ALL };
+    var cache = CacheService.getScriptCache(), hour = Math.floor(now_() / 3600000), uh = sha256Hex_(a.name).slice(0, 16);
+    var allKey = 'sends:' + kind + ':' + hour, userKey = 'sends:u:' + kind + ':' + uh + ':' + hour, tryKey = 'sends:t:' + uh + ':' + hour;
+    var sendsAll = Number(cache.get(allKey)) || 0, sendsUser = Number(cache.get(userKey)) || 0, tries = Number(cache.get(tryKey)) || 0;
+    if (sendsUser >= lim.u) return rateErr_('user', kind);
+    if (sendsAll >= lim.a) return rateErr_('all', kind);
+    if (tries >= CFG.MAX_SEND_ATTEMPTS_PER_HOUR) return rateErr_('user', 't');
 
     var c = folderFiles_(folder);
+    if (c.tooMany) return { ok: false, error: 'folder_full', message: folderFullMsg_() };
     if (!c.hasDocx || !c.hasImage) return { ok: false, error: 'missing_files', message: 'חסר קובץ Word או תמונת מפה/תצ"א בתיקייה' };   // א-11 נספח ג': חובה לצרף מפה/תצ"א
     if (c.total > CFG.MAX_MAIL_BYTES) return { ok: false, error: 'too_big' };
 
-    var owner = ownerEmail_(), to = mode === 'live' ? CFG.MAIL_TO.slice() : (owner ? [owner] : []);
-    if (!to.length) return { ok: false, error: 'no_owner' };
-    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), mode, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
-    cache.put(hourKey, String(sends + 1), 3600);
+    // המבקש = כתובת המשתמש המחובר (שמורה ומאומתת); בלי כתובת — הבעלים. הבעלים חייב להיות ידוע: הוא תמיד מקבל עותק סמוי (נכשל סגור)
+    var owner = ownerEmail_(), requester = requesterEmail_(a.user) || owner;
+    if (!owner || !requester) return { ok: false, error: 'no_owner' };
+    var plan = mailPlan_(mode, target, requester, owner), to = plan.to;
+    // מכסת המיילים היומית של גוגל נספרת לפי נמענים (to+cc+bcc): בודקים מראש, כדי שהכשל יהיה ברור, לא יירשם "failed" ביומן ולא יצרוך קצב.
+    // עותקים משאירים רזרבה (MAIL_QUOTA_RESERVE) לשליחה האמיתית למשרד ולקודי ההרשמה.
+    var need = plan.to.length + plan.cc.length + plan.bcc.length;
+    if (!mailQuotaOk_(need, kind === 'o' ? 0 : CFG.MAIL_QUOTA_RESERVE)) return quotaErr_();
+    var prefix = !toOffice ? '[עותק לעצמי — לא נשלח למשרד נוטאם] ' : mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ';
+    // ביומן: שליחה לעצמו נרשמת כ-mode:'self' (ראו sendKind_) — לעולם לא כ"נשלחה חי"
+    var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
+    cache.put(allKey, String(sendsAll + 1), 3600); cache.put(userKey, String(sendsUser + 1), 3600); cache.put(tryKey, String(tries + 1), 3600);
     try {
-      MailApp.sendEmail({
-        to: to.join(','), cc: mode === 'live' && owner ? owner : '', replyTo: owner || '', name: CFG.SENDER_NAME,
-        subject: (mode === 'live' ? '' : '[בדיקה — לא נשלח למשרד נוטאם] ') + subject, body: body, attachments: c.blobs
-      });
+      var opts = { to: to.join(','), replyTo: plan.replyTo, name: CFG.SENDER_NAME, subject: prefix + subject, body: body, attachments: c.blobs };
+      if (plan.cc.length) opts.cc = plan.cc.join(',');
+      if (plan.bcc.length) opts.bcc = plan.bcc.join(',');
+      MailApp.sendEmail(opts);
     } catch (err) {
+      rateRefund_(cache, allKey); rateRefund_(cache, userKey);      // המייל לא יצא — לא צורכים מכסת שליחות (קריסה באמצע נשארת צרוכה: שמרני)
       try { logSentEnd_(folder.getId(), sid, 'failed'); } catch (e2) { /* הרשומה נשארת "בשליחה" — שמרני */ }
       throw err;
     }
     try { logSentEnd_(folder.getId(), sid, 'sent'); } catch (e3) { /* המייל כבר יצא; הרשומה נשארת "בשליחה" וממשיכה לחסום כפילות */ }
     try {   // סימון בתוך תיקיית הבקשה, כדי שגם מי שפותח את התיקייה בדרייב יראה שנשלחה
-      folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (mode === 'live' ? '' : ' (בדיקה)') + '.txt',
-        ['נשלח ע"י: ' + a.name, 'מצב: ' + (mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — לבעלים בלבד'), 'אל: ' + to.join(', '), 'עותק: ' + (mode === 'live' ? owner : '—'), 'נושא: ' + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
+      var kindName = !toOffice ? 'עותק לעצמו — לא נשלח למשרד נוטאם' : mode === 'live' ? 'חי — למשרד נוטאם' : 'בדיקה — למבקש בלבד, לא נשלח למשרד נוטאם';
+      folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (!toOffice ? ' (לעצמו)' : mode === 'live' ? '' : ' (בדיקה)') + '.txt',
+        ['נשלח ע"י: ' + a.name, 'יעד: ' + (toOffice ? 'משרד' : 'לעצמו'), 'מצב: ' + kindName, 'אל: ' + to.join(', '), 'עותק: ' + (plan.cc.length ? plan.cc.join(', ') : '—'), 'עותק סמוי למנהל: כן', 'נושא: ' + prefix + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
     } catch (e4) { /* הסימון אינו חיוני */ }
-    return { ok: true, mode: mode, to: to, cc: mode === 'live' ? owner : '', files: c.names, sentAt: t };
+    // owner לא מוחזר ללקוח אלא כשהוא עצמו המבקש (to/cc מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר)
+    return { ok: true, mode: mode, target: target, to: to, cc: plan.cc, adminCopy: true, files: c.names, sentAt: t };
   }
 };
 
-// קבצי הבקשה בתיקייה (Word, KML, תמונות) — לא יומן, לא JSON ולא סימוני שליחה
+// קבצי הבקשה בתיקייה (Word, KML, תמונות) — לא יומן, לא JSON ולא סימוני שליחה.
+// תיקייה עם יותר מ-MAX_FOLDER_FILES קבצים (לא נוצרה דרך saveFile, שאוכף תקרה) מסומנת tooMany ותכניה לא נקראים: קריאת מאות קבצים תחת נעילת הסקריפט הייתה מחזיקה את כל המטיסים ב"השרת עסוק"
 function folderFiles_(folder) {
-  var out = { blobs: [], names: [], total: 0, hasDocx: false, hasImage: false }, it = folder.getFiles();
+  var out = { blobs: [], names: [], total: 0, hasDocx: false, hasImage: false, tooMany: false }, it = folder.getFiles(), picked = [];
   while (it.hasNext()) {
     var f = it.next(), n = f.getName();
     if (!/\.(docx|kml|png|jpe?g)$/i.test(n)) continue;
+    if (picked.length >= CFG.MAX_FOLDER_FILES) { out.tooMany = true; return out; }
+    picked.push(f);
     out.total += f.getSize();
     if (/\.docx$/i.test(n)) out.hasDocx = true;
     if (/\.(png|jpe?g)$/i.test(n)) out.hasImage = true;
-    out.blobs.push(f.getBlob()); out.names.push(n);
+    out.names.push(n);
+  }
+  picked.forEach(function (f) { out.blobs.push(f.getBlob()); });
+  return out;
+}
+// הסוגים היחידים ש-saveFile כותב ושהניקוי ב-saveBegin מכיר (Word, KML, תמונות, JSON של הבקשה). סימוני "נשלח — ....txt" ויומן אינם ביניהם
+var REQ_FILE_RE_ = /\.(docx|kml|png|jpe?g|json)$/i;
+function folderFullMsg_() { return 'בתיקיית הבקשה יותר מדי קבצים (עד ' + CFG.MAX_FOLDER_FILES + ') או נפח גדול מדי (עד ' + Math.round(CFG.MAX_FOLDER_BYTES / 1048576) + 'MB) — שמרו את הבקשה מחדש'; }
+// כמה קבצי בקשה (REQ_FILE_RE_) וכמה בייטים כבר בתיקייה, בלי קובץ בשם exceptName (הוא יוחלף). עוצר כשהגיע לתקרת הקבצים — תיקייה מנופחת לא נסרקת עד הסוף
+function folderUsage_(folder, exceptName) {
+  var out = { count: 0, bytes: 0 }, it = folder.getFiles();
+  while (it.hasNext() && out.count < CFG.MAX_FOLDER_FILES) {
+    var f = it.next(), n = f.getName();
+    if (n === exceptName || !REQ_FILE_RE_.test(n)) continue;
+    out.count++; out.bytes += f.getSize();
   }
   return out;
+}
+// נפח העלאה של משתמש: שעתי (CacheService) ויומי (Script Properties, כי המטמון מוגבל ל-6 שעות). נמדדים בייטים שנכתבו (לא מה שנשמר): setTrashed לא מפנה מקום בדרייב
+function uploadUsed_(name) {
+  var uh = sha256Hex_(name).slice(0, 16), cache = CacheService.getScriptCache(), hk = 'up:' + uh + ':' + Math.floor(now_() / 3600000), bk = 'B:' + uh, day = dayKey_(), d = readJsonProp_(bk);
+  return { hk: hk, bk: bk, day: day, h: Number(cache.get(hk)) || 0, d: (d && d.d === day) ? Number(d.b) || 0 : 0 };
+}
+function uploadAdd_(u, bytes) {
+  CacheService.getScriptCache().put(u.hk, String(u.h + bytes), 3600);
+  props_().setProperty(u.bk, JSON.stringify({ d: u.day, b: u.d + bytes }));
+}
+// בקשות "פתוחות" של משתמש: לא נשלחו חי ונגעו בהן בתוך LOG_KEEP_DAYS הימים האחרונים
+function openRequests_(log, user, t) {
+  var cutoff = t - CFG.LOG_KEEP_DAYS * 86400000, n = 0;
+  log.forEach(function (e) { if (e.user === user && !liveSentAt_(e) && lastTouch_(e) >= cutoff) n++; });
+  return n;
 }
 
 function loginOk_(name, u) {
   var t = makeToken_(name, u);
-  return { ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: u.until || null, renewUrl: CFG.RENEW_URL };
+  return withMailInfo_({ ok: true, token: t.token, exp: t.exp, user: name, role: u.role, mailMode: mailMode_(), mailTo: CFG.MAIL_TO, until: u.until || null, renewUrl: CFG.RENEW_URL }, u);
 }
 function admin_(r) {
   var a = auth_(r.token);

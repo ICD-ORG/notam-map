@@ -76,6 +76,10 @@
     .filter(p => p.first && p.last && p.phone).map(p => ({ name: p.first + " " + p.last, phone: p.phone }));
   // מכשולים שידועים למבקש כשורה אחת: שורות חדשות מוחלפות ב-"; "
   const knownObstaclesText = inp => String(inp.knownObstacles || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).join("; ");
+  // שם הגורם המבקש (שדה 2, מייל, חתימה, יוצר המסמך): מה שהמבקש הקליד, אחרי trim — אין ברירת מחדל של הארגון (האימות ב-core.js דורש ערך)
+  const orgName = inp => String((inp && inp.requesterOrg) || "").trim();
+  // אות קריאה / מס׳ רישום (שדות 13 ו-14): אופציונליים; ריק => "לא רלוונטי" (cfg.fixed.not_relevant, ובהיעדרו הנוסח הקבוע)
+  const optionalId = (v, cfg) => String(v == null ? "" : v).trim() || ((cfg && cfg.fixed && cfg.fixed.not_relevant) || "לא רלוונטי");
 
   /* ---------- 17 שדות הטופס ---------- */
   function buildForm(res, cfg) {
@@ -99,7 +103,7 @@
     const contactsHtml = namedContacts(inp).map((c, i) => (i + 1) + ". " + E(c.name) + " — " + (c.phone ? "<span dir='ltr' class='ph'>" + E(c.phone) + "</span>" : "ללא טלפון")).join("<br>");
     const rows = [
       ["מס׳ נוטאם", "(ימולא ע״י משרד נוטאם)", "<i class='muted'>(ריק – " + E(cfg.fixed.notam_notam_field) + ")</i>"],
-      ["שם/גורם המבקש", "", E(cfg.org.name)],
+      ["שם/גורם המבקש", "", E(orgName(inp))],
       ["סוג כלי הטיס או מכשול", "כטמ״מ או רב להב = לציין האם קיים קשר עין", E(inp.aircraft.join(", ")) + " — רב להב, " + vl],
       ["מהות הפעילות המבוקשת", "", E(inp.purpose)],
       ["האם הסגירה חלה על מרססים", "(ימולא ע״י חיל האוויר)", "<span class='muted'>כן ☐ &nbsp; לא ☐ &nbsp;·&nbsp; " + E(cfg.fixed.sprayers_note) + "</span>"],
@@ -110,8 +114,8 @@
       ["גבהי הטיסה או גובה המכשול", "מטרים או רגל (m/feet) · מעפ״ש או מעפ״י (AGL/AMSL) · (גובה במטר × 3.28084 = גובה ברגל)", "מגובה: קרקע (0) &nbsp; עד גובה: <b>" + res.ft.toFixed(1) + " רגל</b> (" + C.trimNum(inp.heightM, 2) + " מ׳ × 3.28084)<br>בסיס: מעפ״ש (AGL)"],
       ["מבקש הבקשה + מס׳ טלפון", "", E(inp.requesterName) + ", <span dir='ltr' class='ph'>" + E(inp.requesterPhone) + "</span>" + participantsHtml],
       ["אנשי קשר בשטח בעת הפעלת הסגירה", "2 אנשי קשר + טלפונים", contactsHtml],
-      ["אות קריאה", "(אם רלוונטי)", E(cfg.org.callsign)],
-      ["מס׳ רישום כלי הטיס", "(אם רלוונטי)", E(cfg.org.registration)],
+      ["אות קריאה", "(אם רלוונטי)", E(optionalId(inp.callsign, cfg))],
+      ["מס׳ רישום כלי הטיס", "(אם רלוונטי)", E(optionalId(inp.registration, cfg))],
       ["גודל וצבע הבלון", "(רלוונטי לבלון מעוגן)", E(cfg.fixed.balloon)],
       ["סימוני אזהרה לתעופה (לגבי מכשולים בלבד)", "סימוני יום, תאורת לילה", E(cfg.fixed.warning_markings)],
       ["זמן קיפול מנוף בחירום", "(אם רלוונטי)", E(cfg.fixed.crane)]
@@ -308,7 +312,7 @@
     const inp = res.inp, now = o.now || new Date(), pn = o.providerNames || {};
     const prov = (k, dflt) => { const p = pn[k] != null ? pn[k] : dflt; return p ? " — " + p : ""; };
     return {
-      docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || cfg.org.name,
+      docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || orgName(inp),
       title: "פמ״ת פנים ארצי א-11 — נספח ג׳", subtitle: "טופס בקשה לסגירה אווירית",
       draftText: o.draft ? "טיוטה — לא מוכן לשליחה: " + o.draft : "",
       rows: buildForm(res, cfg).map(r => ({ n: r.n, label: r.label, sub: r.sub, html: r.html })),
@@ -388,7 +392,7 @@
     const lines = [
       "שלום רב,", "",
       "מצורפת בקשה לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26).", "",
-      "שם/גורם המבקש: " + cfg.org.name,
+      "שם/גורם המבקש: " + orgName(inp),
       "כלי טיס: " + inp.aircraft.join(", ") + " — רב להב, " + (inp.vlos ? "קיים קשר עין" : "ללא קשר עין"),
       "מהות הפעילות: " + inp.purpose,
       "מיקום: " + inp.siteName,
@@ -403,7 +407,7 @@
     if (ko) lines.push("מכשולים שידועים למבקש: " + ko);
     lines.push("",
       "מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), ארבע תמונות — תצ״א בתקריב, מפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת עם סימון המיקום (המפה/התצ״א הנדרשים בנספח ג׳), וקובץ KML.", "",
-      "בברכה,", inp.requesterName, cfg.org.name, inp.requesterPhone);
+      "בברכה,", inp.requesterName, orgName(inp), inp.requesterPhone);
     const body = lines.join("\n");
     return { to: cfg.mail.to, subject, body, mailto: "mailto:" + cfg.mail.to.join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body) };
   }
