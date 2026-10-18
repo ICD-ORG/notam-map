@@ -2436,7 +2436,7 @@ test("בלי דליפה של כתובת הארגון למטיס עצמאי: לא
 test("מטיס עצמאי שנוצר ידנית בלי כתובת שמורה: copyTo ריק (הארגון לא נחשף), והמייל יוצא לכתובת הארגון בלבד (בלי כפילות) ובלי חשיפה בתשובה ובסימון", () => {
   const { env, token } = bootstrapped(); goLive(env, token);
   const m1 = manualPilot(env, token);
-  assert.deepEqual([m1.email, m1.copyTo, m1.copyToIsOwner, m1.org], ["", "", false, false]); assert.deepEqual(m1.features, FEATURES);
+  assert.deepEqual([m1.email, m1.copyTo, m1.copyToIsOwner, m1.org, m1.adv], ["", "", false, false, false]); assert.deepEqual(m1.features, FEATURES);
   assert.ok(!JSON.stringify(m1).includes(ORG));
   for (const target of ["office", "self"]) {
     const b = savedRequest(env, m1.token, "ידני " + target + " — 05.03.2027");
@@ -2494,6 +2494,132 @@ test("setOrg: מנהל בלבד; מנהל אינו ניתן להורדה; ערך
   // משתמש חסום אפשר לסווג מחדש; הסוג לא נוגע בחסימה
   assert.ok(env.call({ action: "setBlocked", token, target: "dana.pilot", blocked: true }).ok);
   assert.ok(setOrg(env, token, "dana.pilot", true).ok); assert.equal(userRec(env, "dana.pilot").blocked, true);
+});
+
+/* ===== תצוגה מתקדמת (adv): הרשאה אישית לכל משתמש, נפרדת מסוג החשבון. בפועל: מנהל תמיד כן; אחרת הערך הבוליאני השמור; בלי ערך — לפי הסוג (ארגוני כן, עצמאי לא) ===== */
+const setAdv = (env, token, target, adv) => env.call({ action: "setAdv", token, target, adv });
+const rowOf = (env, token, name) => env.call({ action: "listUsers", token }).users.find(x => x.user === name);
+const writeRec = (env, name, rec) => { env.props["U:" + name] = JSON.stringify(rec); };
+
+test("adv: מטריצת הערך בפועל — מנהל / ארגוני / עצמאי × לא הוכרע / true / false / ערך משובש — בכניסה, ב-me, בהחלפת סיסמה וב-listUsers (advExplicit = ההכרעה השמורה או null)", () => {
+  const { env, token } = bootstrapped();
+  const stores = [undefined, true, false, "true", 1, null];     // לא-בוליאני ברשומה = לא הוכרע
+  let n = 0;
+  for (const kind of ["admin", "org", "pilot"]) for (const stored of stores) {
+    const name = "adv.user." + (++n);
+    const req = { action: "addUser", token, newUser: name, newPass: "some-pass-12345", role: kind === "admin" ? "admin" : "user" };
+    if (kind === "pilot") req.org = false;
+    assert.ok(env.call(req).ok);
+    if (stored !== undefined) { const rec = userRec(env, name); rec.adv = stored; writeRec(env, name, rec); }
+    const want = kind === "admin" ? true : (typeof stored === "boolean" ? stored : kind === "org"), what = `${kind} / ${JSON.stringify(stored)}`;
+    const lg = env.call({ action: "login", user: name, pass: "some-pass-12345" });
+    assert.ok(lg.ok, what); assert.strictEqual(lg.adv, want, "login " + what); assert.ok(lg.features.includes("advView"), what);
+    assert.strictEqual(env.call({ action: "me", token: lg.token }).adv, want, "me " + what);
+    const row = rowOf(env, token, name);
+    assert.strictEqual(row.adv, want, "listUsers " + what);
+    assert.strictEqual(row.advExplicit, kind !== "admin" && typeof stored === "boolean" ? stored : null, "advExplicit " + what);
+    const cp = env.call({ action: "changePassword", token: lg.token, oldPass: "some-pass-12345", newPass: "other-pass-12345" });
+    assert.strictEqual(cp.adv, want, "changePassword " + what);
+  }
+  assert.equal(n, 18);
+  // המנהל שהוקם ב-bootstrap, ומשתמש ישן בלי השדה adv (כמו בכל רשומה שנוצרה לפני העדכון): ברירת מחדל לפי הסוג
+  assert.strictEqual(env.call({ action: "login", user: "itzik", pass: PASS }).adv, true);
+  assert.deepEqual([rowOf(env, token, "itzik").adv, rowOf(env, token, "itzik").advExplicit], [true, null]);
+  assert.ok(!("adv" in userRec(env, "itzik")), "הקמת מנהל לא כותבת adv");
+});
+
+test("setAdv: מנהל בלבד; ערך בוליאני בלבד; משתמש לא קיים; מנהל אינו ניתן לשינוי; מטיס שנרשם לבד מקבל ומאבד תצוגה מתקדמת; לא מבטל אסימונים; נשמר בכניסה, בהחלפת סיסמה ובחידוש מנוי; setOrg לא נוגע בהכרעה", () => {
+  const { env, token } = withWix();
+  const pilot = pilotUser(env);
+  assert.strictEqual(pilot.adv, false, "regFinish: מי שנרשם לבד — בלי תצוגה מתקדמת כברירת מחדל");
+  assert.ok(!("adv" in userRec(env, "dana.pilot")), "ההרשמה לא כותבת adv: ההכרעה היא של המנהל בלבד");
+  const row = () => rowOf(env, token, "dana.pilot"), me = () => env.call({ action: "me", token: pilot.token });
+  assert.deepEqual([row().adv, row().advExplicit, row().org], [false, null, false]);
+  // הרשאות: מטיס (גם על עצמו), עובד ארגוני (גם על עצמו), בלי אסימון, אסימון שגוי
+  assert.ok(env.call({ action: "addUser", token, newUser: "org.staff", newPass: "staff-pass-12345" }).ok);
+  const staff = env.call({ action: "login", user: "org.staff", pass: "staff-pass-12345" });
+  assert.strictEqual(staff.adv, true);
+  assert.equal(setAdv(env, pilot.token, "dana.pilot", true).error, "forbidden");
+  assert.equal(setAdv(env, pilot.token, "org.staff", false).error, "forbidden");
+  assert.equal(setAdv(env, staff.token, "org.staff", false).error, "forbidden");
+  assert.equal(setAdv(env, staff.token, "dana.pilot", true).error, "forbidden");
+  assert.equal(env.call({ action: "setAdv", target: "dana.pilot", adv: true }).ok, false);
+  assert.equal(setAdv(env, "bad", "dana.pilot", true).ok, false);
+  assert.ok(!("adv" in userRec(env, "dana.pilot")) && !("adv" in userRec(env, "org.staff")), "ניסיונות לא מורשים לא שינו דבר");
+  assert.strictEqual(me().adv, false); assert.strictEqual(env.call({ action: "me", token: staff.token }).adv, true);
+  // קלט
+  assert.equal(setAdv(env, token, "nobody", true).error, "no_user");
+  assert.equal(setAdv(env, token, undefined, true).error, "no_user");
+  for (const bad of [undefined, null, "true", "false", 1, 0, [], {}]) assert.equal(setAdv(env, token, "dana.pilot", bad).error, "bad_adv", JSON.stringify(bad));
+  assert.ok(!("adv" in userRec(env, "dana.pilot")), "ערך לא בוליאני לא נשמר");
+  // מנהל אינו ניתן לשינוי (גם לא הוא עצמו, ובשני הכיוונים) ונשאר עם תצוגה מתקדמת
+  assert.ok(env.call({ action: "addUser", token, newUser: "second.admin", newPass: "admin-pass-12345", role: "admin" }).ok);
+  for (const target of ["itzik", "second.admin"]) for (const v of [true, false]) {
+    const r = setAdv(env, token, target, v); assert.deepEqual([r.ok, r.error], [false, "is_admin"], target + " " + v);
+    assert.ok(!("adv" in userRec(env, target)), target + ": לא נכתב adv");
+  }
+  assert.strictEqual(env.call({ action: "me", token }).adv, true);
+  // מטיס שנרשם לבד: הפעלה — האסימון הקיים ממשיך לעבוד (הרשומה לא עברה tv), סוג החשבון לא משתנה, וכל התשובות מדווחות
+  const tv = userRec(env, "dana.pilot").tv;
+  const on = setAdv(env, token, "dana.pilot", true);
+  assert.deepEqual([on.ok, on.adv], [true, true]);
+  assert.strictEqual(userRec(env, "dana.pilot").adv, true); assert.equal(userRec(env, "dana.pilot").tv, tv, "setAdv לא מבטל אסימונים");
+  assert.equal(userRec(env, "dana.pilot").org, false, "ההרשאה לא משנה את סוג החשבון");
+  let m = me(); assert.ok(m.ok, "האסימון הקיים תקף"); assert.deepEqual([m.adv, m.org], [true, false]);
+  assert.deepEqual([row().adv, row().advExplicit, row().org], [true, true, false]);
+  // כיבוי: אותו אסימון, מיד
+  const off = setAdv(env, token, "dana.pilot", false);
+  assert.deepEqual([off.ok, off.adv], [true, false]);
+  assert.deepEqual([me().adv, row().adv, row().advExplicit], [false, false, false], "הכרעה מפורשת לכבות");
+  // setOrg לא נוגע בהכרעה המפורשת (בשני הכיוונים), גם כשהיא מנוגדת לברירת המחדל של הסוג החדש
+  assert.ok(setOrg(env, token, "dana.pilot", true).ok); assert.deepEqual([me().adv, me().org, row().advExplicit], [false, true, false], "ארגוני שהמנהל כיבה לו — נשאר מכובה");
+  assert.ok(setAdv(env, token, "dana.pilot", true).ok); assert.ok(setOrg(env, token, "dana.pilot", false).ok);
+  assert.deepEqual([me().adv, me().org, row().advExplicit], [true, false, true], "עצמאי שהמנהל הפעיל לו — נשאר מופעל");
+  // בכניסה חוזרת, בהחלפת סיסמה ובחידוש מנוי ההכרעה נשמרת
+  const lg = env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }); assert.strictEqual(lg.adv, true);
+  const cp = env.call({ action: "changePassword", token: lg.token, oldPass: "dana-pass-1234", newPass: "dana-new-pass-5678" }); assert.strictEqual(cp.adv, true);
+  addOrder(env, { email: "pilot@example.com", created: iso(env.now() - DAY) });
+  assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);
+  assert.ok(env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env) }).renewed);
+  assert.strictEqual(userRec(env, "dana.pilot").adv, true, "חידוש מנוי לא מאפס את ההכרעה");
+  assert.strictEqual(env.call({ action: "login", user: "dana.pilot", pass: "dana-new-pass-5678" }).adv, true);
+  // משתמש חסום אפשר להכריע לגביו; החסימה לא משתנה
+  assert.ok(env.call({ action: "setBlocked", token, target: "dana.pilot", blocked: true }).ok);
+  assert.ok(setAdv(env, token, "dana.pilot", false).ok); assert.equal(userRec(env, "dana.pilot").blocked, true);
+  // עובד ארגוני: כיבוי אישי; הסוג נשאר ארגוני (שליחה בשם הארגון) והאסימון תקף
+  const so = setAdv(env, token, "org.staff", false);
+  assert.deepEqual([so.ok, so.adv], [true, false]);
+  const sm = env.call({ action: "me", token: staff.token }); assert.deepEqual([sm.ok, sm.adv, sm.org], [true, false, true]);
+  assert.deepEqual([rowOf(env, token, "org.staff").adv, rowOf(env, token, "org.staff").advExplicit], [false, false]);
+  // ללא הכרעה — ברירת המחדל עוקבת אחרי הסוג (setOrg)
+  assert.ok(env.call({ action: "addUser", token, newUser: "flip.user", newPass: "some-pass-12345" }).ok);
+  const fl = env.call({ action: "login", user: "flip.user", pass: "some-pass-12345" }); assert.strictEqual(fl.adv, true);
+  assert.ok(setOrg(env, token, "flip.user", false).ok); assert.deepEqual([env.call({ action: "me", token: fl.token }).adv, rowOf(env, token, "flip.user").advExplicit], [false, null]);
+  assert.ok(setOrg(env, token, "flip.user", true).ok); assert.strictEqual(env.call({ action: "me", token: fl.token }).adv, true);
+});
+
+test("adv: לא חושף דבר על משתמשים אחרים — משתמש רגיל מקבל רק את הדגל של עצמו; listUsers/setAdv חסומים לו; הכרעה על אחר לא משנה את תשובותיו", () => {
+  const { env, token } = withWix();
+  const pilot = pilotUser(env);
+  assert.ok(env.call({ action: "addUser", token, newUser: "org.staff", newPass: "staff-pass-12345" }).ok);
+  const seen = [JSON.stringify(pilot)];
+  const call = o => { const r = env.call(Object.assign({ token: pilot.token }, o)); seen.push(JSON.stringify(r)); return r; };
+  const meBefore = call({ action: "me" });
+  assert.strictEqual(meBefore.adv, false);
+  const lu = call({ action: "listUsers" }); assert.deepEqual([lu.ok, lu.error], [false, "forbidden"]); assert.ok(!("users" in lu));
+  call({ action: "listRequests" }); call({ action: "setAdv", target: "org.staff", adv: false }); call({ action: "setAdv", target: "dana.pilot", adv: true });
+  assert.ok(setAdv(env, token, "org.staff", false).ok);       // החלטת מנהל על אחר
+  const meAfter = call({ action: "me" });
+  assert.deepEqual(meAfter, meBefore, "ההכרעה על משתמש אחר לא משנה את תשובת המטיס");
+  seen.push(JSON.stringify(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" })));
+  const all = seen.join("\n");
+  assert.ok(!all.includes("advExplicit"), "advExplicit הוא של המנהל בלבד");
+  assert.ok(!all.includes("org.staff") && !all.includes("itzik"), "שמות משתמשים אחרים לא נחשפים");
+  assert.ok(!all.includes(ORG) && !all.includes(OWNER));
+  // למנהל כן: השורות נושאות adv ו-advExplicit לכל משתמש
+  const rows = env.call({ action: "listUsers", token }).users;
+  assert.ok(rows.every(x => typeof x.adv === "boolean" && (x.advExplicit === null || typeof x.advExplicit === "boolean")), JSON.stringify(rows));
+  assert.deepEqual(rows.map(x => [x.user, x.adv, x.advExplicit]), [["dana.pilot", false, null], ["itzik", true, null], ["org.staff", false, false]]);
 });
 
 test("addUser: org ברירת מחדל true (ארגוני), org:false = מטיס עצמאי, מנהל תמיד ארגוני, ערך לא בוליאני נדחה; משתמשים קיימים בלי שדה: admin => ארגוני, אחרת עצמאי", () => {
