@@ -425,3 +425,153 @@ test("הסברי ״!״: מציינים מה מוצג, קירוב, סינון ל�
   assert.ok(/התאריכים והשעות/.test(L.HELP.notams) && /עדיין בתוקף/.test(L.HELP.notams) && /ללא מיקום|בלי מיקום/.test(L.HELP.notams) && /בדוח/.test(L.HELP.notams));
   for (const k of ["zones", "notams"]) assert.ok(/תצוגה מקדימה בלבד/.test(L.HELP[k]) && /״מוכן לשליחה״/.test(L.HELP[k]) && /הרץ את כל הבדיקות/.test(L.HELP[k]) && L.HELP_NAME[k]);
 });
+
+/* ================= תיקוני הסקירה (20 ממצאים) ================= */
+const un = n => ({ sites: [], unmapped: Array.from({ length: n }, (_, i) => ({ id: "LLP" + (1000 + i), name: "אתר " + i })) });
+
+test("ממצא 1/12: אתרי רט״ג בלי גבול בקובץ — שורת ״לא נבדקו N …״ (יחיד/רבים) רק כשיש כאלה, בנייטרלי; ״אין״ מוגבל לקובץ; על הנתונים האמיתיים 121", () => {
+  assert.ok(!line(L.preview(baseArgs({ inpa: un(0) })), "unmapped"), "אין אתרים בלי גבול — אין שורה");
+  assert.ok(!line(L.preview(baseArgs({ inpa: { sites: [] } })), "unmapped"), "בלי שדה unmapped — אין שורה");
+  assert.equal(line(L.preview(baseArgs({ inpa: un(1) })), "unmapped").text, "לא נבדק אתר רט״ג אחד שאין לו גבול בקובץ — הוא נבדק רק בהרצה המלאה, לפי שם מול OpenStreetMap.");
+  const many = line(L.preview(baseArgs({ inpa: un(121) })), "unmapped");
+  assert.equal(many.text, "לא נבדקו 121 אתרי רט״ג שאין להם גבול בקובץ — הם נבדקים רק בהרצה המלאה, לפי שם מול OpenStreetMap.");
+  assert.equal(many.cls, "", "נייטרלי, לא אזהרה קבועה (עייפות אזהרות)");
+  const r = L.preview(baseArgs({ inpa: un(5) })), keys = r.lines.map(l => l.k);
+  assert.ok(keys.indexOf("near") < keys.indexOf("unmapped") && keys.indexOf("unmapped") < keys.indexOf("window"), "אחרי שורת ״בקרבה״ ולפני הנוטמים: " + keys.join());
+  assert.match(line(r, "inside").text, /שבקובץ$/); assert.match(line(r, "near").text, /בקובץ$/);
+  const real = L.preview(Object.assign({ lat: 33.09, lon: 35.6, radius: 300, heightM: 80, zones, inpa, notams: snap.notams, notamFetchedIso: snap.fetched_iso, thresholds: TH, now: NOW }));
+  assert.match(line(real, "unmapped").text, new RegExp("לא נבדקו " + inpa.unmapped.length + " אתרי רט״ג"), "נתונים אמיתיים: " + inpa.unmapped.length);
+  assert.ok(!L.HELP.zones.includes("אינו מצויר ואינו נבדק בפס") === false, "ה-״!״ מציין שאתר בלי גבול אינו נבדק בפס");
+});
+
+test("ממצא 2/7: נתונים פגומים — גבול פגום זורק badId מ-zoneShapes, נוטם עם רדיוס אינסופי/ענק עובר ל״ללא מיקום״, והפס לעולם לא זורק", () => {
+  const badRings = [[[null, null], [32, 34], [32.1, 34.1]], [["x", "y"], [32, 34], [32.1, 34.1]], [[32], [32, 34], [32.1, 34.1]], [[NaN, 34], [32, 34], [32.1, 34.1]], [[32, 34], [32.1, 34.1]], [[Infinity, 34], [32, 34], [32.1, 34.1]]];
+  for (const ring of badRings) {
+    const z = mkZ([zA17("BAD1", "פגום", ring)]);
+    assert.throws(() => L.zoneShapes(z, noInpa), e => e.badId === "BAD1", JSON.stringify(ring));
+    let r; assert.doesNotThrow(() => { r = L.preview(baseArgs({ zones: z })); }, "הפס לא זורק: " + JSON.stringify(ring));
+    const w = line(r, "zones"); assert.ok(w && w.cls === "warn" && /נתונים לא תקינים: BAD1/.test(w.text), "במקום ״אין חפיפה״ בירוק — אזהרה: " + JSON.stringify(r.lines.map(l => l.text)));
+    assert.ok(!line(r, "inside") && !line(r, "near"), "אין קביעה על מפה פגומה"); assert.equal(r.lines[r.lines.length - 1].text, L.LAST_LINE); assert.ok(line(r, "notams"), "הנוטמים ממשיכים");
+  }
+  assert.throws(() => L.zoneShapes({ zones: [{ id: "R1", cat: "LLP", rings: "לא מערך" }] }, noInpa), e => e.badId === "R1");
+  assert.throws(() => L.zoneShapes({ zones: [{ id: "C2", cat: "LLU", c: ["a", "b"], r: 100 }] }, noInpa), e => e.badId === "C2", "מעגל עם מרכז לא מספרי");
+  assert.throws(() => L.zoneShapes({ zones: [{ id: "C3", cat: "LLU", c: [32, 34.8], r: NaN }] }, noInpa), e => e.badId === "C3");
+  assert.throws(() => L.zoneShapes(mkZ([]), { sites: [{ id: "LLP7", kind: "R", max: 100, rings: [[["a", "b"], [1, 2], [3, 4]]] }] }), e => e.badId === "LLP7", "אתר רט״ג עם גבול פגום");
+  // נוטם: רדיוס שגולש לאינסוף (400 ספרות), ענק (3,000 ק״מ) — בלי מיקום; רגיל — מצויר
+  const w = L.inputWindow(baseArgs(), NOW);
+  const huge = ntm("INF/26", { e: "OPS WI " + "9".repeat(400) + " KM RADIUS CENTERED ON PSN 320000N0344800E CLSD" }), big = ntm("BIG/26", { e: "OPS WI 3000 KM RADIUS CENTERED ON PSN 320000N0344800E CLSD" }), ok = ntm("OK/26", { e: POS("320000", "0344800") });
+  const s = L.selectNotams([huge, big, ok], w);
+  assert.deepEqual(s.noLocation.sort(), ["BIG/26", "INF/26"]); assert.deepEqual(s.items.map(n => n.id), ["OK/26"]);
+  let r; assert.doesNotThrow(() => { r = L.preview(baseArgs({ notams: [huge, big, ok] })); });
+  assert.match(line(r, "noloc").text, /^2 נוטמים ללא מיקום/);
+  // קלט שאינו אובייקט / ערכים חסרים: בלי חריגה
+  for (const a of [{ notams: [null, {}, { id: "X" }, { raw: 5 }] }, { zones: { zones: [null] } }, { zones: { zones: [{}] } }]) assert.doesNotThrow(() => L.preview(baseArgs(a)), JSON.stringify(a));
+});
+
+test("ממצא 8: notamAlt — F) ואחריו אלפי רווחים/שורות בלי G) הוא ליניארי (לא מעוקב), וההתנהגות הקודמת נשמרת", () => {
+  const cases = ["E) X\nF)" + " ".repeat(5000) + "\nZ", "E) X\nF)" + " ".repeat(5000) + "Z", "E) X\nF)" + "\n".repeat(5000) + "Z", "E) X\nF) " + " \t".repeat(3000), "F)".repeat(3000) + " ".repeat(3000)];
+  for (const raw of cases) { const t0 = performance.now(), r = L.notamAlt(raw), dt = performance.now() - t0; assert.equal(r, "", "אין G): ריק"); assert.ok(dt < 50, "זמן " + dt.toFixed(1) + " מ״ש ל-" + raw.length + " תווים"); }
+  assert.equal(L.notamAlt("E) X\nF) SFC G) 1000FT AGL)"), "SFC – 1000FT AGL", "G) באותה שורה");
+  assert.equal(L.notamAlt("E) X\nF) SFC\n  \nG) 500FT AMSL)"), "SFC – 500FT AMSL", "G) בשורה הלא-ריקה הבאה");
+  assert.equal(L.notamAlt("E) X\nF) SFC\nE2) אחר\nG) 500FT)"), "", "שורה אחרת ביניהם: לא מחברים (כמו הביטוי הקודם)");
+  assert.equal(L.notamAlt("F) ראשון\nF) SFC\nG) 1000FT AGL)"), "SFC – 1000FT AGL", "F) ראשון בלי G) — מנסים את הבא");
+  assert.equal(L.notamAlt("E) X\nF) \nG) 1000FT)"), "0 – 5000 רגל (לפי שורת Q)".replace(/.*/, "") , "F) ריק — לא משתמשים בו (ואין Q בטקסט)");
+});
+
+test("ממצא 10: inputWindow — חלון זהה לשורה הראשונה/האחרונה בטבלת יום/לילה המלאה (180 צירופים, שעון קיץ וחורף, חוצה חצות), קל לחישוב, והטווח הארוך אינו נחתך בשקט", () => {
+  const days = [["2026-03-20", 0], ["2026-03-25", 5], ["2026-10-20", 3], ["2026-10-22", 6], ["2026-10-25", 0], ["2026-12-30", 7], ["2027-03-24", 4], ["2026-01-10", 60]], times = [["17:00", "20:00"], ["22:00", "02:00"], ["00:00", "23:59"], ["06:30", "06:30"], ["", ""]];
+  let n = 0;
+  for (const [d0, span] of days) for (const [tf, tt] of times) {
+    const dTo = new Date(Date.UTC(+d0.slice(0, 4), +d0.slice(5, 7) - 1, +d0.slice(8) + span)).toISOString().slice(0, 10), full = !(tf && tt);
+    const rows = C.dayNightTable(31.8, 35.0, d0, dTo, full ? "00:00" : tf, full ? "23:59" : tt), w = L.inputWindow({ dateFrom: d0, dateTo: dTo, timeFrom: tf, timeTo: tt }, NOW);
+    assert.equal(w.fromMs, +rows[0].startUtc, d0 + ".." + dTo + " " + tf); assert.equal(w.toMs, +rows[rows.length - 1].endUtc, d0 + ".." + dTo + " " + tt); assert.equal(w.tooLong, span > 60 ? true : false); n++;
+  }
+  assert.ok(n >= 40, "נבדקו " + n);
+  // הקלדת שנה בשדה התאריך (0002 / 0020 / 0202): לא תאריך — נפילה למעכשיו עם הסבר, ובלי חישוב כבד
+  for (const y of ["0002", "0020", "0202", "1999"]) { const t0 = performance.now(), w = L.inputWindow({ dateFrom: y + "-10-20", dateTo: "2026-10-23", timeFrom: "17:00", timeTo: "20:00" }, NOW), dt = performance.now() - t0; assert.equal(w.mode, "now"); assert.match(w.reason, /אינם תקינים/); assert.ok(dt < 20, y + ": " + dt.toFixed(1) + " מ״ש"); }
+  { const t0 = performance.now(); for (let i = 0; i < 40; i++) L.inputWindow({ dateFrom: "2026-10-" + String(1 + (i % 28)).padStart(2, "0"), dateTo: "2026-12-20", timeFrom: "17:00", timeTo: "20:00" }, NOW); assert.ok(performance.now() - t0 < 400, "40 חישובי חלון (טווח 60 ימים) תוך " + (performance.now() - t0).toFixed(0) + " מ״ש"); }
+  // טווח ארוך (400+ ימים): התווית והחלון מסכימים (לא נחתכים ב-400 שורות) ומסומנים tooLong; הפס מזהיר שההרצה תידחה
+  const long = L.inputWindow({ dateFrom: "2026-10-20", dateTo: "2030-12-18", timeFrom: "17:00", timeTo: "20:00" }, NOW);
+  assert.equal(long.label, "20.10.2026 17:00 – 18.12.2030 20:00 (שעון מקומי)"); assert.equal(long.tooLong, true);
+  assert.equal(long.toMs, +C.dayNightTable(31.8, 35.0, "2030-12-18", "2030-12-18", "17:00", "20:00")[0].endUtc, "הסיום בפועל = סוף היום האחרון שבתווית");
+  assert.match(line(L.preview(baseArgs({ dateTo: "2030-12-18" })), "range").text, /עולה על 60 ימים/); assert.ok(!line(L.preview(baseArgs()), "range"));
+});
+
+test("ממצא 13/15: סדר תצוגה RTL — RLM אחרי מזהה לטיני לפני ״ — מספר״ (נוטם ותווית אזור), ואזור בלי שם מוצג כמזהה בלבד (בלי ״״) בצורות, בפס ובבדיקה המלאה", () => {
+  const noName = zA17("LLR120", "", rect(600, 800, -100, 100), { cat: "LLR" }), named = zA17("LLU20", "תל אביב", rect(800, 900, -100, 100));
+  const near = ntm("NR1/26", { e: POS("320130", "0344800") });
+  const r = L.preview(baseArgs({ zones: mkZ([noName, named]), notams: [near] }));
+  const nt = line(r, "near").text, nn = line(r, "notams").text;
+  assert.ok(nt.includes("LLR120" + RLM + " — ") && !nt.includes("״״"), nt); assert.ok(nt.includes("LLU20 ״תל אביב״" + RLM + " — "), nt);
+  assert.ok(nn.includes("NR1/26" + RLM + " — "), nn);
+  assert.equal(L.zoneShapes(mkZ([noName]), noInpa)[0].label, "LLR120");
+  const z = C.analyzeZones(P0, 1000, { zones: [noName], inpa: noInpa }, 5000, null, 750); assert.equal(z.inside.concat(z.near)[0].label, "LLR120", "analyzeZones: אותו כלל");
+  const inLine = line(L.preview(baseArgs({ zones: mkZ([zA17("LLR121", "", rect(-300, 300, -300, 300), { cat: "LLR" })]) })), "inside").text; assert.ok(/^חפיפה ל-LLR121 — /.test(inLine) && !inLine.includes("״״"), inLine);
+  const rs = L.zoneShapes(zones, inpa); assert.ok(rs.filter(s => /״״/.test(s.label)).length === 0, "בנתונים האמיתיים אין ״״ ריקות");
+  const noNm = zones.zones.filter(zz => !zz.name && zz.cat !== "B09" && zz.cat !== "B09B"); assert.ok(noNm.length >= 3, "בנתונים יש אזורים בלי שם (LLR107/120/601)");
+  for (const zz of noNm) assert.equal(rs.find(s => s.id === zz.id).label, zz.id);
+});
+
+test("ממצא 14: גבהים בכרטיס נוטם — עברית לעולם לא בתוך dir=ltr (רק הרצפים הלטיניים/המספריים), טקסט עוין escaped, תוקף ב-nowrap", () => {
+  const q = u => "E) X\nQ) LLLL/QWPLW/IV/BO /W /000/" + u + "/3200N03448E005";
+  assert.equal(L.notamAltHtml(q("060")), '<span dir="ltr">0</span> – <span dir="ltr">6000</span> רגל (לפי שורת Q)');
+  assert.equal(L.notamAltHtml(q("999")), '<span dir="ltr">0</span> – ללא הגבלה (לפי שורת Q)');
+  assert.equal(L.notamAltHtml("E) X\nF) SFC\nG) 1000FT AGL)"), '<span dir="ltr">SFC – 1000FT AGL</span>');
+  assert.equal(L.notamAltHtml("E) בלי גבהים"), ""); assert.equal(L.notamAltHtml(""), "");
+  const host = L.notamAltHtml("E) X\nF) <img src=x onerror=alert(1)>\nG) 5'00 \"FT\" &amp;)");
+  assert.ok(host.includes("&lt;img src=x onerror=alert(1)&gt;") && !/<img/i.test(host) && host.includes("&amp;amp;"), host);
+  for (const h of [L.notamAltHtml(q("060")), L.notamAltHtml(q("999")), host]) assert.ok(!/<span dir="ltr">[^<]*[א-ת][^<]*<\/span>/.test(h), "אין עברית בתוך ltr: " + h);
+  const sel = L.selectNotams([ntm("C1/26", { e: POS("320130", "0344800"), b: "2610191600", c: "2610230200", f: "E2) x" })], L.inputWindow({ dateFrom: "2026-10-20", timeFrom: "00:00", timeTo: "23:00" }, NOW));
+  const card = L.popupHtml({ zones: [], notams: sel.items }, {});
+  assert.ok(card.includes('<span dir="ltr" style="white-space:nowrap">2026-10-19 16:00Z</span> – <span dir="ltr" style="white-space:nowrap">2026-10-23 02:00Z</span>'), "כל תאריך+שעה ב-ltr נפרד שאינו נשבר");
+  assert.ok(card.includes('<span dir="ltr">0</span> – <span dir="ltr">5000</span> רגל (לפי שורת Q)'), card);
+  assert.ok(tagsOf(card).every(t => TAG_OK.test(t)), "תגיות מהרשימה הלבנה בלבד");
+  assert.equal(L.notamAlt(q("050")), "0 – 5000 רגל (לפי שורת Q)", "notamAlt נשאר מחרוזת טקסט");
+});
+
+test("ממצא 16: סדר הכרטיס לפי חומרה — א-17 אסור (LLP/LLU/LLD), א-17 מוגבל (LLR), רט״ג, ב-09; סדר הציור (zoneShapes) לא השתנה; הכותרת מפרטת אזורים/נוטמים", () => {
+  const mk = (src, cat, id) => ({ src, id, cat, name: "n", label: id, kind: "k", alt: "", pmt: "", note: "", approx: false, footnote: false, rings: [] });
+  const zs = [mk("b09", "B09", "B1"), mk("inpa", "NR", "P1"), mk("a17", "LLR", "R1"), mk("a17", "LLU", "U1"), mk("inpa", "NP", "P2"), mk("a17", "LLP", "L1"), mk("a17", "LLD", "D1"), mk("a17", "LLR", "R2")];
+  const h = L.popupHtml({ zones: zs, notams: [] }, { maxZones: 20 }), pos = id => h.indexOf("<b>" + id + "</b>");
+  const order = ["U1", "L1", "D1", "R1", "R2", "P1", "P2", "B1"];
+  assert.deepEqual(zs.map(z => z.id).sort((a, b) => pos(a) - pos(b)), order, "אסור (בסדר הקלט) < מוגבל < רט״ג < ב-09");
+  assert.deepEqual(zs.map(z => z.id), ["B1", "P1", "R1", "U1", "P2", "L1", "D1", "R2"], "המערך המקורי לא עבר מיון");
+  const draw = L.zoneShapes(zones, inpa), first = src => draw.findIndex(s => s.src === src), last = src => draw.map(s => s.src).lastIndexOf(src);
+  assert.ok(last("inpa") < first("b09") && last("b09") < first("a17"), "סדר הציור נשאר שמורות < ב-09 < א-17");
+  const two = L.popupHtml({ zones: [mk("a17", "LLU", "U1")], notams: L.selectNotams([ntm("A/26", { e: POS("320000", "0344800") }), ntm("B/26", { e: POS("320000", "0344800") })], L.inputWindow(baseArgs(), NOW)).items }, {});
+  assert.match(two, /3 פריטים \(אזור אחד · 2 נוטמים\)/); assert.ok(!/אזור אחד · /.test(L.popupHtml({ zones: [mk("a17", "LLU", "U1")], notams: [] }, {})), "רק אזורים — בלי פירוט");
+});
+
+test("ממצא 18: יחיד/רבים — ״ועוד נוטם אחד״ / ״ועוד אזור אחד״ בכרטיס ובפס; ״ועוד N נוטמים״ מ-2", () => {
+  const mkz = i => ({ src: "a17", id: "Z" + i, cat: "LLP", name: "n", label: "Z" + i, kind: "k", alt: "", pmt: "", note: "", approx: false, footnote: false, rings: [] });
+  const items = k => L.selectNotams(Array.from({ length: k }, (_, i) => ntm("T" + i + "/26", { e: POS("320000", "0344800") })), L.inputWindow(baseArgs(), NOW)).items;
+  assert.match(L.popupHtml({ zones: [], notams: items(9) }, {}), /ועוד נוטם אחד</); assert.match(L.popupHtml({ zones: [], notams: items(10) }, {}), /ועוד 2 נוטמים</);
+  assert.match(L.popupHtml({ zones: Array.from({ length: 9 }, (_, i) => mkz(i)), notams: [] }, {}), /ועוד אזור אחד</); assert.match(L.popupHtml({ zones: Array.from({ length: 11 }, (_, i) => mkz(i)), notams: [] }, {}), /ועוד 3 אזורים</);
+  const nm = k => Array.from({ length: k }, (_, i) => ntm("M" + i + "/26", { e: "OPS WI 100M RADIUS CENTERED ON PSN 32" + String(i + 1).padStart(2, "0") + "00N0344800E CLSD" }));
+  const th = { thresholds: Object.assign({}, TH, { notam_near_m: 40000 }) };
+  assert.match(line(L.preview(baseArgs(Object.assign({ notams: nm(7) }, th))), "notams").text, /; ועוד נוטם אחד$/); assert.match(line(L.preview(baseArgs(Object.assign({ notams: nm(8) }, th))), "notams").text, /; ועוד 2 נוטמים$/);
+  const zl = k => Array.from({ length: k }, (_, i) => zA17("Y" + i, "n" + i, rect(-300 - i, 300 + i, -300, 300)));
+  assert.match(line(L.preview(baseArgs({ zones: mkZ(zl(5)) })), "inside").text, /; ועוד אזור אחד$/); assert.match(line(L.preview(baseArgs({ zones: mkZ(zl(6)) })), "inside").text, /; ועוד 2 אזורים$/);
+});
+
+test("ממצא 6/9/17: נ״צ שהוקלד ואינו חוקי — מצב bad-coord עם אזהרה במקום סיכום של הנקודה הקודמת, ושורה אחרונה נשמרת", () => {
+  const r = L.preview(baseArgs({ coordInvalid: true, zones: mkZ([zA17("LLP9", "בדיקה", rect(-300, 300, -300, 300))]) }));
+  assert.equal(r.state, "bad-coord"); assert.equal(r.lines[0].k, "hint"); assert.equal(r.lines[0].cls, "warn"); assert.match(r.lines[0].text, /הנ״צ שהוקלד אינו חוקי/);
+  assert.ok(!line(r, "inside") && !line(r, "near") && !line(r, "notams"), "אין סיכום של הנקודה הקודמת"); assert.equal(r.lines[r.lines.length - 1].text, L.LAST_LINE);
+  assert.equal(L.preview(baseArgs({ coordInvalid: false })).state, "ok");
+});
+
+test("מבנה (ממצאים 2/3/6/7/9/11/17 + תקלות א/ב): ui.js — כשל תצוגה אינו זורק, גרירה כותבת את שדה הנ״צ, ההקלדה לא מרנדרת את השער, וה-CSS כולל אזורים בטוחים", () => {
+  const ui = fs.readFileSync(path.join(ROOT, "members-k38p/requests/js/ui.js"), "utf8"), html = fs.readFileSync(path.join(ROOT, "members-k38p/requests/index.html"), "utf8");
+  assert.ok(/applyJobs[^\n]*then\(r => \{ try \{ layerDataChanged\(\); \} catch/.test(ui), "applyJobs: טעינת נתונים לעולם לא נדחית בגלל ציור");
+  const ol = ui.slice(ui.indexOf("function onLayerData()"), ui.indexOf("function scheduleLayerUpdate")); assert.ok(/try \{ refreshLayers\(\); \} catch/.test(ol) && /try \{ updateSummary\(\); \} catch/.test(ol), "onLayerData: כל חלק ב-try/catch");
+  assert.ok(/try \{ initLayerUi\(\); \} catch/.test(ui) && /try \{ initLayers\(m\); \} catch/.test(ui), "אתחול השכבות והמתגים לא עוצר את init");
+  assert.ok(/function showHitsAt\(ll, moved\) \{ try \{ showHits\(ll, moved\); \} catch/.test(ui), "כרטיס הלחיצה לא זורק ל-click");
+  assert.ok(/marker\.on\("dragend", \(\) => \{[^}]*setCenter\(p\.lat, p\.lng, false, true\)/.test(ui), "גרירה: שדה הנ״צ נכתב (fromInput=false) ובלי הזזת מפה (noMove)");
+  assert.ok(/function setCenter[\s\S]{0,400}\n\s*closeCard\(\);/.test(ui), "שינוי נקודה סוגר את הכרטיס הישן ומבטל פתיחה ממתינה");
+  assert.ok(/addEventListener\("change", \(\) => \{ const c = C\.parseCoordInput[^\n]*else scheduleLayerUpdate\(\)/.test(ui), "טקסט לא חוקי בשדה הנ״צ מעדכן את הפס");
+  assert.ok(/refreshGate\(\{ quiet: true \}\)/.test(ui) && /if \(S\.report && !\(opts && opts\.quiet\)\) renderReport\(\)/.test(ui) && /box\._html !== html/.test(ui), "הקלדה: בלי רינדור דוח ובלי החלפת DOM זהה של השער");
+  assert.ok(/--safe-top:env\(safe-area-inset-top,0px\)/.test(html) && /header\{padding:calc\(16px \+ var\(--safe-top\)\)/.test(html) && /header \.back\{[^}]*min-height:44px/.test(html), "ריווח עליון בטוח, קישור חזרה ≥ 44px");
+  assert.ok(/id="puNew" maxlength="320"/.test(html) && /#puList\{max-height:/.test(html), "שדה הוספת מהות מוגבל ל-4×80, ורשימת הצ׳יפים גוללת");
+  assert.ok(/viewport-fit=cover/.test(html), "viewport-fit=cover נשאר — ולכן הריווח הבטוח הכרחי");
+});

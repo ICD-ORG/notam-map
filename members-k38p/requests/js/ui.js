@@ -52,7 +52,7 @@
       ["notam", loadNotams()]
     ];
   }
-  const applyJobs = jobs => Promise.all(jobs.map(([k, p]) => p.then(m => setStatus(k, true, m), e => setStatus(k, false, "לא נטען: " + (e && e.message ? e.message : e))))).then(r => { onLayerData(); return r; });   // אחרי כל טעינה (גם טעינה מחדש ב-checkSync): מציירים מחדש את השכבות והפס
+  const applyJobs = jobs => Promise.all(jobs.map(([k, p]) => p.then(m => setStatus(k, true, m), e => setStatus(k, false, "לא נטען: " + (e && e.message ? e.message : e))))).then(r => { try { layerDataChanged(); } catch (e) { logLayerErr("layerDataChanged", e); } return r; });   // אחרי כל טעינה (גם טעינה מחדש ב-checkSync): מציירים מחדש את השכבות והפס. כשל בתצוגה לעולם לא דוחה את הטעינה ולא עוצר את init
 
 
   async function loadStatic() {
@@ -377,6 +377,8 @@
       if (e.field === "requester") { if (!$("reqName").value.trim()) $("reqName").classList.add("bad"); if (!C.validPhone($("reqPhone").value)) $("reqPhone").classList.add("bad"); }
     });
     markPeople(errs);
+    // טקסט שהוקלד בשדה ההוספה ולא נוסף: רמז בלבד (לא חוסם, לא מוסיף לבד) — ההרצה ממילא נעצרת כי לא נבחרה מהות
+    if (errs.some(e => e.field === "purpose") && $("puNew").value.trim() && $("e_purpose")) $("e_purpose").textContent += " — הקלדתם מהות אך לא הוספתם אותה: לחצו ״הוסף מהות פעילות״.";
     if (errs.some(e => e.field === "requester" || e.field === "requesterOrg" || e.field === "callsign" || e.field === "registration" || e.field === "contacts" || e.field === "participants")) $("personBox").open = true;   // השגיאה לא תוסתר בתוך תיבה סגורה
   }
 
@@ -565,10 +567,19 @@
       d.appendChild(document.createTextNode(l.text)); box.appendChild(d);
     });
   }
-  function onLayerData() { refreshLayers(); updateSummary(); }
+  // עדכון התצוגה כולה (ציור + פס): לא זורק לעולם — כל חלק בנפרד ב-try/catch. כשל בפס מוצג כהסבר בפס עצמו (לא נעלמת הפס בשקט), ושום סטטוס/שער אינו נגע
+  function summaryFailed(e) {
+    logLayerErr("updateSummary", e);
+    try { const box = $("pointSummary"); if (box) box.textContent = "סיכום מקדים אינו זמין (תקלה בחישוב התצוגה). הבדיקות המלאות נקבעות רק ב״הרץ את כל הבדיקות״."; } catch (e2) { /* ignore */ }
+  }
+  function onLayerData() {
+    try { refreshLayers(); } catch (e) { logLayerErr("refreshLayers", e); }
+    try { updateSummary(); } catch (e) { summaryFailed(e); }
+  }
   function scheduleLayerUpdate() { clearTimeout(LAY.timer); LAY.timer = setTimeout(() => { LAY.timer = null; onLayerData(); }, 200); }
   // כרטיס בלחיצה על המפה: כל האזורים והנוטמים (של השכבות הדלוקות) שמתחת לנקודה שנלחצה; בלי כלום מתחת — לא נפתח כלום
-  function showHitsAt(ll, moved) {
+  function showHitsAt(ll, moved) { try { showHits(ll, moved); } catch (e) { logLayerErr("showHitsAt", e); try { closeCard(); } catch (e2) { /* ignore */ } } }   // כשל בכרטיס אינו נזרק ל-click של המפה: הנקודה כבר נבחרה
+  function showHits(ll, moved) {
     const lay = S.lf.lay, m = S.lf.m; if (!lay || !LY) return;
     const zones = m.hasLayer(lay.zoneGroup) ? LY.hitZones(lay.shapes, ll.lat, ll.lng) : [], notams = m.hasLayer(lay.notamGroup) ? LY.hitNotams(lay.notamItems, ll.lat, ll.lng) : [], seq = ++LAY.seq;
     if (!zones.length && !notams.length) { m.closePopup(); return; }
@@ -576,9 +587,11 @@
     let done = false;
     const open = () => {
       if (done || seq !== LAY.seq) return; done = true;
+      try {
       const sz = m.getSize(), o = lay.popup.options;   // הכרטיס תמיד נכנס למפה, גם בטלפון (מפה צרה ונמוכה): רוחב וגובה מרביים לפי גודל המפה, וגלילה פנימית כשיש הרבה פריטים
       o.maxWidth = Math.max(170, Math.min(320, sz.x - 64)); o.minWidth = Math.min(190, o.maxWidth); o.maxHeight = Math.max(140, Math.min(300, sz.y - 120));
       lay.popup.setLatLng(ll).setContent(html); m.openPopup(lay.popup);
+      } catch (e) { logLayerErr("openCard", e); }
     };
     if (moved) { m.once("moveend", open); setTimeout(open, 900); } else open();   // המפה זזה: מחכים לסיום התנועה (גיבוי: טיימר) כדי שהכרטיס לא ייפתח במקום הלא נכון
   }
@@ -608,25 +621,31 @@
   /* ---------- שער "מוכן לשליחה" ---------- */
   // pending נגזר ממה שבאמת ממתין: טיימר עריכה רכה שעוד לא פעל, או בנייה רצה של ההדמיות. אף בנייה (ובמיוחד לא בנייה מיושנת) לא מאפסת אותו "על דעת עצמה"
   const syncPending = () => { S.pending = rebuildTimer !== null || S.building; };
-  function refreshGate() {
+  // opts.quiet: קריאה מהקלדה בשדה רך. נועלת את הלחצנים מיד (S.ready), אבל לא מרנדרת את הדוח ולא מחליפה את אזור השער אם לא השתנה — אחרת הפריסה מעל תיבת ההקלדה "קופצת" בכל תו
+  function refreshGate(opts) {
     const box = $("gate"); if (!box) return;
+    const toReview = $("toReview"); if (toReview) toReview.hidden = !S.res;   // קישור קפיצה לסעיף 4 (סקירה, תאריך סיור והערות המבקש) — אחרי הרצה בלבד; בטלפון הסעיף רחוק מתחת לשער ולאזהרות
     if (!S.res) { $("resultsSec").style.display = "none"; return; }
     $("resultsSec").style.display = "block";
     syncPending();
     const g = C.gate(S.statuses);
     S.ready = g.ready && !S.stale && !S.pending;     // pending = הדמיות המפה נבנות מחדש אחרי עריכה — עד שהסתיימו אסור לשמור או לשלוח (התמונות עדיין של הגרסה הקודמת)
-    const w = warnings();
+    // באנר ״מעדכן את ההדמיות״ רק כשההמתנה היא להדמיות (שם האתר שונה או בנייה רצה); עריכה רכה אחרת שממתינה לרינדור נועלת את הלחצנים בלבד, והבאנר נשאר כפי שהיה
+    const imgWait = S.pending && !S.stale && (S.building || (S.imgSite != null && S.imgSite !== ($("siteName").value || "").trim()));
+    const showReady = S.ready || (S.pending && !imgWait && g.ready && !S.stale);
+    const skipHtml = !!(opts && opts.quiet) && !imgWait && box._html !== undefined;   // הקלדה בשדה רך בלי שינוי הדמיות: אזור השער אינו משתנה — לא בונים מחדש (גם לא את האזהרות, שחישובן כבד יחסית) ולא נוגעים ב-DOM
+    const w = skipHtml ? [] : warnings();
     let html = "";
     if (S.stale) html += '<div class="banner no">' + (S.staleWhy === "data" ? "נתוני המפה או הנוטמים התעדכנו מאז הרצת הבדיקות." : "הנתונים בטופס השתנו מאז הרצת הבדיקות.") + ' יש ללחוץ שוב על "הרץ את כל הבדיקות" לפני שליחה.</div>';
-    if (S.pending && !S.stale) html += '<div class="banner warn">מעדכן את ההדמיות לפי השינוי האחרון… (אפשר לשמור ולשלוח רק אחרי שהסתיים)</div>';
-    html += S.ready ? '<div class="banner ok">✔ כל הבדיקות הושלמו ללא כשל. הבקשה מוכנה לשליחה.</div>'
+    if (imgWait) html += '<div class="banner warn">מעדכן את ההדמיות לפי השינוי האחרון… (אפשר לשמור ולשלוח רק אחרי שהסתיים)</div>';
+    html += showReady ? '<div class="banner ok">✔ כל הבדיקות הושלמו ללא כשל. הבקשה מוכנה לשליחה.</div>'
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
-    box.innerHTML = html;
+    if (!skipHtml && box._html !== html) { box.innerHTML = html; box._html = html; }   // לא מחליפים DOM זהה
     ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
     $("btnMail").querySelector("button").disabled = !S.ready;
     $("btnMail").style.pointerEvents = S.ready ? "" : "none";
-    if (S.report) renderReport();
+    if (S.report && !(opts && opts.quiet)) renderReport();
   }
   function warnings() {
     const out = [], r = S.res; if (!r) return out;
@@ -797,7 +816,9 @@
         if (S.res && !S.running) renderAll(); else { syncPending(); if (S.res) refreshGate(); }   // באמצע הרצה: run מרנדר בסיומה
       }
     }, 450);
-    syncPending(); refreshGate();
+    // בכל תו: הלחצנים ננעלים מיד (pending), אבל אזור השער והדוח אינם מרונדרים מחדש ואין באנר חדש (אלא אם שם האתר שונה — ההדמיות באמת ייבנו מחדש).
+    // הרינדור, האימות והמייל קורים פעם אחת אחרי 450 מ״ש בלי הקלדה — כך הפריסה מעל תיבת ההקלדה לא זזה והמיקוד והסמן נשארים
+    syncPending(); refreshGate({ quiet: true });
   }
 
   /* ---------- הדוח ---------- */
@@ -1155,7 +1176,7 @@
     if (H) { H.wire(); attachHelp(); }   // לחצני ״!״ ליד כפתורי הדף (ההסברים ב-HELP)
     applyRole();   // עד שהתחברות מזוהה — ״שמור בדרייב״ מוסתר (נכשל סגור); המנהל מקבל אותו ב-req-auth
     initMap();
-    initLayerUi();   // מתגי האיסורים והנוטמים + פס הסיכום (גם כשהמפה לא נטענה: המתגים מושבתים עם הסבר)
+    try { initLayerUi(); } catch (e) { logLayerErr("initLayerUi", e); }   // מתגי האיסורים והנוטמים + פס הסיכום (גם כשהמפה לא נטענה: המתגים מושבתים עם הסבר); כשל בהם לעולם לא עוצר את האתחול
     const okCfg = await loadStatic();
     document.addEventListener("req-auth", ev => {   // משתמש אחר באותו דף לא יורש תיקייה, מזהה בקשה או הודעות של קודמו
       const u = ev.detail && ev.detail.user;
@@ -1165,7 +1186,7 @@
     });
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
-    $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); });
+    $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); else scheduleLayerUpdate(); });   // טקסט שאינו נ״צ: הפס מתעדכן להנחיה (layerPoint), ולא ממשיך להציג את הנקודה הקודמת
     ["siteName", "purpose", "vlos", "reqName", "reqPhone", "reqOrg", "reqCallsign", "reqReg", "knownObs", "visitDate", "visitNotes"].forEach(id => (id === "visitDate" ? ["input", "change"] : ["input"]).forEach(ev => $(id).addEventListener(ev, () => { if (id.startsWith("req")) savePerson(); onSoftInputChange(); })));
     // אנשי קשר ומשתתפים: מאזין אחד (delegation) לכל השורות; הוספה והסרה של שורות ב-click
     $("personBox").addEventListener("input", ev => { if (ev.target.closest && ev.target.closest(".plist")) { savePerson(); onSoftInputChange(); } });
@@ -1175,6 +1196,7 @@
     $("aircraft").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-acrm]"); if (b) removeAircraft(+b.dataset.acrm); });
     $("acAdd").onclick = addAircraft; $("acNew").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addAircraft(); } });
     $("puAdd").onclick = addPurpose; $("puNew").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPurpose(); } });
+    $("purpose").addEventListener("change", () => { $("puMsg").textContent = ""; });   // הודעת ההוספה האחרונה ("כבר ברשימה — נבחרה") לא נשארת אחרי שבחרו מהות אחרת
     $("puList").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-purm]"); if (b) removePurpose(+b.dataset.purm); });
     $("incChecks").addEventListener("change", () => { if (S.res) { clearOutcome(); renderReport(); } });
     $("runBtn").onclick = run; $("qBtn").onclick = searchPlace; $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });

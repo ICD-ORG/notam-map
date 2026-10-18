@@ -603,7 +603,8 @@ try {
     // הערות הסיור ותאריכו (סעיף 4): נכנסים לדוח כשדות רכים — אחרי ההרצה
     await page.fill("#visitDate", visitYmd); await page.fill("#visitNotes", NOTES);
     await page.check("#reviewOk");
-    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 20000 });
+    // עריכה רכה (לא של שם האתר) אינה מציגה באנר ״מעדכן״: הלחצנים ננעלים והדוח מתעדכן ב-debounce, ולכן ממתינים גם לסיום ההמתנה (S.pending), לא רק לטקסט השער
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent) && !window.__REQ.S.pending, null, { timeout: 20000 });
     const ckRows = await page.$$eval("#report table.ck tr", trs => trs.map(t => [...t.children].map(c => c.innerText.replace(/\s+/g, " ").trim())));
     const koRow = ckRows.find(r => r[1] === "מכשולים שידועים למבקש") || [];
     check("מכשולים ידועים בדף הבדיקות: שורה עם התאמה לפריט שנמצא (עמוד חשמל) ו״לא נמצא בסריקה״ לפריט שלא", /״עמוד חשמל״ — התאמה אפשרית[^:]*: .*עמוד חשמל/.test(koRow[3] || "") && /״דינוזאור מתנפח כחול, <i>חלל<\/i> אפל״ — לא נמצא בסריקה|״דינוזאור מתנפח כחול״ — לא נמצא בסריקה/.test(koRow[3] || ""), (koRow[3] || "").slice(0, 400));
@@ -1247,7 +1248,7 @@ try {
     const rmPu = async t => { const i = (await chips()).indexOf(t); await page.locator("#puList [data-purm]").nth(i).click(); };
     const puMsg = () => page.textContent("#puMsg");
     const bubble = () => page.evaluate(() => { const b = document.getElementById("hbubble"); return !b || b.hidden ? null : b.textContent; });
-    check("מהות פעילות: בהתחלה ״בחרו…״ והמהויות הקבועות בלבד; אין צ׳יפים ואין מהות שמורה; שדה ההוספה מוגבל ל-80 תווים עם placeholder", (await opts()).join("|") === fixedOpts.join("|") && (await sel()) === "" && (await chips()).length === 0 && !(await page.isVisible("#puSaved")) && (await storedArr()).length === 0 && (await page.getAttribute("#puNew", "maxlength")) === "80" && /^למשל: לצורך/.test(await page.getAttribute("#puNew", "placeholder")), (await opts()).join("|"));
+    check("מהות פעילות: בהתחלה ״בחרו…״ והמהויות הקבועות בלבד; אין צ׳יפים ואין מהות שמורה; שדה ההוספה מוגבל ל-320 תווים (4×80: הדבקה ארוכה מגיעה להודעת הדחייה ולא נחתכת בשקט) עם placeholder", (await opts()).join("|") === fixedOpts.join("|") && (await sel()) === "" && (await chips()).length === 0 && !(await page.isVisible("#puSaved")) && (await storedArr()).length === 0 && (await page.getAttribute("#puNew", "maxlength")) === "320" && /^למשל: לצורך/.test(await page.getAttribute("#puNew", "placeholder")), (await opts()).join("|"));
     // הוספה: ניקוי רווחים וטאב, בחירה מיידית, צ׳יפ עם ×, שמירה ב-localStorage, שדה ההוספה מתרוקן
     await addPu("   לצורך    הדרכת \t טייסים  ");
     check("הוספת מהות: נוספה ל-select אחרי ניקוי רווחים, נבחרה מיד, מוצגת כצ׳יפ עם ×, נשמרה ב-localStorage (icd_req_purposes_v1), ושדה ההוספה התרוקן", (await opts()).length === fixedOpts.length + 1 && (await opts()).includes(P1) && (await sel()) === P1 && (await chips()).join("|") === P1 && (await page.locator("#puList [data-purm]").count()) === 1 && JSON.stringify(await storedArr()) === JSON.stringify([P1]) && (await page.inputValue("#puNew")) === "" && (await page.isVisible("#puSaved")), JSON.stringify(await storedArr()));
@@ -1260,8 +1261,8 @@ try {
     check("מהות קבועה שהוקלדה שוב: נבחרת בלי להתווסף לרשימה השמורה (ובלי צ׳יפ ובלי ×)", (await sel()) === cfgPu[1] && (await chips()).length === 2 && (await opts()).length === fixedOpts.length + 2 && (await storedArr()).length === 2, await sel());
     await addPu("   ");
     check("שדה ריק או רווחים בלבד: לא מתווסף, ומוצגת הודעה", /יש להקליד מהות/.test(await puMsg()) && (await chips()).length === 2, await puMsg());
-    // אורך: מעל 80 (הוקלד תוכניתית, עוקף את maxlength) נדחה בלי חיתוך שקט והשם נשאר בשדה; בדיוק 80 מתקבל
-    await page.evaluate(() => { document.getElementById("puNew").value = "א".repeat(81); }); await page.click("#puAdd");
+    // אורך: מעל 80 (מוקלד ממש — שדה ההוספה מקבל עד 320) נדחה בלי חיתוך שקט והשם נשאר בשדה; בדיוק 80 מתקבל
+    await page.fill("#puNew", "א".repeat(81)); await page.click("#puAdd");
     check("מהות ארוכה מ-80 תווים: נדחית בהודעה, לא נחתכת בשקט ולא נשמרת, והטקסט נשאר בשדה", /עד 80 תווים/.test(await puMsg()) && (await chips()).length === 2 && (await storedArr()).length === 2 && (await page.inputValue("#puNew")).length === 81, await puMsg());
     await addPu("ב".repeat(80));
     check("מהות של בדיוק 80 תווים מתקבלת ונבחרת", (await sel()) === "ב".repeat(80) && (await chips()).length === 3, "");
@@ -1384,8 +1385,9 @@ try {
     const expNotams = inp => LYR.selectNotams(snapJ.notams, LYR.inputWindow(inp, new Date())).items.length;   // מה שהדף אמור לצייר, מחושב בנפרד בתהליך הבדיקה מקובץ הנוטמים השמור
     const lyReady = pg => pg.waitForFunction(() => { const l = window.__REQ && window.__REQ.S.lf.lay; return l && l.zoneLayers.length > 0 && l.sel; }, null, { timeout: 30000 });
     const vis = pg => pg.evaluate(() => window.__REQ.S.lf.lay.visible());
-    const strip = pg => pg.evaluate(() => document.getElementById("pointSummary").innerText.replace(/[ \t]+/g, " "));
-    const stripHas = (pg, re) => pg.waitForFunction(r => new RegExp(r).test(document.getElementById("pointSummary").innerText), re.source, { timeout: 8000 }).then(() => true, () => false);
+    // הפס מכניס RLM אחרי מזהה לטיני שבא לפני " — " ומספר (אחרת הסדר החזותי מתהפך); השוואות הטקסט כאן הן בלעדיו, ובדיקה נפרדת מוודאת שהוא קיים
+    const strip = pg => pg.evaluate(() => document.getElementById("pointSummary").innerText.split(String.fromCharCode(0x200F)).join("").replace(/[ \t]+/g, " "));
+    const stripHas = (pg, re) => pg.waitForFunction(r => new RegExp(r).test(document.getElementById("pointSummary").innerText.split(String.fromCharCode(0x200F)).join("")), re.source, { timeout: 8000 }).then(() => true, () => false);
     const clickLatLng = async (pg, lat, lon, zoom) => {   // לחיצת עכבר אמיתית על נ״צ נתון
       await pg.evaluate(([la, lo, z]) => { window.__REQ.S.lf.m.setView([la, lo], z, { animate: false }); }, [lat, lon, zoom]);
       await pg.locator("#map").scrollIntoViewIfNeeded();
@@ -1431,7 +1433,7 @@ try {
     const e100 = await edgeOf();
     check("מרחק LLU20 מקצה סגירה ברדיוס 100 מ׳ ≈ 426 מ׳ (525.9 − 100, בטווח הלחיצה)", e100 != null && Math.abs(e100 - 426) <= 6, "edge=" + e100);
     await page.fill("#radius", "150");
-    await page.waitForFunction(v => { const m = /LLU20 ״תל אביב״ — [^\n]*?(\d+) מ׳ מקצה הסגירה/.exec(document.getElementById("pointSummary").innerText); return m && Math.abs(+m[1] - (v - 50)) <= 2; }, e100, { timeout: 5000 }).then(() => check("שינוי רדיוס ל-150 מעדכן את הפס (המרחק מקצה הסגירה יורד ב-50 מ׳)", true, ""), async () => check("שינוי רדיוס ל-150 מעדכן את הפס (המרחק מקצה הסגירה יורד ב-50 מ׳)", false, await strip(page)));
+    await page.waitForFunction(v => { const m = /LLU20 ״תל אביב״ — [^\n]*?(\d+) מ׳ מקצה הסגירה/.exec(document.getElementById("pointSummary").innerText.split(String.fromCharCode(0x200F)).join("")); return m && Math.abs(+m[1] - (v - 50)) <= 2; }, e100, { timeout: 5000 }).then(() => check("שינוי רדיוס ל-150 מעדכן את הפס (המרחק מקצה הסגירה יורד ב-50 מ׳)", true, ""), async () => check("שינוי רדיוס ל-150 מעדכן את הפס (המרחק מקצה הסגירה יורד ב-50 מ׳)", false, await strip(page)));
     check("בלי גובה: הפס אומר ״הזינו גובה לחישוב מדויק״", /הזינו גובה לחישוב מדויק/.test(await strip(page)), await strip(page));
     await page.fill("#height", "80");
     check("אחרי הזנת גובה ההנחיה נעלמת, אזור ב-09 הגבוה מדי מסונן, ואין חפיפה לאזורי איסור", await page.waitForFunction(() => !/הזינו גובה לחישוב מדויק/.test(document.getElementById("pointSummary").innerText), null, { timeout: 5000 }).then(() => true, () => false) && await stripHas(page, /בתוך הסגירה: אין חפיפה לאזורי איסור/), await strip(page));
@@ -1443,6 +1445,7 @@ try {
     await page.waitForFunction(n => window.__REQ.S.lf.lay.visible().notams === n, expNotams(winA), { timeout: 8000 }).catch(() => {});
     check("סינון הנוטמים לפי התאריכים והשעות שנבחרו (20–23.10.2026 17:00–20:00): מספר השכבות כמו בחישוב העצמאי", (await vis(page)).notams === expNotams(winA) && expNotams(winA) > 0, JSON.stringify(await vis(page)) + " expected=" + expNotams(winA));
     check("הפס מציג את חלון הנוטמים שנבחר ואת הנוטם הקבוע C0431/26 עם מרחקו מקצה הסגירה", await stripHas(page, /20\.10\.2026 17:00 – 23\.10\.2026 20:00/) && await stripHas(page, /C0431\/26 — [\d.]+ ק״מ מקצה הסגירה/), await strip(page));
+    check("סדר תצוגה (RTL): אחרי מזהה הנוטם בפס יש RLM לפני ״ — מרחק״ (אחרת המספר מופיע לפני המזהה והיחידה מנותקת ממנו), וגם אחרי תווית אזור בשורת ״בקרבה״", await page.evaluate(() => { const t = document.getElementById("pointSummary").innerText, R = String.fromCharCode(0x200F); return t.includes("C0431/26" + R + " — ") && t.includes("LLU20 ״תל אביב״" + R + " — "); }), (await page.evaluate(() => document.getElementById("pointSummary").innerText)).slice(0, 300));
     await setWin(winB);
     await page.waitForFunction(n => window.__REQ.S.lf.lay.visible().notams === n, expNotams(winB), { timeout: 8000 }).catch(() => {});
     check("החלפת התאריכים (20–21.12.2026) מחליפה את הנוטמים המצוירים", expNotams(winA) !== expNotams(winB) && (await vis(page)).notams === expNotams(winB), JSON.stringify(await vis(page)) + " A=" + expNotams(winA) + " B=" + expNotams(winB));
@@ -1544,6 +1547,223 @@ try {
     const d = await page.evaluate(() => ({ z: document.getElementById("lyrZones").disabled, n: document.getElementById("lyrNotams").disabled, zn: document.getElementById("lyrZonesNote").textContent, vis: window.__REQ.S.lf.lay.visible(), sum: document.getElementById("pointSummary").innerText }));
     check("נתוני האזורים לא נטענו: מתג האיסורים מושבת עם הסבר, שום אזור לא מצויר, והנוטמים והפס ממשיכים לעבוד", d.z && !d.n && /נתוני האזורים לא נטענו/.test(d.zn) && d.vis.zones === 0 && d.vis.notams > 0 && /בחרו נקודה במפה/.test(d.sum), JSON.stringify(d).slice(0, 300));
     await ctx.close();
+  }
+  /* ===== תרחיש תיקוני סקירה (20 ממצאים + תקלות הטלפון וההקלדה): אינטראקציות המפה והפס, כשל בציור שאינו מפיל את הדף, מהויות, הקלדה יציבה, הערות המבקש בטלפון, אזורים בטוחים ===== */
+  {
+    const LYR = require(path.join(ROOT, "members-k38p/requests/js/maplayers.js"));
+    const RLM = String.fromCharCode(0x200F);
+    const J = p => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
+    const strip = pg => pg.evaluate(() => document.getElementById("pointSummary").innerText.split(String.fromCharCode(0x200F)).join("").replace(/[ \t]+/g, " "));
+    const boot = async (opts, pre) => {   // pre: פעולות לפני טעינת הדף (route וכו׳)
+      const { ctx, page } = await newPage(browser, opts || {});
+      if (pre) await pre(page);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      return { ctx, page };
+    };
+    const clickLL = async (pg, lat, lon, zoom) => {
+      if (zoom != null) await pg.evaluate(([la, lo, z]) => { window.__REQ.S.lf.m.setView([la, lo], z, { animate: false }); }, [lat, lon, zoom]);
+      await pg.locator("#map").scrollIntoViewIfNeeded();
+      const xy = await pg.evaluate(([la, lo]) => { const m = window.__REQ.S.lf.m, p = m.latLngToContainerPoint([la, lo]), r = m.getContainer().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]);
+      await pg.mouse.click(xy.x, xy.y);
+    };
+
+    /* --- א. אינטראקציות: גרירה (3/9), נ״צ לא חוקי (6), סגירת כרטיס (17), כרטיס ראשון בזום 8 (11), רט״ג בלי גבול (1), הערת תאריכים (18), ביצועי הקלדת שנה (10) --- */
+    {
+      const { ctx, page } = await boot();
+      await page.fill("#radius", "100"); await page.fill("#height", "80");
+      // 11: לחיצה ראשונה בזום 8 (איפוס סינכרוני של המפה) — הכרטיס נפתח מיד ולא אחרי טיימר הגיבוי (900 מ״ש)
+      await page.locator("#map").scrollIntoViewIfNeeded();
+      const z8 = await page.evaluate(() => window.__REQ.S.lf.m.getZoom());
+      const t0 = Date.now(); await clickLL(page, 31.935, 34.880556);   // LLU01, בזום ההתחלתי
+      const opened = await page.waitForFunction(() => !!document.querySelector(".leaflet-popup .lp"), null, { timeout: 4000 }).then(() => Date.now() - t0, () => -1);
+      check("ממצא 11: לחיצה ראשונה בזום " + z8 + " (איפוס סינכרוני של המפה): הכרטיס נפתח מיד (פחות מ-700 מ״ש, לא אחרי טיימר הגיבוי של 900)", z8 <= 10 && opened >= 0 && opened < 700, "z=" + z8 + " opened after " + opened + "ms");
+      await clickLL(page, 32.099128, 34.816617, 16);
+      await page.waitForFunction(() => /^\d+\.\d+, \d+\.\d+$/.test(document.getElementById("coord").value), null, { timeout: 5000 });
+      await page.waitForFunction(() => /LLU20/.test(document.getElementById("pointSummary").innerText), null, { timeout: 5000 }).catch(() => {});
+      const s0 = await strip(page);
+      check("ממצא 1/12: הפס מציין שאתרי רט״ג בלי גבול בקובץ אינם נבדקים בו (״לא נבדקו N אתרי רט״ג שאין להם גבול בקובץ — … בהרצה המלאה״), והקביעות ״אין״ מוגבלות לקובץ", /לא נבדקו \d+ אתרי רט״ג שאין להם גבול בקובץ — הם נבדקים רק בהרצה המלאה/.test(s0) && /בתוך הסגירה: (אין חפיפה לאזורי איסור שבקובץ|חפיפה ל-)/.test(s0), s0.slice(0, 400));
+      // 3/9: גרירת הסמן כותבת את שדה הנ״צ ומעדכנת את הפס וההרצה; בלי זום; הכרטיס הפתוח נסגר
+      await page.evaluate(() => { window.__REQ.S.lf.m.setZoom(12, { animate: false }); });
+      await page.waitForTimeout(400);
+      const mb = await page.locator(".leaflet-marker-icon").first().boundingBox();
+      await page.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2); await page.mouse.down();
+      await page.mouse.move(mb.x + mb.width / 2 + 40, mb.y + mb.height / 2 - 30, { steps: 8 }); await page.mouse.up();
+      await page.waitForTimeout(700);
+      const d = await page.evaluate(() => { const S = window.__REQ.S, mk = S.lf.marker.getLatLng(), ri = window.__REQ.readInputs(), cf = document.getElementById("coord").value.split(",").map(x => +x.trim()); return { mk: [mk.lat, mk.lng], center: [S.center.lat, S.center.lon], field: cf, run: [ri.lat, ri.lon], zoom: S.lf.m.getZoom(), popup: !!document.querySelector(".leaflet-popup") }; });
+      const same = (a, b) => Math.abs(a[0] - b[0]) < 2e-6 && Math.abs(a[1] - b[1]) < 2e-6;
+      check("ממצא 3/9: אחרי גרירת הסמן שדה הנ״צ, S.center, הסמן וקלט ההרצה זהים (אין נקודה ישנה בשדה)", same(d.mk, d.field) && same(d.mk, d.center) && same(d.mk, d.run) && !same(d.mk, [32.099128, 34.816617]), JSON.stringify(d));
+      check("ממצא 3/9: הגרירה לא מקרבת/מזיזה את המפה (נשארה בזום 12) והכרטיס הישן נסגר", d.zoom === 12 && !d.popup, JSON.stringify(d));
+      const s1 = await strip(page);
+      check("ממצא 3/9: הפס מתעדכן לנקודה שאליה נגרר הסמן (לא נשאר כמו לפני הגרירה)", s1 !== s0 && !/בחרו נקודה/.test(s1), s1.slice(0, 200));
+      // 6: נ״צ שהוקלד ואינו חוקי
+      await page.fill("#coord", "garbage"); await page.dispatchEvent("#coord", "change");
+      const bad = await page.waitForFunction(() => { const b = document.getElementById("pointSummary"); return b.querySelector('[data-k="hint"]') && !b.querySelector('[data-k="inside"],[data-k="near"],[data-k="notams"]'); }, null, { timeout: 4000 }).then(() => true, () => false);
+      check("ממצא 6: טקסט שאינו נ״צ בשדה — הפס מציג ״הנ״צ שהוקלד אינו חוקי״ מיד (בלי להמתין לשינוי שדה אחר) ולא את סיכום הנקודה הקודמת", bad && /הנ״צ שהוקלד אינו חוקי/.test(await strip(page)) && /תצוגה מקדימה בלבד/.test(await strip(page)), await strip(page));
+      await page.fill("#coord", "32.099128, 34.816617"); await page.dispatchEvent("#coord", "change");
+      await page.evaluate(() => document.getElementById("coord").blur()); await page.waitForTimeout(700);   // עוזבים את השדה לפני הלחיצה על המפה (change נוסף בעזיבה מזיז את המפה לנקודה שהוקלדה)
+      check("ממצא 6: נ״צ תקין שוב — הסיכום חוזר", await page.waitForFunction(() => !!document.querySelector('#pointSummary [data-k="inside"]'), null, { timeout: 4000 }).then(() => true, () => false), await strip(page));
+      // 17: כרטיס פתוח נסגר כשהנקודה משתנה בהקלדה
+      await clickLL(page, 32.95, 35.65, 14);
+      const card = await page.waitForFunction(() => !!document.querySelector(".leaflet-popup .lp"), null, { timeout: 8000 }).then(() => true, () => false);
+      await page.fill("#coord", "32.9540, 35.6540"); await page.dispatchEvent("#coord", "change");
+      check("ממצא 17: כרטיס שנפתח בלחיצה נסגר כשמקלידים נ״צ אחר (לא נשאר על הנקודה הישנה בזמן שהפס מתאר את החדשה)", card && await page.waitForFunction(() => !document.querySelector(".leaflet-popup"), null, { timeout: 3000 }).then(() => true, () => false), "card=" + card);
+      // 18: הערת המתג מבחינה בין ״לא נבחרו תאריכים״ ל״תאריכים שגויים״
+      await page.fill("#dateFrom", ""); await page.fill("#dateTo", "");
+      await page.waitForFunction(() => /עוד לא נבחרו תאריכים/.test(document.getElementById("lyrNotamsNote").textContent), null, { timeout: 4000 }).catch(() => {});
+      const n1 = await page.textContent("#lyrNotamsNote");
+      await page.fill("#dateFrom", "2026-10-20"); await page.fill("#dateTo", "2026-10-18");
+      await page.waitForFunction(() => /אינם תקינים/.test(document.getElementById("lyrNotamsNote").textContent), null, { timeout: 4000 }).catch(() => {});
+      const n2 = await page.textContent("#lyrNotamsNote");
+      check("ממצא 18: הערת מתג הנוטמים: בלי תאריכים — ״עוד לא נבחרו תאריכים״; תאריכים שגויים — ״התאריכים שנבחרו אינם תקינים״ (ולא ההפך)", /עוד לא נבחרו תאריכים/.test(n1) && !/אינם תקינים/.test(n1) && /התאריכים שנבחרו אינם תקינים/.test(n2) && !/עוד לא נבחרו/.test(n2), n1 + " || " + n2);
+      // 10: הקלדת שנה בשדה התאריך (0002, 0020, 0202) אינה גורמת לחסימה ארוכה של הדף
+      // מודדים את inputWindow כפי שהדף קורא לו (כל עדכון מושהה): בשנה חלקית הוא חוזר מיד (לא בונה טבלת יום/לילה לאלפי ימים — לפני התיקון ~25 מ״ש כאן ו-~250 מ״ש בדפדפן אטי, פעמיים בכל הקלדה)
+      await page.evaluate(() => { const LYo = window.ReqLayers, orig = LYo.inputWindow; window.__IW = { max: 0, n: 0 }; LYo.inputWindow = function () { const t = performance.now(); try { return orig.apply(this, arguments); } finally { window.__IW.max = Math.max(window.__IW.max, performance.now() - t); window.__IW.n++; } }; });
+      for (const y of ["0002", "0020", "0202"]) { await page.evaluate(v => { const e = document.getElementById("dateFrom"); e.value = v; e.dispatchEvent(new Event("input", { bubbles: true })); }, y + "-10-20"); await page.waitForTimeout(450); }
+      const iw = await page.evaluate(() => window.__IW);
+      check("ממצא 10: הקלדת שנה חלקית (0002/0020/0202) בשדה התאריך — inputWindow חוזר מיד (פחות מ-8 מ״ש לקריאה; ללא טבלת יום/לילה לאלפי ימים)", iw.n >= 3 && iw.max < 8, JSON.stringify(iw));
+      await ctx.close();
+    }
+
+    /* --- ב. כשל בציור השכבות לעולם אינו מפיל את הדף (2/7) --- */
+    {
+      const { ctx, page } = await boot({}, async pg => {
+        await pg.route(/\/members-k38p\/data\/zones\.json/, async r => { const resp = await r.fetch(), j = await resp.json(); j.zones[0].rings = [[[null, null], [32, 34], [32.1, 34.1]]]; r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(j) }); });
+      });
+      const d = await page.evaluate(() => ({ ready: window.__REQ_READY === true, run: typeof document.getElementById("runBtn").onclick, add: typeof document.getElementById("puAdd").onclick, zOff: document.getElementById("lyrZones").disabled, nOff: document.getElementById("lyrNotams").disabled, zn: document.getElementById("lyrZonesNote").textContent, vis: window.__REQ.S.lf.lay.visible(), sum: document.getElementById("pointSummary").innerText, a17: window.__REQ.S.statuses.a17 }));
+      check("ממצא 2: גבול פגום בקובץ האזורים (קואורדינטה null) — הדף נטען (ready, הכניסה והלחצנים מחווטים), שכבת האיסורים מושבתת עם הסבר, שום אזור לא מצויר, והנוטמים ממשיכים", d.ready && d.run === "function" && d.add === "function" && d.zOff && !d.nOff && /אינה זמינה/.test(d.zn) && d.vis.zones === 0 && d.vis.notams > 0, JSON.stringify(d).slice(0, 400));
+      await page.fill("#radius", "100"); await clickLL(page, 32.099128, 34.816617, 16); await page.waitForTimeout(500);
+      const s = await strip(page);
+      check("ממצא 2: עם גבול פגום הפס אינו אומר ״אין חפיפה״ בירוק אלא מזהיר שאי אפשר לחשב תצוגה מקדימה של האיסורים (נתונים לא תקינים), ושורת ״תצוגה מקדימה בלבד״ נשמרת", /לא ניתן לחשב תצוגה מקדימה של אזורי איסור \(נתונים לא תקינים/.test(s) && !/אין חפיפה לאזורי איסור/.test(s) && /תצוגה מקדימה בלבד/.test(s), s.slice(0, 300));
+      check("ממצא 2: כשל התצוגה לא נגע בסטטוס הבדיקות (a17 נטען) ולא יצר תוצאה", await page.evaluate(() => window.__REQ.S.res === null && window.__REQ.S.statuses.a17 && window.__REQ.S.statuses.a17.ok === true), "");
+      await ctx.close();
+    }
+    {
+      const huge = { id: "Z9999/26", loc: "LLLL", name: "רדיוס אינסופי", heb: "סגירה ברדיוס אינסופי\nבתוקף: קבוע", raw: "Z9999/26 NOTAMN\nQ) LLLL/QRTCA/IV/BO /W /000/050/3206N03449E002\nA) LLLL B) 2601010000 C) PERM\nE) OPS WI " + "9".repeat(400) + " KM RADIUS CENTERED ON PSN 320600N0344900E CLSD\nF) GND G) 500FT AMSL)" };
+      const snapN = J("members-k38p/requests/selftest/notam-data.snap.json"), all = snapN.notams.concat([huge]);
+      const expNoLoc = LYR.selectNotams(all, LYR.inputWindow({}, new Date())).noLocation, expItems = LYR.selectNotams(all, LYR.inputWindow({}, new Date())).items.length;
+      const { ctx, page } = await boot({}, async pg => {
+        await pg.route(/\/notam-all\.json/, r => { const d = JSON.parse(JSON.stringify(snapN)); d.notams = d.notams.concat([huge]); d.fetched_iso = d.fetched_at = pg._notamIso; d.listed = d.count = d.notams.length; d.failed = []; r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) }); });
+      });
+      const d = await page.evaluate(() => ({ ready: window.__REQ_READY === true, run: typeof document.getElementById("runBtn").onclick, vis: window.__REQ.S.lf.lay.visible(), note: document.getElementById("lyrNotamsNote").textContent, off: document.getElementById("lyrNotams").disabled, noLoc: window.__REQ.S.lf.lay.sel.noLocation }));
+      check("ממצא 7: נוטם עם רדיוס אינסופי (400 ספרות) — הדף נטען, הלחצנים מחווטים, הנוטם נספר ״ללא מיקום״ ואינו מצויר, ושאר הנוטמים מצוירים", d.ready && d.run === "function" && !d.off && d.noLoc.includes("Z9999/26") && d.vis.notams === expItems && new RegExp("· " + expNoLoc.length + " ללא מיקום").test(d.note) && !/טוען נתוני/.test(d.note), JSON.stringify(d).slice(0, 400));
+      await ctx.close();
+    }
+
+    /* --- ג. מהויות פעילות (4/5/19/20) --- */
+    {
+      const { ctx, page } = await boot();
+      const msg = () => page.textContent("#puMsg"), opts = () => page.$$eval("#purpose option", o => o.map(x => x.value));
+      const emoji = String.fromCharCode(0xd83d, 0xde00);
+      await page.focus("#puNew"); await page.keyboard.insertText("ג".repeat(120));
+      check("ממצא 5: הדבקה של 120 תווים בשדה ההוספה אינה נחתכת ל-80 בשקט (השדה מחזיק את כולה)", (await page.inputValue("#puNew")).length === 120, "len=" + (await page.inputValue("#puNew")).length);
+      await page.click("#puAdd");
+      check("ממצא 5: מהות של 120 תווים נדחית בהודעה ״ארוכה מדי — עד 80 תווים (הוקלדו 120)״, הטקסט נשאר בשדה ולא נוספה מהות", /ארוכה מדי — עד 80 תווים \(הוקלדו 120\)/.test(await msg()) && (await page.inputValue("#puNew")).length === 120 && (await opts()).length === (await page.evaluate(() => window.__REQ.S.cfg.purposes.length)) + 1, await msg());
+      await page.fill("#puNew", emoji.repeat(81)); await page.click("#puAdd");
+      check("ממצא 5: 81 אמוג׳י נדחים (נספרים כתווים, לא כיחידות UTF-16)", /הוקלדו 81/.test(await msg()), await msg());
+      await page.fill("#puNew", emoji.repeat(80)); await page.click("#puAdd");
+      check("ממצא 5: 80 אמוג׳י (160 יחידות UTF-16) מתקבלים ונבחרים", (await page.inputValue("#purpose")) === emoji.repeat(80) && (await msg()) === "", await msg());
+      await page.click('#puList [data-purm="0"]');
+      for (const [name, text] of [["RLM בודד", RLM], ["ZWSP", String.fromCharCode(0x200b)], ["מילוי הנגול", String.fromCharCode(0x3164)], ["בריילי ריק", String.fromCharCode(0x2800)], ["רווחים ו-RLM", "  " + RLM + RLM + " "]]) {
+        await page.fill("#puNew", text); await page.click("#puAdd");
+        const ls = await page.evaluate(() => localStorage.getItem("icd_req_purposes_v1") || "[]");
+        check("ממצא 4: מהות שכולה תווים בלתי נראים (" + name + ") נדחית בהודעה — לא נוספת, לא נבחרת ולא נשמרת", /יש להקליד מהות פעילות|אינה מכילה תווים גלויים/.test(await msg()) && (await page.inputValue("#purpose")) === "" && JSON.parse(ls).length === 0, await msg() + " | " + ls);
+      }
+      // 20: הודעה מיושנת נמחקת בבחירה אחרת; רמז כשהוקלד טקסט שלא נוסף
+      const first = await page.evaluate(() => window.__REQ.S.cfg.purposes[0]);
+      await page.fill("#puNew", first); await page.click("#puAdd");
+      const dup = await msg();
+      await page.selectOption("#purpose", { index: 2 });
+      check("ממצא 20: הודעת ״כבר ברשימה — נבחרה״ נמחקת כשבוחרים מהות אחרת ב-select", /כבר ברשימה — נבחרה/.test(dup) && (await msg()) === "", dup + " -> " + (await msg()));
+      await page.selectOption("#purpose", { index: 0 }); await page.fill("#puNew", "לצורך משלי"); await page.click("#runBtn");
+      const hint1 = await page.textContent("#e_purpose");
+      await page.fill("#puNew", ""); await page.click("#runBtn");
+      const hint2 = await page.textContent("#e_purpose");
+      check("ממצא 20: הוקלדה מהות ולא נוספה — שגיאת השדה כוללת רמז ״הקלדתם מהות אך לא הוספתם אותה: לחצו ״הוסף מהות פעילות״״ (בלי להוסיף לבד); בלי טקסט — בלי רמז", /יש לבחור מהות פעילות/.test(hint1) && /לא הוספתם אותה/.test(hint1) && !/לא הוספתם/.test(hint2) && /יש לבחור מהות פעילות/.test(hint2) && (await page.inputValue("#purpose")) === "", hint1 + " || " + hint2);
+      // 4: ערך שמור ב-localStorage שכולו בלתי נראה נזרק בטעינה; 19: 30 מהויות — הרשימה גוללת ואינה מנפחת את הסעיף
+      const longs = Array.from({ length: 30 }, (_, i) => "לצורך מיפוי ומחקר מס׳ " + (i + 1) + " באתר");
+      await page.evaluate(([a, r]) => localStorage.setItem("icd_req_purposes_v1", JSON.stringify([r, " " + r + " "].concat(a))), [longs, RLM]);
+      await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      if (await page.$("#authForm")) await login(page); else await page.waitForFunction(() => !document.body.classList.contains("authLocked"), null, { timeout: 20000 });
+      const o = await opts(), cfgN = await page.evaluate(() => window.__REQ.S.cfg.purposes.length);
+      check("ממצא 4: ערכים שמורים שכולם תווים בלתי נראים נזרקים בטעינה; 30 המהויות התקינות נטענות", o.length === 1 + cfgN + 30 && !o.includes(RLM) && !o.includes(" " + RLM + " "), "options=" + o.length);
+      const g = await page.evaluate(() => { const l = document.getElementById("puList"), cs = getComputedStyle(l), s = document.getElementById("inputs").getBoundingClientRect(); return { h: Math.round(l.getBoundingClientRect().height), sh: l.scrollHeight, ch: l.clientHeight, oy: cs.overflowY, sec: Math.round(s.height) }; });
+      check("ממצא 19: 30 מהויות שמורות — רשימת הצ׳יפים מוגבלת בגובה (עד 160px) וגוללת (overflow auto), ואינה מנפחת את סעיף ״מה מבקשים״", g.h <= 165 && g.sh > g.ch && /auto|scroll/.test(g.oy), JSON.stringify(g));
+      await ctx.close();
+    }
+
+    /* --- ד. הקלדה יציבה בשדה הערות המבקש אחרי הרצה (תקלה ב), והערות המבקש בטלפון (תקלה ג) --- */
+    const typingProbe = async (page, sel, nChars, pauseAt) => {
+      await page.evaluate(s => { const e = document.querySelector(s); e.scrollIntoView({ block: "center" }); e.focus({ preventScroll: true }); }, sel);
+      await page.waitForTimeout(300);
+      const st = () => page.evaluate(s => { const e = document.querySelector(s); return { top: e.getBoundingClientRect().top, y: window.scrollY, act: document.activeElement && document.activeElement.id, ss: e.selectionStart, se: e.selectionEnd, banner: document.querySelectorAll("#gate .banner").length, locked: document.getElementById("btnSend").disabled && document.getElementById("btnDocx").disabled }; }, sel);
+      await page.evaluate(() => { window.__RM = 0; new MutationObserver(m => { window.__RM += m.length; }).observe(document.getElementById("report"), { childList: true, subtree: true, characterData: true, attributes: true }); });   // כמה פעמים הדוח נבנה מחדש בזמן ההקלדה (צריך 0 עד ה-debounce)
+      const base = await st(), text = Array.from({ length: nChars }, (_, i) => "אבגדהוזחטיכלמנסעפצקרשת"[i % 22]).join("");
+      let mt = 0, my = 0, lost = 0, caret = 0, mb = base.banner, unlocked = 0, rm = 0;
+      for (let i = 0; i < nChars; i++) {
+        await page.keyboard.type(text[i]); await page.waitForTimeout(i === pauseAt ? 900 : 10);   // pauseAt: השהיה ארוכה באמצע — ההקלדה "נקלטת" (debounce) ואז ממשיכים
+        if (i === (pauseAt > 0 ? pauseAt - 1 : nChars - 1)) rm = await page.evaluate(() => window.__RM);
+        const s = await st(); mt = Math.max(mt, Math.abs(s.top - base.top)); my = Math.max(my, Math.abs(s.y - base.y)); mb = Math.max(mb, s.banner);
+        if (s.act !== sel.slice(1)) lost++; if (s.ss !== i + 1 || s.se !== i + 1) caret++; if (!s.locked && i !== pauseAt) unlocked++;
+      }
+      await page.waitForFunction(() => !window.__REQ.S.pending, null, { timeout: 20000 });
+      const fin = await page.evaluate(([s, t]) => ({ val: document.querySelector(s).value === t, inp: window.__REQ.S.res.inp.visitNotes === t || s !== "#visitNotes", ready: window.__REQ.S.ready, ok: /הבקשה מוכנה לשליחה/.test(document.getElementById("gate").textContent) }), [sel, text]);
+      return { base, mt, my, lost, caret, mb, unlocked, rm, fin };
+    };
+    for (const dev of [{ name: "מחשב", opts: { viewport: { width: 1280, height: 900 } } }, { name: "טלפון 390", opts: { viewport: { width: 390, height: 844 }, touch: true } }]) {
+      const { ctx, page } = await boot(dev.opts); let errs = 0; page.on("pageerror", () => { errs++; });
+      await readyRequest(page);
+      const r = await typingProbe(page, "#visitNotes", 200, 100);
+      check("תקלה ב (" + dev.name + "): הקלדת 200 תווים בשדה הערות המבקש — בכל תו הפריסה לא זזה (תיבה וגלילה פחות מ-2px; לפני התיקון: מחשב ~69px, טלפון ~93px גלילה), הפוקוס והסמן נשארים, אין באנר חדש מעל התיבה, הדוח לא נבנה מחדש בכל תו (0 שינויי DOM בדוח עד ההשהיה) ואין שגיאת JS", r.mt < 2 && r.my < 2 && r.lost === 0 && r.caret === 0 && r.mb === r.base.banner && r.rm === 0 && errs === 0, JSON.stringify({ ...r, errs }));
+      check("תקלה ב (" + dev.name + "): בזמן ההקלדה הלחצנים נעולים (שער fail-closed: שליחה/Word מושבתים עד שהעריכה נקלטת), ואחרי ההשהיה הטקסט נקלט בבקשה והבקשה שוב מוכנה לשליחה", r.unlocked === 0 && r.fin.val && r.fin.inp && r.fin.ready && r.fin.ok, JSON.stringify(r.fin) + " unlocked=" + r.unlocked);
+      const r2 = await typingProbe(page, "#knownObs", 60, -1);
+      check("תקלה ב (" + dev.name + "): גם שדה רך אחר (מכשולים ידועים) — הפוקוס והסמן נשארים, בלי שגיאת JS, והשער חוזר למוכן", r2.lost === 0 && r2.caret === 0 && errs === 0 && r2.fin.ready, JSON.stringify(r2).slice(0, 300));
+      if (dev.opts.touch) {
+        const g = await page.evaluate(() => { const W = innerWidth, o = {}; ["reviewBox", "visitDate", "visitNotes"].forEach(id => { const e = document.getElementById(id), r = e.getBoundingClientRect(), cs = getComputedStyle(e); o[id] = { w: Math.round(r.width), left: Math.round(r.left), right: Math.round(r.right), shown: cs.display !== "none" && cs.visibility !== "hidden" && !!e.offsetParent }; }); return { W, o, scrollW: document.documentElement.scrollWidth }; });
+        check("תקלה ג (טלפון 390): אחרי הרצה סעיף 4 — תאריך סיור והערות המבקש — מוצג, בתוך רוחב המסך (בלי חיתוך וגלילה אופקית) וברוחב סביר", Object.values(g.o).every(x => x.shown && x.left >= 0 && x.right <= g.W) && g.o.visitNotes.w >= 250 && g.scrollW <= g.W + 1, JSON.stringify(g));
+        await page.locator("#reviewBox").scrollIntoViewIfNeeded(); await page.locator("#reviewBox").screenshot({ path: path.join(OUT, "visit-notes-390.png") });
+      }
+      await ctx.close();
+    }
+    for (const W of [390, 320]) {
+      const { ctx, page } = await boot({ viewport: { width: W, height: 740 }, touch: true });
+      const pre = await page.evaluate(() => ({ hint: !!document.getElementById("reviewHint") && document.getElementById("reviewHint").offsetParent !== null, link: document.getElementById("toReview").hidden, sec: getComputedStyle(document.getElementById("resultsSec")).display }));
+      check("תקלה ג (טלפון " + W + "): לפני הרצה — הסעיף עוד לא מוצג, אבל ליד כפתור ההרצה כתוב שאחרי ההרצה יופיע סעיף 4 (הערות המבקש), וקישור הקפיצה מוסתר", pre.hint && pre.link && pre.sec === "none", JSON.stringify(pre));
+      await readyRequest(page);
+      const g = await page.evaluate(() => { const W = innerWidth, vn = document.getElementById("visitNotes"), r = vn.getBoundingClientRect(); return { W, shown: !!vn.offsetParent, left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height), link: !document.getElementById("toReview").hidden, scrollW: document.documentElement.scrollWidth }; });
+      check("תקלה ג (טלפון " + W + "): אחרי הרצה תיבת ההערות מוצגת בתוך המסך (ברוחב ≥ 220px, בלי חיתוך וגלילה אופקית) וקישור הקפיצה לסעיף 4 מוצג", g.shown && g.left >= 0 && g.right <= g.W && g.w >= 220 && g.link && g.scrollW <= g.W + 1, JSON.stringify(g));
+      await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(100);
+      await page.locator("#toReview").scrollIntoViewIfNeeded(); await page.click("#toReview"); await page.waitForTimeout(500);
+      const j = await page.evaluate(() => { const r = document.getElementById("reviewBox").getBoundingClientRect(); return { top: Math.round(r.top), h: innerHeight }; });
+      check("תקלה ג (טלפון " + W + "): לחיצה על ״קפיצה לסעיף 4״ מביאה את סעיף 4 למסך", j.top >= -5 && j.top < j.h / 2, JSON.stringify(j));
+      await page.locator("#visitNotes").scrollIntoViewIfNeeded(); await page.tap("#visitNotes"); await page.keyboard.type("בדיקת הקלדה בנייד");
+      check("תקלה ג (טלפון " + W + "): ניתן להקליד בתיבת ההערות (מגע + מקלדת) והטקסט נקלט בבקשה", (await page.inputValue("#visitNotes")) === "בדיקת הקלדה בנייד" && await page.waitForFunction(() => window.__REQ.S.res.inp.visitNotes === "בדיקת הקלדה בנייד" && !window.__REQ.S.pending, null, { timeout: 8000 }).then(() => true, () => false), await page.inputValue("#visitNotes"));
+      await page.locator("#reviewBox").screenshot({ path: path.join(OUT, "visit-notes-" + W + ".png") });
+      await ctx.close();
+    }
+
+    /* --- ה. אזורים בטוחים (תקלה א): קישור ״חזרה למפה״ לא נבלע בחריץ/שורת הסטטוס; גם landscape וחלונות --- */
+    for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 320, height: 568 }]) {
+      const { ctx, page } = await newPage(browser, { viewport: vp, touch: true });
+      await page.route(/\/members-k38p\/$/, r => r.fulfill({ status: 200, contentType: "text/html", body: "<html><body>map</body></html>" }));
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await page.evaluate(() => { const s = document.documentElement.style; s.setProperty("--safe-top", "50px"); s.setProperty("--safe-left", "44px"); s.setProperty("--safe-right", "44px"); s.setProperty("--safe-bottom", "34px"); });
+      const cover = await page.evaluate(() => { const b = document.querySelector("#authCover .authBox"), r = b.getBoundingClientRect(); return { top: Math.round(r.top), left: Math.round(r.left), right: Math.round(r.right), W: innerWidth }; });
+      check("תקלה א (" + vp.width + "×" + vp.height + "): כיסוי הכניסה לא נכנס לאזורים הבטוחים (חלון הכניסה מתחת ל-50px מלמעלה ובתוך 44px מהצדדים)", cover.top >= 50 && cover.left >= 44 && cover.right <= cover.W - 44 && (vp.height < vp.width || cover.top > 80), JSON.stringify(cover));   // בטלפון עומד החלון ממורכז אנכית (מרווחי auto); ב-landscape הוא מתחיל בראש האזור הבטוח ונגלל
+      await login(page);
+      const g = await page.evaluate(() => { const a = document.querySelector("header a.back"), r = a.getBoundingClientRect(), h = document.querySelector("header h1").getBoundingClientRect(), W = innerWidth; return { top: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), right: Math.round(r.right), left: Math.round(r.left), W, h1L: Math.round(h.left), h1R: Math.round(h.right), hit: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === a, scrollW: document.documentElement.scrollWidth }; });
+      check("תקלה א (" + vp.width + "×" + vp.height + "): עם --safe-top:50px קישור ״חזרה למפה״ לא חופף לאזור העליון הבטוח (top ≥ 50), גובהו ≥ 44px, הכותרת בתוך הצדדים הבטוחים, ובלי גלילה אופקית", g.top >= 50 && g.h >= 44 && g.w >= 44 && g.hit && g.h1L >= 44 && g.h1R <= g.W - 44 && g.scrollW <= g.W + 1, JSON.stringify(g));
+      let nav = true; await Promise.all([page.waitForURL(/\/members-k38p\/$/, { timeout: 8000 }), page.click("header a.back")]).catch(() => { nav = false; });
+      check("תקלה א (" + vp.width + "×" + vp.height + "): הקישור ניתן ללחיצה (page.click בלי force) ומנווט למפה", nav, page.url());
+      await ctx.close();
+    }
+    {   // חלון פתוח (ניהול משתמשים) באזור בטוח: מתחת לחריץ ומעל פס הבית
+      const { ctx, page } = await boot({ viewport: { width: 390, height: 600 }, touch: true });
+      await page.evaluate(() => { document.documentElement.style.setProperty("--safe-top", "50px"); document.documentElement.style.setProperty("--safe-bottom", "34px"); });
+      await page.click("#ubAdmin"); await page.waitForSelector("#authModal .authBox");
+      const m = await page.evaluate(() => { const r = document.querySelector("#authModal .authBox").getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), H: innerHeight }; });
+      check("תקלה א: חלון ניהול המשתמשים (טלפון, חריץ 50px / פס בית 34px) נשאר בתוך האזור הבטוח ולא נחתך למעלה", m.top >= 50 && m.bottom <= m.H - 34 + 1, JSON.stringify(m));
+      await ctx.close();
+    }
   }
   /* ===== תרחיש 13: עצמאות המבקש — כל מטיס הוא המבקש של בקשתו: גורם מבקש ניתן לעריכה (שדה 2) ואות קריאה / מס׳ רישום (שדות 13 ו-14); חלון השליחה לפי החוזה (למשרד / רק לעצמי / בדיקה; שרת חדש וישן); דרייב למנהל בלבד ===== */
   {

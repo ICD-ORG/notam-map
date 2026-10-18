@@ -44,7 +44,7 @@
       let rings = null;
       if (z.rings != null && !Array.isArray(z.rings)) throw badGeom(z.id);
       if (z.rings && z.rings.length) { if (!z.rings.every(ringOk)) throw badGeom(z.id); rings = z.rings; }
-      else if (z.c && z.r) { if (!finite2(z.c) || !(typeof z.r === "number" && isFinite(z.r) && z.r > 0)) throw badGeom(z.id); rings = [C.circlePoints(new C.Proj(z.c[0], z.c[1]), z.r, 96)]; }   // בלי rings: מעגל c+r כמו ב-mapimg.js
+      else if (z.c != null || z.r != null) { if (!finite2(z.c) || !(typeof z.r === "number" && isFinite(z.r) && z.r > 0)) throw badGeom(z.id); rings = [C.circlePoints(new C.Proj(z.c[0], z.c[1]), z.r, 96)]; }   // בלי rings: מעגל c+r כמו ב-mapimg.js
       if (!rings) return;   // אזור בלי גבול בקובץ: אינו מצויר
       const alt = z.alt || (z.min != null ? C.altRange(z) : "");
       out.push({ src: isB09(z) ? "b09" : "a17", id: z.id, name: z.name || "", cat: z.cat, kind: kindOf(z), alt, pmt: z.pmt || "", pmtRef: z.pmtRef || "", note: z.note || "",
@@ -258,6 +258,7 @@
     /* ---- אזורי איסור: אותו חישוב כמו בבדיקות המלאות, אך רק מול הגבולות שבקובץ ---- */
     if (!a.zones || !a.zones.zones || !a.inpa) add("zones", "אזורי איסור", "נתוני האזורים לא נטענו — אין תצוגה מקדימה של אזורי איסור.", "warn");
     else try {
+      zoneShapes(a.zones, a.inpa);   // גבול פגום בקובץ הנתונים זורק (badId) — ואז ״אין חפיפה״ בירוק היה טענה על מפה שחסר בה אזור; במקום זה מוצגת שורת אזהרה (ה-catch למטה)
       const z = out.zonesRes = C.analyzeZones(P, R, { zones: a.zones.zones, inpa: a.inpa }, th.near_zone_m, topFt, th.approx_margin_m);
       const txt = r => r.label + " — " + r.kind + (r.approx ? " (שרטוט בקירוב, אינו הגבול הרשמי)" : "");
       if (z.inside.length) add("inside", "בתוך הסגירה", "חפיפה ל-" + capList(z.inside.map(txt), 4, "אזור אחד", "אזורים"), "hit");
@@ -267,10 +268,10 @@
       else add("near", "בקרבה (עד " + nm + " מקצה הסגירה)", "אין אזור איסור בקובץ", "ok");
       // אתרי רט״ג שאין להם גבול בקובץ (inpa.unmapped) אינם נבדקים כאן — הבדיקה המלאה מתאימה אותם לפי שם מול OpenStreetMap, ולכן ״אין״ למעלה אינו קביעה לגביהם. לא מנחשים התאמה מהשם
       const un = Array.isArray(a.inpa.unmapped) ? a.inpa.unmapped.length : 0;
-      if (un) add("unmapped", "", "לא נבדקו " + (un === 1 ? "אתר רט״ג אחד שאין לו גבול" : un + " אתרי רט״ג שאין להם גבול") + " בקובץ — " + (un === 1 ? "הוא נבדק" : "הם נבדקים") + " רק בהרצה המלאה, לפי שם מול OpenStreetMap.");
+      if (un) add("unmapped", "", (un === 1 ? "לא נבדק " : "לא נבדקו ") + (un === 1 ? "אתר רט״ג אחד שאין לו גבול" : un + " אתרי רט״ג שאין להם גבול") + " בקובץ — " + (un === 1 ? "הוא נבדק" : "הם נבדקים") + " רק בהרצה המלאה, לפי שם מול OpenStreetMap.");
       if (z.excluded.length) add("excluded", "", "אזורי ב-09 שאינם חופפים אנכית לגובה שהוזן: " + z.excluded.map(x => x.id).join(", ") + ".");
       if (topFt == null) add("height", "", "לא הוזן גובה — אזורי ב-09 אינם מסוננים לפי גובה. הזינו גובה לחישוב מדויק.", "warn");
-    } catch (e) { out.zonesRes = null; add("zones", "אזורי איסור", "לא ניתן לחשב תצוגה מקדימה של אזורי איסור (נתונים לא תקינים) — הבדיקות המלאות רצות בלחיצה על ״הרץ״.", "warn"); }
+    } catch (e) { out.zonesRes = null; add("zones", "אזורי איסור", "לא ניתן לחשב תצוגה מקדימה של אזורי איסור (נתונים לא תקינים" + (e && e.badId ? ": " + e.badId : "") + ") — הבדיקות המלאות רצות בלחיצה על ״הרץ״.", "warn"); }
 
     /* ---- נוטמים: חלון התאריכים שנבחר בטופס, ואותה בדיקה כמו במלאה ---- */
     if (!Array.isArray(a.notams)) add("notams", "נוטמים", "נתוני הנוטמים לא נטענו — אין תצוגה מקדימה של נוטמים.", "warn");

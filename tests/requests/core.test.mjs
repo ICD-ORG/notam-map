@@ -1270,3 +1270,37 @@ test("Word: הגורם המבקש בשדה 2 ובמאפיין יוצר המסמ�
   const dirty = await build({ requesterOrg: "א" + fcc(0xfffe) + "ב" + fcc(0xb) + "ג", callsign: "ד" + fcc(1) + "ה", registration: "ו" + fcc(0xffff) + "ז" });
   assert.ok(!XML_BAD.test(dirty.doc) && !XML_BAD.test(dirty.core) && plainOf(dirty.doc).includes("אבג") && plainOf(dirty.doc).includes("דה") && plainOf(dirty.doc).includes("וז"), "תווים אסורים מנוקים");
 });
+
+/* ---------- תיקוני סקירה: מהות בלי תווים גלויים (ממצא 4), אורך בנקודות קוד (ממצא 5), אזור בלי שם (ממצא 15) ---------- */
+test("ממצא 4: מהות שכולה תווים בלתי נראים נדחית (RLM, ZWSP, LRM, WJ, SHY, מילוי הנגול, בריילי ריק, CGJ, בוררי וריאציה…) — גם בשילוב עם רווחים; מהות עם תו גלוי אחד מתקבלת", () => {
+  const invisible = [0x200f, 0x200b, 0x200e, 0x2060, 0xad, 0x202e, 0x202a, 0x3164, 0x2800, 0x115f, 0x1160, 0xffa0, 0x34f, 0x180e, 0xfe0f, 0xfeff, 0xa0, 0x2003, 0x2064];
+  for (const c of invisible) {
+    assert.equal(C.purposeHasVisible(fcc(c)), false, "U+" + c.toString(16));
+    const e = puErrs(fcc(c)); assert.equal(e.length, 1, "U+" + c.toString(16)); assert.equal(e[0].msg, "יש לבחור מהות פעילות");
+    assert.equal(puErrs("  " + fcc(c) + " " + fcc(c, c) + "\t").length, 1, "בשילוב עם רווחים: U+" + c.toString(16));
+  }
+  assert.equal(puErrs(invisible.map(c => fcc(c)).join("")).length, 1, "כל הבלתי נראים יחד");
+  assert.equal(C.purposeHasVisible(fcc(0xd83d, 0xde00)), true, "אמוג'י הוא תו גלוי");
+  for (const ok of ["א", fcc(0x200f) + "א", "x" + fcc(0x200b), "1", "-", fcc(0x3164) + "ב" + fcc(0x2800)]) { assert.equal(C.purposeHasVisible(ok), true, JSON.stringify(ok)); assert.equal(puErrs(ok).length, 0, JSON.stringify(ok)); }
+  assert.equal(C.purposeHasVisible(null), false); assert.equal(C.purposeHasVisible(undefined), false); assert.equal(C.purposeHasVisible(""), false);
+});
+
+test("ממצא 5: אורך המהות נספר בנקודות קוד — 80 אמוג'י תקינים, 81 נדחים בהודעה; ui.js ו-index.html מאפשרים הדבקה עד 4×80 כדי שהדחייה תגיע למשתמש ולא תיחתך בשקט", () => {
+  const e = fcc(0xd83d, 0xde00);
+  assert.equal(C.purposeLen(e.repeat(80)), 80); assert.equal(puErrs(e.repeat(80)).length, 0, "80 אמוג'י (160 יחידות UTF-16) תקינים");
+  const over = puErrs(e.repeat(81)); assert.equal(over.length, 1); assert.match(over[0].msg, /80/);
+  assert.equal(C.PURPOSE_MAX, 80);
+  const html = fs.readFileSync(path.join(ROOT, "members-k38p/requests/index.html"), "utf8"); assert.match(html, /id="puNew" maxlength="320"/, "4×PURPOSE_MAX: הדבקה של 81–320 תווים מגיעה להודעת הדחייה");
+  const ui = fs.readFileSync(path.join(ROOT, "members-k38p/requests/js/ui.js"), "utf8"); assert.match(ui, /C\.purposeLen\(name\) > PURPOSE_MAX/); assert.match(ui, /!C\.purposeHasVisible\(name\)/); assert.match(ui, /C\.purposeHasVisible\(n\) && C\.purposeLen\(n\) <= PURPOSE_MAX/, "גם ערך שמור ב-localStorage נבדק בטעינה");
+});
+
+test("ממצא 15: אזור בלי שם (LLR107/120/601 בנתונים) — התווית היא המזהה בלבד, בלי ״״ ריקות, בכל מקום שבו analyzeZones מפיקה תווית (דוח, KML, מייל)", () => {
+  const noName = zones.zones.filter(z => !z.name && z.cat !== "B09" && z.cat !== "B09B"); assert.ok(noName.length >= 3, "בנתונים יש אזורים בלי שם: " + noName.map(z => z.id));
+  for (const z of noName) {
+    const c = z.rings ? z.rings[0][0] : z.c, P = new C.Proj(c[0], c[1]), r = C.analyzeZones(P, 100, { zones: [z], inpa: { sites: [] } }, 1000);
+    const hit = r.inside.concat(r.near).find(x => x.id === z.id); assert.ok(hit, z.id + " נמצא"); assert.equal(hit.label, z.id); assert.ok(!hit.label.includes("״״"));
+  }
+  const named = zones.zones.find(z => z.name && z.cat !== "B09" && z.cat !== "B09B"), c = named.rings ? named.rings[0][0] : named.c;
+  const rn = C.analyzeZones(new C.Proj(c[0], c[1]), 100, { zones: [named], inpa: { sites: [] } }, 1000), hn = rn.inside.concat(rn.near).find(x => x.id === named.id);
+  assert.equal(hn.label, named.id + " ״" + named.name + "״", "אזור עם שם — כמו תמיד");
+});
