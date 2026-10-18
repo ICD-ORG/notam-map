@@ -162,8 +162,8 @@
     btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
     btnRegion: "מוריד את מפת האזור המרוחקת (PNG), בטווח של כ-10 ק״מ ומעלה, עם סמן וחץ שמצביעים על המיקום. הפריטים מסומנים בה בלי מספרים.",
     btnCopy: "מעתיק ללוח את נוסח המייל המוכן (נמענים, נושא וגוף ההודעה) כדי להדביק בתוכנת המייל. לא שולח ולא שומר דבר.",
-    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בתיקייה בדרייב של בעל המערכת (הארכיון המרכזי), בלי לשלוח. הכפתור מוצג למנהל המערכת בלבד: מטיס רגיל אינו יכול לפתוח את התיקייה, וכל שליחה שומרת את הבקשה בארכיון המרכזי גם בלי הכפתור הזה. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
-    btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון המרכזי (בדרייב של מנהל המערכת, לצורכי תמיכה — התיקייה אינה נפתחת למטיס) ושולח אותה במייל עם הקבצים. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה מנהל המערכת מקבל עותק סמוי לצורכי תמיכה. שליחה למשרד נוטאם אינה ניתנת לביטול.",
+    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בתיקייה בדרייב של בעל המערכת (הארכיון המרכזי: בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. הכפתור מוצג למנהל המערכת בלבד: מטיס רגיל אינו יכול לפתוח את התיקייה, וכל שליחה שומרת את הבקשה בארכיון המרכזי גם בלי הכפתור הזה. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
+    btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון המרכזי (בדרייב, לצורכי תמיכה — התיקייה אינה נפתחת למטיס) ושולח אותה במייל עם הקבצים. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — המייל יוצא בשם הגורם המבקש שהצהרתם עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה צוות התמיכה של המערכת מקבל עותק סמוי לצורכי תמיכה בלבד. שליחה למשרד נוטאם אינה ניתנת לביטול.",
     btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית.",
     acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
     puAdd: "מוסיף את המהות שהקלדתם (עד " + PURPOSE_MAX + " תווים) לרשימת ״מהות הפעילות״ ובוחר אותה מיד. היא נשמרת בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ותופיע גם בביקורים הבאים — עד " + MAX_EXTRA_PURPOSES + " מהויות נוספות; מעל זה יש להסיר אחת כדי להוסיף. בבקשה אחת נבחרת מהות אחת, והיא נכנסת כלשונה לשדה 4 בטופס הרשמי, לקובץ ה-Word ולמייל. מהות שהוספתם מוצגת מתחת לשדה עם × שמסירה אותה מהרשימה השמורה; את המהויות הקבועות בהגדרות המערכת אי אפשר להסיר.",
@@ -172,6 +172,8 @@
     wipePerson: "מוחק מהדפדפן הזה את הפרטים השמורים של החשבון המחובר: שם וטלפון המבקש, שם הגורם המבקש, אות הקריאה ומס׳ הרישום ואת אנשי הקשר השמורים, מנקה את השדות ומחזיר שתי שורות ריקות לאנשי הקשר; גם רשימת המשתתפים מתרוקנת. קבצים שכבר נשמרו בדרייב אינם משתנים.",
     stRun: "מריץ מחדש את הבדיקה העצמית: מחשב את נקודת הירקון מנתוני אמת שנשמרו מראש ומשווה לתוצאות שחושבו בנפרד. הבדיקה רצה גם אוטומטית בכל טעינת דף; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה."
   };
+  // הסבר ״שלח״ לחשבון ארגוני (מוחלף ב-data-help אחרי ההתחברות, ב-applyRole): שליחה בשם הארגון, עותק ותשובות אל הארגון
+  const HELP_SEND_ORG = "פותח חלון אישור; אחרי שתאשרו הוא שומר את הבקשה בארכיון הארגון בדרייב (תיקיית ״הארגון״) ושולח אותה במייל עם הקבצים, בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״). במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — עותק נשלח לארגון (ולכתובת שנרשמה בחשבונכם, אם יש), ותשובות המשרד יחזרו אל הארגון; או ״שלח רק לעצמי״ — עותק לבדיקה בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון (ובלעדיה — לכתובת הארגון). שליחה למשרד נוטאם אינה ניתנת לביטול.";
   // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
   const HELP_NAME = {
     qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
@@ -333,6 +335,11 @@
     return rowsOf(kind).map(r => { const o = {}; LISTS[kind].cols.forEach(([f]) => { o[f] = cellVal(r, f); }); return o; }).filter(o => Object.values(o).some(Boolean));
   }
 
+  /* ---------- סוג החשבון (ארגוני / מטיס עצמאי) וברירות המחדל של הארגון ---------- */
+  // חשבון ארגוני: השרת מדווח org (שרת ישן — מנהל = ארגוני), ורק כשיש התחברות תקפה. ברירות המחדל הארגוניות (שם הארגון, אות קריאה, רישום) קיימות רק ב-config.json → org_defaults; אין להוסיף כאלה למטיס עצמאי
+  const isOrg = () => { const A = window.ReqAuth; return !!(A && A.loggedIn && A.loggedIn() && A.isOrg && A.isOrg()); };
+  const orgDefaults = () => { const d = S.cfg && S.cfg.org_defaults; return d && typeof d === "object" ? d : null; };
+  const ORG_NAME = () => { const d = orgDefaults(); return d && typeof d.name === "string" && d.name.trim() ? d.name.trim() : "הארגון הישראלי לרב להב"; };   // שם השולח במייל של חשבון ארגוני (CFG.SENDER_NAME בשרת)
   /* ---------- בקרי הטופס ---------- */
   function buildControls() {
     extraPu = loadExtraPurposes(); renderPurposes("");
@@ -352,14 +359,22 @@
     }
     contacts = contacts || [];
     $("reqName").value = String(p.reqName || ""); $("reqPhone").value = String(p.reqPhone || "");
-    $("reqOrg").value = String(p.reqOrg || ""); $("reqCallsign").value = String(p.reqCallsign || ""); $("reqReg").value = String(p.reqReg || "");   // גורם מבקש, אות קריאה ומס׳ רישום: נשמרים מקומית עם שאר פרטי המבקש; אין ברירת מחדל מההגדרות
+    // גורם מבקש, אות קריאה ומס׳ רישום: נשמרים מקומית עם שאר פרטי המבקש (לפי חשבון). ברירות המחדל של הארגון (config.json → org_defaults) נטענות רק בחשבון ארגוני ורק לשדה שאין לו ערך שמור (גם ערך שמור ריק הוא בחירה של המשתמש ונשאר);
+    // למטיס עצמאי אין ברירת מחדל. רשומה שנשמרה בחשבון ארגוני והחשבון כבר עצמאי — ערך שהוא ברירת המחדל של הארגון לא עובר למטיס
+    const od = isOrg() ? orgDefaults() : null, od0 = orgDefaults();
+    const legacy = typeof p.org !== "boolean";   // רשומה שנכתבה לפני ההפרדה (בלי org): שדה ריק בה אינו בחירה של המשתמש
+    const field = (k, dk) => {
+      if (typeof p[k] === "string" && !(legacy && !p[k].trim())) return (p.org === true && !isOrg() && od0 && typeof od0[dk] === "string" && p[k].trim() === od0[dk].trim()) ? "" : p[k];
+      return od && typeof od[dk] === "string" ? od[dk] : "";
+    };
+    $("reqOrg").value = field("reqOrg", "name"); $("reqCallsign").value = field("reqCallsign", "callsign"); $("reqReg").value = field("reqReg", "registration");
     $("reqCallsign").placeholder = $("reqReg").placeholder = (S.cfg.fixed && S.cfg.fixed.not_relevant) || "לא רלוונטי";
     setRows("contacts", contacts); setRows("participants", []);
-    $("personBox").open = !(p.reqName && String(p.reqOrg || "").trim() && contacts.filter(c => c.name.trim()).length >= 2);
+    $("personBox").open = !(p.reqName && $("reqOrg").value.trim() && contacts.filter(c => c.name.trim()).length >= 2);
     if (migrated) savePerson();   // כותב בפורמט החדש ומסיר את המפתחות הישנים
   }
   function savePerson() {
-    lsSet(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, reqOrg: $("reqOrg").value, reqCallsign: $("reqCallsign").value, reqReg: $("reqReg").value, contacts: readRows("contacts") }));
+    lsSet(PERSON_KEY, JSON.stringify({ reqName: $("reqName").value, reqPhone: $("reqPhone").value, reqOrg: $("reqOrg").value, reqCallsign: $("reqCallsign").value, reqReg: $("reqReg").value, contacts: readRows("contacts"), org: isOrg() }));   // org: סוג החשבון בעת השמירה (loadPerson: ברירות מחדל ארגוניות לא עוברות למי שהפך לעצמאי)
   }
   // ניקוי שדות פרטי המבקש בדף בלבד (בלי לגעת באחסון)
   function clearPersonFields() {
@@ -1142,10 +1157,20 @@
   }
   // כפתור ״שמור בדרייב״ (עם ״!״ שלו) מוצג רק למנהל: התיקייה בדרייב של בעל המערכת (ארכיון מרכזי לצורכי תמיכה) ומטיס רגיל לא יכול לפתוח אותה. השליחה ממשיכה לשמור בארכיון (persistToDrive) כחלק מהשליחה, בלי כפתור וקישור למטיס
   const isAdmin = () => !!(window.ReqAuth && window.ReqAuth.getRole && window.ReqAuth.getRole() === "admin");
+  // רמזי שדות הגורם המבקש, אות הקריאה ומס׳ הרישום בחשבון ארגוני (בחשבון עצמאי נשאר הנוסח שב-index.html: אין ברירת מחדל)
+  const ORG_HINTS = {
+    hReqOrg: "נספח ג׳ שדה 2 — חובה, עד 80 תווים. בחשבון ארגוני נטען כאן שם הארגון כברירת מחדל; אפשר לערוך אותו, והעריכה נשמרת.",
+    hReqCallsign: "נספח ג׳ שדה 13 — עד 40 תווים. בחשבון ארגוני נטענת כאן ברירת המחדל של הארגון; אפשר לערוך אותה, והעריכה נשמרת. ריק = ״לא רלוונטי״.",
+    hReqReg: "נספח ג׳ שדה 14 — עד 40 תווים. בחשבון ארגוני נטענת כאן ברירת המחדל של הארגון; אפשר לערוך אותה, והעריכה נשמרת. ריק = ״לא רלוונטי״."
+  };
   function applyRole() {
     const b = $("btnDrive"), w = b && (b.closest(".hw") || b);
     if (w) w.hidden = !isAdmin();
     if (!isAdmin()) { const m = $("driveMsg"); if (m) { m.textContent = ""; m.className = "small"; } }
+    // ההסבר של ״שלח״ ורמזי שדות הגורם המבקש לפי סוג החשבון: ארגוני (שולח בשם הארגון, וברירות המחדל שלו נטענות) או מטיס עצמאי (ברירת המחדל; הנוסח הקבוע ב-HELP וב-index.html)
+    const org = isOrg(), sb = $("btnSend"), hb = sb && sb.closest(".hw") && sb.closest(".hw").querySelector(".hbtn");
+    if (hb) hb.setAttribute("data-help", org ? HELP_SEND_ORG : HELP.btnSend);
+    Object.keys(ORG_HINTS).forEach(id => { const e = $(id); if (!e) return; if (e.dataset.base == null) e.dataset.base = e.textContent; e.textContent = org ? ORG_HINTS[id] : e.dataset.base; });
   }
   async function saveToDrive() {
     const out = $("driveMsg"), btn = $("btnDrive"), A = window.ReqAuth;
@@ -1168,7 +1193,25 @@
   const fmtTime = t => new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
   // קידומות הנושא לפי השרת (Code.gs): בדיקה — לא נשלח למשרד; עותק לעצמי — לא נשלח למשרד. מוצגות בחלון השליחה כדי שהמבקש ידע מה יראה בתיבת הדואר
   const SUBJ_TEST = "[בדיקה — לא נשלח למשרד נוטאם] ", SUBJ_SELF = "[עותק לעצמי — לא נשלח למשרד נוטאם] ";
-  const ARCHIVE_NOTE = '<p class="small">הבקשה נשמרת בארכיון המרכזי בדרייב של מנהל המערכת, והוא מקבל עותק סמוי של כל שליחה — לצורכי תמיכה בלבד.</p>';
+  const ARCHIVE_NOTE = '<p class="small">הבקשה נשמרת בארכיון המרכזי בדרייב של בעל המערכת, והוא מקבל עותק סמוי של כל שליחה — לצורכי תמיכה בלבד.</p>';
+  // הפרדה בין הארגון למטיסים עצמאיים (features.orgSplit): חשבון ארגוני שולח בשם הארגון; מטיס עצמאי — בשם הגורם שהצהיר עליו (fromName), והארגון מקבל עותק סמוי לתמיכה בלבד. למטיס עצמאי לא מוצגת כתובת הארגון ולא נאמר שהארגון הוא השולח או נמען העותק
+  const ARCHIVE_ORG = '<p class="small">הבקשה נשמרת בארכיון הארגון בדרייב (תיקיית ״הארגון״).</p>';
+  const ARCHIVE_PILOT = '<p class="small">הבקשה נשמרת בארכיון המערכת, וצוות התמיכה של המערכת מקבל עותק סמוי של כל שליחה — לצורכי תמיכה בלבד.</p>';
+  const SENDER_SUFFIX = " — דרך מערכת בקשות הטיסה";   // קבוע בשרת (מונע התחזות לרשות); מוצג בחלון השליחה כפי שיופיע בתיבת הדואר
+  // שם השולח במייל של מטיס עצמאי כפי שהשרת ינקה אותו (cleanSender_ ב-Code.gs): תווי בקרה וכיווניות (U+0000-001F, 007F-009F, 061C, 200B-200F, 2028-202E, 2066-2069, FEFF) וגם <>"@ ולוכסן הפוך — לרווח; רווחים מכווצים, trim, עד 60 תווים (בלי חצי זוג חלופי בסוף).
+  // ריק אחרי ניקוי — השרת משתמש בשם השמור בחשבון (או ״מטיס״); כאן ״מטיס״. הטווחים נבדקים במספרים (בלי רצפי escape בקובץ)
+  const SENDER_HIDDEN = [[0, 0x1f], [0x7f, 0x9f], [0x61c, 0x61c], [0x200b, 0x200f], [0x2028, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]];
+  function pilotSenderName(raw) {
+    let o = "";
+    for (const ch of String(raw == null ? "" : raw)) {
+      const c = ch.codePointAt(0);
+      o += (ch === "<" || ch === ">" || ch === '"' || ch === "@" || ch === String.fromCharCode(92) || SENDER_HIDDEN.some(r => c >= r[0] && c <= r[1])) ? " " : ch;
+    }
+    let n = o.replace(/\s+/g, " ").trim().slice(0, 60);
+    const last = n.charCodeAt(n.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) n = n.slice(0, -1).trim();
+    return (n || "מטיס") + SENDER_SUFFIX;
+  }
   async function sendToNotam() {
     if (!S.ready || S.sending) return;
     const A = window.ReqAuth;
@@ -1189,7 +1232,10 @@
     const warn = warnings().filter(w => /ימי עבודה|נוטמים נמשכו|מכשול שהוזן ולא נמצא/.test(w));   // אזהרות שחשוב לראות ממש לפני השליחה
     // יעד השליחה. שרת חדש (features.sendTarget) שולח לפי כתובת המבקש שנשמרה בו (נרשמה עם אימות קוד במייל; הלקוח אינו שולח כתובת כלל): למשרד נוטאם (target "office") — עותק למבקש והתשובות אליו, או רק למבקש עצמו (target "self"); במצב בדיקה — רק למבקש.
     // משתמש בלי כתובת (נוצר ידנית על ידי המנהל) — העותק והתשובות נופלים לבעל המערכת (copyToIsOwner), ורק אז מוצגת כתובתו. שרת ישן: בלי target ובלי "לעצמי", ההתנהגות והטקסט כמו קודם (עותק ותשובות לבעל המערכת; בבדיקה — רק לבעל המערכת)
-    const newSrv = A.hasFeature("sendTarget"), toOwner = A.getCopyToIsOwner(), addr = A.getCopyTo();
+    // שרת עם הפרדה (orgSplit): org = חשבון ארגוני; fromName = הגורם המבקש שהוקלד (השרת מנקה אותו ומשתמש בו כשם השולח של מטיס עצמאי). מטיס עצמאי חייב כתובת שנשמרה ואומתה בשרת — בלעדיה אין לאן לשלוח עותק ותשובות, ולא נחשפת לו כתובת הארגון
+    const newSrv = A.hasFeature("sendTarget"), split = newSrv && A.hasFeature("orgSplit"), org = split && A.isOrg(), toOwner = A.getCopyToIsOwner(), addr = A.getCopyTo(), personal = A.getEmail() || "";
+    const fromName = split ? String(S.res.inp.requesterOrg || "") : "";
+    if (split && !org && (toOwner || !addr)) { out.className = "small err"; out.textContent = sup("לא נשלח: אין כתובת מייל רשומה בחשבון שלך, ולכן אי אפשר לשלוח את הבקשה — פנו לתמיכה."); return; }
     if (newSrv && !addr) { out.className = "small err"; out.textContent = "לא נשלח: השרת לא החזיר את כתובת העותק — אי אפשר להציג למי יישלח המייל."; return; }
     const adr = '<span dir="ltr">' + esc(addr) + "</span>", officeTo = '<span dir="ltr">' + esc(mail.to.join(", ")) + "</span>";
     const noAddr = "אין כתובת מייל רשומה בחשבון שלך — העותק יישלח לבעל המערכת (" + adr + ")";
@@ -1199,21 +1245,47 @@
     const oldNote = adm ? '<div class="banner warn" style="margin:8px 0 0"><b>שרת ה-Apps Script עדיין בגרסה הישנה — יש לעדכן אותו (ראו README).</b> עד שיעודכן אי אפשר לשלוח רק לעצמי, והשליחה ממשיכה כמו קודם.</div>'
       : '<div class="banner warn" style="margin:8px 0 0"><b>' + esc(sup("שליחה רק לעצמך אינה זמינה כרגע — פנו לתמיכה.")) + '</b> השליחה ממשיכה כמו קודם.</div>';
     const oldSrvTitle = adm ? "שרת ה-Apps Script בגרסה הישנה — יש לעדכן אותו" : sup("שליחה רק לעצמך אינה זמינה כרגע — פנו לתמיכה");
-    const dlg = !newSrv ? {   // שרת ישן
+    const orgName = esc(ORG_NAME()), selfName = esc(pilotSenderName(fromName)), pAdr = '<span dir="ltr">' + esc(personal) + "</span>";
+    const sameAddr = !!personal && personal.toLowerCase() === String(addr).toLowerCase();
+    // חשבון ארגוני: העותק אל הארגון (כתובת העותק כפי שהשרת מחזיר), ואל כתובת המבקש השמורה אם יש ושונה
+    const orgCc = sameAddr ? "הארגון ואליך (" + adr + ")" : "הארגון (" + adr + ")" + (personal ? " ואליך (" + pAdr + ")" : "");
+    const dlg = split ? (org ? (live ? {   // הפרדה, חשבון ארגוני, מצב חי
+      title: "שליחה למשרד נוטאם",
+      banner: '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> אפשר לשלוח את הבקשה באמת למשרד נוטאם בשם הארגון, או לשלוח רק לעצמך עותק לבדיקה.</div>',
+      to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · עותק: ' + orgCc + ' · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '</p>' +
+        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + ' בלבד · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + ' · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
+      archive: ARCHIVE_ORG, go: "שלח למשרד נוטאם", self: "on"
+    } : {   // הפרדה, חשבון ארגוני, מצב בדיקה
+      title: "שליחת בדיקה",
+      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח רק אל ' + adr + ' ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
+      to: '<p><b>אל:</b> ' + adr + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
+      archive: ARCHIVE_ORG, go: "שלח בדיקה אליי", self: ""
+    }) : (live ? {   // הפרדה, מטיס עצמאי, מצב חי
+      title: "שליחה למשרד נוטאם",
+      banner: '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> אפשר לשלוח את הבקשה באמת למשרד נוטאם, או לשלוח רק לעצמך עותק לבדיקה.</div>',
+      to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · עותק אליך: ' + adr + ' · התשובות יגיעו אליך</p>' +
+        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + ' בלבד · לא נשלח למשרד</p><p><b>שם השולח במייל:</b> ' + selfName + '</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
+      archive: ARCHIVE_PILOT, go: "שלח למשרד נוטאם", self: "on"
+    } : {   // הפרדה, מטיס עצמאי, מצב בדיקה
+      title: "שליחת בדיקה",
+      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח רק אליך (' + adr + ') ולא למשרד נוטאם. (בעל המערכת יכול להעביר למצב חי בניהול משתמשים.)</div>',
+      to: '<p><b>אל:</b> ' + adr + '</p><p><b>שם השולח במייל:</b> ' + selfName + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
+      archive: ARCHIVE_PILOT, go: "שלח בדיקה אליי", self: ""
+    })) : !newSrv ? {   // שרת ישן
       title: "שליחה למשרד נוטאם",
       banner: (live ? '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> המייל יישלח באמת אל ' + officeTo + '. עותק יישלח לחשבון הבעלים של המערכת, ותשובות המשרד יגיעו אליו (ולא אליך).</div>'
-        : '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה:</b> המייל יישלח רק לחשבון הבעלים של המערכת (לא אליך) ולא יישלח למשרד נוטאם. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>') + oldNote,
+        : '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה:</b> המייל יישלח רק לחשבון הבעלים של המערכת (לא אליך) ולא יישלח למשרד נוטאם. (בעל המערכת יכול להעביר למצב חי בניהול משתמשים.)</div>') + oldNote,
       to: '<p><b>אל:</b> <span dir="ltr">' + esc((live ? mail.to : ["בעל המערכת (בדיקה)"]).join(", ")) + '</span></p><p><b>נושא:</b> ' + subjOf(live ? "" : "test") + '</p>',
       archive: "", go: live ? "שלח למשרד נוטאם" : "שלח בדיקה לבעל המערכת", self: live ? "disabled" : ""
     } : live ? {   // שרת חדש, מצב חי: שני יעדים
       title: "שליחה למשרד נוטאם",
       banner: '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> אפשר לשלוח את הבקשה באמת למשרד נוטאם, או לשלוח רק לעצמך עותק לבדיקה.</div>',
-      to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · ' + (toOwner ? noAddr + ' · התשובות יגיעו לבעל המערכת' : 'עותק אליך: ' + adr + ' · התשובות יגיעו אליך') + ' · עותק נשמר גם אצל מנהל המערכת לצורכי תמיכה</p>' +
+      to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · ' + (toOwner ? noAddr + ' · התשובות יגיעו לבעל המערכת' : 'עותק אליך: ' + adr + ' · התשובות יגיעו אליך') + ' · עותק נשמר גם אצל בעל המערכת לצורכי תמיכה</p>' +
         '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + (toOwner ? noAddr : adr) + ' בלבד · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
       archive: ARCHIVE_NOTE, go: "שלח למשרד נוטאם", self: "on"
     } : {   // שרת חדש, מצב בדיקה: כפתור אחד, ושליחה ל-office נשלחת ממילא למבקש בלבד
       title: "שליחת בדיקה",
-      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — ' + (toOwner ? "אין כתובת מייל רשומה בחשבון שלך, ולכן המייל יישלח רק לבעל המערכת (" + adr + ")" : "המייל יישלח רק אליך (" + adr + ")") + ' ולא למשרד נוטאם. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
+      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — ' + (toOwner ? "אין כתובת מייל רשומה בחשבון שלך, ולכן המייל יישלח רק לבעל המערכת (" + adr + ")" : "המייל יישלח רק אליך (" + adr + ")") + ' ולא למשרד נוטאם. (בעל המערכת יכול להעביר למצב חי בניהול משתמשים.)</div>',
       to: '<p><b>אל:</b> ' + adr + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
       archive: ARCHIVE_NOTE, go: "שלח בדיקה אליי", self: ""
     };
@@ -1239,6 +1311,7 @@
     const doSend = async (target, again) => {
       const req = { folderId: S.sendFolder.folderId, subject: mail.subject, body: mail.body, again: !!again };
       if (newSrv) req.target = target;
+      if (split) req.fromName = fromName;   // שם השולח של מטיס עצמאי (השרת מנקה ומוסיף את הסיומת הקבועה); לחשבון ארגוני השרת משתמש בשם הארגון ומתעלם ממנו
       if (target === "office") req.expectMode = shown;
       const r = await A.call("sendRequest", req);
       if (!r.ok && r.error === "mode_changed") { A.setMailModeValue(r.mailMode); const e = new Error("מצב השליחה השתנה בשרת"); e.code = "mode_changed"; throw e; }
@@ -1259,10 +1332,11 @@
       }
       S.sent = { at: r.sentAt, mode: r.mode, to: r.to, target: r.target || "office" };
       // ההודעה לפי מה שהשרת דיווח בפועל (target / mode), לא לפי מה שהתבקש. הכתובת של הבעלים לא מוצגת (רק "בעל המערכת"); פרט ל-copyToIsOwner שמוצג בחלון עצמו
-      const who = newSrv && !toOwner ? "אליך" : "לבעל המערכת";
+      // חשבון ארגוני: העותק (ובלי כתובת רשומה — גם שליחה לעצמי) אל הארגון; מטיס עצמאי — אליו
+      const who = split ? (org ? (toOwner ? "לארגון" : "אליך") : "אליך") : newSrv && !toOwner ? "אליך" : "לבעל המערכת", whoCopy = split && org ? (toOwner ? "לארגון" : "אליך ולארגון") : who;
       let msgHtml;
       if (newSrv && r.target === "self") msgHtml = "נשלח " + who + " ✔ — לא נשלח למשרד נוטאם.";
-      else if (r.mode === "live") msgHtml = "נשלחה למשרד נוטאם ✔ (עותק " + who + ") — <span dir='ltr'>" + esc((r.to || []).join(", ")) + "</span> · " + esc(fmtTime(r.sentAt)) + ".";
+      else if (r.mode === "live") msgHtml = "נשלחה למשרד נוטאם ✔ (עותק " + whoCopy + ") — <span dir='ltr'>" + esc((r.to || []).join(", ")) + "</span> · " + esc(fmtTime(r.sentAt)) + ".";
       else msgHtml = "נשלח במצב בדיקה " + who + " ✔ — לא נשלח למשרד נוטאם.";
       // התיקייה בדרייב היא של בעל המערכת: הקישור רק למנהל. מטיס רגיל מקבל הודעה בלי קישור (הבקשה נשמרה בארכיון המרכזי כחלק מהשליחה)
       prog.className = "small ok"; prog.innerHTML = msgHtml; out.className = "small ok"; out.innerHTML = msgHtml + (isAdmin() ? ' <a href="' + esc(S.sendFolder.url) + '" target="_blank" rel="noopener">פתח את התיקייה בדרייב</a>' : "");
@@ -1287,7 +1361,7 @@
       if (!me2.ok) throw new Error(A.msg(me2));
       if ((A.getMailMode() === "live" ? "live" : "test") !== shown) { const e = new Error("מצב השליחה השתנה"); e.code = "mode_changed"; throw e; }
       // גם היעד שהוצג בחלון (כתובת העותק, האם היא של הבעלים, ויכולת "לעצמי" של השרת) חייב להיות זהה למה שהשרת מדווח עכשיו — אחרת המשתמש אישר טקסט שאינו תואם למציאות
-      if (A.hasFeature("sendTarget") !== newSrv || A.getCopyTo() !== addr || A.getCopyToIsOwner() !== toOwner) { const e = new Error("יעד השליחה השתנה"); e.code = "dest_changed"; throw e; }
+      if (A.hasFeature("sendTarget") !== newSrv || (A.hasFeature("orgSplit") && newSrv) !== split || (split && A.isOrg() !== org) || A.getCopyTo() !== addr || A.getCopyToIsOwner() !== toOwner || (split && (A.getEmail() || "") !== personal)) { const e = new Error("יעד השליחה השתנה"); e.code = "dest_changed"; throw e; }
       if (!S.ready || !$("reviewOk").checked) throw new Error("הבקשה אינה מוכנה לשליחה (בדיקות שלא הושלמו, נתונים ששונו או סקירה שלא אושרה) — לא נשלח");
       prog.textContent = "בודק סנכרון עם המפה…";
       if (!(await checkSync())) throw new Error("הנתונים אינם מסונכרנים עם מפת החברים — לא נשלח");

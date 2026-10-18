@@ -35,6 +35,17 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, "127.0.0.1", r));
 const BASE = "http://127.0.0.1:" + server.address().port;
 const APP = BASE + "/members-k38p/requests/index.html";
+// תיקיות הבקשות בדרייב המדומה (חוזה ההפרדה בין הארגון למטיסים עצמאיים): ארגוניות תחת ROOT/"הארגון"/<בקשה>, עצמאיות תחת ROOT/"מטיסים"/<משתמש>/<בקשה>, וישנות (מלפני ההפרדה) ישירות תחת ROOT. תיקיות הסוג והמשתמש עצמן אינן בקשות
+const KIND_FOLDERS = ["הארגון", "מטיסים"];
+const reqFolders = env => {
+  const all = env.folders, live = Object.values(all).filter(f => f.id !== "ROOT" && !f.trashed), par = f => all[f.parent];
+  return live.filter(f => { const p1 = par(f), p2 = p1 && par(p1), p3 = p2 && par(p2);
+    if (p1 && p1.id === "ROOT") return !KIND_FOLDERS.includes(f.name);                       // עומק 1: ישנה
+    if (p2 && p2.id === "ROOT") return p1.name === "הארגון";                                 // עומק 2: ארגונית
+    return !!p3 && p3.id === "ROOT" && p2.name === "מטיסים"; });                              // עומק 3: עצמאית
+};
+// נתיב התיקייה מתחת ל-ROOT (למשל "הארגון/מקום — תאריך" או "מטיסים/dana.pilot/מקום — תאריך")
+const folderPath = (env, f) => { const names = []; for (let x = f; x && x.id !== "ROOT"; x = env.folders[x.parent]) names.unshift(x.name); return names.join("/"); };
 const API = "https://script.test/exec";
 const ADMIN = "itzik.admin", PASS = "correct-horse-1";
 const SUPPORT = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")).support_email;   // כתובת התמיכה מההגדרות (n=12): מצורפת להודעות "פנו לתמיכה"
@@ -55,7 +66,19 @@ const CORS = { "access-control-allow-origin": "*" };
 // Apps Script אמיתי אינו תומך ב-CORS preflight: כל פנייה אליו חייבת להיות "בקשה פשוטה" (text/plain). המדמה מסרב ל-OPTIONS וסופר הפרות.
 const API_STATS = { preflight: 0, nonSimple: 0, posts: 0 };
 // שרת Apps Script ישן (לפני "עצמאות המבקש"): תשובותיו אינן נושאות features / email / copyTo / copyToIsOwner. opts.oldServer נבדק בכל קריאה, ולכן אפשר להפעילו ולכבותו באמצע בדיקה
-const oldSrv = (opts, resp) => { if (opts && opts.oldServer && resp && typeof resp === "object") { resp = { ...resp }; ["features", "email", "copyTo", "copyToIsOwner"].forEach(k => { delete resp[k]; }); } return resp; };
+// opts.noSplit: שרת בגרסת "עצמאות המבקש" (sendTarget) שעדיין בלי ההפרדה בין הארגון למטיסים עצמאיים — בלי features.orgSplit ובלי org / totals / kind. opts.oldServer מסיר גם את שאר השדות (email, copyTo…)
+const oldSrv = (opts, resp) => {
+  const split = opts && (opts.oldServer || opts.noSplit);
+  if (split && resp && typeof resp === "object") {
+    resp = { ...resp };
+    ["org", "totals"].forEach(k => { delete resp[k]; });
+    if (Array.isArray(resp.users)) resp.users = resp.users.map(u => { const x = { ...u }; delete x.org; return x; });
+    if (Array.isArray(resp.requests)) resp.requests = resp.requests.map(u => { const x = { ...u }; delete x.kind; return x; });
+    if (Array.isArray(resp.features)) resp.features = resp.features.filter(f => f !== "orgSplit");
+    if (opts.oldServer) ["features", "email", "copyTo", "copyToIsOwner"].forEach(k => { delete resp[k]; });
+  }
+  return resp;
+};
 const apiHandler = (env, calls, opts) => async r => {
   const req = r.request(), m = req.method();
   if (m === "OPTIONS") { API_STATS.preflight++; return r.abort(); }
@@ -187,8 +210,9 @@ async function fillExample(page, over) {
   await page.evaluate(() => { document.getElementById("personBox").open = true; });
   await page.fill("#reqName", "בודק ראשון"); await page.fill("#reqPhone", "050-0000001");
   await page.fill("#reqOrg", over.org || "חברת הבדיקה בע״מ");   // שם הגורם המבקש (שדה 2) חובה ואין לו ברירת מחדל
-  if (over.callsign != null) await page.fill("#reqCallsign", over.callsign);
-  if (over.registration != null) await page.fill("#reqReg", over.registration);
+  // חשבון ארגוני (המנהל במדמה) מקבל ברירות מחדל ארגוניות באות הקריאה וברישום (org_defaults); ברירת המחדל של הבדיקות היא מבקש שמקליד הכול בעצמו — ללא ערך מפורש השדות מנוקים (למטיס עצמאי הם ריקים ממילא)
+  await page.fill("#reqCallsign", over.callsign != null ? over.callsign : "");
+  await page.fill("#reqReg", over.registration != null ? over.registration : "");
   await setContacts(page, over.contacts || [["בודק שני", "050-0000002"], ["בודק שלישי", "050-0000003"]]);
   if (over.participants) await addParticipants(page, over.participants);
   if (over.known) await page.fill("#knownObs", over.known);
@@ -511,7 +535,7 @@ try {
     }
     check("aria-label סטטי ומתאר: ״שלח למשרד נוטאם״ ו״צילום אוויר/מפת רחובות״ (רקעי מפת העבודה) מסבירים שהם משפיעים על התצוגה בלבד", (await hb("#btnSend").getAttribute("aria-label")) === "הסבר על: שליחה למשרד נוטאם" && (await hb("#qBtn").getAttribute("aria-label")) === "הסבר על: חיפוש מקום" && /לא על ארבע התמונות/.test(await hb("#baseSat").getAttribute("data-help")) && /לא על ארבע התמונות/.test(await hb("#baseOsm").getAttribute("data-help")) && /Nominatim/.test(await hb("#qBtn").getAttribute("data-help")) && /בדיקה העצמית/.test(await hb("#stRun").getAttribute("data-help")), "");
     { const dh = await hb("#btnDrive").getAttribute("data-help"), sh = await hb("#btnSend").getAttribute("data-help");
-      check("הסברים מדויקים: ״שמור בדרייב״ — שמירה בלי שליחה, בדרייב של בעל המערכת ולמנהל בלבד; ״שלח״ — שומר בארכיון המרכזי ושולח: למשרד (עותק למבקש) או רק לעצמי, בבדיקה רק למבקש, עותק סמוי למנהל", /בדרייב של בעל המערכת \(הארכיון המרכזי\), בלי לשלוח/.test(dh) && /מוצג למנהל המערכת בלבד/.test(dh) && /שומר את הבקשה בארכיון המרכזי/.test(sh) && /שלח למשרד נוטאם/.test(sh) && /שלח רק לעצמי/.test(sh) && /במצב בדיקה המייל נשלח רק אליכם/.test(sh) && /עותק סמוי/.test(sh) && /תשובות המשרד יגיעו אליכם/.test(sh) && !/owner@|בעל המערכת \(בדיקה\)/.test(sh), dh.slice(0, 80) + " | " + sh.slice(0, 80)); }
+      check("הסברים מדויקים (מנהל = חשבון ארגוני): ״שמור בדרייב״ — שמירה בלי שליחה, בדרייב של בעל המערכת ולמנהל בלבד, לפי סוג הבקשה; ״שלח״ — שומר בארכיון הארגון ושולח בשם הארגון: למשרד (עותק לארגון, התשובות אל הארגון) או רק לעצמי, בבדיקה רק לכתובת המבקש", /בדרייב של בעל המערכת \(הארכיון המרכזי: בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש\), בלי לשלוח/.test(dh) && /מוצג למנהל המערכת בלבד/.test(dh) && /שומר את הבקשה בארכיון הארגון בדרייב \(תיקיית ״הארגון״\) ושולח אותה/.test(sh) && /בשם הארגון \(שם השולח ״הארגון הישראלי לרב להב״\)/.test(sh) && /שלח למשרד נוטאם/.test(sh) && /שלח רק לעצמי/.test(sh) && /עותק נשלח לארגון/.test(sh) && /תשובות המשרד יחזרו אל הארגון/.test(sh) && /במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון/.test(sh) && !/owner@|בעל המערכת \(בדיקה\)/.test(sh), dh.slice(0, 80) + " | " + sh.slice(0, 80)); }
     await hb("#runBtn").click();
     let b = await bubble();
     check("״!״ נפתח: בועת הסבר מוצגת בתוך המסך, aria-expanded=true", !!b && /מריץ את כל הבדיקות/.test(b.text) && (await hb("#runBtn").getAttribute("aria-expanded")) === "true" && b.left >= 0 && b.right <= b.vw && b.top >= 0 && b.bottom <= b.vh, JSON.stringify(b));
@@ -533,7 +557,7 @@ try {
     const envA = page._env, tokA = envA.call({ action: "login", user: ADMIN, pass: PASS }).token;
     envA.call({ action: "addUser", token: tokA, newUser: "dave.pilot", newPass: "dave-pass-12345" });
     await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
-    check("בחלון ניהול המשתמשים: לחצני ״!״ ליד מתג מצב השליחה, חמשת פריטי המקרא (חסום, פתח מחדש, איפוס, תוקף, מחק), הוסף, אפס ובדוק", (await page.locator("#admBody .admMode .hbtn").count()) === 1 && (await page.locator("#admBody .admHelp .hbtn").count()) === 5 && (await page.locator("#addForm .hbtn").count()) === 1 && (await page.locator("#rstForm .hbtn").count()) === 1 && (await page.locator("#wxForm .hbtn").count()) === 1, "");
+    check("בחלון ניהול המשתמשים: לחצני ״!״ ליד מתג מצב השליחה, חמשת פריטי המקרא (חסום, פתח מחדש, איפוס, תוקף, מחק), חשבון ארגוני + הוסף, אפס ובדוק", (await page.locator("#admBody .admMode .hbtn").count()) === 1 && (await page.locator("#admBody .admHelp .hbtn").count()) === 5 && (await page.locator("#addForm .hbtn").count()) === 2 && (await page.locator("#rstForm .hbtn").count()) === 1 && (await page.locator("#wxForm .hbtn").count()) === 1, "");
     { // ״!״ ליד כל אחד מארבעת כפתורי הפעולה בשורת המשתמש, מוערמים בעמודה אחת; ליד המנהל עצמו אין פעולות
       const rowInfo = () => page.evaluate(() => {
         const tds = [...document.querySelectorAll("#admBody td.acts")], td = tds.find(t => t.querySelector("[data-blk]")), r = el => el.getBoundingClientRect();
@@ -827,7 +851,7 @@ try {
     await page.evaluate(() => { document.getElementById("driveMsg").textContent = ""; });
     await page.click("#btnDrive");
     await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
-    const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT"), ends2 = page._calls.saveEnds || [];
+    const folder = reqFolders(page._env)[0], ends2 = page._calls.saveEnds || [];
     let plain = "";
     { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), z = await JZ.loadAsync(folder.files.find(f => f.name.endsWith(".docx") && !f.trashed).bytes);
       plain = (await z.file("word/document.xml").async("string")).replace(/<[^>]+>/g, "").replace(new RegExp("[" + String.fromCharCode(0x202a, 0x202c) + "]", "g"), ""); }
@@ -909,7 +933,7 @@ try {
       await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
       const msgT = await page.textContent("#driveMsg");
       check("שמירה בדרייב הצליחה (7 קבצים: Word, KML, ארבע תמונות ונתוני בקשה)", /נשמרו 7 קבצים/.test(msgT), msgT.slice(0, 160));
-      const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
+      const folder = reqFolders(page._env)[0];
       const names = folder ? folder.files.filter(f => !f.trashed).map(f => f.name) : [];
       check("התיקייה בדרייב נקראת 'מקום — תאריך' ומכילה Word, KML, ארבע תמונות בשמות לפי החוזה ונתוני בקשה", !!folder && /— \d\d\.\d\d\.\d{4}/.test(folder.name) && names.length === 7 &&
         names.some(n => n.endsWith(".docx")) && names.some(n => n.endsWith(".kml")) && names.filter(n => /\.(png|jpg)$/.test(n)).length === 4 && names.some(n => n.endsWith(".json")) &&
@@ -925,13 +949,13 @@ try {
       await page.click("#btnDrive");
       await page.waitForFunction(() => /נשמרו 7 קבצים/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
       await page.waitForTimeout(300);
-      check("שמירה חוזרת מחליפה קבצים באותו שם (בלי כפילויות)", folder.files.filter(f => !f.trashed).length === 7 && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 1, "");
+      check("שמירה חוזרת מחליפה קבצים באותו שם (בלי כפילויות)", folder.files.filter(f => !f.trashed).length === 7 && reqFolders(page._env).length === 1, "");
       // בקשה אחרת באותו מקום ותאריך (דף חדש = מזהה בקשה חדש): תיקייה נפרדת, והקבצים של הראשונה לא נדרסים
       { const { ctx: ctxB, page: pageB } = await newPage(browser, { env: page._env });
         await pageB.goto(APP); await pageB.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(pageB);
         await readyRequest(pageB); await pageB.click("#btnDrive");
         await pageB.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.querySelector("#driveMsg").textContent), null, { timeout: 120000 });
-        const fs2 = Object.values(page._env.folders).filter(f => f.parent === "ROOT");
+        const fs2 = reqFolders(page._env);
         check("אותו מקום ותאריך מבקשה אחרת: שתי תיקיות נפרדות, והראשונה שלמה", fs2.length === 2 && /\(2\)$/.test(fs2[1].name) && folder.files.filter(f => !f.trashed).length === 7, fs2.map(f => f.name).join(" | "));
         await ctxB.close(); }
       await ctx.close();
@@ -966,7 +990,7 @@ try {
       check("כפתור 'שלח' נפתח כשהבקשה מוכנה", !(await page.isDisabled("#btnSend")), "");
       await page.click("#btnSend"); await page.waitForSelector(".sendBox");
       const mt = await page.textContent(".sendBox");
-      check("חלון השליחה: מצב בדיקה, נמען הבעלים בלבד, נושא וקבצים", /מצב בדיקה/.test(mt) && /אין כתובת מייל רשומה בחשבון שלך, ולכן המייל יישלח רק לבעל המערכת \(owner@icd\.test\) ולא למשרד נוטאם/.test(mt) && /שלח בדיקה אליי/.test(mt) && /בקשה לסגירה אווירית —/.test(mt) && /קובץ KML/.test(mt) && ["תצ״א — תקריב", "מפת רחובות — תקריב", "הדמיה וסימונים — מבט כללי", "מפת אזור — מרוחק"].every(n => mt.includes(n)) && !/notamoffice@iaa\.gov\.il, nofm/.test(mt.split("נוסח המייל")[0].split("אל:")[1] || ""), mt.replace(/\s+/g, " ").slice(0, 200));
+      check("חלון השליחה (מנהל = חשבון ארגוני בלי כתובת שמורה): מצב בדיקה, נמען כתובת הארגון בלבד, התשובות אל הארגון, נושא וקבצים", /מצב בדיקה/.test(mt) && /המייל יישלח רק אל office@icd\.org\.il ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב/.test(mt.replace(/\s+/g, " ")) && /שלח בדיקה אליי/.test(mt) && /בקשה לסגירה אווירית —/.test(mt) && /קובץ KML/.test(mt) && ["תצ״א — תקריב", "מפת רחובות — תקריב", "הדמיה וסימונים — מבט כללי", "מפת אזור — מרוחק"].every(n => mt.includes(n)) && !/notamoffice@iaa\.gov\.il, nofm/.test(mt.split("נוסח המייל")[0].split("אל:")[1] || ""), mt.replace(/\s+/g, " ").slice(0, 200));
       check("כפתור השליחה חסום עד סימון האישור", await page.isDisabled("#sendGo"), "");
       await page.check("#sendOk"); check("אחרי סימון האישור הכפתור נפתח", !(await page.isDisabled("#sendGo")), "");
       await page.click("#sendGo");
@@ -974,9 +998,9 @@ try {
       const pr = await page.textContent("#sendProg");
       check("שליחת בדיקה הצליחה (לבעלים בלבד)", /נשלח במצב בדיקה/.test(pr) && /לא נשלח למשרד נוטאם/.test(pr), pr.slice(0, 160));
       const mails = page._env.mails;
-      check("נשלח מייל אחד לבעלים עם 6 קבצים מצורפים (Word, KML וארבע תמונות — בלי JSON) ללא נמען חיצוני", mails.length === 1 && mails[0].to === "owner@icd.test" && mails[0].attachments.length === 6 && !/iaa\.gov\.il/.test(JSON.stringify(mails[0].to + mails[0].cc)), mails.length + " מיילים; " + (mails[0] && mails[0].attachments.map(a => a.name).join(" | ")));
+      check("נשלח מייל אחד לכתובת הארגון עם 6 קבצים מצורפים (Word, KML וארבע תמונות — בלי JSON) ללא נמען חיצוני", mails.length === 1 && mails[0].to === "office@icd.org.il" && mails[0].attachments.length === 6 && !/iaa\.gov\.il/.test(JSON.stringify(mails[0].to + mails[0].cc)), mails.length + " מיילים; " + (mails[0] && mails[0].attachments.map(a => a.name).join(" | ")));
       check("נושא הבדיקה מסומן ונוסח המייל נשמר", /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית — /.test(mails[0].subject) && /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\)/.test(mails[0].body), mails[0].subject.slice(0, 80));
-      const folder = Object.values(page._env.folders).find(f => f.parent === "ROOT");
+      const folder = reqFolders(page._env)[0];
       check("סימון 'נשלח (בדיקה)' נוצר בתיקייה בדרייב", folder.files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folder.files.map(f => f.name).join(" | ").slice(0, 200));
       const sm = await page.textContent("#sendMsg"); check("ההודעה בעמוד מציינת שליחה לבדיקה בלבד", /בדיקה/.test(sm), sm.slice(0, 120));
       // בקשה שלא השתנתה נשלחת שוב מאותה תיקייה בדרייב (בלי שמירה כפולה); שינוי בנוסח ה-Word מחייב שמירה מחדש
@@ -1007,7 +1031,7 @@ try {
       env.call({ action: "setMailMode", token: adminTok, mode: "live" });          // המנהל משנה בזמן שהחלון פתוח
       await page.check("#sendOk"); await page.click("#sendGo");
       await page.waitForFunction(() => /מצב השליחה בשרת השתנה/.test(document.querySelector("#sendMsg").textContent) && /אינה ניתנת לביטול/.test((document.querySelector(".sendBox") || {}).textContent || ""), null, { timeout: 60000 });   // לא מספיק לחכות ל"מצב חי" — המילים מופיעות גם בחלון הבדיקה
-      check("מצב השליחה השתנה בשרת: לא נשלח מייל ולא נוצרה תיקייה בדרייב", env.mails.length === 0 && Object.values(env.folders).filter(f => f.parent === "ROOT").length === 0, env.mails.length + " מיילים");
+      check("מצב השליחה השתנה בשרת: לא נשלח מייל ולא נוצרה תיקייה בדרייב", env.mails.length === 0 && reqFolders(env).length === 0, env.mails.length + " מיילים");
       check("החלון נפתח מחדש במצב חי, עם אזהרה ועם אישור שיש לסמן שוב", /אינה ניתנת לביטול/.test(await page.textContent(".sendBox")) && (await page.isDisabled("#sendGo")) && /מצב השליחה בשרת השתנה/.test(await page.textContent("#sendMsg")), "");
       await page.check("#sendOk"); await page.click("#sendGo");
       await page.waitForFunction(() => /נשלחה למשרד נוטאם|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
@@ -1029,7 +1053,7 @@ try {
       await page.evaluate(() => { const ok = document.getElementById("sendOk"); ok.disabled = false; ok.checked = true; const g = document.getElementById("sendGo"); g.disabled = false; g.click(); });
       await page.waitForFunction(() => /נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 30000 });
       const t = await page.textContent("#sendProg");
-      check("בקשה ששונתה אחרי שהייתה מוכנה: השליחה נעצרת, אין מייל ואין תיקייה", /אינה מוכנה|השתנו/.test(t) && page._env.mails.length === 0 && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 0, t.slice(0, 160));
+      check("בקשה ששונתה אחרי שהייתה מוכנה: השליחה נעצרת, אין מייל ואין תיקייה", /אינה מוכנה|השתנו/.test(t) && page._env.mails.length === 0 && reqFolders(page._env).length === 0, t.slice(0, 160));
       await ctx.close();
     }
     // 6ח3: בזמן שמירה/שליחה — אי אפשר לסגור את החלון, להחליף אותו או להתחיל זרימה שנייה
@@ -1060,7 +1084,7 @@ try {
       await page.click("#sendGo");
       await page.waitForSelector("#authCover", { timeout: 30000 });
       const top = await page.evaluate(() => { const f = document.getElementById("authForm") || document.getElementById("authCover"), r = f.getBoundingClientRect(), el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return !!(el && el.closest("#authCover")); });
-      check("משתמש נחסם באמצע שליחה: מסך הכניסה מעל הכול, החלון נסגר, אין מייל ואין תיקייה", top && !(await page.$("#authModal")) && env.mails.length === 0 && Object.values(env.folders).filter(f => f.parent === "ROOT").length === 0 && /חסום/.test(await page.textContent("#authCover")), "");
+      check("משתמש נחסם באמצע שליחה: מסך הכניסה מעל הכול, החלון נסגר, אין מייל ואין תיקייה", top && !(await page.$("#authModal")) && env.mails.length === 0 && reqFolders(env).length === 0 && /חסום/.test(await page.textContent("#authCover")), "");
       await ctx.close();
     }
     // 6ח5: טקסט נ״צ לא חוקי לא מתעלם בשקט ולא מריץ את הבדיקות על הנקודה הקודמת
@@ -1128,7 +1152,7 @@ try {
       await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
       const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => [...x.children].map(c => c.textContent.trim())));
       const dr = rows.find(c => c[0] === "dana.pilot");
-      check("ניהול: ליד המשתמש מוצגים המייל ותאריך סיום המנוי", !!dr && dr[3] === "pilot@example.com" && /\d/.test(dr[4]) && !/הסתיים/.test(dr[4]), JSON.stringify(dr));
+      check("ניהול: ליד המשתמש מוצגים סוג החשבון, המייל ותאריך סיום המנוי (עמודת הסוג נוספה אחרי התפקיד)", !!dr && /^עצמאי/.test(dr[2]) && dr[4] === "pilot@example.com" && /\d/.test(dr[5]) && !/הסתיים/.test(dr[5]), JSON.stringify(dr));
       page.once("dialog", d => d.accept("2031-05-05"));
       await page.click("[data-exp='dana.pilot']");
       await page.waitForFunction(() => /2031|05\.05|5\.5\.2031|5\/5\/2031/.test(document.querySelector("#admBody").textContent), null, { timeout: 10000 });
@@ -1164,7 +1188,7 @@ try {
       await page.check("#sendOk"); await page.click("#sendGo");
       await page.waitForFunction(() => /נשלחה למשרד נוטאם|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
       const m = env.mails[0];
-      check("מצב חי: נשלח ל-notamoffice@ ול-nofm@ בלבד, עותק לבעלים", env.mails.length === 1 && m.to === "notamoffice@iaa.gov.il,nofm@iaa.gov.il" && m.cc === "owner@icd.test" && !/^\[בדיקה/.test(m.subject), JSON.stringify([m.to, m.cc]));
+      check("מצב חי (מנהל = ארגוני): נשלח ל-notamoffice@ ול-nofm@ בלבד, עותק לכתובת הארגון", env.mails.length === 1 && m.to === "notamoffice@iaa.gov.il,nofm@iaa.gov.il" && m.cc === "office@icd.org.il" && !/^\[בדיקה/.test(m.subject), JSON.stringify([m.to, m.cc]));
       check("מצב חי: הודעת הצלחה עם הנמענים והשעה", /נשלחה למשרד נוטאם/.test(await page.textContent("#sendProg")), "");
       await page.click("#mdClose"); await page.click("#btnSend"); await page.waitForSelector(".sendBox");
       await page.check("#sendOk"); await page.click("#sendGo");
@@ -1181,7 +1205,7 @@ try {
       check("ניהול: ליד כל משתמש (שאינו המנהל עצמו) כפתור 'חסום מבקשות'", (await page.$$("button.block[data-blk='dave.pilot']")).length === 1 && (await page.$$("button[data-blk='" + ADMIN + "']")).length === 0, "");
       const rows = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr", r => r.map(x => [...x.children].map(c => c.textContent.trim())));
       const adminRow = rows.find(c => c[0] === ADMIN);
-      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", !!adminRow && adminRow[5] === "1" && adminRow[6] === "2", JSON.stringify(adminRow));
+      check("ניהול: ליד המנהל מוצגות כמות הבקשות שהגיש (1) והנשלחות (2 לפי מניין שליחות אמיתיות)", !!adminRow && adminRow[6] === "1" && adminRow[7] === "2", JSON.stringify(adminRow));
       await page.click("button.block[data-blk='dave.pilot']"); await page.waitForSelector("button.unblock[data-blk='dave.pilot']");
       check("חסימה מהכפתור: מופיע 'פתח מחדש את הבקשות' והמשתמש חסום בשרת", /פתח מחדש את הבקשות/.test(await page.textContent("button.unblock[data-blk='dave.pilot']")) && env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).error === "blocked", "");
       await page.click("button.unblock[data-blk='dave.pilot']"); await page.waitForSelector("button.block[data-blk='dave.pilot']");
@@ -1216,7 +1240,7 @@ try {
       await page.click("#btnSend");
       await page.waitForFunction(() => /אינם מסונכרנים/.test(document.querySelector("#sendMsg").textContent), null, { timeout: 20000 });
       check("המפה התעדכנה והייצוא טרם רץ: השליחה נחסמת, אין חלון ואין מייל", !(await page.$(".sendBox")) && page._env.mails.length === 0 && (await page.evaluate(() => document.querySelector("#syncBanner").style.display)) === "block", "");
-      check("המפה התעדכנה: שמירה בדרייב ושליחה חסומות בשער (שום תיקייה לא נוצרה)", (await page.isDisabled("#btnDrive")) && (await page.isDisabled("#btnSend")) && Object.values(page._env.folders).filter(f => f.parent === "ROOT").length === 0, "");
+      check("המפה התעדכנה: שמירה בדרייב ושליחה חסומות בשער (שום תיקייה לא נוצרה)", (await page.isDisabled("#btnDrive")) && (await page.isDisabled("#btnSend")) && reqFolders(page._env).length === 0, "");
       page._map.zonesHash = page._tamperedHash();              // הייצוא האוטומטי הסתיים: zones.json תואם למפה החדשה — הדף מתאושש מעצמו
       await page.waitForFunction(() => /הבקשה אינה מוכנה לשליחה/.test(document.querySelector("#gate").textContent) && /התעדכנו מאז הרצת הבדיקות/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
       check("אחרי שהייצוא הסתיים: הדף טוען נתונים חדשים, הבקשה מסומנת כישנה וחייבת הרצה מחדש", await page.isDisabled("#btnSend") && (await page.evaluate(() => window.__REQ.S.data.zones.dataHash)) === page._map.zonesHash, "");
@@ -1397,7 +1421,7 @@ try {
         check("המהות המותאמת בקובץ ה-Word כטקסט: ה-XML תקין, אין תגית מוזרקת (</w:t>, <img), והטקסט נשמר כלשונו", valid && plain.includes(HOSTILE) && !doc.includes("<img") && !doc.includes("]]>") && (doc.match(/<w:t[ >]/g) || []).length === (doc.match(/<\/w:t>/g) || []).length, "") }
       await p2.click("#btnSend"); await p2.waitForSelector(".sendBox"); await p2.check("#sendOk"); await p2.click("#sendGo");
       await p2.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
-      const mails = p2._env.mails, folder = Object.values(p2._env.folders).find(f => f.parent === "ROOT"), jf = folder && folder.files.find(f => f.name.endsWith(".json")), rec = jf ? JSON.parse(jf.bytes.toString("utf8")) : {};
+      const mails = p2._env.mails, folder = reqFolders(p2._env)[0], jf = folder && folder.files.find(f => f.name.endsWith(".json")), rec = jf ? JSON.parse(jf.bytes.toString("utf8")) : {};
       check("המהות המותאמת במייל שנשלח (שרת Apps Script) ובקובץ נתוני הבקשה בדרייב (inputs.purpose)", mails.length === 1 && mails[0].body.split("\n").includes("מהות הפעילות: " + HOSTILE) && rec.inputs && rec.inputs.purpose === HOSTILE, mails.length + " מיילים");
       await p2.click("#mdClose");
       // בחירה במהות אחרת אחרי ההרצה: שדה רך — הטופס מתעדכן והבקשה נשארת מוכנה
@@ -1810,12 +1834,13 @@ try {
   }
   /* ===== תרחיש 13: עצמאות המבקש — כל מטיס הוא המבקש של בקשתו: גורם מבקש ניתן לעריכה (שדה 2) ואות קריאה / מס׳ רישום (שדות 13 ו-14); חלון השליחה לפי החוזה (למשרד / רק לעצמי / בדיקה; שרת חדש וישן); דרייב למנהל בלבד ===== */
   {
-    // 13א: שדות המבקש בטופס — ריקים כברירת מחדל, גורם מבקש חובה (ללא ערך קבוע), אות קריאה ומס׳ רישום אופציונליים; אימות עם הודעה וסימון
+    // 13א: שדות המבקש בטופס של מטיס עצמאי — ריקים כברירת מחדל (ברירות המחדל הארגוניות נטענות רק לחשבון ארגוני; ראו תרחיש 17), גורם מבקש חובה (ללא ערך קבוע), אות קריאה ומס׳ רישום אופציונליים; אימות עם הודעה וסימון
     const { ctx, page } = await newPage(browser);
-    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    { const e0 = page._env, t0 = e0.call({ action: "login", user: ADMIN, pass: PASS }).token; e0.call({ action: "addUser", token: t0, newUser: "pat.pilot", newPass: "pat-pass-12345", org: false }); }   // מטיס עצמאי (org:false)
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, "pat.pilot", "pat-pass-12345");
     await page.evaluate(() => { document.getElementById("personBox").open = true; });
     const lbl = await page.textContent("label.f:has(#reqOrg) > b");
-    check("שדה ״שם הגורם המבקש״ בתיבת פרטי המבקש: תווית ברורה, ריק כברירת מחדל (אין עוד ״הארגון הישראלי לרב להב״ קבוע)", lbl === "שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)" && (await page.inputValue("#reqOrg")) === "" && !/לרב להב/.test(await page.inputValue("#reqOrg")), lbl);
+    check("שדה ״שם הגורם המבקש״ בתיבת פרטי המבקש (מטיס עצמאי): תווית ברורה, ריק כברירת מחדל (אין ברירת מחדל ארגונית למטיס עצמאי)", lbl === "שם הגורם המבקש (חברה / ארגון / מטיס — כפי שיופיע בבקשה)" && (await page.inputValue("#reqOrg")) === "" && !/לרב להב/.test(await page.inputValue("#reqOrg")), lbl);
     check("אות קריאה ומס׳ רישום: שדות אופציונליים וריקים עם ״לא רלוונטי״ כ-placeholder", (await page.inputValue("#reqCallsign")) === "" && (await page.inputValue("#reqReg")) === "" && (await page.getAttribute("#reqCallsign", "placeholder")) === "לא רלוונטי" && (await page.getAttribute("#reqReg", "placeholder")) === "לא רלוונטי", "");
     const tryRun = async (over, errId, re, badId, label) => {
       await fillExample(page, over); const o0 = page._calls.overpass;
@@ -1867,7 +1892,7 @@ try {
     await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
     const sm = await page.innerHTML("#sendMsg");
     check("מנהל: אחרי שליחה מוצג הקישור ״פתח את התיקייה בדרייב״", /נשלח במצב בדיקה/.test(sm) && /פתח את התיקייה בדרייב/.test(sm) && /href="https:\/\/drive\//.test(sm), sm.slice(0, 200));
-    { const env = page._env, folder = Object.values(env.folders).find(f => f.parent === "ROOT"), dx = folder.files.find(f => /\.docx$/.test(f.name)), js = folder.files.find(f => /\.json$/.test(f.name));
+    { const env = page._env, folder = reqFolders(env)[0], dx = folder.files.find(f => /\.docx$/.test(f.name)), js = folder.files.find(f => /\.json$/.test(f.name));
       const { doc, core } = await docxParts(dx.bytes), plain = doc.replace(/<[^>]+>/g, "");
       check("הקובץ שנשמר בארכיון: Word עם הגורם המבקש ויוצר המסמך; מייל הבדיקה נושא את הגורם; קובץ נתוני הבקשה אינו כולל שם גורם, אות קריאה או מס׳ רישום", plain.includes("חברת בטא") && /<dc:creator>חברת בטא<\/dc:creator>/.test(core) && env.mails.length === 1 && env.mails[0].body.includes("שם/גורם המבקש: חברת בטא") && !/חברת בטא|אלפא 1|4X-ALF/.test(js.bytes.toString("utf8")), "מיילים " + env.mails.length); }
     await ctx.close();
@@ -1885,10 +1910,10 @@ try {
     const opts = { env, oldServer: false };
     const { ctx, page } = await newPage(browser, opts);
     await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, "dana.pilot", "dana-pass-1234");
-    const OWNER = "owner@icd.test", OFFICE = "notamoffice@iaa.gov.il,nofm@iaa.gov.il";
-    const ga = () => page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), features: ReqAuth.getFeatures(), role: ReqAuth.getRole() }));
+    const OWNER = "owner@icd.test", ORGA = "office@icd.org.il", OFFICE = "notamoffice@iaa.gov.il,nofm@iaa.gov.il";   // OWNER = בעל הסקריפט (Session); ORGA = כתובת הארגון (CFG.ADMIN_COPY_TO) — מקבלת עותק סמוי ממטיס עצמאי
+    const ga = () => page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), features: ReqAuth.getFeatures(), role: ReqAuth.getRole(), org: ReqAuth.isOrg() }));
     let g = await ga();
-    check("הכנה: dana.pilot נרשמה עם כתובת; auth.js חושף email / copyTo / copyToIsOwner=false / features=sendTarget / role=user", reg.ok && reg.email === "dana@example.com" && g.email === "dana@example.com" && g.copyTo === "dana@example.com" && g.own === false && g.features.includes("sendTarget") && g.role === "user", JSON.stringify(g));
+    check("הכנה: dana.pilot נרשמה עם כתובת; auth.js חושף email / copyTo / copyToIsOwner=false / features=sendTarget / role=user", reg.ok && reg.email === "dana@example.com" && g.email === "dana@example.com" && g.copyTo === "dana@example.com" && g.own === false && g.features.includes("sendTarget") && g.features.includes("orgSplit") && g.role === "user" && g.org === false, JSON.stringify(g));
     await readyRequest(page, { org: "דנה לוי צילום" });
     const norm = s => s.replace(/\s+/g, " ");
     const dlg = async () => { await page.click("#btnSend"); await page.waitForSelector(".sendBox"); return norm(await page.textContent(".sendBox")); };
@@ -1902,8 +1927,8 @@ try {
     setMode("live");
     let t = await dlg();
     check("דיאלוג (חי, משתמש עם כתובת): ״מצב חי״, ״שלח למשרד נוטאם״ (ראשי) ו״שלח רק לעצמי (עותק לבדיקה)״", /מצב חי/.test(t) && (await page.textContent("#sendGo")) === "שלח למשרד נוטאם" && (await page.getAttribute("#sendGo", "class")).includes("primary") && (await page.textContent("#sendSelf")) === "שלח רק לעצמי (עותק לבדיקה)" && (await page.isDisabled("#sendGo")) && (await page.isDisabled("#sendSelf")), t.slice(0, 200));
-    check("דיאלוג (חי): ״אל: notamoffice@…, nofm@… · עותק אליך: <כתובתך> · התשובות יגיעו אליך · עותק נשמר גם אצל מנהל המערכת לצורכי תמיכה״", t.includes("אל: notamoffice@iaa.gov.il, nofm@iaa.gov.il · עותק אליך: dana@example.com · התשובות יגיעו אליך · עותק נשמר גם אצל מנהל המערכת לצורכי תמיכה"), t.slice(0, 500));
-    check("דיאלוג (חי): ״אל: <כתובתך> בלבד · לא נשלח למשרד״; כתובת הבעלים אינה מוצגת", t.includes("אל: dana@example.com בלבד · לא נשלח למשרד") && !t.includes(OWNER), t.slice(0, 600));
+    check("דיאלוג עצמאי (חי): ״אל: notamoffice@…, nofm@… · עותק אליך: <כתובתך> · התשובות יגיעו אליך״, ושורת שם השולח; הערת הארכיון ניטרלית (צוות התמיכה, בלי הארגון)", t.includes("אל: notamoffice@iaa.gov.il, nofm@iaa.gov.il · עותק אליך: dana@example.com · התשובות יגיעו אליך") && t.includes("שם השולח במייל: דנה לוי צילום — דרך מערכת בקשות הטיסה") && t.includes("הבקשה נשמרת בארכיון המערכת, וצוות התמיכה של המערכת מקבל עותק סמוי של כל שליחה — לצורכי תמיכה בלבד") && !t.includes("מנהל המערכת"), t.slice(0, 500));
+    check("דיאלוג (חי): ״אל: <כתובתך> בלבד · לא נשלח למשרד״; כתובת הבעלים אינה מוצגת", t.includes("אל: dana@example.com בלבד · לא נשלח למשרד") && !t.includes(OWNER) && !t.includes(ORGA), t.slice(0, 600));
     await page.check("#sendOk");
     check("סימון האישור מפעיל את שני הכפתורים", !(await page.isDisabled("#sendGo")) && !(await page.isDisabled("#sendSelf")), "");
     const b0 = page._calls.actions.filter(a => a === "saveBegin").length;
@@ -1911,20 +1936,20 @@ try {
     let pr = norm(await page.textContent("#sendProg"));
     check("שליחה רק לעצמי: ההודעה ״נשלח אליך ✔ — לא נשלח למשרד נוטאם״", pr === "נשלח אליך ✔ — לא נשלח למשרד נוטאם.", pr);
     let m = lastMail();
-    check("שליחה רק לעצמי: המייל אל המבקש בלבד (בלי עותק), עותק סמוי לבעלים, replyTo למבקש, נושא ״[עותק לעצמי — לא נשלח למשרד נוטאם]״, קבצים מצורפים", env.mails.length === 1 && m.to === "dana@example.com" && !m.cc && m.bcc === OWNER && m.replyTo === "dana@example.com" && m.subject.startsWith("[עותק לעצמי — לא נשלח למשרד נוטאם] ") && m.attachments.length === 6, JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, subject: m.subject.slice(0, 50) }));
+    check("שליחה רק לעצמי (עצמאי): המייל אל המבקש בלבד (בלי עותק), עותק סמוי לכתובת הארגון, replyTo למבקש, שם השולח עם הסיומת, נושא ״[עותק לעצמי — לא נשלח למשרד נוטאם]״, קבצים מצורפים", env.mails.length === 1 && m.to === "dana@example.com" && !m.cc && m.bcc === ORGA && m.name === "דנה לוי צילום — דרך מערכת בקשות הטיסה" && m.replyTo === "dana@example.com" && m.subject.startsWith("[עותק לעצמי — לא נשלח למשרד נוטאם] ") && m.attachments.length === 6, JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, subject: m.subject.slice(0, 50) }));
     check("הבקשה ל-sendRequest: target=self, בלי expectMode, ובלי שום שדה כתובת/נמען מהלקוח", sends().length === 1 && sends()[0].target === "self" && !("expectMode" in sends()[0]) && !Object.keys(sends()[0]).some(k => /^(to|cc|bcc|email|replyTo|recipients?)$/i.test(k)), JSON.stringify(Object.keys(sends()[0] || {})));
     check("משתמש רגיל: ההודעה ללא קישור לדרייב, והקישור לתיקייה לא קיים בשום מקום בדף", !(await page.$("#sendMsg a")) && !/https:\/\/drive\//.test(await page.content()), norm(await page.textContent("#sendMsg")));
     check("אחרי שליחה לעצמי החלון נשאר: האישור מתאפס וצריך לסמן שוב, והכפתורים חסומים עד אז", !(await page.isChecked("#sendOk")) && !(await page.isDisabled("#sendOk")) && (await page.isDisabled("#sendGo")) && (await page.isDisabled("#sendSelf")), "");
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
     pr = norm(await page.textContent("#sendProg")); m = lastMail();
     check("אחרי שליחה לעצמי אפשר לשלוח למשרד (היא אינה נספרת כ״נשלחה למשרד״): ההודעה ״נשלחה למשרד נוטאם ✔ (עותק אליך)״", /^נשלחה למשרד נוטאם ✔ \(עותק אליך\) — notamoffice@iaa\.gov\.il, nofm@iaa\.gov\.il · /.test(pr) && env.mails.length === 2, pr);
-    check("שליחה למשרד: to=משרד נוטאם, cc=המבקש, bcc=הבעלים, replyTo=המבקש, בלי קידומת בנושא", m.to === OFFICE && m.cc === "dana@example.com" && m.bcc === OWNER && m.replyTo === "dana@example.com" && !/^\[/.test(m.subject), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo }));
+    check("שליחה למשרד (עצמאי): to=משרד נוטאם, cc=המבקש, bcc=כתובת הארגון, replyTo=המבקש, שם השולח עם הסיומת, בלי קידומת בנושא", m.to === OFFICE && m.cc === "dana@example.com" && m.bcc === ORGA && m.name === "דנה לוי צילום — דרך מערכת בקשות הטיסה" && m.replyTo === "dana@example.com" && !/^\[/.test(m.subject), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo }));
     check("הבקשה: target=office עם expectMode=live; בלי שמירה נוספת בדרייב בין שני היעדים (saveBegin פעם אחת)", sends().length === 2 && sends()[1].target === "office" && sends()[1].expectMode === "live" && sends()[1].again === false && page._calls.actions.filter(a => a === "saveBegin").length === b0 + 1, JSON.stringify(sends()[1]));
     check("אחרי שליחה למשרד החלון ננעל (אישור וכפתורים חסומים)", (await page.isDisabled("#sendOk")) && (await page.isDisabled("#sendGo")) && (await page.isDisabled("#sendSelf")), "");
     await closeDlg();
     { const lr = env.call({ action: "listRequests", token: admTok }).requests.find(x => x.user === "dana.pilot");
       check("יומן המנהל: שליחה אחת למשרד (חי) ושליחה אחת לעצמו — הלעצמו לא נספרת כ״נשלחה למשרד נוטאם״", lr && lr.sentLive === 1 && lr.sentSelf === 1 && lr.sentTest === 0, JSON.stringify(lr)); }
-    { const fo = Object.values(env.folders).find(f => f.parent === "ROOT"), names = fo ? fo.files.map(f => f.name) : [];
+    { const fo = reqFolders(env)[0], names = fo ? fo.files.map(f => f.name) : [];
       check("הארכיון המרכזי נשמר גם למשתמש רגיל (Word, KML, תמונות) וסימוני השליחה בתיקייה: לעצמו ולמשרד", !!fo && names.some(n => /\.docx$/.test(n)) && names.some(n => /\.kml$/.test(n)) && names.some(n => /\(לעצמו\)\.txt$/.test(n)) && names.some(n => /^נשלח — [\d\- ]+\.txt$/.test(n)), names.join(" | ").slice(0, 300)); }
     // שליחה חוזרת למשרד: נחסמת, ו״שלח שוב בכל זאת״ קיים רק ל-office (שליחה לעצמו נשארת חסומה עד אישור)
     t = await dlg(); await page.check("#sendOk"); await page.click("#sendGo");
@@ -1939,11 +1964,11 @@ try {
     check("דיאלוג (בדיקה, משתמש עם כתובת): ״מצב בדיקה — המייל יישלח רק אליך (dana@example.com) ולא למשרד נוטאם״, כפתור אחד ״שלח בדיקה אליי״", t.includes("מצב בדיקה — המייל יישלח רק אליך (dana@example.com) ולא למשרד נוטאם") && (await page.textContent("#sendGo")) === "שלח בדיקה אליי" && !(await page.$("#sendSelf")) && !t.includes(OWNER) && t.includes("[בדיקה — לא נשלח למשרד נוטאם] "), t.slice(0, 300));
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלח במצב בדיקה|נכשלה");
     pr = norm(await page.textContent("#sendProg")); m = lastMail();
-    check("שליחת בדיקה: ״נשלח במצב בדיקה אליך ✔״; המייל אל המבקש בלבד, עותק סמוי לבעלים, נושא עם קידומת בדיקה", pr === "נשלח במצב בדיקה אליך ✔ — לא נשלח למשרד נוטאם." && m.to === "dana@example.com" && !m.cc && m.bcc === OWNER && m.replyTo === "dana@example.com" && m.subject.startsWith("[בדיקה — לא נשלח למשרד נוטאם] ") && env.mails.length === 4, pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
+    check("שליחת בדיקה (עצמאי): ״נשלח במצב בדיקה אליך ✔״; המייל אל המבקש בלבד, עותק סמוי לכתובת הארגון, נושא עם קידומת בדיקה", pr === "נשלח במצב בדיקה אליך ✔ — לא נשלח למשרד נוטאם." && m.to === "dana@example.com" && !m.cc && m.bcc === ORGA && m.replyTo === "dana@example.com" && m.subject.startsWith("[בדיקה — לא נשלח למשרד נוטאם] ") && env.mails.length === 4, pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
     check("בבדיקה הבקשה היא target=office עם expectMode=test (המצב נאכף בשרת)", sends()[sends().length - 1].target === "office" && sends()[sends().length - 1].expectMode === "test", JSON.stringify(sends()[sends().length - 1]));
     await closeDlg();
     { const html = await page.content(), body = await page.evaluate(() => document.body.innerText);
-      check("משתמש רגיל עם כתובת: כתובת הבעלים וקישור התיקייה בדרייב לא מופיעים בשום מקום בדף, ואין ״פתח את התיקייה בדרייב״", !html.includes(OWNER) && !/https:\/\/drive\//.test(html) && !/פתח את התיקייה/.test(body), ""); }
+      check("מטיס עצמאי עם כתובת: כתובת הבעלים, כתובת הארגון וקישור התיקייה בדרייב לא מופיעים בשום מקום בדף, ואין ״פתח את התיקייה בדרייב״", !html.includes(OWNER) && !html.includes(ORGA) && !body.includes(ORGA) && !/https:\/\/drive\//.test(html) && !/פתח את התיקייה/.test(body), ""); }
     // יעד שהשתנה בשרת בזמן שהחלון פתוח (כאן: כתובת המבקש): לא נשלח דבר, והחלון נפתח מחדש עם הכתובת העדכנית ודורש אישור מחדש
     setMode("live"); await newSite("אתר שינוי יעד"); await dlg();
     { const rec = JSON.parse(env.props["U:dana.pilot"]); rec.email = "dana.new@example.com"; env.props["U:dana.pilot"] = JSON.stringify(rec); }
@@ -1967,35 +1992,35 @@ try {
     setMode("test"); t = await dlg();
     check("שרת ישן (בדיקה): הטקסט הישן ״יישלח רק לחשבון הבעלים של המערכת (לא אליך)״, כפתור ״שלח בדיקה לבעל המערכת״, בלי ״לעצמי״, ועדיין הודעת העדכון", t.includes("המייל יישלח רק לחשבון הבעלים של המערכת (לא אליך)") && (await page.textContent("#sendGo")) === "שלח בדיקה לבעל המערכת" && !(await page.$("#sendSelf")) && /שליחה רק לעצמך אינה זמינה כרגע — פנו לתמיכה/.test(t) && !/README|עדיין בגרסה הישנה/.test(t) && !t.includes(OWNER), t.slice(0, 300));
     await closeDlg(); opts.oldServer = false;
-    // --- ד. dave: משתמש רגיל בלי כתובת — העותק והתשובות לבעל המערכת (רק אז מוצגת כתובתו); ללא דרייב ---
+    // --- ד. dave: חשבון ארגוני שנוצר ידנית (addUser — ארגוני כברירת מחדל) בלי כתובת שמורה — העותק והתשובות לארגון (כתובת הארגון מוצגת לארגוני בלבד); ללא דרייב (לא מנהל) ---
     // כניסה של משתמש אחר באותו דף (בלי רענון): הדף נטען מחדש עם מצב נקי (בידוד בין חשבונות) — לדייב אין בקשה מוכנה והוא מכין אחת משלו
     await page.click("#ubOut"); await login(page, "dave.pilot", "dave-pass-12345"); setMode("live"); await readyRequest(page, { org: "דייב צילום" });
     g = await ga();
-    check("משתמש בלי כתובת: email ריק, copyTo=הבעלים, copyToIsOwner=true", g.email === "" && g.copyTo === OWNER && g.own === true && g.role === "user", JSON.stringify(g));
+    check("חשבון ארגוני שנוצר ידנית בלי כתובת: org=true, email ריק, copyTo=כתובת הארגון, copyToIsOwner=true", g.org === true && g.email === "" && g.copyTo === ORGA && g.own === true && g.role === "user", JSON.stringify(g));
     check("משתמש רגיל אחר: כפתור הדרייב עדיין מוסתר", await driveHidden(), "");
     t = await dlg();
-    check("דיאלוג (חי, בלי כתובת רשומה): ״אין כתובת מייל רשומה בחשבון שלך — העותק יישלח לבעל המערכת״, והכתובת של הבעלים מוצגת רק כאן", t.includes("אין כתובת מייל רשומה בחשבון שלך — העותק יישלח לבעל המערכת (" + OWNER + ")") && t.includes("התשובות יגיעו לבעל המערכת") && (await page.textContent("#sendSelf")) === "שלח רק לעצמי (עותק לבדיקה)", t.slice(0, 500));
+    check("דיאלוג ארגוני (חי, בלי כתובת רשומה): ״עותק: הארגון (office@icd.org.il) · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב״, בלי הכתובת של הבעלים", t.includes("עותק: הארגון (" + ORGA + ") · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב") && !t.includes(OWNER) && !t.includes("בעל המערכת") && (await page.textContent("#sendSelf")) === "שלח רק לעצמי (עותק לבדיקה)", t.slice(0, 500));
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
     pr = norm(await page.textContent("#sendProg")); m = lastMail();
-    check("שליחה למשרד בלי כתובת: cc=הבעלים (ללא bcc כפול), replyTo=הבעלים, ההודעה ״(עותק לבעל המערכת)״", /^נשלחה למשרד נוטאם ✔ \(עותק לבעל המערכת\)/.test(pr) && m.to === OFFICE && m.cc === OWNER && !m.bcc && m.replyTo === OWNER, pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
+    check("שליחה למשרד מחשבון ארגוני בלי כתובת: cc=כתובת הארגון (ללא bcc), replyTo=הארגון, name=שם הארגון, ההודעה ״(עותק לארגון)״", /^נשלחה למשרד נוטאם ✔ \(עותק לארגון\)/.test(pr) && m.to === OFFICE && m.cc === ORGA && !m.bcc && m.replyTo === ORGA && m.name === "הארגון הישראלי לרב להב", pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, name: m.name }));
     await closeDlg();
     const sb0 = page._calls.actions.filter(a => a === "saveBegin").length;
     await page.evaluate(() => { document.getElementById("btnDrive").click(); });   // הגנה לעומק: גם לחיצה תוכנתית על הכפתור המוסתר לא שומרת בדרייב
     await page.waitForTimeout(500);
     check("משתמש רגיל: לחיצה תוכנתית על ״שמור בדרייב״ המוסתר אינה פותחת שמירה (אין saveBegin נוסף ואין הודעה)", page._calls.actions.filter(a => a === "saveBegin").length === sb0 && (await page.textContent("#driveMsg")) === "", "");
     setMode("test"); await newSite("אתר ד דייב בדיקה"); t = await dlg();
-    check("דיאלוג (בדיקה, בלי כתובת רשומה): המייל יישלח רק לבעל המערכת, ולא למשרד", t.includes("אין כתובת מייל רשומה בחשבון שלך, ולכן המייל יישלח רק לבעל המערכת (" + OWNER + ") ולא למשרד נוטאם") && (await page.textContent("#sendGo")) === "שלח בדיקה אליי", t.slice(0, 300));
+    check("דיאלוג ארגוני (בדיקה, בלי כתובת רשומה): המייל יישלח רק אל כתובת הארגון, ולא למשרד", t.includes("המייל יישלח רק אל " + ORGA + " ולא למשרד נוטאם · התשובות יחזרו אל הארגון") && (await page.textContent("#sendGo")) === "שלח בדיקה אליי", t.slice(0, 300));
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלח במצב בדיקה|נכשלה");
     pr = norm(await page.textContent("#sendProg")); m = lastMail();
-    check("בדיקה בלי כתובת: ״נשלח במצב בדיקה לבעל המערכת ✔״ והמייל לבעלים בלבד (בלי bcc כפול)", pr === "נשלח במצב בדיקה לבעל המערכת ✔ — לא נשלח למשרד נוטאם." && m.to === OWNER && !m.cc && !m.bcc, pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
+    check("בדיקה בחשבון ארגוני בלי כתובת: ״נשלח במצב בדיקה לארגון ✔״ והמייל לכתובת הארגון בלבד (בלי bcc כפול)", pr === "נשלח במצב בדיקה לארגון ✔ — לא נשלח למשרד נוטאם." && m.to === ORGA && !m.cc && !m.bcc, pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
     await closeDlg();
     // --- ה. מנהל (בלי כתובת): כפתור הדרייב מוצג; בחי עותק לבעלים; קישור לתיקייה בהודעה ---
     await page.click("#ubOut"); await login(page); setMode("live"); await readyRequest(page, { org: "מנהל צילום" });
     g = await ga();
-    check("מנהל: role=admin, בלי כתובת => copyTo=הבעלים; כפתור ״שמור בדרייב״ וה-״!״ מוצגים", g.role === "admin" && g.own === true && g.copyTo === OWNER && (await page.isVisible("#btnDrive")) && (await page.locator(".hw:has(#btnDrive)").isVisible()), JSON.stringify(g));
+    check("מנהל: role=admin, org=true, בלי כתובת => copyTo=כתובת הארגון; כפתור ״שמור בדרייב״ וה-״!״ מוצגים", g.role === "admin" && g.org === true && g.own === true && g.copyTo === ORGA && (await page.isVisible("#btnDrive")) && (await page.locator(".hw:has(#btnDrive)").isVisible()), JSON.stringify(g));
     await dlg(); await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
     m = lastMail(); const sm2 = await page.innerHTML("#sendMsg");
-    check("מנהל, שליחה חיה: cc=הבעלים (הוא המבקש), ללא bcc כפול; ההודעה כוללת קישור לתיקייה בדרייב", m.to === OFFICE && m.cc === OWNER && !m.bcc && /פתח את התיקייה בדרייב/.test(sm2) && /^נשלחה למשרד נוטאם ✔ \(עותק לבעל המערכת\)/.test(norm(await page.textContent("#sendMsg"))), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
+    check("מנהל, שליחה חיה: cc=כתובת הארגון, ללא bcc, replyTo=הארגון; ההודעה כוללת קישור לתיקייה בדרייב", m.to === OFFICE && m.cc === ORGA && !m.bcc && m.replyTo === ORGA && /פתח את התיקייה בדרייב/.test(sm2) && /^נשלחה למשרד נוטאם ✔ \(עותק לארגון\)/.test(norm(await page.textContent("#sendMsg"))), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc }));
     await closeDlg();
     opts.oldServer = true; t = await dlg();   // מנהל מול שרת ישן: אותו טיפול — ״לעצמי״ מושבת, הודעת העדכון, והטקסט הישן
     check("מנהל מול שרת ישן (חי): ״שלח רק לעצמי״ מושבת, הודעת העדכון עם ההוראה לעדכן את השרת (README) למנהל בלבד, והטקסט הישן; לא נשלח target", (await page.isDisabled("#sendSelf")) && /שרת ה-Apps Script עדיין בגרסה הישנה — יש לעדכן אותו \(ראו README\)/.test(t) && (await page.getAttribute("#sendSelf", "title")) === "שרת ה-Apps Script בגרסה הישנה — יש לעדכן אותו" && t.includes("ותשובות המשרד יגיעו אליו (ולא אליך)") && (await page.evaluate(() => ReqAuth.getFeatures().length)) === 0, t.slice(0, 200));
@@ -2007,7 +2032,7 @@ try {
   if (!LIVE) {
     const { ctx, page } = await newPage(browser);
     const env = page._env, adm = env.call({ action: "login", user: ADMIN, pass: PASS }).token, sleepMs = ms => new Promise(r => setTimeout(r, ms));
-    for (const [u, p] of [["anna.pilot", "anna-pass-12345"], ["ben.pilot", "ben-pass-12345"]]) env.call({ action: "addUser", token: adm, newUser: u, newPass: p });
+    for (const [u, p] of [["anna.pilot", "anna-pass-12345"], ["ben.pilot", "ben-pass-12345"]]) env.call({ action: "addUser", token: adm, newUser: u, newPass: p, org: false });   // מטיסים עצמאיים: בלי ברירות מחדל ארגוניות — השדות ריקים אצל בן
     const ANNA = ["anna.pilot", "anna-pass-12345"], BEN = ["ben.pilot", "ben-pass-12345"];
     const SECRETS = ["אנה צילומי אוויר", "ANNA1", "4X-AAA", "יוסי של אנה", "רונית של אנה", "050-1110001", "050-1110002", "Anna Drone", "מהות של אנה", "מכשול של אנה", "סיור של אנה"];
     await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
@@ -2073,7 +2098,7 @@ try {
 
   /* ===== תרחיש 16: התנתקות, פקיעת אסימון וחסימה מאפסות הכול ונועלות את הדף (n=9); ניווט בהיסטוריה (n=10); בלי כלי טיס מסומן מראש (n=15); הודעות סנכרון ותמיכה (n=11/12); הרשמה (n=17/18) ===== */
   if (!LIVE) {
-    const addPilot = (env, u, p) => { const adm = env.call({ action: "login", user: ADMIN, pass: PASS }).token; env.call({ action: "addUser", token: adm, newUser: u, newPass: p }); return adm; };
+    const addPilot = (env, u, p) => { const adm = env.call({ action: "login", user: ADMIN, pass: PASS }).token; env.call({ action: "addUser", token: adm, newUser: u, newPass: p, org: false }); return adm; };   // מטיס עצמאי (org:false): בלי ברירות מחדל ארגוניות בשדות
     const GIL = ["gil.pilot", "gil-pass-12345"];
     const SEC = ["גיל צילום סודי", "GIL-CS", "4X-GIL", "איש קשר גיל א", "050-3330001", "מכשול סודי של גיל", "הערת סיור של גיל", "איש קשר גיל ב", "050-3330002"];
     const gilReady = async (page) => {
@@ -2252,7 +2277,7 @@ try {
       env.wix.orders.push(mk(1), mk(2, { email: "guest@example.com", memberId: "" }));
       await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await page.waitForSelector("#authForm");
       const mailtoLogin = await page.$$eval("#authCover a[href^='mailto:']", a => a.map(x => x.getAttribute("href") + "|" + x.textContent));
-      check("n=12: מסך הכניסה כולל קישור mailto לכתובת התמיכה מההגדרות (office@icd.org.il)", SUPPORT === "office@icd.org.il" && mailtoLogin.length === 1 && mailtoLogin[0] === "mailto:" + SUPPORT + "|" + SUPPORT, JSON.stringify(mailtoLogin));
+      check("n=12: מסך הכניסה כולל קישור mailto לכתובת התמיכה מההגדרות (info@icd.org.il)", SUPPORT === "info@icd.org.il" && mailtoLogin.length === 1 && mailtoLogin[0] === "mailto:" + SUPPORT + "|" + SUPPORT, JSON.stringify(mailtoLogin));
       await page.click("#auReg"); await page.waitForSelector("#regForm");
       const reg = (await page.textContent("#regForm")).replace(/\s+/g, " "), mailtoReg = await page.$$eval("#regForm a[href^='mailto:']", a => a.map(x => x.getAttribute("href")));
       check("n=12: מסך ההרשמה כולל קישור mailto לתמיכה", mailtoReg.length === 1 && mailtoReg[0] === "mailto:" + SUPPORT, JSON.stringify(mailtoReg));
@@ -2392,7 +2417,7 @@ try {
     await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
     let confirmTxt = null; page.once("dialog", d => { confirmTxt = d.message(); d.dismiss(); });
     await page.click("#admMode"); await page.waitForTimeout(300);
-    check("n=20: אישור המעבר למצב חי מתאר את ההתנהגות: כל מטיס שולח למשרד נוטאם (שתי הכתובות) עם עותק למבקש, התשובות אליו, עותק סמוי למנהל, אפשר לשלוח רק לעצמו, ואין אישור לכל בקשה; ביטול משאיר מצב בדיקה", !!confirmTxt && /כל מטיס יוכל לשלוח/.test(confirmTxt) && confirmTxt.includes("notamoffice@iaa.gov.il") && confirmTxt.includes("nofm@iaa.gov.il") && /עותק למטיס/.test(confirmTxt) && /תשובות המשרד יגיעו אליו ולא אליך/.test(confirmTxt) && /עותק סמוי/.test(confirmTxt) && /רק לעצמו/.test(confirmTxt) && /בלי אישור נוסף/.test(confirmTxt) && !/כל בקשה שתישלח תישלח באמת/.test(confirmTxt) && (await page.textContent("#admBody .admMode")).includes("בדיקה"), confirmTxt);
+    check("n=20: אישור המעבר למצב חי מתאר את ההתנהגות לפי סוג החשבון: משתמש שולח למשרד נוטאם (שתי הכתובות); ארגוני — בשם הארגון, עותק ותשובות אל הארגון; עצמאי — עותק למטיס, התשובות אליו, והארגון מקבל עותק סמוי לתמיכה; אפשר לשלוח רק לעצמו, ואין אישור לכל בקשה; ביטול משאיר מצב בדיקה", !!confirmTxt && /כל משתמש יוכל לשלוח/.test(confirmTxt) && confirmTxt.includes("notamoffice@iaa.gov.il") && confirmTxt.includes("nofm@iaa.gov.il") && /חשבון ארגוני שולח בשם הארגון/.test(confirmTxt) && /תשובות המשרד יחזרו אל הארגון/.test(confirmTxt) && /עותק למטיס, ותשובות המשרד יחזרו אליו/.test(confirmTxt) && /עותק סמוי של כל שליחה לצורכי תמיכה בלבד/.test(confirmTxt) && /רק לעצמו/.test(confirmTxt) && /אין אישור נוסף שלך לכל בקשה/.test(confirmTxt) && !/כל בקשה שתישלח תישלח באמת/.test(confirmTxt) && (await page.textContent("#admBody .admMode")).includes("בדיקה"), confirmTxt);
     // --- מכסת המייל היומית בחלון הניהול (mailQuotaLeft מהשרת)
     const quota = async v => { optsA.patchResp = (b, r) => b.action === "listUsers" ? Object.assign({}, r, { mailQuotaLeft: v }) : undefined; await page.click("#mdClose"); await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl"); return page.evaluate(() => { const e = document.getElementById("admQuota"); return e ? { text: e.textContent.replace(/\s+/g, " "), cls: e.className } : null; }); };
     let qv = await quota(12);
@@ -2501,6 +2526,281 @@ try {
       return { same, sameText, changed, changedText };
     });
     check("n=14: עדכונים חוזרים בלי שינוי בתוכן (input/change על רדיוס, גובה, תאריך ושעה) אינם נוגעים ב-DOM של האזור החי (0 מוטציות); שינוי נקודה בונה מחדש", r.same === 0 && r.sameText && r.changed > 0 && r.changedText, JSON.stringify(r));
+    await ctx.close();
+  }
+
+  /* ===== תרחיש 17: הפרדה וניהול בין מה שהארגון שולח לבין מה שמטיסים עצמאיים שולחים (חוזה שרת↔לקוח): סוג חשבון (org), ברירות מחדל ארגוניות, שם השולח (fromName), דיאלוגי שליחה לכל סוג ומצב, ניהול (setOrg, סיכומים, סינון), כתובת תמיכה ===== */
+  {
+    const ORG_ADDR = "office@icd.org.il", ORG_NAME = "הארגון הישראלי לרב להב", OFFICE = "notamoffice@iaa.gov.il,nofm@iaa.gov.il", SUFFIX = " — דרך מערכת בקשות הטיסה";
+    const norm = s => s.replace(/\s+/g, " ");
+    // עולם מדומה: מנהל (ארגוני), olga.org (ארגוני, נוצר ידנית — ברירת מחדל), dana.pilot (נרשמה עם כרטיס — עצמאית, כתובת שמורה), ron.pilot (עצמאי שנוצר ידנית עם org:false, בלי כתובת)
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token, setMode = m => env.call({ action: "setMailMode", token: admTok, mode: m });
+    const add = (u, extra) => env.call(Object.assign({ action: "addUser", token: admTok, newUser: u, newPass: u.split(".")[0] + "-pass-12345" }, extra || {}));
+    check("הכנה: addUser בלי org => חשבון ארגוני; org:false => עצמאי; listUsers מחזירה org לכל משתמש", add("olga.org").ok && add("ron.pilot", { org: false }).ok, "");
+    env.props.WIX_API_KEY = "test-key";
+    env.wix.orders.push({ orderNumber: "ORD-SPLIT-1", status: "PAID", created: new Date(Date.now() - 3 * 86400000).toISOString(), email: "dana@example.com", firstName: "דנה", memberId: "m-2", tickets: [] });
+    env.call({ action: "regStart", email: "dana@example.com" });
+    const regCode = /(\d{6})/.exec(env.mails[env.mails.length - 1].subject)[1], reg = env.call({ action: "regFinish", email: "dana@example.com", code: regCode, user: "dana.pilot", pass: "dana-pass-1234" });
+    env.mails.length = 0;
+    const usersOf = () => Object.fromEntries(env.call({ action: "listUsers", token: admTok }).users.map(u => [u.user, u]));
+    { const us = usersOf();
+      check("סוגי החשבונות בשרת: מנהל ו-olga.org ארגוניים; dana.pilot (regFinish) ו-ron.pilot (org:false) עצמאיים", reg.ok && reg.org === false && us[ADMIN].org === true && us["olga.org"].org === true && us["dana.pilot"].org === false && us["ron.pilot"].org === false, JSON.stringify(Object.fromEntries(Object.entries(us).map(([k, v]) => [k, v.org])))); }
+    const opts = { env };
+    const { ctx, page } = await newPage(browser, opts);
+    const logout = async () => { await page.click("#ubOut"); await page.waitForSelector("#authForm", { timeout: 30000 }); };
+    const vals = () => page.evaluate(() => ({ org: document.getElementById("reqOrg").value, cs: document.getElementById("reqCallsign").value, reg: document.getElementById("reqReg").value, name: document.getElementById("reqName").value, ph: document.getElementById("reqCallsign").placeholder }));
+    const isOrgNow = () => page.evaluate(() => ReqAuth.isOrg());
+    const D = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")).org_defaults;
+
+    /* ---- א. ברירות מחדל ארגוניות מול עצמאי, עריכה ושמירה, והחלפת חשבון באותו דפדפן ---- */
+    check("config.json: org_defaults = הארגון הישראלי לרב להב / לא רלוונטי / ICD; כתובת התמיכה info@icd.org.il", D && D.name === ORG_NAME && D.callsign === "לא רלוונטי" && D.registration === "ICD" && SUPPORT === "info@icd.org.il", JSON.stringify(D) + " " + SUPPORT);
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    check("לפני התחברות: אין ברירות מחדל בשדות (גם לא של הארגון)", JSON.stringify(await vals()) === JSON.stringify({ org: "", cs: "", reg: "", name: "", ph: "לא רלוונטי" }), JSON.stringify(await vals()));
+    await login(page);   // מנהל = ארגוני
+    let v = await vals();
+    check("מנהל (ארגוני): ברירות המחדל נטענות — שם הגורם המבקש, אות הקריאה והרישום; auth.js: isOrg=true, features כולל orgSplit", (await isOrgNow()) === true && v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "ICD" && (await page.evaluate(() => ReqAuth.hasFeature("orgSplit"))), JSON.stringify(v));
+    check("מנהל (ארגוני): רמזי השדות מסבירים שנטענה ברירת מחדל של הארגון שאפשר לערוך (ולא ״אין ברירת מחדל״)", /ברירת מחדל של הארגון|שם הארגון כברירת מחדל/.test(await page.textContent("#hReqOrg")) && /ברירת המחדל של הארגון/.test(await page.textContent("#hReqCallsign")) && /ברירת המחדל של הארגון/.test(await page.textContent("#hReqReg")) && !/אין ברירת מחדל/.test(await page.textContent("#hReqOrg")), "");
+    check("מנהל (ארגוני): שורת המשתמש ״(מנהל)״; ה-! של ״שלח״ הוא הנוסח הארגוני (בשם הארגון)", /\(מנהל\)/.test(await page.textContent("#userBar")) && /בשם הארגון/.test(await page.getAttribute(".hw:has(#btnSend) > .hbtn", "data-help")), "");
+    // עריכה: הרישום ישתנה, אות הקריאה תרוקן — נשמרים כרגיל (גם ערך ריק הוא בחירה), ושם הגורם נשאר ברירת המחדל
+    await page.fill("#reqReg", "4X-ADM"); await page.fill("#reqCallsign", "");
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    v = await vals();
+    check("אחרי עריכה ורענון: הרישום שנערך נשמר (4X-ADM), אות הקריאה שרוקנה נשארת ריקה (לא חוזרת לברירת המחדל), ושם הארגון נשמר", v.org === ORG_NAME && v.reg === "4X-ADM" && v.cs === "", JSON.stringify(v));
+    { const rec = JSON.parse(await lsRead(page, "icd_req_person_v1"));
+      check("הרשומה השמורה של המנהל נושאת את סוג החשבון (org:true) ואת הערכים שבשדות", rec.org === true && rec.reqOrg === ORG_NAME && rec.reqReg === "4X-ADM" && rec.reqCallsign === "", JSON.stringify(rec)); }
+    // מחיקת הפרטים השמורים: השדות מתרוקנים; בטעינה הבאה (אין ערך שמור) ברירות המחדל חוזרות
+    await page.evaluate(() => { document.getElementById("personBox").open = true; }); await page.click("#wipePerson");
+    check("״מחק פרטים אלה מהמכשיר״: השדות מתרוקנים", JSON.stringify(await vals()) === JSON.stringify({ org: "", cs: "", reg: "", name: "", ph: "לא רלוונטי" }) && (await lsRead(page, "icd_req_person_v1")) === null, JSON.stringify(await vals()));
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    v = await vals();
+    check("אחרי המחיקה והרענון (אין ערך שמור): ברירות המחדל הארגוניות חוזרות", v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "ICD", JSON.stringify(v));
+    // רשומה שנכתבה בגרסה שלפני ההפרדה (בלי מפתח org, עם שדות ריקים): אצל חשבון ארגוני הריק אינו בחירה — ברירות המחדל נטענות; ערך שאינו ריק נשמר
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ reqName: "", reqPhone: "", reqOrg: "", reqCallsign: "", reqReg: "4X-OLD", contacts: [] })), await uk(page, "icd_req_person_v1"));
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    v = await vals();
+    check("רשומה ישנה (בלי org) עם שדות ריקים אצל המנהל: שם הארגון ואות הקריאה נטענים מברירות המחדל, והרישום שאינו ריק (4X-OLD) נשמר", v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "4X-OLD", JSON.stringify(v));
+    // החלפת חשבון באותו דפדפן: ארגוני -> עצמאי (dana): הכול ריק; הפרטים של dana נשמרים אצלה בלבד
+    await page.fill("#reqReg", "4X-ADM");   // שומר גם את שאר הערכים של המנהל (ברירות המחדל) ברשומה שלו
+    await logout(); await login(page, "dana.pilot", "dana-pass-1234");
+    v = await vals();
+    check("עצמאי (dana) באותו דפדפן אחרי מנהל: isOrg=false; כל השדות ריקים — שום ערך של הארגון או של המנהל לא עבר", (await isOrgNow()) === false && v.org === "" && v.cs === "" && v.reg === "" && v.name === "" && !/\(מנהל\)|חשבון ארגוני/.test(await page.textContent("#userBar")), JSON.stringify(v));
+    check("עצמאי: רמזי השדות נשארים בנוסח ״אין ברירת מחדל״ וה-! של ״שלח״ הוא הנוסח העצמאי (בלי הארגון)", /אין ברירת מחדל/.test(await page.textContent("#hReqOrg")) && !/ברירת המחדל של הארגון/.test(await page.textContent("#hReqCallsign")), "");
+    { const sh = await page.getAttribute(".hw:has(#btnSend) > .hbtn", "data-help");
+      check("עצמאי: ה-! של ״שלח״ מסביר שהמייל יוצא בשם הגורם שהצהרתם עליו (עם הסיומת), העותק והתשובות אליכם, ותמיכה מקבלת עותק סמוי — בלי אזכור של הארגון או של כתובתו", /בשם הגורם המבקש שהצהרתם עליו/.test(sh) && sh.includes("דרך מערכת בקשות הטיסה") && /ותשובות המשרד יגיעו אליכם/.test(sh) && /צוות התמיכה של המערכת מקבל עותק סמוי/.test(sh) && !/הארגון|office@icd/.test(sh), sh.slice(0, 200)); }
+    await page.fill("#reqName", "דנה לוי"); await page.fill("#reqOrg", "דנה לוי צילום"); await page.fill("#reqReg", "4X-DNA");
+    await logout(); await login(page, "olga.org", "olga-pass-12345");
+    v = await vals();
+    check("ארגוני שאינו מנהל (olga.org): ברירות המחדל של הארגון — לא הערכים של dana; שורת המשתמש ״(חשבון ארגוני)״", (await isOrgNow()) === true && v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "ICD" && v.name === "" && /\(חשבון ארגוני\)/.test(await page.textContent("#userBar")), JSON.stringify(v));
+    await page.fill("#reqName", "אולגה");   // נשמר ברשומה (עם ברירות המחדל) — לבדיקת המעבר לעצמאי
+    await logout(); await login(page, "dana.pilot", "dana-pass-1234");
+    v = await vals();
+    check("חזרה ל-dana: הערכים שלה נשמרו ושל אף אחד אחר לא התערבבו", v.name === "דנה לוי" && v.org === "דנה לוי צילום" && v.reg === "4X-DNA" && v.cs === "", JSON.stringify(v));
+    { const recD = JSON.parse(await lsRead(page, "icd_req_person_v1"));
+      check("הרשומה השמורה של dana נושאת org:false", recD.org === false, JSON.stringify(recD)); }
+    // olga הפכה לעצמאית (setOrg) — ברירות המחדל הארגוניות ששמרה אינן עוברות איתה; ערך שהקלידה בעצמה כן
+    check("setOrg (מנהל): olga.org -> עצמאית", env.call({ action: "setOrg", token: admTok, target: "olga.org", org: false }).ok && usersOf()["olga.org"].org === false, "");
+    await logout(); await login(page, "olga.org", "olga-pass-12345");
+    v = await vals();
+    check("משתמשת שהפכה מארגונית לעצמאית: isOrg=false; ברירות המחדל הארגוניות שנשמרו אצלה נמחקות מהשדות (שם הארגון, ״לא רלוונטי״, ICD), והשם שהקלידה נשאר", (await isOrgNow()) === false && v.org === "" && v.cs === "" && v.reg === "" && v.name === "אולגה", JSON.stringify(v));
+    env.call({ action: "setOrg", token: admTok, target: "olga.org", org: true });
+
+    /* ---- ב. חלון השליחה והשליחה בפועל: ארגוני (מנהל, olga עם/בלי כתובת שמורה) מול עצמאי (dana; ron בלי כתובת נחסם), חי/בדיקה/לעצמי; fromName; שם השולח במייל ---- */
+    const dlg = async () => { await page.click("#btnSend"); await page.waitForSelector(".sendBox"); return norm(await page.textContent(".sendBox")); };
+    const dlgVisible = () => page.evaluate(() => { const b = document.querySelector(".sendBox").cloneNode(true); b.querySelectorAll("details").forEach(d => d.remove()); return b.textContent.replace(/\s+/g, " "); });   // בלי נוסח המייל (details)
+    const closeDlg = async () => { await page.click("#mdClose"); await page.waitForSelector(".sendBox", { state: "detached" }); };
+    const waitSent = re => page.waitForFunction(r => new RegExp(r).test(document.querySelector("#sendProg").textContent), re, { timeout: 120000 });
+    const newSite = async name => { await page.fill("#siteName", name); await page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending && !window.__REQ.S.building, null, { timeout: 90000 }); };
+    const lastMail = () => env.mails[env.mails.length - 1], sends = () => page._calls.sends || [], lastSend = () => sends()[sends().length - 1];
+    const sendOffice = async re => { await page.check("#sendOk"); await page.click("#sendGo"); await waitSent(re); };
+    const sendSelf = async re => { await page.check("#sendOk"); await page.click("#sendSelf"); await waitSent(re); };
+
+    // --- ב1. מנהל (ארגוני, בלי כתובת שמורה => כתובת העותק היא כתובת הארגון) ---
+    await logout(); await login(page); setMode("live");
+    await readyRequest(page, { org: "חברת המנהל בע״מ", callsign: "אות-1", registration: "4X-ORG" });
+    let g = await page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), org: ReqAuth.isOrg() }));
+    check("מנהל: השרת מחזיר org=true; בלי כתובת שמורה: copyTo=כתובת הארגון (מוצגת רק לארגוני)", g.org === true && g.email === "" && g.copyTo === ORG_ADDR && g.own === true, JSON.stringify(g));
+    let t = await dlg();
+    check("דיאלוג ארגוני (חי): ״אל: <משרד נוטאם> · עותק: הארגון (<כתובת>) · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב״", t.includes("אל: notamoffice@iaa.gov.il, nofm@iaa.gov.il · עותק: הארגון (" + ORG_ADDR + ") · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME) && (await page.textContent("#sendGo")) === "שלח למשרד נוטאם" && (await page.textContent("#sendSelf")) === "שלח רק לעצמי (עותק לבדיקה)", t.slice(0, 500));
+    check("דיאלוג ארגוני (חי): ״שלח רק לעצמי״ — אל כתובת הארגון בלבד, התשובות אל הארגון, לא נשלח למשרד; בלי שורת ״שם השולח במייל״ של מטיס ובלי ״בעל המערכת״", t.includes("אל: " + ORG_ADDR + " בלבד · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME + " · לא נשלח למשרד") && !t.includes("שם השולח במייל") && !t.includes("בעל המערכת") && t.includes("הבקשה נשמרת בארכיון הארגון בדרייב"), t.slice(0, 700));
+    await sendSelf("נשלח|נכשלה");
+    let m = lastMail();
+    check("ארגוני, לעצמי: to=כתובת הארגון, בלי עותק ובלי bcc, replyTo=הארגון, name=שם הארגון; הבקשה כוללת fromName=הגורם שהוקלד ו-target=self", env.mails.length === 1 && m.to === ORG_ADDR && !m.cc && !m.bcc && m.replyTo === ORG_ADDR && m.name === ORG_NAME && lastSend().target === "self" && lastSend().fromName === "חברת המנהל בע״מ", JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, name: m.name, send: lastSend() }));
+    check("ארגוני, לעצמי: ההודעה ״נשלח לארגון ✔ — לא נשלח למשרד נוטאם״", norm(await page.textContent("#sendProg")) === "נשלח לארגון ✔ — לא נשלח למשרד נוטאם.", norm(await page.textContent("#sendProg")));
+    await sendOffice("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
+    m = lastMail();
+    check("ארגוני, למשרד: to=משרד נוטאם, cc=כתובת הארגון בלבד, בלי bcc, replyTo=הארגון, name=שם הארגון; fromName=הגורם שהוקלד, target=office, expectMode=live", env.mails.length === 2 && m.to === OFFICE && m.cc === ORG_ADDR && !m.bcc && m.replyTo === ORG_ADDR && m.name === ORG_NAME && lastSend().target === "office" && lastSend().expectMode === "live" && lastSend().fromName === "חברת המנהל בע״מ", JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, name: m.name }));
+    check("ארגוני, למשרד: ההודעה ״נשלחה למשרד נוטאם ✔ (עותק לארגון)״", /^נשלחה למשרד נוטאם ✔ \(עותק לארגון\) — notamoffice@iaa\.gov\.il, nofm@iaa\.gov\.il · /.test(norm(await page.textContent("#sendProg"))), norm(await page.textContent("#sendProg")));
+    await closeDlg();
+    { const fo = reqFolders(env)[0];
+      check("הבקשה הארגונית נשמרה בתיקיית ״הארגון״ בדרייב (מתחת לראשית), וקישור התיקייה מוצג למנהל", !!fo && /^הארגון\//.test(folderPath(env, fo)) && /פתח את התיקייה בדרייב/.test(await page.innerHTML("#sendMsg")), fo ? folderPath(env, fo) : "אין תיקייה"); }
+    setMode("test"); await newSite("אתר ארגוני בדיקה");
+    t = await dlg();
+    check("דיאלוג ארגוני (בדיקה): ״מצב בדיקה — המייל יישלח רק אל <כתובת הארגון> ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: …״, כפתור אחד", t.includes("מצב בדיקה — המייל יישלח רק אל " + ORG_ADDR + " ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME) && (await page.textContent("#sendGo")) === "שלח בדיקה אליי" && !(await page.$("#sendSelf")), t.slice(0, 400));
+    await sendOffice("נשלח במצב בדיקה|נכשלה"); m = lastMail();
+    check("ארגוני, בדיקה: to=כתובת הארגון בלבד, בלי bcc, replyTo=הארגון, name=שם הארגון; fromName נשלח גם בבדיקה", m.to === ORG_ADDR && !m.cc && !m.bcc && m.replyTo === ORG_ADDR && m.name === ORG_NAME && lastSend().fromName === "חברת המנהל בע״מ" && /^נשלח במצב בדיקה לארגון ✔/.test(norm(await page.textContent("#sendProg"))), norm(await page.textContent("#sendProg")));
+    await closeDlg();
+
+    // --- ב2. olga (ארגונית שאינה מנהלת) עם כתובת שמורה משלה: העותק לארגון ולכתובת שלה, בלי כפילות ---
+    { const rec = JSON.parse(env.props["U:olga.org"]); rec.email = "olga@example.com"; env.props["U:olga.org"] = JSON.stringify(rec); }
+    await logout(); await login(page, "olga.org", "olga-pass-12345"); setMode("live");
+    await readyRequest(page, { org: "אולגה צילום", callsign: "", registration: "" });
+    g = await page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), org: ReqAuth.isOrg(), role: ReqAuth.getRole() }));
+    check("olga: ארגונית (org=true, role=user) עם כתובת שמורה — copyTo=הכתובת שלה", g.org === true && g.role === "user" && g.email === "olga@example.com" && g.copyTo === "olga@example.com" && g.own === false, JSON.stringify(g));
+    t = await dlg();
+    check("דיאלוג ארגוני עם כתובת שמורה: ״עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון״; כפתור ״שמור בדרייב״ מוסתר (לא מנהלת)", t.includes("עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME) && !(await page.locator(".hw:has(#btnDrive)").isVisible()), t.slice(0, 400));
+    await sendOffice("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה"); m = lastMail();
+    check("ארגונית עם כתובת, למשרד: cc=כתובת הארגון וגם כתובתה (בלי כפילות), בלי bcc, replyTo=הארגון, name=שם הארגון; ההודעה ״(עותק אליך ולארגון)״; בלי קישור לתיקייה", m.to === OFFICE && m.cc === ORG_ADDR + ",olga@example.com" && !m.bcc && m.replyTo === ORG_ADDR && m.name === ORG_NAME && /\(עותק אליך ולארגון\)/.test(norm(await page.textContent("#sendProg"))) && !(await page.$("#sendMsg a")), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo }));
+    await closeDlg();
+
+    // --- ב3. dana (עצמאית עם כתובת שמורה) ---
+    await logout(); await login(page, "dana.pilot", "dana-pass-1234"); setMode("live");
+    await readyRequest(page, { org: "דנה לוי צילום", callsign: "", registration: "" });
+    g = await page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), org: ReqAuth.isOrg() }));
+    check("dana: עצמאית (org=false), copyTo=הכתובת השמורה שלה", g.org === false && g.email === "dana@example.com" && g.copyTo === "dana@example.com" && g.own === false, JSON.stringify(g));
+    t = await dlg(); const tv = await dlgVisible();
+    check("דיאלוג עצמאי (חי): כמו היום — ״אל: notamoffice@… · עותק אליך: dana@example.com · התשובות יגיעו אליך״ ו״אל: dana@example.com בלבד · לא נשלח למשרד״", t.includes("אל: notamoffice@iaa.gov.il, nofm@iaa.gov.il · עותק אליך: dana@example.com · התשובות יגיעו אליך") && t.includes("אל: dana@example.com בלבד · לא נשלח למשרד"), t.slice(0, 500));
+    check("דיאלוג עצמאי: שורת ״שם השולח במייל: <הגורם שהצהרת> — דרך מערכת בקשות הטיסה״", t.includes("שם השולח במייל: דנה לוי צילום" + SUFFIX), t.slice(0, 600));
+    check("דיאלוג עצמאי: אין כתובת הארגון, אין שם הארגון ואין אזכור של הארגון כשולח/כעותק/כנמען תשובות (מחוץ לנוסח המייל)", !tv.includes(ORG_ADDR) && !tv.includes("לרב להב") && !/הארגון/.test(tv) && !/בעל המערכת/.test(tv), tv.slice(0, 600));
+    await sendSelf("נשלח|נכשלה"); m = lastMail();
+    check("עצמאי, לעצמי: to=dana, bcc=כתובת הארגון (תמיכה), replyTo=dana, name=״דנה לוי צילום — דרך מערכת בקשות הטיסה״; fromName=הגורם שהוקלד", m.to === "dana@example.com" && !m.cc && m.bcc === ORG_ADDR && m.replyTo === "dana@example.com" && m.name === "דנה לוי צילום" + SUFFIX && lastSend().target === "self" && lastSend().fromName === "דנה לוי צילום", JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, name: m.name, send: lastSend() }));
+    await sendOffice("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה"); m = lastMail();
+    check("עצמאי, למשרד: to=משרד נוטאם, cc=dana, bcc=כתובת הארגון, replyTo=dana, name=הגורם + הסיומת הקבועה; fromName נשלח גם ל-office; ההודעה ״(עותק אליך)״", m.to === OFFICE && m.cc === "dana@example.com" && m.bcc === ORG_ADDR && m.replyTo === "dana@example.com" && m.name === "דנה לוי צילום" + SUFFIX && lastSend().target === "office" && lastSend().fromName === "דנה לוי צילום" && /\(עותק אליך\)/.test(norm(await page.textContent("#sendProg"))), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo, name: m.name }));
+    await closeDlg();
+    { const fo = reqFolders(env).find(f => /^מטיסים\//.test(folderPath(env, f)));
+      check("הבקשה העצמאית נשמרה בתיקיית ״מטיסים״ ובתוכה תת-תיקייה על שם המשתמש; למטיס אין קישור לתיקייה", !!fo && /^מטיסים\/dana\.pilot\/[^/]+$/.test(folderPath(env, fo)) && !(await page.$("#sendMsg a")), fo ? folderPath(env, fo) : "אין"); }
+    setMode("test"); await newSite("אתר עצמאי בדיקה");
+    t = await dlg();
+    check("דיאלוג עצמאי (בדיקה): ״המייל יישלח רק אליך (dana@example.com) ולא למשרד נוטאם״ ושורת שם השולח; בלי הארגון", t.includes("מצב בדיקה — המייל יישלח רק אליך (dana@example.com) ולא למשרד נוטאם") && t.includes("שם השולח במייל: דנה לוי צילום" + SUFFIX) && !(await dlgVisible()).includes(ORG_ADDR) && !/הארגון/.test(await dlgVisible()), t.slice(0, 400));
+    await sendOffice("נשלח במצב בדיקה|נכשלה"); m = lastMail();
+    check("עצמאי, בדיקה: to=dana, bcc=הארגון, replyTo=dana, name עם הסיומת", m.to === "dana@example.com" && !m.cc && m.bcc === ORG_ADDR && m.replyTo === "dana@example.com" && m.name === "דנה לוי צילום" + SUFFIX && lastSend().fromName === "דנה לוי צילום", JSON.stringify({ to: m.to, bcc: m.bcc, name: m.name }));
+    await closeDlg();
+    { // שם גורם עוין: השרת מנקה (<>"@\ ובקרה), והדיאלוג מציג כפי שהשרת ישלח; אין הזרקת HTML
+      await page.fill("#reqOrg", "משטרת <b>ישראל</b> \"@x\\y\"");
+      await page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending && !window.__REQ.S.building, null, { timeout: 90000 });
+      t = await dlg();
+      check("שם גורם עוין (<b>, מירכאות, @, לוכסן): הדיאלוג מציג את השם המנוקה כפי שהשרת ישלח, כטקסט — בלי הזרקת HTML", t.includes("שם השולח במייל: משטרת b ישראל /b x y" + SUFFIX) && (await page.locator(".sendBox b:text-is('ישראל')").count()) === 0, t.slice(0, 500));
+      await sendOffice("נשלח במצב בדיקה|נכשלה"); m = lastMail();
+      check("אותו שם עוין: השרת שולח name מנוקה (בלי <>\"@\\), מסתיים בסיומת הקבועה, ו-fromName הגולמי נשלח כפי שהוקלד", m.name === "משטרת b ישראל /b x y" + SUFFIX && !/[<>"@\\]/.test(m.name) && lastSend().fromName === "משטרת <b>ישראל</b> \"@x\\y\"", JSON.stringify({ name: m.name, fromName: lastSend().fromName }));
+      await closeDlg(); }
+    { const html = await page.content(), body = await page.evaluate(() => document.body.innerText), helps = await page.$$eval(".hbtn", els => els.map(e => e.dataset.help || "").join(" | "));
+      check("עצמאי: כתובת הארגון (office@icd.org.il) לא מופיעה בשום מקום בדף — לא ב-HTML, לא בטקסט הגלוי ולא בהסברי ה-!", !html.includes(ORG_ADDR) && !body.includes(ORG_ADDR) && !helps.includes(ORG_ADDR), ""); }
+
+    // --- ב4. ron (עצמאי בלי כתובת שמורה): השליחה נחסמת (נכשל סגור) והכתובת של הארגון לא נחשפת; כתובת התמיכה מוצגת ---
+    await logout(); await login(page, "ron.pilot", "ron-pass-12345");
+    await readyRequest(page, { org: "רון צילום", callsign: "", registration: "" });
+    g = await page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), org: ReqAuth.isOrg() }));
+    check("ron: עצמאי בלי כתובת — השרת לא מחזיר לו כתובת (copyTo ריק) ובוודאי לא את כתובת הארגון", g.org === false && g.email === "" && g.copyTo === "" && g.own === false, JSON.stringify(g));
+    { const n0 = env.mails.length, s0 = sends().length, b0 = page._calls.actions.filter(a => a === "saveBegin").length;
+      await page.click("#btnSend"); await page.waitForFunction(() => /לא נשלח/.test(document.querySelector("#sendMsg").textContent), null, { timeout: 30000 });
+      const em = norm(await page.textContent("#sendMsg"));
+      check("עצמאי בלי כתובת שמורה: לא נפתח חלון, לא נשמר בדרייב ולא נשלח; ההודעה מפנה לתמיכה (info@icd.org.il) בלי כתובת הארגון", !(await page.$(".sendBox")) && env.mails.length === n0 && sends().length === s0 && page._calls.actions.filter(a => a === "saveBegin").length === b0 && em.includes("אין כתובת מייל רשומה בחשבון שלך") && em.includes("פנו לתמיכה: " + SUPPORT) && !em.includes(ORG_ADDR), em); }
+
+    // --- ב5. שרת ללא orgSplit (sendTarget בלבד) ושרת ישן: fromName לא נשלח; הדיאלוג כמו קודם; org נגזר מהתפקיד ---
+    await logout(); await login(page, "dana.pilot", "dana-pass-1234"); setMode("live");
+    await readyRequest(page, { org: "דנה לוי צילום", callsign: "", registration: "" });
+    opts.noSplit = true;
+    t = await dlg();
+    check("שרת בלי orgSplit (sendTarget בלבד): הדיאלוג הקודם (״עותק נשמר גם אצל בעל המערכת לצורכי תמיכה״), בלי שורת שם השולח", t.includes("עותק אליך: dana@example.com · התשובות יגיעו אליך · עותק נשמר גם אצל בעל המערכת לצורכי תמיכה") && !t.includes("שם השולח במייל") && (await page.evaluate(() => ReqAuth.hasFeature("orgSplit"))) === false, t.slice(0, 400));
+    await sendSelf("נשלח|נכשלה");
+    check("שרת בלי orgSplit: sendRequest נשלח בלי fromName (אבל עם target)", lastSend().target === "self" && !("fromName" in lastSend()), JSON.stringify(Object.keys(lastSend())));
+    await closeDlg(); opts.noSplit = false;
+    await logout(); await login(page); setMode("live");
+    await page.evaluate(() => { document.getElementById("personBox").open = true; }); await page.click("#wipePerson");   // אין ערך שמור אצל המנהל — כדי לראות בשרת ישן את ברירות המחדל הארגוניות (שם הארגון, אות קריאה, רישום)
+    opts.oldServer = true;
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    v = await vals();
+    check("שרת ישן (בלי features ובלי org): org נגזר מהתפקיד — המנהל ארגוני וברירות המחדל הארגוניות נטענות", (await isOrgNow()) === true && v.org === ORG_NAME && v.cs === "לא רלוונטי" && v.reg === "ICD" && (await page.evaluate(() => ReqAuth.getFeatures().length)) === 0, JSON.stringify(v));
+    const ymd = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    await readyRequest(page, { org: "חברת המנהל בע״מ", callsign: "", registration: "", dateFrom: ymd(20), dateTo: ymd(22) });
+    t = await dlg();
+    check("שרת ישן, מנהל: הדיאלוג הישן (עותק לחשבון הבעלים), ללא שורת שם השולח וללא ניסוח של הארגון כשולח", t.includes("עותק יישלח לחשבון הבעלים של המערכת, ותשובות המשרד יגיעו אליו (ולא אליך)") && !t.includes("שם השולח") && (await page.isDisabled("#sendSelf")), t.slice(0, 300));
+    await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
+    check("שרת ישן: sendRequest נשלח בלי fromName ובלי target", !("fromName" in lastSend()) && !("target" in lastSend()), JSON.stringify(Object.keys(lastSend())));
+    await closeDlg();
+    await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
+    check("שרת ישן: חלון הניהול בלי עמודת סוג, בלי סיכומים לפי סוג, בלי סינון סוג ובלי תיבת ״חשבון ארגוני״", (await page.locator("#admBody .utype, #admTotals, #admKind, #adO, [data-setorg]").count()) === 0, "");
+    await page.click("#mdClose"); opts.oldServer = false;
+    await ctx.close();
+  }
+  {
+    /* ---- ג. ניהול משתמשים: עמודת סוג והפיכה (setOrg), תיבת ״חשבון ארגוני״ בהוספת משתמש, סיכומים נפרדים, יומן עם סוג וסינון ---- */
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    env.call({ action: "addUser", token: admTok, newUser: "eli.org", newPass: "eli-pass-12345" });
+    env.call({ action: "addUser", token: admTok, newUser: "pil.pilot", newPass: "pil-pass-12345", org: false });
+    const { ctx, page } = await newPage(browser, { env });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    // בקשות ביומן: אחת ארגונית (המנהל) ואחת עצמאית (pil.pilot), נשמרות ישירות בשרת עם saveBegin (kind לפי סוג המשתמש ברגע זה)
+    const mkReq = (tok, name, rid) => { const b = env.call({ action: "saveBegin", token: tok, folderName: name, rid }); return b; };
+    const pilTok = env.call({ action: "login", user: "pil.pilot", pass: "pil-pass-12345" }).token, eliTok = env.call({ action: "login", user: "eli.org", pass: "eli-pass-12345" }).token;
+    const b1 = mkReq(admTok, "אתר ארגוני א — 2026-11-01", "a".repeat(24)), b2 = mkReq(eliTok, "אתר ארגוני ב — 2026-11-02", "b".repeat(24)), b3 = mkReq(pilTok, "אתר מטיס — 2026-11-03", "c".repeat(24));
+    check("הכנה: שלוש בקשות ביומן — שתיים ארגוניות ואחת של מטיס עצמאי; saveBegin מחזיר url למנהל בלבד (גם חשבון ארגוני שאינו מנהל לא מקבל)", b1.ok && b2.ok && b3.ok && b1.url && !b2.url && !b3.url, JSON.stringify([b1.ok, b2.ok, b3.ok, !!b1.url, !!b2.url, !!b3.url]));
+    await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
+    const tbl = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll("#admBody table.admTbl:nth-of-type(1) tr")].slice(1).map(r => [r.querySelector("td").textContent.trim(), { type: (r.querySelector(".utype") || {}).dataset ? r.querySelector(".utype").dataset.type : null, label: (r.querySelector(".utype") || {}).textContent || null, btn: (r.querySelector("[data-setorg]") || {}).textContent || null, help: !!r.querySelector("td:has(.utype) .hbtn") }])));
+    let rows = await tbl();
+    const heads = await page.$$eval("#admBody table.admTbl:nth-of-type(1) tr:first-child th", ths => ths.map(t => t.textContent.trim()));
+    check("טבלת המשתמשים: עמודת ״סוג״ אחרי ״תפקיד״; מנהל = ארגוני (בלי כפתור הפיכה), eli.org = ארגוני + ״הפוך לעצמאי״, pil.pilot = עצמאי + ״הפוך לארגוני״, לכל כפתור ״!״", heads[1] === "תפקיד" && heads[2] === "סוג" && rows[ADMIN].type === "org" && rows[ADMIN].label === "ארגוני" && rows[ADMIN].btn === null && rows["eli.org"].type === "org" && rows["eli.org"].btn === "הפוך לעצמאי" && rows["eli.org"].help && rows["pil.pilot"].type === "pilot" && rows["pil.pilot"].label === "עצמאי" && rows["pil.pilot"].btn === "הפוך לארגוני" && rows["pil.pilot"].help, JSON.stringify(rows));
+    { const h = await page.getAttribute("#admBody tr:has([data-setorg='pil.pilot']) td:has(.utype) .hbtn", "data-help"), lbl = await page.getAttribute("#admBody tr:has([data-setorg='pil.pilot']) td:has(.utype) .hbtn", "aria-label");
+      check("הסבר ה-! של הסוג מפרט מה משתנה: שם השולח, ברירות המחדל, תיקיית הדרייב וניתוב התשובות/העותקים", /שם השולח/.test(h) && /ברירות המחדל/.test(h) && /תיקיית ״הארגון״/.test(h) && /תיקיית ״מטיסים״/.test(h) && /התשובות/.test(h) && /בקשות חדשות בלבד/.test(h) && /^הסבר על: סוג החשבון — pil\.pilot$/.test(lbl), lbl + " | " + h.slice(0, 120)); }
+    const totalsText = () => page.evaluate(() => { const e = document.getElementById("admTotals"); return e ? e.textContent.replace(/\s+/g, " ").trim() : null; });
+    { const tot = env.call({ action: "listUsers", token: admTok }).totals, want = "בקשות הארגון: " + tot.org.requests + " (נשלחו " + tot.org.sent + ") · בקשות מטיסים: " + tot.pilot.requests + " (נשלחו " + tot.pilot.sent + ")";
+      check("סיכומים נפרדים בראש החלון: ״בקשות הארגון: 2 (נשלחו 0) · בקשות מטיסים: 1 (נשלחו 0)״ — לפי מה שהשרת מחזיר", tot.org.requests === 2 && tot.pilot.requests === 1 && (await totalsText()) === want && want === "בקשות הארגון: 2 (נשלחו 0) · בקשות מטיסים: 1 (נשלחו 0)" && (await page.evaluate(() => document.querySelector("#admBody").firstElementChild.id)) === "admTotals", (await totalsText()) + " | " + want); }
+    // יומן הבקשות: עמודת סוג, סינון, קישור ״פתח״
+    const logRows = () => page.evaluate(() => [...document.querySelectorAll("#admBody table.admTbl:nth-of-type(2) tr")].slice(1).map(r => [r.querySelector("td[data-kind]").dataset.kind, r.querySelector("td[data-kind]").textContent.trim(), r.children[3].textContent.trim(), (r.querySelector("a") || {}).href || ""]));
+    let lr = await logRows();
+    check("יומן הבקשות: עמודת סוג לכל שורה (הארגון / מטיס) וסינון ״הכול״ כברירת מחדל — שלוש שורות", lr.length === 3 && lr.filter(x => x[0] === "org" && x[1] === "הארגון").length === 2 && lr.filter(x => x[0] === "pilot" && x[1] === "מטיס").length === 1 && (await page.inputValue("#admKind")) === "", JSON.stringify(lr));
+    check("קישור ״פתח״ ביומן ממשיך לעבוד: כתובת התיקייה בדרייב של כל בקשה (גם של מטיס, במבנה מטיסים/משתמש)", lr.every(x => /^https:\/\/drive\.google\.com\/drive\/folders\/F\d+$/.test(x[3])) && lr.some(x => x[3].endsWith("/" + b3.folderId)) && lr.some(x => x[3].endsWith("/" + b1.folderId)), JSON.stringify(lr.map(x => x[3])));
+    await page.selectOption("#admKind", "pilot"); await page.waitForFunction(() => document.querySelectorAll("#admBody table.admTbl:nth-of-type(2) tr").length === 2, null, { timeout: 10000 });
+    lr = await logRows();
+    check("סינון ״מטיסים״: רק הבקשה העצמאית; הסינון נשמר ברענון החלון", lr.length === 1 && lr[0][0] === "pilot" && (await page.inputValue("#admKind")) === "pilot", JSON.stringify(lr));
+    await page.selectOption("#admKind", "org"); await page.waitForFunction(() => [...document.querySelectorAll("#admBody table.admTbl:nth-of-type(2) tr")].slice(1).every(r => r.querySelector("td[data-kind]").dataset.kind === "org") && document.querySelectorAll("#admBody table.admTbl:nth-of-type(2) tr").length === 3, null, { timeout: 10000 });
+    lr = await logRows();
+    check("סינון ״הארגון״: שתי הבקשות הארגוניות בלבד", lr.length === 2 && lr.every(x => x[0] === "org"), JSON.stringify(lr));
+    await page.selectOption("#admKind", ""); await page.waitForFunction(() => document.querySelectorAll("#admBody table.admTbl:nth-of-type(2) tr").length === 4, null, { timeout: 10000 });
+    // הפיכת סוג משתמש (setOrg) בלחיצה: pil.pilot -> ארגוני, ושוב לעצמאי; confirm מסביר; ביטול ב-confirm לא משנה דבר
+    page.once("dialog", d => d.dismiss());
+    await page.click("[data-setorg='pil.pilot']"); await page.waitForTimeout(400);
+    check("ביטול ב-confirm של ההפיכה: הסוג לא משתנה", env.call({ action: "listUsers", token: admTok }).users.find(u => u.user === "pil.pilot").org === false, "");
+    let dlgMsg = "";
+    page.once("dialog", d => { dlgMsg = d.message(); d.accept(); });
+    await page.click("[data-setorg='pil.pilot']"); await page.waitForFunction(() => document.querySelector("[data-setorg='pil.pilot']") && document.querySelector("[data-setorg='pil.pilot']").textContent === "הפוך לעצמאי", null, { timeout: 10000 });
+    rows = await tbl();
+    check("הפיכה לארגוני: ה-confirm מפרט את השינוי (שם השולח, תיקיית ״הארגון״, בקשות חדשות); השרת מעודכן; הטבלה והסיכומים מתרעננים (המטיס עדיין נספר ב״מטיסים״ — לפי סוג הבקשה בעת השמירה)", /שם השולח/.test(dlgMsg) && /תיקיית ״הארגון״/.test(dlgMsg) && /בקשות שכבר נשמרו נשארות במקומן/.test(dlgMsg) && rows["pil.pilot"].type === "org" && env.call({ action: "listUsers", token: admTok }).users.find(u => u.user === "pil.pilot").org === true && (await totalsText()) === "בקשות הארגון: 2 (נשלחו 0) · בקשות מטיסים: 1 (נשלחו 0)", dlgMsg.slice(0, 200) + " | " + (await totalsText()));
+    page.once("dialog", d => d.accept());
+    await page.click("[data-setorg='pil.pilot']"); await page.waitForFunction(() => document.querySelector("[data-setorg='pil.pilot']").textContent === "הפוך לארגוני", null, { timeout: 10000 });
+    check("הפיכה חזרה לעצמאי: הסוג בשרת org=false", env.call({ action: "listUsers", token: admTok }).users.find(u => u.user === "pil.pilot").org === false, "");
+    // הוספת משתמש: תיבת ״חשבון ארגוני״ מסומנת כברירת מחדל; מנהל כופה ארגוני; בלי סימון => עצמאי
+    check("טופס ״הוספת משתמש״: תיבת ״חשבון ארגוני״ מסומנת כברירת מחדל, עם ״!״", (await page.isChecked("#adO")) && !(await page.isDisabled("#adO")) && (await page.locator("#addForm label:has(#adO)").count()) === 1 && (await page.locator("#addForm .hw:has(#adO) .hbtn").count()) === 1, "");
+    await page.fill("#adU", "new.org"); await page.fill("#adP", "new-pass-12345"); await page.click("#addForm button.primary");
+    await page.waitForSelector("tr:has-text('new.org')");
+    await page.fill("#adU", "new.pilot"); await page.fill("#adP", "new-pass-12345"); await page.uncheck("#adO"); await page.click("#addForm button.primary");
+    await page.waitForSelector("tr:has-text('new.pilot')");
+    { const us = Object.fromEntries(env.call({ action: "listUsers", token: admTok }).users.map(u => [u.user, u.org]));
+      rows = await tbl();
+      check("addUser: ללא שינוי בתיבה (מסומנת) => ארגוני; בלי סימון => עצמאי (org:false נשלח); הטבלה מציגה את שניהם; התיבה חוזרת לסימון אחרי רענון", us["new.org"] === true && us["new.pilot"] === false && rows["new.org"].type === "org" && rows["new.pilot"].type === "pilot" && (await page.isChecked("#adO")), JSON.stringify(us)); }
+    await page.check("#adA");
+    check("סימון ״מנהל״ מסמן ונועל את ״חשבון ארגוני״ (מנהל הוא תמיד ארגוני)", (await page.isChecked("#adO")) && (await page.isDisabled("#adO")), "");
+    await page.fill("#adU", "new.admin"); await page.fill("#adP", "new-pass-12345"); await page.click("#addForm button.primary");
+    await page.waitForSelector("tr:has-text('new.admin')");
+    { const us = Object.fromEntries(env.call({ action: "listUsers", token: admTok }).users.map(u => [u.user, [u.role, u.org]]));
+      check("מנהל חדש: role=admin ו-org=true; בטבלה — ארגוני בלי כפתור הפיכה", us["new.admin"][0] === "admin" && us["new.admin"][1] === true && (await tbl())["new.admin"].btn === null, JSON.stringify(us["new.admin"])); }
+    // שגיאת setOrg מהשרת מוצגת (מנהל אינו ניתן להפיכה)
+    { const r = env.call({ action: "setOrg", token: admTok, target: "new.admin", org: false });
+      check("השרת דוחה הפיכת מנהל לעצמאי (is_admin)", r.ok === false && r.error === "is_admin", JSON.stringify(r)); }
+    await ctx.close();
+  }
+  {
+    /* ---- ד. כתובת התמיכה למטיס: info@icd.org.il במסכי הכניסה וההרשמה, בהודעות ההפניה, וללא office@icd.org.il בשום מקום בדף ---- */
+    const { ctx, page } = await newPage(browser);
+    await page.goto(APP); await page.waitForSelector("#authForm", { timeout: 60000 });
+    const html0 = await page.content();
+    check("מסך הכניסה: קישור תמיכה mailto:info@icd.org.il, ובדף כולו אין office@icd.org.il", /href="mailto:info@icd\.org\.il"/.test(html0) && !html0.includes("office@icd.org.il") && SUPPORT === "info@icd.org.il", "");
+    await page.fill("#auUser", "no.such"); await page.fill("#auPass", "wrong-pass-12345"); await page.click("#auGo");
+    await page.waitForFunction(() => document.getElementById("auErr").textContent.length > 0, null, { timeout: 20000 });
+    await page.click("#auReg"); await page.waitForSelector("#regForm");
+    const html1 = await page.content();
+    check("מסך ההרשמה: קישור תמיכה info@icd.org.il ואין office@icd.org.il", /href="mailto:info@icd\.org\.il"/.test(html1) && !html1.includes("office@icd.org.il"), "");
     await ctx.close();
   }
 

@@ -4,16 +4,16 @@
 (function () {
   "use strict";
   const KEY = "icdReqSession";
-  const A = { cfg: null, requireMember: undefined, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], email: "", copyTo: "", copyToIsOwner: false, features: [], busy: false, until: null };
+  const A = { cfg: null, requireMember: undefined, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], email: "", copyTo: "", copyToIsOwner: false, features: [], org: false, orgKnown: false, busy: false, until: null };
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
-    bad_login: "שם משתמש או סיסמה שגויים.", locked: "יותר מדי ניסיונות כושלים — נסו שוב בעוד כרבע שעה.", blocked: "המשתמש חסום מבקשות טיסה. יש לפנות למנהל המערכת.",
+    bad_login: "שם משתמש או סיסמה שגויים.", locked: "יותר מדי ניסיונות כושלים — נסו שוב בעוד כרבע שעה.", blocked: "המשתמש חסום מבקשות טיסה. פנו לתמיכה.",
     expired: "פג תוקף ההתחברות — יש להתחבר מחדש.", auth: "ההתחברות אינה תקפה — יש להתחבר מחדש.", weak_pass: "הסיסמה קצרה מדי (לפחות 10 תווים).",
     bad_user: "שם משתמש לא תקין (3–40 תווים: אותיות, ספרות, נקודה, מקף).", exists: "המשתמש כבר קיים.", no_user: "המשתמש לא נמצא.", self: "לא ניתן לבצע פעולה זו על המשתמש שלך.",
     forbidden: "הפעולה מותרת למנהל בלבד.", bad_code: "הקוד שגוי או שפג תוקפו.", no_setup: "המערכת אינה במצב הקמה.", busy: "השרת עסוק, נסו שוב.", bad_folder: "התיקייה בדרייב אינה תקפה.",
-    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", mail_quota: "מכסת המיילים היומית של המערכת הסתיימה — נסו שוב מחר, או פנו לתמיכה.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הבעלים של המערכת (נדרשת לכל שליחה, כי הבעלים מקבל עותק סמוי).", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", sub_expired: "המנוי הסתיים. לחידוש יש לרכוש כרטיס חדש ואז ללחוץ כאן על ״הרשמה / חידוש מנוי״.", bad_email: "כתובת המייל אינה תקינה.", no_ticket: "לא נמצא כרטיס ששולם עבור הכתובת הזו (או שכבר נוצל).", need_credentials: "יש לבחור שם משתמש וסיסמה.",
-    ticket_expired: "הכרטיס ישן מדי (מעבר לתקופת המנוי) — יש לרכוש כרטיס חדש.", not_configured: "ההרשמה עדיין לא הופעלה במערכת. יש לפנות למשרד הארגון.", wix_down: "לא ניתן לאמת כרגע את הכרטיס מול האתר — נסו שוב בעוד כמה דקות.", bad_date: "תאריך לא תקין (YYYY-MM-DD).", bad_name: "שם התיקייה אינו תקין.", bad_rid: "מזהה הבקשה אינו תקין — רעננו את הדף.", not_ready: "הבקשה לא נשמרה בשרת כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב.", mode_changed: "מצב השליחה בשרת השתנה.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_action: "פעולה לא מוכרת."
+    bad_file: "הקובץ גדול מדי או ריק.", already_sent: "הבקשה כבר נשלחה.", missing_files: "חסר קובץ Word או תמונת מפה/תצ״א בתיקייה — יש לשמור שוב בדרייב.", rate: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר.", mail_quota: "מכסת המיילים היומית של המערכת הסתיימה — נסו שוב מחר, או פנו לתמיכה.", bad_mail: "נושא או גוף המייל ריקים.", no_owner: "לא ניתן לזהות את כתובת הארגון או את כתובת הבעלים של המערכת (נדרשת לכל שליחה, כי כתובת הארגון מקבלת עותק).", too_big: "הקבצים גדולים מדי לשליחה במייל (מעל 24MB).", sub_expired: "המנוי הסתיים. לחידוש יש לרכוש כרטיס חדש ואז ללחוץ כאן על ״הרשמה / חידוש מנוי״.", bad_email: "כתובת המייל אינה תקינה.", no_ticket: "לא נמצא כרטיס ששולם עבור הכתובת הזו (או שכבר נוצל).", need_credentials: "יש לבחור שם משתמש וסיסמה.",
+    ticket_expired: "הכרטיס ישן מדי (מעבר לתקופת המנוי) — יש לרכוש כרטיס חדש.", not_configured: "ההרשמה עדיין לא הופעלה במערכת. יש לפנות למשרד הארגון.", wix_down: "לא ניתן לאמת כרגע את הכרטיס מול האתר — נסו שוב בעוד כמה דקות.", bad_date: "תאריך לא תקין (YYYY-MM-DD).", bad_name: "שם התיקייה אינו תקין.", bad_rid: "מזהה הבקשה אינו תקין — רעננו את הדף.", not_ready: "הבקשה לא נשמרה בשרת כמוכנה לשליחה — יש להשלים את הבדיקות ולשמור שוב בדרייב.", mode_changed: "מצב השליחה בשרת השתנה.", server: "שגיאת שרת.", bad_request: "בקשה לא תקינה.", bad_org: "סוג החשבון אינו תקין.", is_admin: "חשבון מנהל הוא תמיד חשבון ארגוני — לא ניתן לשנות את הסוג שלו.", bad_action: "פעולה לא מוכרת."
   };
   // הודעות שמפנות לפעולה של מנהל (שמירה בדרייב, README, שרת) מוצגות רק למנהל; למטיס רגיל — ניסוח ניטרלי שמפנה לתמיכה
   const ERR_PILOT = {
@@ -47,8 +47,10 @@
   const msg = r => withSupport(rawMsg(r));
   // מצב השליחה והנמענים מתשובת השרת (login / regFinish / me / changePassword). full: מאפס קודם — תשובה בלי features היא שרת ישן, ולכן "שלח רק לעצמי" מושבת והלקוח לא שולח target.
   // email = כתובת המבקש השמורה ("" אם אין); copyTo = לאן יישלחו עותקים (email, ובלי כתובת — כתובת הבעלים); copyToIsOwner = copyTo היא כתובת הבעלים כי אין למשתמש כתובת
+  // org (boolean) = סוג החשבון מהשרת (ארגוני / מטיס עצמאי); orgKnown = השרת דיווח org. שרת ישן לא מדווח — A.isOrg() נגזר אז מהתפקיד (מנהל = ארגוני)
   function applyMail(r, full) {
-    if (full) { A.mailMode = "test"; A.mailTo = []; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; }
+    if (full) { A.mailMode = "test"; A.mailTo = []; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; A.org = false; A.orgKnown = false; }
+    if (r.org === true || r.org === false) { A.org = r.org; A.orgKnown = true; }
     if (r.mailMode) A.mailMode = r.mailMode === "live" ? "live" : "test";
     if (Array.isArray(r.mailTo)) A.mailTo = r.mailTo;
     if (typeof r.email === "string") A.email = r.email;
@@ -60,15 +62,17 @@
   /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהפעולה עושה בפועל בקוד (Code.gs ובקובץ הזה) ---------- */
   const HELP = {
     pass: "פותח חלון להחלפת הסיסמה שלך: מקלידים את הסיסמה הנוכחית ואת החדשה פעמיים (לפחות 10 תווים). אחרי ההחלפה כל ההתחברויות האחרות של המשתמש שלך מתבטלות, וההתחברות הנוכחית נשארת.",
-    admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): מצב השליחה, רשימת המשתמשים והפעולות עליהם, יומן הבקשות, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
+    admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): סיכום הבקשות לפי סוג (הארגון / מטיסים), מצב השליחה, רשימת המשתמשים וסוג החשבון של כל אחד (ארגוני / עצמאי) והפעולות עליהם, יומן הבקשות עם סינון לפי סוג, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
     out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה, מנקה מהדף את הבקשה, הדוח והפרטים שעל המסך (הדף נטען מחדש) ומחזיר למסך הכניסה. פרטי המבקש, אנשי הקשר וכלי הטיס ששמרתם בדפדפן נשארים שמורים לכניסה הבאה שלכם; אין בכך מחיקה של קבצים שכבר נשמרו או נשלחו.",
-    mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק למבקש עצמו (לכתובת שנרשמה בחשבונו; למשתמש בלי כתובת — לבעל המערכת). במצב חי המבקש בוחר: שליחה למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) עם עותק למבקש, והתשובות מגיעות אליו, או שליחה רק לעצמו. בכל שליחה מנהל המערכת מקבל עותק סמוי לצורכי תמיכה. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
+    mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק לכתובת שנרשמה בחשבון המבקש (בחשבון ארגוני בלי כתובת — לכתובת הארגון), ולא למשרד נוטאם. במצב חי המבקש בוחר בין שליחה למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) לבין שליחה רק לעצמו. חשבון ארגוני שולח בשם הארגון: שם השולח ״הארגון הישראלי לרב להב״, עותק לארגון, והתשובות חוזרות אל הארגון. חשבון עצמאי (מטיס) שולח בשם הגורם שהצהיר עליו (בתוספת ״— דרך מערכת בקשות הטיסה״): העותק והתשובות חוזרים אל המטיס, והארגון מקבל עותק סמוי לצורכי תמיכה בלבד. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
     block: "חסום מבקשות: המשתמש לא יוכל להתחבר כלל, ולכן גם לא לשמור בדרייב או לשלוח. כל ההתחברויות הפעילות שלו מתבטלות מיד, וניסיון כניסה חדש (גם עם סיסמה נכונה) נדחה עד שתלחצו ״פתח מחדש את הבקשות״. הנתונים שלו והקבצים שכבר שמר אינם נמחקים. אי אפשר לחסום את עצמך.",
     unblock: "פתח מחדש את הבקשות: מסיר את החסימה, והמשתמש יוכל להתחבר שוב עם הסיסמה שלו. ההתחברויות הקודמות שלו נשארות מבוטלות, ולכן עליו להתחבר מחדש. הפעולה אינה משנה את תוקף המנוי (מי שהמנוי שלו הסתיים עדיין לא יוכל להתחבר) ואינה מוחקת דבר. חשבון שנחסם אוטומטית בגלל הזמנה שבוטלה עלול להיחסם שוב בבדיקה היומית כל עוד ההזמנה מבוטלת.",
     rst: "איפוס סיסמה (בשורת המשתמש): ממלא את שם המשתמש בטופס ״איפוס סיסמה״ שבתחתית החלון ומעביר אליו את הסמן. הסיסמה עצמה נקבעת שם, בלחיצה על ״אפס״.",
     exp: "שינוי תוקף: שואל תאריך סיום מנוי (YYYY-MM-DD) למשתמש; תאריך ריק = ללא הגבלה. אחרי התאריך המשתמש לא יוכל להיכנס עד חידוש המנוי. השינוי גם מאפס את תזכורות סיום המנוי שנשלחו.",
     del: "מוחק את המשתמש לצמיתות, אחרי אישור. כרטיסי הרכישה ששויכו אליו ומייל ההרשמה שלו משתחררים, וניתן להירשם איתם מחדש. קבצי הבקשות שלו בדרייב וביומן הבקשות אינם נמחקים. אי אפשר למחוק את עצמך.",
-    add: "מוסיף משתמש חדש עם שם משתמש וסיסמה זמנית (לפחות 10 תווים). ״מנהל״ מוסיף גם הרשאת ניהול. למשתמש שנוסף כך אין תאריך סיום מנוי עד שתקבעו אחד ב״שינוי תוקף״.",
+    add: "מוסיף משתמש חדש עם שם משתמש וסיסמה זמנית (לפחות 10 תווים). ״מנהל״ מוסיף גם הרשאת ניהול (ומנהל הוא תמיד חשבון ארגוני). ״חשבון ארגוני״ (מסומן כברירת מחדל) קובע את סוג החשבון — בלי הסימון המשתמש הוא מטיס עצמאי. למשתמש שנוסף כך אין תאריך סיום מנוי עד שתקבעו אחד ב״שינוי תוקף״.",
+    addOrg: "סוג החשבון של המשתמש החדש. חשבון ארגוני (מסומן כברירת מחדל): נשלח בשם הארגון, התשובות והעותק חוזרים אל הארגון, ברירות המחדל של הארגון (גורם מבקש, אות קריאה ורישום) נטענות בטופס, והבקשות נשמרות בתיקיית ״הארגון״ בדרייב. בלי הסימון — מטיס עצמאי: נשלח בשם הגורם שהמטיס מצהיר עליו, התשובות והעותק חוזרים אליו, הארגון מקבל עותק סמוי לצורכי תמיכה בלבד, אין ברירות מחדל של הארגון, והבקשות נשמרות בתיקיית ״מטיסים״ תחת שם המשתמש. אפשר להחליף את הסוג אחר כך בטבלת המשתמשים.",
+    type: "סוג החשבון קובע איך הבקשות של המשתמש נשלחות ואיפה הן נשמרות. ארגוני: שם השולח ״הארגון הישראלי לרב להב״, העותק והתשובות חוזרים אל הארגון, ברירות המחדל של הארגון נטענות בטופס (למי שאין לו ערך שמור), והבקשות נשמרות בתיקיית ״הארגון״ בדרייב. עצמאי: שם השולח הוא הגורם שהמטיס מצהיר עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), העותק והתשובות חוזרים אל המטיס, הארגון מקבל עותק סמוי לצורכי תמיכה בלבד, אין ברירות מחדל של הארגון, והבקשות נשמרות בתיקיית ״מטיסים״ תחת שם המשתמש. ההחלפה חלה על בקשות חדשות בלבד — בקשות שכבר נשמרו נשארות בתיקייה שלהן. לא ניתן לשנות מנהל (מנהל הוא תמיד ארגוני).",
     reset: "קובע למשתמש הנבחר סיסמה חדשה (לפחות 10 תווים). כל ההתחברויות הקיימות שלו מתבטלות, והוא צריך להיכנס מחדש עם הסיסמה החדשה.",
     wix: "בודק מול אתר הארגון (Wix) אילו הזמנות ששולמו קיימות לכתובת המייל שהוקלדה, ולכל הזמנה אם היא כבר נוצלה להרשמה ועל ידי מי, ואם היא זכאית להרשמה. פעולת אבחון בלבד — אינה משנה דבר."
   };
@@ -77,7 +81,7 @@
   const withHelp = (html, t, name) => '<span class="hw">' + html + hb(t, name) + "</span>";
 
   function save() { try { sessionStorage.setItem(KEY, JSON.stringify({ token: A.token, user: A.user, role: A.role, exp: A.exp })); } catch (e) { /* ignore */ } }
-  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
+  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; A.org = false; A.orgKnown = false; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
   function restore() { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (s && s.token && s.exp > Date.now()) { A.token = s.token; A.user = s.user; A.role = s.role; A.exp = s.exp; return true; } } catch (e) { /* ignore */ } return false; }
 
   async function post(body) {
@@ -203,12 +207,13 @@
   }
 
   /* ---------- שורת משתמש, החלפת סיסמה וניהול משתמשים ---------- */
+  const isOrg = () => A.orgKnown ? A.org : A.role === "admin";   // סוג החשבון: ארגוני (השרת מדווח org; שרת ישן — מנהל = ארגוני) או מטיס עצמאי
   function renderBar() {
     let bar = $("userBar");
     if (!bar) { bar = document.createElement("div"); bar.id = "userBar"; bar.className = "userBar"; const w = document.querySelector("header .wrap"); (w || document.body).appendChild(bar); }
     if (!A.token) { bar.innerHTML = ""; return; }
     const daysLeft = A.until ? Math.ceil((A.until - Date.now()) / 86400000) : null;
-    bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : "") + '</span> ' +
+    bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : isOrg() ? " (חשבון ארגוני)" : "") + '</span> ' +
       (A.until ? '<span id="ubSub">מנוי עד ' + esc(fmtD(A.until)) + (daysLeft <= 30 ? ' — <b>מסתיים בעוד ' + daysLeft + ' ימים</b>' + renewLink() : "") + '</span> ' : "") +
       withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
     $("ubPass").onclick = openPassword; $("ubOut").onclick = () => logout();
@@ -258,15 +263,35 @@
   async function openAdmin() {
     if (A.busy) return null;
     const m = modal('<h2>ניהול משתמשים</h2><div id="admBody">טוען…</div>');
-    let filter = "";
+    let filter = "", kindFilter = "";   // kindFilter: "" = הכול, "org" = הארגון, "pilot" = מטיסים (סינון בלקוח, על הבקשות שנטענו)
     const draw = async () => {
-      const [r, rq] = await Promise.all([call("listUsers"), call("listRequests", { user: filter || undefined, limit: 100 })]);
+      const [r, rq] = await Promise.all([call("listUsers"), call("listRequests", { user: filter || undefined, kind: kindFilter || undefined, limit: 100 })]);
       const body = $("admBody"); if (!body) return;
       if (!r.ok) { body.innerHTML = '<div class="err">' + esc(msg(r)) + "</div>"; return; }
       A.mailMode = r.mailMode || A.mailMode;
       const logWarn = r.logError ? '<div class="err" style="margin:0 0 8px"><b>יומן הבקשות לא נקרא:</b> ' + esc(r.logError) + " — השליחה והשמירה נעצרות עד שיטופל (אפשר עדיין לחסום משתמשים).</div>" : "";
       const fmt = t => t ? new Date(t).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—";
       const modeLive = A.mailMode === "live";
+      // סוג חשבון (חוזה הפרדה בין הארגון למטיסים עצמאיים): השרת מחזיר org לכל משתמש; בלי org (שרת ישן) אין עמודת סוג, סיכומים ולא סינון. משתמש בלי org מפורש — מנהל = ארגוני
+      const split = A.hasFeature("orgSplit") || r.users.some(u => typeof u.org === "boolean");
+      const userOrg = u => typeof u.org === "boolean" ? u.org : u.role === "admin";
+      const kindOf = x => x.kind === "pilot" ? "pilot" : "org";   // רשומה בלי סוג (נשמרה לפני ההפרדה) נחשבת ארגונית
+      const num = v => typeof v === "number" && isFinite(v) ? v : null;
+      // סיכומים לפי סוג: מהשרת (totals: {org:{requests,sent}, pilot:{requests,sent}}); בלעדיהם — סכום השורות לפי הסוג הנוכחי של המשתמשים
+      const totals = (() => {
+        const t = r.totals, ok = k => t && t[k] && num(t[k].requests) != null && num(t[k].sent) != null;
+        if (ok("org") && ok("pilot")) return { org: { requests: t.org.requests, sent: t.org.sent }, pilot: { requests: t.pilot.requests, sent: t.pilot.sent } };
+        const z = { org: { requests: 0, sent: 0 }, pilot: { requests: 0, sent: 0 } };
+        r.users.forEach(u => { const k = userOrg(u) ? "org" : "pilot"; z[k].requests += num(u.requests) || 0; z[k].sent += num(u.sent) || 0; });
+        return z;
+      })();
+      const totalsHtml = split ? '<div class="admTotals" id="admTotals" role="status"><b>בקשות הארגון:</b> ' + esc(String(totals.org.requests)) + " (נשלחו " + esc(String(totals.org.sent)) + ") · <b>בקשות מטיסים:</b> " + esc(String(totals.pilot.requests)) + " (נשלחו " + esc(String(totals.pilot.sent)) + ")</div>" : "";
+      const reqRows = rq.ok ? rq.requests.filter(x => !split || !kindFilter || kindOf(x) === kindFilter) : [];
+      const typeCell = u => {
+        const o = userOrg(u), lbl = '<b class="utype ' + (o ? "org" : "pilot") + '" data-type="' + (o ? "org" : "pilot") + '">' + (o ? "ארגוני" : "עצמאי") + "</b>";
+        if (u.role === "admin" || !split) return lbl;
+        return lbl + " " + withHelp('<button type="button" data-setorg="' + esc(u.user) + '" data-to="' + (o ? 0 : 1) + '">' + (o ? "הפוך לעצמאי" : "הפוך לארגוני") + "</button>", HELP.type, "סוג החשבון — " + u.user);
+      };
       // מכסת המייל היומית של המערכת (Google): נותרו N נמענים; אזהרה כשנמוך מ-30. השרת מחזיר מספר או null (לא ידוע) — ללא שורה כשאינו מספר
       const ql = r.mailQuotaLeft, quotaHtml = (typeof ql === "number" && isFinite(ql)) ? '<div class="small' + (ql < 30 ? ' err' : '') + '" id="admQuota" role="status">' + (ql < 30 ? '⚠ ' : '') + (Math.floor(ql) === 1 ? 'נותר נמען אחד' : 'נותרו ' + esc(String(Math.max(0, Math.floor(ql)))) + ' נמענים') + ' במכסת המייל היומית' + (ql < 30 ? ' — המכסה עומדת להיגמר; אחרי שתיגמר לא יישלחו מיילים (לא בקשות ולא קודי הרשמה) עד מחר' : '') + '.</div>' : '';
       // ארבעת כפתורי הפעולה בשורת משתמש, כל אחד עם ״!״ משלו. בחסימה/פתיחה ההסבר נבחר לפי u.blocked (הכפתור משנה תווית): HELP.block מול HELP.unblock, כפי ש-setBlocked בשרת מתנהג בכל כיוון
@@ -277,23 +302,32 @@
           withHelp('<button type="button" data-exp="' + q + '">שינוי תוקף</button>', HELP.exp, "שינוי תוקף — " + u.user) +
           withHelp('<button type="button" data-del="' + q + '">מחק</button>', HELP.del, "מחיקת משתמש — " + u.user);
       };
-      body.innerHTML = logWarn +
+      body.innerHTML = logWarn + totalsHtml +
         '<div class="admMode ' + (modeLive ? "live" : "test") + '"><b>מצב שליחה: ' + (modeLive ? "חי — למשרד נוטאם" : "בדיקה — המייל נשלח רק למבקש עצמו") + '</b> ' +
         withHelp('<button type="button" id="admMode">' + (modeLive ? "העבר למצב בדיקה" : "העבר למצב חי (שליחה אמיתית למשרד נוטאם)") + '</button>', HELP.mode, "מצב שליחה") + '</div>' + quotaHtml +
         '<h3 style="margin:12px 0 6px">משתמשים — מי הגיש בקשות</h3>' +
         '<div class="small admHelp"><span>הסבר על הפעולות בעמודה האחרונה (גם ליד כל כפתור בשורה):</span>' + [["חסום מבקשות", HELP.block], ["פתח מחדש את הבקשות", HELP.unblock], ["איפוס סיסמה", HELP.rst], ["שינוי תוקף", HELP.exp], ["מחק", HELP.del]].map(([l, t]) => withHelp(esc(l), t, l)).join("") + '</div>' +
-        '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th><th>מצב</th><th>מייל</th><th>תוקף מנוי</th><th>בקשות שנשמרו</th><th>נשלחו למשרד נוטאם</th><th>בקשה אחרונה</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
-        r.users.map(u => '<tr' + (u.blocked ? ' class="blocked"' : "") + '><td dir="ltr"><a href="#" data-flt="' + esc(u.user) + '">' + esc(u.user) + '</a></td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td><td>' + (u.blocked ? '<b class="err">חסום מבקשות</b>' + (u.blockedWhy ? ' <span class="small">(' + esc(u.blockedWhy) + ')</span>' : "") : "פעיל") + '</td><td dir="ltr">' + esc(u.email || "—") + '</td><td>' + (u.until ? (u.until < Date.now() ? '<b class="err">' + esc(fmtD(u.until)) + ' (הסתיים)</b>' : esc(fmtD(u.until))) : "ללא הגבלה") + '</td><td>' + u.requests + '</td><td>' + u.sent + '</td><td>' + esc(fmt(u.lastRequest)) + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td class="acts">' +
+        '<table class="admTbl"><tr><th>משתמש</th><th>תפקיד</th>' + (split ? "<th>סוג</th>" : "") + '<th>מצב</th><th>מייל</th><th>תוקף מנוי</th><th>בקשות שנשמרו</th><th>נשלחו למשרד נוטאם</th><th>בקשה אחרונה</th><th>כניסה אחרונה</th><th>פעולות</th></tr>' +
+        r.users.map(u => '<tr' + (u.blocked ? ' class="blocked"' : "") + '><td dir="ltr"><a href="#" data-flt="' + esc(u.user) + '">' + esc(u.user) + '</a></td><td>' + (u.role === "admin" ? "מנהל" : "משתמש") + '</td>' + (split ? "<td>" + typeCell(u) + "</td>" : "") + '<td>' + (u.blocked ? '<b class="err">חסום מבקשות</b>' + (u.blockedWhy ? ' <span class="small">(' + esc(u.blockedWhy) + ')</span>' : "") : "פעיל") + '</td><td dir="ltr">' + esc(u.email || "—") + '</td><td>' + (u.until ? (u.until < Date.now() ? '<b class="err">' + esc(fmtD(u.until)) + ' (הסתיים)</b>' : esc(fmtD(u.until))) : "ללא הגבלה") + '</td><td>' + u.requests + '</td><td>' + u.sent + '</td><td>' + esc(fmt(u.lastRequest)) + '</td><td>' + esc(fmt(u.lastLogin)) + '</td><td class="acts">' +
           (u.user === A.user ? "—" : actCell(u)) + '</td></tr>').join("") + "</table>" +
         '<h3 style="margin:14px 0 6px">יומן בקשות' + (filter ? ' של <span dir="ltr">' + esc(filter) + '</span> <a href="#" id="admAll">(הצג את כולם)</a>' : " — כל המשתמשים") + '</h3>' +
-        (rq.ok && rq.requests.length ? '<table class="admTbl"><tr><th>נשמרה</th><th>משתמש</th><th>בקשה</th><th>סטטוס</th><th>תיקייה</th></tr>' +
-          rq.requests.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td><td>' + esc(x.name) + '</td><td>' +
+        (split ? '<div class="row admKind"><label class="small">סוג: <select id="admKind" autocomplete="off"><option value="">הכול</option><option value="org">הארגון</option><option value="pilot">מטיסים</option></select></label></div>' : "") +
+        (reqRows.length ? '<table class="admTbl"><tr><th>נשמרה</th><th>משתמש</th>' + (split ? "<th>סוג</th>" : "") + '<th>בקשה</th><th>סטטוס</th><th>תיקייה</th></tr>' +
+          reqRows.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td>' + (split ? '<td data-kind="' + kindOf(x) + '">' + (kindOf(x) === "pilot" ? "מטיס" : "הארגון") + "</td>" : "") + '<td>' + esc(x.name) + '</td><td>' +
             (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : (x.sentSelf || x.sentTest) ? [x.sentSelf ? "נשלחה לעצמו" : "", x.sentTest ? "נשלחה לבדיקה בלבד" : ""].filter(Boolean).join(" · ") : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
-          : '<div class="small">' + (rq.ok ? "אין בקשות ביומן." : esc(msg(rq))) + "</div>") +
-        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form>' +
+          : '<div class="small">' + (rq.ok ? (kindFilter && split ? "אין בקשות מהסוג הזה בין הבקשות שנטענו." : "אין בקשות ביומן.") : esc(msg(rq))) + "</div>") +
+        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + (split ? withHelp('<label class="small"><input type="checkbox" id="adO" checked> חשבון ארגוני</label>', HELP.addOrg, "חשבון ארגוני") : "") + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form>' +
         '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px">' + withHelp('<button type="submit">אפס</button>', HELP.reset, "קביעת סיסמה חדשה") + '</form><div class="err" id="admErr"></div>' +
         '<h3 style="margin:14px 0 6px">בדיקת כרטיס באתר (אבחון)</h3><form id="wxForm" class="row"><input id="wxE" type="email" placeholder="מייל הרכישה" dir="ltr" autocomplete="off" style="flex:1 1 220px">' + withHelp('<button type="submit">בדוק</button>', HELP.wix, "בדיקת כרטיס באתר") + '</form><div class="small" id="wxOut"></div>';
       const fail = rr => { $("admErr").textContent = msg(rr); };
+      if ($("admKind")) { $("admKind").value = kindFilter; $("admKind").onchange = () => { kindFilter = $("admKind").value; draw(); }; }
+      body.querySelectorAll("[data-setorg]").forEach(b => b.onclick = async () => {
+        const to = b.dataset.to === "1", who = b.dataset.setorg;
+        // הנוסח מתאר את מה שהחלפת הסוג משנה בפועל (שם השולח, ניתוב התשובות והעותקים, ברירות המחדל והתיקייה בדרייב) — ורק לבקשות חדשות
+        if (!confirm(to ? "להפוך את " + who + " לחשבון ארגוני? מעכשיו הבקשות שלו יישלחו בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״), התשובות והעותק יחזרו אל הארגון, ברירות המחדל של הארגון ייטענו בטופס שלו, והבקשות החדשות יישמרו בתיקיית ״הארגון״ בדרייב. בקשות שכבר נשמרו נשארות במקומן." : "להפוך את " + who + " לחשבון עצמאי? מעכשיו הבקשות שלו יישלחו בשם הגורם שהוא מצהיר עליו, התשובות והעותק יחזרו אליו, הארגון יקבל עותק סמוי לצורכי תמיכה בלבד, והבקשות החדשות יישמרו בתיקיית ״מטיסים״ תחת שמו בדרייב. בקשות שכבר נשמרו נשארות במקומן.")) return;
+        const rr = await call("setOrg", { target: who, org: to }); rr.ok ? draw() : fail(rr);
+      });
+      if ($("adA")) $("adA").onchange = () => { const a = $("adA").checked, o = $("adO"); if (o) { if (a) o.checked = true; o.disabled = a; } };   // מנהל הוא תמיד ארגוני (נאכף בשרת)
       body.querySelectorAll("[data-blk]").forEach(b => b.onclick = async () => { const rr = await call("setBlocked", { target: b.dataset.blk, blocked: b.dataset.to === "1" }); rr.ok ? draw() : fail(rr); });
       body.querySelectorAll("[data-exp]").forEach(b => b.onclick = async () => {
         const v = prompt("תאריך סיום המנוי של " + b.dataset.exp + " (YYYY-MM-DD). ריק = ללא הגבלה:", ""); if (v === null) return;
@@ -307,10 +341,13 @@
         const toLive = !modeLive;
         // הנוסח מתאר את ההתנהגות בפועל (Code.gs, mailPlan_): כל מטיס בוחר בעצמו — למשרד נוטאם (עותק אליו, התשובות אליו, עותק סמוי למנהל) או רק לעצמו; ואין אישור נוסף של המנהל לכל בקשה
         const offTo = (A.mailTo && A.mailTo.length ? A.mailTo : ["notamoffice@iaa.gov.il", "nofm@iaa.gov.il"]).join(", ");
-        if (toLive && !confirm("במצב חי כל מטיס יוכל לשלוח את בקשתו באמת למשרד נוטאם (" + offTo + "), מחשבון הארגון, עם עותק למטיס — ותשובות המשרד יגיעו אליו ולא אליך. אתה תקבל עותק סמוי של כל שליחה, בלי אישור נוסף שלך לכל בקשה. כל מטיס יכול גם לבחור לשלוח רק לעצמו. השינוי חל מיד על כל המשתמשים. להמשיך?")) return;
+        const modeMsg = A.hasFeature("orgSplit")
+          ? "במצב חי כל משתמש יוכל לשלוח את בקשתו באמת למשרד נוטאם (" + offTo + "). חשבון ארגוני שולח בשם הארגון (שם השולח ״הארגון הישראלי לרב להב״), עם עותק לארגון, ותשובות המשרד יחזרו אל הארגון. חשבון עצמאי (מטיס) שולח בשם הגורם שהוא מצהיר עליו, עם עותק למטיס, ותשובות המשרד יחזרו אליו; הארגון יקבל עותק סמוי של כל שליחה לצורכי תמיכה בלבד. אין אישור נוסף שלך לכל בקשה, וכל משתמש יכול גם לבחור לשלוח רק לעצמו. השינוי חל מיד על כל המשתמשים. להמשיך?"
+          : "במצב חי כל מטיס יוכל לשלוח את בקשתו באמת למשרד נוטאם (" + offTo + "), מחשבון הארגון, עם עותק למטיס — ותשובות המשרד יגיעו אליו ולא אליך. אתה תקבל עותק סמוי של כל שליחה, בלי אישור נוסף שלך לכל בקשה. כל מטיס יכול גם לבחור לשלוח רק לעצמו. השינוי חל מיד על כל המשתמשים. להמשיך?";
+        if (toLive && !confirm(modeMsg)) return;
         const rr = await call("setMailMode", { mode: toLive ? "live" : "test" }); rr.ok ? draw() : fail(rr);
       };
-      $("addForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("addUser", { newUser: $("adU").value.trim(), newPass: $("adP").value, role: $("adA").checked ? "admin" : "user" }); rr.ok ? draw() : fail(rr); };
+      $("addForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("addUser", { newUser: $("adU").value.trim(), newPass: $("adP").value, role: $("adA").checked ? "admin" : "user", org: $("adA").checked || !$("adO") || $("adO").checked }); rr.ok ? draw() : fail(rr); };
       $("wxForm").onsubmit = async ev => {
         ev.preventDefault(); $("wxOut").textContent = "בודק…";
         const rr = await call("wixCheck", { email: $("wxE").value.trim() });
@@ -342,6 +379,7 @@
   A.getMailMode = () => A.mailMode;
   A.getMailTo = () => A.mailTo;
   A.getRole = () => A.role;
+  A.isOrg = isOrg;                            // חשבון ארגוני? השרת מדווח org; שרת ישן (בלי org) — מנהל = ארגוני
   A.getEmail = () => A.email;                  // כתובת המבקש השמורה בשרת ("" = אין)
   A.getCopyTo = () => A.copyTo;                // לאן יישלחו העותקים ו"שלח רק לעצמי" (email, ובלי כתובת — כתובת הבעלים)
   A.getCopyToIsOwner = () => A.copyToIsOwner;  // true = אין כתובת רשומה בחשבון, והעותק יישלח לבעל המערכת
