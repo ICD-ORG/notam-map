@@ -184,7 +184,7 @@ body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לש
   #reportHost .nonprint{display:none !important}
   .paper{box-shadow:none;border-radius:0;max-width:none;margin:0;padding:0;page-break-after:always;break-after:page}
   .paper:last-child{page-break-after:auto;break-after:auto}
-  .paper table.f td{padding:2px 8px !important;font-size:10.4px !important;line-height:1.3 !important}   /* מוקטן כדי שטופס עם 3 אנשי קשר, 3 משתתפים ו-2 מכשולים ידועים ייכנס לעמוד אחד (ולא יישפכו למשרד עמוד כמעט ריק) */
+  .paper table.f td{padding:1.5px 8px !important;font-size:10.4px !important;line-height:1.18 !important}   /* מוקטן כדי שטופס עם 3 אנשי קשר, 3 משתתפים ו-2 מכשולים ידועים ייכנס לעמוד אחד (ולא יישפכו למשרד עמוד כמעט ריק) */
   .paper td.k small{font-size:9.3px !important}
   .paper .hdr{margin-bottom:5px}
   .paper table.t tr,.paper table.f tr{break-inside:avoid;page-break-inside:avoid}
@@ -358,10 +358,10 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <!-- הצהרה ואישור המבקש (חובה: בלי סימון אי אפשר לשמור או לשלוח). הנוסח המאושר ב-js/output.js DECLARATION — שינוי כאן מחייב שינוי שם ואת version (בדיקת core.test.mjs מוודאת שהם זהים) -->
     <div class="decl" id="declBox" role="group" aria-labelledby="declTitle">
       <h3 id="declTitle">הצהרה ואישור המבקש</h3>
-      <p>אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).</p>
-      <p>אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.</p>
-      <p>לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה.</p>
-      <label class="declok" for="reviewOk"><input autocomplete="off" type="checkbox" id="reviewOk" aria-required="true"><b>קראתי, הבנתי ואני מאשר את האמור לעיל</b></label>
+      <p id="declP1">אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).</p>
+      <p id="declP2">אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.</p>
+      <p id="declP3">לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה.</p>
+      <label class="declok" for="reviewOk"><input autocomplete="off" type="checkbox" id="reviewOk" aria-required="true" aria-describedby="declP1 declP2 declP3"><b>קראתי, הבנתי ואני מאשר את האמור לעיל</b></label>
     </div>
   </div>
   <div class="card nonprint" id="actions">
@@ -371,7 +371,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
       <button type="button" id="btnMore" aria-expanded="false" aria-controls="moreOptions">אפשרויות נוספות</button>
     </div>
-    <p class="declgate" id="declGate" role="status"></p>
+    <div role="status" aria-live="polite"><p class="declgate" id="declGate"></p></div>
     <p class="small" id="actionsHint" style="margin-top:8px">הבקשה נשמרת אוטומטית בדרייב כשכל הבדיקות הושלמו וההצהרה אושרה. השליחה במייל מצרפת את כל הקבצים אוטומטית — אין צורך להוריד או לצרף דבר.</p>
     <p class="small" id="driveMsg" role="status"></p>
     <p class="small" id="sendMsg" role="status"></p>
@@ -417,9 +417,9 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="js/sync.js?v=2"></script>
 <script src="js/core.js?v=7"></script>
 <script src="js/maplayers.js?v=1"></script>
-<script src="js/output.js?v=7"></script>
+<script src="js/output.js?v=8"></script>
 <script src="js/docx.js?v=4"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=10"></script>
+<script src="js/ui.js?v=11"></script>
 </body>
 </html>

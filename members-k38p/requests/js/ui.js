@@ -1143,10 +1143,18 @@
   }
   // ״שמור הכול במחשב״: כל קבצי הבקשה (בלי קובץ הנתונים הפנימי) בקובץ ZIP אחד, בלי שרת ובלי דרייב — ארכיון אישי של המבקש
   async function downloadZip() {
-    if (!authed() || !S.res || !S.ready || !window.JSZip) return;
-    const zip = new window.JSZip();
-    (await requestFiles(false)).forEach(f => zip.file(f.name, f.b64, { base64: true }));
-    download(baseName() + " — בקשה לסגירה אווירית.zip", "application/zip", await zip.generateAsync({ type: "blob" }));
+    if (!authed() || !S.res || !S.ready || !window.JSZip || S.zipping) return;
+    const rev0 = S.rev, res0 = S.res, btn = $("btnZip"), out = $("driveMsg");   // הבנייה אסינכרונית: עריכה באמצע (שם האתר, הערות) לא תערבב גרסאות בקובץ אחד
+    S.zipping = true; if (btn) btn.disabled = true;
+    try {
+      const zip = new window.JSZip();
+      (await requestFiles(false)).forEach(f => zip.file(f.name, f.b64, { base64: true }));
+      const blob = await zip.generateAsync({ type: "blob" }), name = baseName() + " — בקשה לסגירה אווירית.zip";
+      if (S.rev !== rev0 || S.res !== res0) { if (out) { out.className = "small err"; out.textContent = "הבקשה שונתה בזמן הכנת הקובץ — לחצו שוב על ״שמור הכול במחשב״."; } return; }
+      download(name, "application/zip", blob);
+    } catch (e) {
+      if (out) { out.className = "small err"; out.textContent = "לא ניתן היה להכין את קובץ ה-ZIP — נסו שוב."; }
+    } finally { S.zipping = false; if (btn) btn.disabled = !S.ready; }
   }
   // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל.
   // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
@@ -1173,7 +1181,8 @@
     // הקוד request_changed סוגר את חלון השליחה (guarded) ופותח אותו מחדש; בשמירה ידנית ההודעה מוצגת בשורת הסטטוס, ובשמירה אוטומטית היא לא מוצגת (עריכה בזמן השמירה — הבקשה תישמר שוב כשתהיה מוכנה)
     const changedErr = () => { const e = new Error("הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב."); e.code = "request_changed"; return e; };
     const changed = S.rev !== rev0;
-    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed });
+    const dr = O.declarationRecord(S.reviewAt);   // הצהרת המבקש: השרת מסמן ״מוכנה״ רק עם גרסת הנוסח ומועד האישור, ורושם אותם ביומן
+    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed, decl: dr ? { v: dr.version, at: dr.confirmedAt } : null });
     if (!end.ok) throw new Error(A.msg(end));
     if (changed || S.rev !== rev0) throw changedErr();   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
     if (!end.ready) throw new Error(isAdmin() ? "השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב" : sup("לא ניתן היה להכין את הבקשה לשליחה — נסו שוב; אם הבעיה חוזרת, פנו לתמיכה."));
@@ -1335,12 +1344,12 @@
       title: "שליחה למשרד נוטאם",
       banner: '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> אפשר לשלוח את הבקשה באמת למשרד נוטאם בשם הארגון, או לשלוח רק לעצמך עותק לבדיקה.</div>',
       to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · עותק: ' + orgCc + ' · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '</p>' +
-        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + ' בלבד · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + ' · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
+        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + (toOwner ? ' בלבד' : ' · עותק: הארגון') + ' · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + ' · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
       archive: ARCHIVE_ORG, go: "שלח למשרד נוטאם", self: "on"
     } : {   // הפרדה, חשבון ארגוני, מצב בדיקה
       title: "שליחת בדיקה",
-      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח רק אל ' + adr + ' ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
-      to: '<p><b>אל:</b> ' + adr + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
+      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח ' + (toOwner ? 'רק אל ' + adr : 'אל ' + adr + ' (עם עותק לארגון)') + ' ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
+      to: '<p><b>אל:</b> ' + adr + '</p>' + (toOwner ? '' : '<p><b>עותק:</b> הארגון</p>') + '<p><b>נושא:</b> ' + subjOf("test") + '</p>',
       archive: ARCHIVE_ORG, go: "שלח בדיקה אליי", self: ""
     }) : (live ? {   // הפרדה, מטיס עצמאי, מצב חי
       title: "שליחה למשרד נוטאם",

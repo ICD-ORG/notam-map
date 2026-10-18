@@ -8,6 +8,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeEnv } from "./helpers/apps-script-env.mjs";
 
+// הצהרת המבקש כפי שהדפדפן שולח ב-saveEnd (נוסח 2026-10-19 ומועד האישור): בלעדיה השרת לא מסמן בקשה מוכנה
+const DECL = { v: "2026-10-19", at: "2026-10-19T10:00:00.000Z" };
 const PASS = "correct-horse-1";
 // כתובת הארגון (CFG.ADMIN_COPY_TO): מקבלת עותק מכל שליחה, והיא "המבקש" של חשבון ארגוני בלי כתובת שמורה. כתובת הבעלים (Session) היא רק נפילה כשהיא ריקה/לא תקינה
 const ORG = "office@icd.org.il";
@@ -183,7 +185,7 @@ function savedRequest(env, token, name = "פי גלילות, תל אביב — 2
   assert.ok(b.ok, JSON.stringify(b));
   for (const [n, mime] of (files || STD_FILES))
     assert.ok(env.call({ action: "saveFile", token, folderId: b.folderId, name: n, mime, b64: b64("תוכן " + n) }).ok);
-  const e = env.call({ action: "saveEnd", token, folderId: b.folderId, ready });
+  const e = env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready });
   assert.ok(e.ok, JSON.stringify(e));
   return Object.assign(b, { rid, ready: e.ready });
 }
@@ -397,11 +399,11 @@ test("שמירה חוזרת של אותו rid מנקה קבצים ישנים (ג
   assert.equal(env.folders[a.folderId].files.filter(f => !f.trashed).length, 0, "אין שאריות מהגרסה הקודמת");
   assert.equal(env.call(sendBody(env, token, a.folderId)).error, "not_ready", "באמצע שמירה אי אפשר לשלוח");
   env.call({ action: "saveFile", token, folderId: b.folderId, name: "שם חדש.docx", mime: "x", b64: b64("1") });
-  assert.equal(env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }).ready, false, "בלי תמונה — לא מוכנה");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready: true }).ready, false, "בלי תמונה — לא מוכנה");
   env.call({ action: "saveFile", token, folderId: b.folderId, name: "שם חדש.png", mime: "image/png", b64: b64("2") });
-  assert.equal(env.call({ action: "saveEnd", token, folderId: b.folderId, ready: false }).ready, false, "הלקוח לא אישר מוכנה");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready: false }).ready, false, "הלקוח לא אישר מוכנה");
   assert.equal(env.call(sendBody(env, token, b.folderId)).error, "not_ready");
-  assert.equal(env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }).ready, true);
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready: true }).ready, true);
   assert.ok(env.call(sendBody(env, token, b.folderId)).ok);
   assert.deepEqual(Array.from(env.mails[0].attachments, x => x.name).sort(), ["שם חדש.docx", "שם חדש.png"]);
 });
@@ -425,7 +427,7 @@ test("בעלות: משתמש אחר לא שומר לתוך rid של אחרים �
   const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
   const mine = savedRequest(env, token, "של המנהל — 03.11.2026");
   assert.equal(env.call({ action: "saveBegin", token: dave.token, folderName: "x", rid: mine.rid }).error, "forbidden");
-  assert.equal(env.call({ action: "saveEnd", token: dave.token, folderId: mine.folderId, ready: true }).error, "forbidden");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: dave.token, folderId: mine.folderId, ready: true }).error, "forbidden");
   assert.equal(env.call(sendBody(env, dave.token, mine.folderId)).error, "forbidden");
   assert.equal(env.mails.length, 0);
   const his = savedRequest(env, dave.token, "של דייב — 03.11.2026");
@@ -949,7 +951,7 @@ test("saveFile: רק לבקשה שביומן, רק לבעלים או מנהל, �
   assert.equal(env.call(sendBody(env, token, mine.folderId)).ok, true);
   assert.ok(put(token, mine.folderId).ok);
   assert.equal(env.call(sendBody(env, token, mine.folderId)).error, "not_ready");
-  assert.ok(env.call({ action: "saveEnd", token, folderId: mine.folderId, ready: true }).ready);
+  assert.ok(env.call({ action: "saveEnd", decl: DECL, token, folderId: mine.folderId, ready: true }).ready);
   // אחרי שליחה חיה — נעולה
   goLive(env, token);
   const live = savedRequest(env, token, "חי — 05.11.2026");
@@ -1132,7 +1134,7 @@ test("שליחה לעצמו אינה 'נשלחה למשרד נוטאם': לא ח
   assert.equal(env.mails.length, 3);
   // עדיין ניתנת לעריכה (לא נעולה) ולא נחשבת כפילות
   assert.ok(env.call({ action: "saveBegin", token: pilot.token, folderName: "אתר עצמי — 09.12.2026", rid }).ok, "שליחה לעצמו לא נועלת עריכה");
-  assert.equal(env.call({ action: "saveEnd", token: pilot.token, folderId: b.folderId, ready: true }).ready, false, "אחרי saveBegin צריך לשמור מחדש (אין קבצים)");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: pilot.token, folderId: b.folderId, ready: true }).ready, false, "אחרי saveBegin צריך לשמור מחדש (אין קבצים)");
   const b2 = savedRequest(env, pilot.token, "אתר עצמי — 09.12.2026", null, rid);
   const live = sendTo(env, pilot.token, b2.folderId, { target: "office" });
   assert.ok(live.ok && live.mode === "live", JSON.stringify(live));
@@ -1511,11 +1513,11 @@ test("בלי דליפת מידע בין מטיסים (n=4/9): אף תשובה ל
   const call = o => { const r = env.call(Object.assign({ token: b.token }, o)); seen.push(JSON.stringify(r)); return r; };
   call({ action: "me" }); call({ action: "listUsers" }); call({ action: "listRequests" }); call({ action: "listRequests", user: "pilot.alphasecret" }); call({ action: "wixCheck", email: "alpha.secret@example.com" });
   call({ action: "setMailMode", mode: "test" }); call({ action: "deleteUser", target: "pilot.alphasecret" }); call({ action: "setBlocked", target: "pilot.alphasecret", blocked: true });
-  call({ action: "saveBegin", folderName: NAME, rid: ra.rid }); call({ action: "saveEnd", folderId: ra.folderId, ready: true });
+  call({ action: "saveBegin", folderName: NAME, rid: ra.rid }); call({ action: "saveEnd", decl: DECL, folderId: ra.folderId, ready: true });
   call({ action: "saveFile", folderId: ra.folderId, name: "x.png", mime: "image/png", b64: b64("x") }); call({ action: "sendRequest", folderId: ra.folderId, subject: "נ", body: "ג", expectMode: "live" });
   const begin = call({ action: "saveBegin", folderName: NAME, rid: newRid() });
   for (const [n, mime] of STD_FILES) call({ action: "saveFile", folderId: begin.folderId, name: n, mime, b64: b64("x") });
-  call({ action: "saveEnd", folderId: begin.folderId, ready: true });
+  call({ action: "saveEnd", decl: DECL, folderId: begin.folderId, ready: true });
   const live = call({ action: "sendRequest", folderId: begin.folderId, subject: "נ", body: "ג", expectMode: "live" });
   call({ action: "sendRequest", folderId: begin.folderId, subject: "נ", body: "ג", expectMode: "live", target: "self" });
   const dup = call({ action: "sendRequest", folderId: begin.folderId, subject: "נ", body: "ג", expectMode: "live" });
@@ -2150,7 +2152,7 @@ test("תקרת קבצים לתיקייה (n=5/16): 12 קבצי בקשה לכל �
   assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok); assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok);   // שני סימוני 'נשלח'
   for (let i = 0; i < 7; i++) assert.ok(putFile(env, token, b.folderId, "נוסף" + i + ".png").ok, "קובץ " + i);
   assert.equal(livesIn(env, b.folderId).filter(f => /\.(docx|kml|png|json)$/.test(f.name)).length, 12);
-  assert.ok(env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }).ready);
+  assert.ok(env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready: true }).ready);
   const before = livesIn(env, b.folderId).map(f => f.id).sort();
   const r = putFile(env, token, b.folderId, "אחד-יותר-מדי.png"); assert.deepEqual([r.ok, r.error], [false, "folder_full"]); assert.match(r.message, /12/);
   assert.deepEqual(livesIn(env, b.folderId).map(f => f.id).sort(), before, "לא נמחק ולא נוסף דבר");
@@ -2231,7 +2233,7 @@ test("תיקייה מנופחת (שלא נוצרה דרך saveFile) (n=16): save
   const { env, token } = bootstrapped(); goLive(env, token);
   const b = savedRequest(env, token, "מנופחת — 12.12.2026"); let reads = 0;
   for (let i = 0; i < 40; i++) env.folders[b.folderId].files.push({ id: "rogue" + i, name: "r" + i + ".docx", mime: "x", get bytes() { reads++; return Buffer.from("x"); }, trashed: false });
-  const end = env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }); assert.deepEqual([end.ok, end.error], [false, "folder_full"]);
+  const end = env.call({ action: "saveEnd", decl: DECL, token, folderId: b.folderId, ready: true }); assert.deepEqual([end.ok, end.error], [false, "folder_full"]);
   assert.equal(sendTo(env, token, b.folderId).error, "folder_full"); assert.equal(env.mails.length, 0);
   assert.ok(reads <= 2 * 12, "לא נקראו תכני 40 הקבצים תחת הנעילה (נקראו " + reads + ")");
 });
@@ -2779,7 +2781,7 @@ test("requestFolder_: עומק 1 (ישנות, כולל ללא סוג) ועומק
   for (const [who, tok, owner] of [["מנהל", token, "itzik"], ["מטיס", pilot.token, "dana.pilot"]]) {
     const leg = mkLegacy(owner, "ישנה של " + who + " — 11.03.2027");
     for (const [n, mime] of STD_FILES) assert.ok(env.call({ action: "saveFile", token: tok, folderId: leg.id, name: n, mime, b64: b64("x") }).ok, who + " saveFile " + n);
-    assert.equal(env.call({ action: "saveEnd", token: tok, folderId: leg.id, ready: true }).ready, true, who);
+    assert.equal(env.call({ action: "saveEnd", decl: DECL, token: tok, folderId: leg.id, ready: true }).ready, true, who);
     const r = sendTo(env, tok, leg.id); assert.ok(r.ok, who + " " + JSON.stringify(r));
     const row = env.call({ action: "listRequests", token }).requests.find(x => x.name.startsWith("ישנה של " + who));
     assert.equal(row.kind, "org", "בלי kind = ארגונית"); assert.equal(row.sentLive, 1);
@@ -2804,14 +2806,14 @@ test("requestFolder_: עומק 1 (ישנות, כולל ללא סוג) ועומק
     const tag = id + " (" + (env.folders[id] ? env.folders[id].name : "-") + ")";
     for (const r of [
       env.call({ action: "saveFile", token, folderId: id, name: "x.png", mime: "image/png", b64: b64("x") }),
-      env.call({ action: "saveEnd", token, folderId: id, ready: true }),
+      env.call({ action: "saveEnd", decl: DECL, token, folderId: id, ready: true }),
       sendTo(env, token, id, { target: "self" }),
     ]) assert.equal(r.error, "bad_folder", tag + " " + JSON.stringify(r));
   }
   // התיקיות העוטפות עצמן (עומק 1-2) נדחות אם אין להן רשומת יומן
   const { env: e2, token: t2 } = withWix(); savedRequest(e2, t2, "ר — 11.03.2027");
   const w2 = childrenOf(e2, "ROOT").find(f => f.name === "הארגון").id;
-  for (const r of [e2.call({ action: "saveFile", token: t2, folderId: w2, name: "x.png", mime: "image/png", b64: b64("x") }), e2.call({ action: "saveEnd", token: t2, folderId: w2, ready: true }), sendTo(e2, t2, w2)]) assert.equal(r.error, "bad_folder");
+  for (const r of [e2.call({ action: "saveFile", token: t2, folderId: w2, name: "x.png", mime: "image/png", b64: b64("x") }), e2.call({ action: "saveEnd", decl: DECL, token: t2, folderId: w2, ready: true }), sendTo(e2, t2, w2)]) assert.equal(r.error, "bad_folder");
   assert.equal(readLogRaw(e2).length, 1);
 });
 
@@ -2854,11 +2856,11 @@ test("מטיס עצמאי: כל הפעולות על בקשות של עצמו ב�
   const p1 = pilotUser(env, "p1@example.com", "pilot.one"), p2 = pilotUser(env, "p2@example.com", "pilot.two");
   const r1 = savedRequest(env, p1.token, "פרטי — 13.03.2027");
   assert.equal(env.call({ action: "saveFile", token: p2.token, folderId: r1.folderId, name: "x.png", mime: "image/png", b64: b64("x") }).error, "forbidden");
-  assert.equal(env.call({ action: "saveEnd", token: p2.token, folderId: r1.folderId, ready: true }).error, "forbidden");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: p2.token, folderId: r1.folderId, ready: true }).error, "forbidden");
   assert.equal(sendTo(env, p2.token, r1.folderId).error, "forbidden");
   assert.equal(env.call({ action: "saveBegin", token: p2.token, folderName: "פרטי — 13.03.2027", rid: r1.rid }).error, "forbidden");
   assert.ok(env.call({ action: "saveFile", token, folderId: r1.folderId, name: "תמיכה.png", mime: "image/png", b64: b64("x") }).ok, "מנהל (תמיכה) כותב");
-  assert.equal(env.call({ action: "saveEnd", token, folderId: r1.folderId, ready: true }).ready, true);
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token, folderId: r1.folderId, ready: true }).ready, true);
   assert.ok(sendTo(env, p1.token, r1.folderId).ok);
 });
 
@@ -3019,7 +3021,7 @@ function readyCycle(env, tok, rid, place) {
     const r = env.call({ action: "saveFile", token: tok, folderId: b.folderId, name: place + " — " + n, mime: "application/octet-stream", b64: bytesB64(Math.floor(mb * MB_K)) });
     if (!r.ok) return { ok: false, step: n, error: r.error, kind: r.kind, message: r.message, folderId: b.folderId };
   }
-  const e = env.call({ action: "saveEnd", token: tok, folderId: b.folderId, ready: true });
+  const e = env.call({ action: "saveEnd", decl: DECL, token: tok, folderId: b.folderId, ready: true });
   return { ok: !!(e.ok && e.ready), step: "saveEnd", folderId: b.folderId };
 }
 function orgWorker(env, token, name = "org.worker") {
@@ -3073,4 +3075,25 @@ test("העלאה אוטומטית ביום עבודה של עובד ארגון: 
   const r = readyCycle(env, worker.token, rids[1], "אתר 2 — 21.11.2026");
   assert.deepEqual([r.ok, r.error, r.kind], [false, "rate", "upload"]); assert.match(r.message, /היומית/);
   assert.equal(logOf(env).filter(e => e.user === "org.worker").length, 10, "עשר בקשות, לא תיקייה למחזור");
+});
+
+/* ===== הצהרת המבקש בשרת: saveEnd מסמן ״מוכנה״ רק עם הצהרה תקינה (גרסת נוסח + מועד אישור), והיא נרשמת ביומן וב״נשלח — ....txt״ ===== */
+test("saveEnd: בלי הצהרה תקינה הבקשה אינה מוכנה (דף ישן ללא שער ההצהרה, קריאה ישירה, ערכים פגומים); הצהרה תקינה נרשמת ביומן ובסימון השליחה", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token, "הצהרה — 20.11.2026", undefined, newRid(), false);
+  const end = decl => env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true, ...(decl === undefined ? {} : { decl }) });
+  for (const bad of [undefined, null, "2026-10-19", 5, [], {}, { v: "2026-10-19" }, { at: DECL.at }, { v: "2026-10-19", at: "ממש עכשיו" }, { v: "x", at: DECL.at }, { v: "2026-10-19", at: "2026-10-19T10:00:00+03:00" }, { v: "2026-10-19", at: DECL.at + "x" }, { v: 20261019, at: DECL.at }, { v: "2026-10-19\n", at: DECL.at }]) {
+    const r = end(bad); assert.equal(r.ok, true); assert.equal(r.ready, false, "הצהרה לא תקינה: " + JSON.stringify(bad));
+    assert.equal(logOf(env).find(e => e.id === b.folderId).decl, null, "לא נרשמת הצהרה פגומה");
+    assert.equal(env.call(sendBody(env, token, b.folderId)).error, "not_ready");
+  }
+  const ok = end(DECL); assert.equal(ok.ready, true);
+  assert.deepEqual(logOf(env).find(e => e.id === b.folderId).decl, DECL, "גרסה ומועד נרשמים ביומן");
+  const r = sendTo(env, token, b.folderId, { target: "self" }); assert.ok(r.ok, JSON.stringify(r));
+  const mark = env.folders[b.folderId].files.find(f => /^נשלח — /.test(f.name)).bytes.toString();
+  assert.match(mark, /הצהרת המבקש: אושרה 2026-10-19T10:00:00\.000Z \(נוסח 2026-10-19\)/);
+  // שמירה חוזרת (saveBegin) מאפסת מוכנות; saveEnd חדש בלי הצהרה לא מחזיר אותה, ומוחק את ההצהרה הקודמת מהרשומה
+  env.call({ action: "saveBegin", token, folderName: "הצהרה — 20.11.2026", rid: b.rid });
+  for (const [n, mime] of STD_FILES) env.call({ action: "saveFile", token, folderId: b.folderId, name: n, mime, b64: b64("x" + n) });
+  assert.equal(end(undefined).ready, false); assert.equal(logOf(env).find(e => e.id === b.folderId).decl, null);
 });

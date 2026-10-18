@@ -6,7 +6,7 @@
  *  - הפרדה בין חשבון ארגוני (org=true: מנהלים, ומשתמשים שהמנהל הוסיף ידנית) לבין מטיס עצמאי (org=false: נרשם עם כרטיס): הארגון שולח בשם הארגון, מטיס שולח בשם הגורם שהצהיר עליו.
  *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות), עם סוג כל בקשה (kind) — המנהל רואה את כולם.
  *  - שליחה במייל, עם הקבצים מהתיקייה: למשרד נוטאם (הכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד) או רק למבקש עצמו.
- *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד). כתובת הארגון (CFG.ADMIN_COPY_TO) מקבלת עותק: סמוי (BCC) ממטיס עצמאי, גלוי (CC) מחשבון ארגוני בשליחה חיה.
+ *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד). כתובת הארגון (CFG.ADMIN_COPY_TO) מקבלת עותק: סמוי (BCC) ממטיס עצמאי, גלוי (CC) מחשבון ארגוני בכל שליחה (חיה, בדיקה ו״לעצמי״; אם אינה כתובת המשתמש עצמו).
  * התקנה: ראו apps-script/README.md. הקוד אינו מכיל סיסמאות או מזהים סודיים; הם נשמרים ב-Script Properties בלבד.
  */
 
@@ -827,7 +827,7 @@ var ACTIONS = {
     return { ok: true };
   },
 
-  // מצב שליחה (מנהל בלבד): test = "שלח למשרד" נשלח רק למבקש עצמו (והבעלים בעותק סמוי); live = למשרד נוטאם
+  // מצב שליחה (מנהל בלבד): test = "שלח למשרד" נשלח רק למבקש עצמו (והארגון בעותק: סמוי ממטיס עצמאי, גלוי מחשבון ארגוני); live = למשרד נוטאם
   setMailMode: function (r) {
     var a = admin_(r); if (a.error) return { ok: false, error: a.error };
     var m = r.mode === 'live' ? 'live' : 'test';
@@ -1024,7 +1024,10 @@ var ACTIONS = {
     if (e.user !== a.name && a.user.role !== 'admin') return { ok: false, error: 'forbidden' };
     var c = folderFiles_(folder);
     if (c.tooMany) return { ok: false, error: 'folder_full', message: folderFullMsg_() };      // תיקייה מנופחת (לא נוצרה דרך saveFile): לא מסמנים מוכנה
-    e.ready = !!r.ready && c.hasDocx && c.hasImage; e.readyAt = e.ready ? now_() : 0;
+    // הצהרת המבקש: גרסת הנוסח ומועד האישור (מהדפדפן) נרשמות ביומן וב״נשלח — ....txt״. בלי הצהרה תקינה הבקשה אינה מסומנת מוכנה — גם כשדף ישן, בלי שער ההצהרה, נשאר פתוח בדפדפן
+    var decl = declOf_(r.decl);
+    e.decl = decl;
+    e.ready = !!r.ready && c.hasDocx && c.hasImage && !!decl; e.readyAt = e.ready ? now_() : 0;
     writeLog_(log, e.id);
     return { ok: true, ready: e.ready };
   },
@@ -1138,6 +1141,7 @@ var ACTIONS = {
       folder.createFile('נשלח — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm') + (!toOffice ? ' (לעצמו)' : mode === 'live' ? '' : ' (בדיקה)') + '.txt',
         ['נשלח ע"י: ' + a.name, 'סוג חשבון: ' + (org ? 'ארגוני' : 'עצמאי'), 'שם השולח: ' + sender, 'יעד: ' + (toOffice ? 'משרד' : 'לעצמו'), 'מצב: ' + kindName,
           'אל: ' + (shownTo.length ? shownTo.join(', ') : '—'), 'עותק: ' + (shownCc.length ? shownCc.join(', ') : '—'), 'עותק סמוי לארגון: ' + (plan.bcc.length ? 'כן' : 'לא'),
+          'הצהרת המבקש: ' + (entry.decl ? 'אושרה ' + entry.decl.at + ' (נוסח ' + entry.decl.v + ')' : 'לא נרשמה'),
           'נושא: ' + prefix + subject, 'קבצים: ' + c.names.join(' | ')].join('\n'), 'text/plain');
     } catch (e4) { /* הסימון אינו חיוני */ }
     // כתובת הארגון לא מוחזרת ללקוח אלא לחשבון ארגוני (to/cc של מטיס מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר). adminCopy = כתובת הארגון בין הנמענים (בכל תפקיד)
@@ -1145,6 +1149,13 @@ var ACTIONS = {
   }
 };
 
+// הצהרת המבקש כפי שהדפדפן מדווח ב-saveEnd: {v: גרסת הנוסח (yyyy-mm-dd), at: מועד האישור ISO}. כל דבר אחר — null (הבקשה לא תסומן מוכנה)
+function declOf_(d) {
+  if (!d || typeof d !== 'object') return null;
+  var v = typeof d.v === 'string' ? d.v : '', at = typeof d.at === 'string' ? d.at : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(at)) return null;
+  return { v: v, at: at };
+}
 // קבצי הבקשה בתיקייה (Word, KML, תמונות) — לא יומן, לא JSON ולא סימוני שליחה.
 // תיקייה עם יותר מ-MAX_FOLDER_FILES קבצים (לא נוצרה דרך saveFile, שאוכף תקרה) מסומנת tooMany ותכניה לא נקראים: קריאת מאות קבצים תחת נעילת הסקריפט הייתה מחזיקה את כל המטיסים ב"השרת עסוק"
 function folderFiles_(folder) {
