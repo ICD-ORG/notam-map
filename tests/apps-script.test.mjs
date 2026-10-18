@@ -974,7 +974,7 @@ function pilotUser(env, email = "pilot@example.com", user = "dana.pilot") {
 const sendTo = (env, token, folderId, extra) => env.call({ action: "sendRequest", expectMode: modeOf(env), token, folderId, subject: "בקשה — נושא", body: "גוף", ...extra });
 const rcpts = v => (v === undefined || v === "" ? [] : String(v).split(","));   // רשימת נמענים כפי שנמסרה ל-MailApp
 const SELF_PREFIX = "[עותק לעצמי — לא נשלח למשרד נוטאם] ", TEST_PREFIX = "[בדיקה — לא נשלח למשרד נוטאם] ";
-const SENDER_SUFFIX = " — דרך מערכת בקשות הטיסה", ORG_NAME = "הארגון הישראלי לרב להב", FEATURES = ["sendTarget", "orgSplit"];
+const SENDER_SUFFIX = " — דרך מערכת בקשות הטיסה", ORG_NAME = "הארגון הישראלי לרב להב", FEATURES = ["sendTarget", "orgSplit", "advView"];
 
 for (const [mode, target, want] of [
   ["test", "office", { to: ["pilot@example.com"], cc: [], prefix: TEST_PREFIX }],
@@ -1041,22 +1041,22 @@ test("משתמש בלי כתובת שמורה (נוצר ידנית, ארגוני
   const { env, token } = bootstrapped();
   env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-123" });
   const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-123" });
-  assert.equal(dave.email, ""); assert.equal(dave.copyTo, ORG); assert.equal(dave.copyToIsOwner, true); assert.equal(dave.org, true); assert.deepEqual(dave.features, FEATURES);
+  assert.equal(dave.email, ""); assert.equal(dave.copyTo, ORG); assert.equal(dave.copyToIsOwner, true); assert.equal(dave.org, true); assert.equal(dave.adv, true, "ארגוני בלי הכרעה: תצוגה מתקדמת"); assert.deepEqual(dave.features, FEATURES);
   const b = savedRequest(env, dave.token, "דייב — 04.12.2026");
   assert.ok(sendTo(env, dave.token, b.folderId, { target: "self" }).ok);
   assert.equal(env.mails[0].to, ORG); assert.equal(env.mails[0].replyTo, ORG); assert.equal(env.mails[0].bcc, undefined);
   // מנהל: אותו דבר
   const adm = env.call({ action: "me", token });
-  assert.equal(adm.email, ""); assert.equal(adm.copyTo, ORG); assert.equal(adm.copyToIsOwner, true); assert.equal(adm.org, true); assert.deepEqual(adm.features, FEATURES);
+  assert.equal(adm.email, ""); assert.equal(adm.copyTo, ORG); assert.equal(adm.copyToIsOwner, true); assert.equal(adm.org, true); assert.equal(adm.adv, true); assert.deepEqual(adm.features, FEATURES);
 });
 
-test("תשובות login/me/changePassword/regFinish/listUsers/setMailMode מחזירות email, copyTo, copyToIsOwner, org ו-features (מטיס עם כתובת; מנהל = ארגוני)", () => {
+test("תשובות login/me/changePassword/regFinish/listUsers/setMailMode מחזירות email, copyTo, copyToIsOwner, org, adv ו-features (מטיס עם כתובת; מנהל = ארגוני)", () => {
   const { env, token } = withWix();
   const reg = pilotUser(env);
   const check = (r, what) => {
     assert.ok(r.ok, what + " " + JSON.stringify(r));
     assert.equal(r.email, "pilot@example.com", what); assert.equal(r.copyTo, "pilot@example.com", what);
-    assert.equal(r.copyToIsOwner, false, what); assert.equal(r.org, false, what); assert.deepEqual(r.features, FEATURES, what);
+    assert.equal(r.copyToIsOwner, false, what); assert.equal(r.org, false, what); assert.equal(r.adv, false, what + ": מטיס עצמאי בלי הכרעה — בלי תצוגה מתקדמת"); assert.deepEqual(r.features, FEATURES, what);
     assert.ok(!JSON.stringify(r).includes(OWNER) && !JSON.stringify(r).includes(ORG), what + ": הבעלים וכתובת הארגון לא נחשפים");
   };
   check(reg, "regFinish");
@@ -1065,11 +1065,11 @@ test("תשובות login/me/changePassword/regFinish/listUsers/setMailMode מח�
   const cp = env.call({ action: "changePassword", token: lg.token, oldPass: "dana-pass-1234", newPass: "dana-new-pass-5678" }); check(cp, "changePassword");
   // תשובות מנהל (listUsers / setMailMode) נושאות את פרטי המנהל עצמו
   const lu = env.call({ action: "listUsers", token }), sm = env.call({ action: "setMailMode", token, mode: "live" });
-  for (const r of [lu, sm]) { assert.equal(r.email, ""); assert.equal(r.copyTo, ORG); assert.equal(r.copyToIsOwner, true); assert.equal(r.org, true); assert.deepEqual(r.features, FEATURES); }
+  for (const r of [lu, sm]) { assert.equal(r.email, ""); assert.equal(r.copyTo, ORG); assert.equal(r.copyToIsOwner, true); assert.equal(r.org, true); assert.equal(r.adv, true); assert.deepEqual(r.features, FEATURES); }
   // וגם בשגיאת mode_changed (תשובה שמחזירה mailMode)
   const b = savedRequest(env, cp.token, "מוד — 05.12.2026");
   const mc = env.call({ action: "sendRequest", token: cp.token, folderId: b.folderId, subject: "נ", body: "ג", expectMode: "test" });
-  assert.equal(mc.error, "mode_changed"); assert.equal(mc.mailMode, "live"); assert.deepEqual(mc.features, FEATURES); assert.equal(mc.org, false);
+  assert.equal(mc.error, "mode_changed"); assert.equal(mc.mailMode, "live"); assert.deepEqual(mc.features, FEATURES); assert.equal(mc.org, false); assert.equal(mc.adv, false);
   assert.ok(!JSON.stringify(mc).includes(ORG));
 });
 
@@ -2759,8 +2759,8 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
     assert.equal(cfg[k], v, k);
     assert.ok(readme.includes("`" + k + "`"), "README מזכיר את " + k);
   }
-  assert.deepEqual(Array.from(cfg.FEATURES), ["sendTarget", "orgSplit"]);
-  for (const w of ["setOrg", "fromName", "orgSplit", "totals", "kind", "copyToIsOwner", "is_admin", "bad_org", "no_owner", "הארגון/", "מטיסים/<", "htmlBody"]) assert.ok(readme.includes(w), "README מזכיר את " + w);
+  assert.deepEqual(Array.from(cfg.FEATURES), ["sendTarget", "orgSplit", "advView"]);
+  for (const w of ["setAdv", "advView", "bad_adv", "advExplicit", "setOrg", "fromName", "orgSplit", "totals", "kind", "copyToIsOwner", "is_admin", "bad_org", "no_owner", "הארגון/", "מטיסים/<", "htmlBody"]) assert.ok(readme.includes(w), "README מזכיר את " + w);
 });
 
 /* ===== גוף המייל: htmlBody (מימין לשמאל, תבליטים) לצד גוף טקסט רגיל ===== */

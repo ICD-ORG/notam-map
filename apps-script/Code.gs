@@ -45,7 +45,7 @@ var CFG = {
   MAX_COPIES_PER_HOUR_ALL: 120,  // ... ובסך הכול לכל המערכת (לא נמוכה מ-60: עיון בעותקים הוא הפעולה השכיחה, ומאה מטיסים לא אמורים לחסום זה את זה)
   MAX_SEND_ATTEMPTS_PER_HOUR: 40, // ניסיונות שליחה שהגיעו עד MailApp (גם כושלים) לכל משתמש — שליחה שנכשלה אינה צורכת את הדליים למעלה, אבל לולאת ניסיונות לא תציף את היומן
   MAIL_QUOTA_RESERVE: 20,        // רזרבה במכסת המיילים היומית של גוגל (נמענים) שעותקים אינם צורכים — כדי שהשליחה האמיתית למשרד וקודי ההרשמה לא יורעבו
-  FEATURES: ['sendTarget', 'orgSplit'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי"; בלי orgSplit הלקוח גוזר את סוג החשבון מ-role ואינו שולח שם שולח)
+  FEATURES: ['sendTarget', 'orgSplit', 'advView'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי"; בלי orgSplit הלקוח גוזר את סוג החשבון מ-role ואינו שולח שם שולח; בלי advView אין שדה adv והלקוח נשאר עם ברירת המחדל לפי סוג החשבון)
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
   LOG_MAX: 2000,           // יעד רך: מעבר לכך נמחקות רק הישנות ביותר שלא נשלחו חי ולא נגעו בהן LOG_KEEP_DAYS ימים; כשהכול מוגן היומן פשוט גדל
@@ -124,6 +124,11 @@ function ownerEmail_() { try { return Session.getEffectiveUser().getEmail() || '
 function orgAddr_() { return normEmail_(CFG.ADMIN_COPY_TO) || normEmail_(ownerEmail_()); }
 // סוג חשבון: מנהל הוא תמיד ארגוני (גם אם מישהו ערך את הרשומה ב-Properties); אחרת לפי השדה org (רק true בדיוק). משתמש קיים בלי שדה — עצמאי
 function isOrg_(u) { return !!u && (u.role === 'admin' || u.org === true); }
+// "תצוגה מתקדמת" (adv) — הרשאה אישית לכל משתמש, נפרדת מסוג החשבון: מנהל תמיד כן (גם אם הרשומה נערכה ל-false); אחרת הערך הבוליאני השמור ברשומה (ההכרעה של המנהל, setAdv);
+// ובלי ערך שמור (או ערך שאינו בוליאני) — ברירת מחדל לפי סוג החשבון: ארגוני כן, מטיס עצמאי לא. כך משתמש קיים בלי השדה שומר על ברירת המחדל. נקרא מהרשומה בכל קריאה, לא מהאסימון
+function advOf_(u) { return !!u && (u.role === 'admin' || (typeof u.adv === 'boolean' ? u.adv : isOrg_(u))); }
+// ההכרעה השמורה כפי שהיא (true / false), או null = ברירת המחדל לפי הסוג (גם למנהל: ערך שמור אצלו אינו נקרא) — כדי שהמנהל יראה מה ברירת מחדל ומה עקיפה
+function advExplicit_(u) { return (u && u.role !== 'admin' && typeof u.adv === 'boolean') ? u.adv : null; }
 // סוג בקשה ביומן: 'pilot' רק כשנרשם כך ב-saveBegin; רשומה ישנה (בלי kind, בתיקייה ישירות תחת הראשית) נחשבת ארגונית
 function kindOf_(e) { return e && e.kind === 'pilot' ? 'pilot' : 'org'; }
 // מצב שליחה: 'test' (ברירת מחדל) — "שלח למשרד" נשלח רק למבקש עצמו; 'live' — למשרד נוטאם. רק מנהל משנה (setMailMode).
@@ -133,10 +138,10 @@ function mailMode_() { return props_().getProperty('MAIL_MODE') === 'live' ? 'li
 function requesterEmail_(u) { return normEmail_(u && u.email); }
 // מה שהלקוח צריך לדעת על המייל: email = כתובת המבקש השמורה (או ''), org = חשבון ארגוני, copyTo = לאן יישלחו עותקים/"שלח לעצמי" (בלי כתובת — כתובת הארגון).
 // copyToIsOwner (שם ישן, לתאימות) = העותק יוצא לכתובת הארגון כי אין כתובת למשתמש. כתובת הארגון מוחזרת רק לחשבון ארגוני: מטיס עצמאי בלי כתובת שמורה
-// (נוצר ידנית עם org:false) מקבל copyTo ריק ו-false — לעולם לא את כתובת הארגון.
+// (נוצר ידנית עם org:false) מקבל copyTo ריק ו-false — לעולם לא את כתובת הארגון. adv = התצוגה המתקדמת בפועל (advOf_) של המשתמש עצמו בלבד — לא של אחרים.
 function mailInfo_(u) {
   var email = requesterEmail_(u), org = isOrg_(u), oa = org ? orgAddr_() : '';
-  return { email: email, copyTo: email || oa, copyToIsOwner: !email && !!oa, org: org, features: CFG.FEATURES.slice() };
+  return { email: email, copyTo: email || oa, copyToIsOwner: !email && !!oa, org: org, adv: advOf_(u), features: CFG.FEATURES.slice() };
 }
 function withMailInfo_(o, u) { var m = mailInfo_(u); for (var k in m) o[k] = m[k]; return o; }
 // מוסיף כתובת לרשימה אם אינה ריקה ועדיין לא נכללה (השוואה באותיות קטנות) — אותה כתובת לא מופיעה פעמיים באותה הודעה
@@ -709,7 +714,7 @@ var ACTIONS = {
     var out = withMailInfo_({ ok: true, mailMode: mailMode_(), logError: logError, totals: totals, users: Object.keys(us).sort().map(function (k) {
       var u = us[k], s = st[k] || { requests: 0, sent: 0, lastRequest: 0, lastSent: 0 };
       return { user: k, role: u.role, org: isOrg_(u), blocked: !!u.blocked, created: u.created, changed: u.changed, lastLogin: u.lastLogin || null, requests: s.requests, sent: s.sent, lastRequest: s.lastRequest || null, lastSent: s.lastSent || null,
-        email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '' };
+        email: u.email || '', until: u.until || null, source: u.source || 'manual', blockedWhy: u.blockedWhy || '', adv: advOf_(u), advExplicit: advExplicit_(u) };
     }) }, a.user);
     out.mailQuotaLeft = mailQuotaLeft_();      // מכסת המייל היומית שנותרה (נמענים), למנהל בלבד; null = לא ידוע
     return out;
@@ -770,6 +775,19 @@ var ACTIONS = {
     u.org = r.org;
     putUser_(r.target, u);
     return { ok: true, org: r.org };
+  },
+
+  // מנהל: הרשאת תצוגה מתקדמת למשתמש (adv: true = מוצגת, false = מוסתרת), בלי קשר לסוג החשבון — גם למטיס שנרשם לבד. רק למשתמש שאינו מנהל: מנהל תמיד רואה (is_admin).
+  // לא מבטלת אסימונים: ההרשאה נקראת מהרשומה בכל קריאה. מחזירה את הערך בפועל (advOf_). משתמש שלא הוכרע לגביו (או רשומה ישנה בלי השדה) נשאר בברירת המחדל לפי סוג החשבון
+  setAdv: function (r) {
+    var a = admin_(r); if (a.error) return { ok: false, error: a.error };
+    var u = getUser_(String(r.target || ''));
+    if (!u) return { ok: false, error: 'no_user' };
+    if (typeof r.adv !== 'boolean') return { ok: false, error: 'bad_adv' };
+    if (u.role === 'admin') return { ok: false, error: 'is_admin', message: 'חשבון מנהל תמיד רואה את התצוגה המתקדמת' };
+    u.adv = r.adv;
+    putUser_(r.target, u);
+    return { ok: true, adv: advOf_(u) };
   },
 
   resetPassword: function (r) {
