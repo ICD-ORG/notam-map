@@ -2813,7 +2813,7 @@ try {
   }
 
   /* NEW18-BEGIN */
-  /* ===== תרחיש 18: הפקות פשוטות — שני כפתורים בלבד (שמור בדרייב, שליחה במייל) לכל חשבון, הורדות ידניות למנהל בלבד; שמירה אוטומטית בדרייב כשהכול סומן (עובד ארגון, מטיס עצמאי, מנהל); מייל קצר בנקודות ושליחה עם הקבצים ===== */
+  /* ===== תרחיש 18: הפקות פשוטות — שלושה כפתורים לכל חשבון (שמור בדרייב, שליחה במייל, אפשרויות נוספות = כל ההורדות), המייל הידני (העתקה ו-mailto) והקישור לתיקייה למנהל בלבד; שמירה אוטומטית בדרייב כשהכול סומן (עובד ארגון, מטיס עצמאי, מנהל); מייל קצר בנקודות ושליחה עם הקבצים ===== */
   if (!LIVE) {
     const sleepMs = ms => new Promise(r => setTimeout(r, ms));
     const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
@@ -2836,12 +2836,16 @@ try {
     const softEdit = (page, id, v) => page.evaluate(([i, x]) => { const e = document.getElementById(i); e.value = x; e.dispatchEvent(new Event("input", { bubbles: true })); }, [id, v]);
     const AUTO_RE = /^נשמר אוטומטית בדרייב ✔ \(\d\d:\d\d\)/, autoDone = page => page.waitForFunction(re => new RegExp(re).test(document.getElementById("driveMsg").textContent), AUTO_RE.source, { timeout: 90000 });
     const runOnly = async (page, over) => { await fillExample(page, over); await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 }); };
-    // הפקדים הגלויים בסעיף 5 (כפתורים, קישורים, תיבות סימון וכותרת הפרטים): מזהים, ובנפרד הפקדים שבתוך הפרטים הסגורים/המוסתרים
-    const visibleControls = page => page.evaluate(() => [...document.querySelectorAll("#actions button:not(.hbtn), #actions a, #actions input, #actions summary")].filter(e => e.getClientRects().length > 0).map(e => e.id || e.tagName));
+    // הפקדים הגלויים בסעיף 5 (כפתורים, קישורים ותיבות סימון; בלי ״!״): מזהים בסדר המסמך. מה שבתוך ״אפשרויות נוספות״ הסגור, או ב-#manualMail המוסתר, אינו נספר (אין לו תיבת פריסה)
+    const visibleControls = page => page.evaluate(() => [...document.querySelectorAll("#actions button:not(.hbtn), #actions a, #actions input")].filter(e => e.getClientRects().length > 0).map(e => e.id || e.tagName));
     const docxOf = async folder => { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), f = folder.files.find(x => !x.trashed && /\.docx$/.test(x.name)); return (await (await JZ.loadAsync(f.bytes)).file("word/document.xml").async("string")).replace(/<[^>]+>/g, ""); };
-    const MANUAL = ["btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnMail"];
+    const THREE = ["btnDrive", "btnSend", "btnMore"], DOWNLOADS = ["btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion"], MAIL = ["btnCopy", "btnMail"];
+    // מצב הלוח ״אפשרויות נוספות״ והמייל הידני: aria של הכפתור, האם נפתח, והאם מוצג (תיבת פריסה) — ובנפרד מה שבלוח גלוי / פעיל (כפתור, ״כולל דף בדיקות״, ושני פקדי המייל)
+    const moreState = page => page.evaluate(() => { const b = document.getElementById("btnMore"), p = document.getElementById("moreOptions"), m = document.getElementById("manualMail"), on = e => e.getClientRects().length > 0;
+      return { exp: b.getAttribute("aria-expanded"), ctl: b.getAttribute("aria-controls"), txt: b.textContent.trim(), panelHidden: p.hidden, panelShown: on(p), mailHidden: m.hidden, mailShown: on(m), text: document.getElementById("actions").innerText }; });
+    const enabledOf = (page, ids) => page.evaluate(l => l.map(id => { const e = document.getElementById(id); return e.id === "btnMail" ? e.getAttribute("aria-disabled") !== "true" : !e.disabled; }), ids);
 
-    /* ---- א. עובד ארגון: שני כפתורים בלבד; שמירה אוטומטית רק אחרי שהכול סומן, בהשהיה, פעם אחת לגרסה ---- */
+    /* ---- א. עובד ארגון: שלושה כפתורים; ההורדות ב״אפשרויות נוספות״; שמירה אוטומטית רק אחרי שהכול סומן, בהשהיה, פעם אחת לגרסה ---- */
     {
       const { ctx, page, popts } = await openAs("ora.org", "ora-pass-12345");
       await runOnly(page, { org: "חברת עובד הארגון" });
@@ -2859,13 +2863,25 @@ try {
       check("עובד ארגון: התיקייה בארכיון המרכזי תחת ״הארגון״ עם 7 קבצים (Word, KML, ארבע תמונות, נתוני בקשה), והשרת סימן את הבקשה מוכנה", folders().length === 1 && /^הארגון\//.test(folderPath(env, fo)) && fo.files.filter(f => !f.trashed).length === 7 && env.call({ action: "listRequests", token: admTok }).requests.find(r => r.name === fo.name).ready === true, folderPath(env, fo));
       const msg = await page.textContent("#driveMsg");
       check("עובד ארגון: ההודעה ״נשמר אוטומטית בדרייב ✔ (HH:MM)״ — בלי קישור לתיקייה (התיקייה בדרייב של בעל המערכת)", AUTO_RE.test(msg) && msg.trim().length < 40 && (await page.locator("#driveMsg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && !/drive\./.test(await page.locator("#actions").innerHTML()), msg);
-      // הפקדים: שני הכפתורים בלבד (כל אחד עם ״!״ שלו), ההורדות הידניות מוסתרות לגמרי (לא בסדר הטאבים, לא בעץ הנגישות), בלי טקסט ישן על מייל ידני / הורדות
+      // הפקדים: שלושה כפתורים בלבד (כל אחד עם ״!״ שלו); ״אפשרויות נוספות״ סגור; המייל הידני (למנהל) מוסתר לגמרי (לא בסדר הטאבים, לא בעץ הנגישות), בלי טקסט ישן על מייל ידני
       const vc = await visibleControls(page), hw = await page.evaluate(() => [...document.querySelectorAll("#actions .hw")].filter(e => e.getClientRects().length).map(e => e.querySelector("button:not(.hbtn)").id));
-      const tab = await page.evaluate(() => [...document.querySelectorAll("#actions button, #actions a, #actions input, #actions summary")].filter(e => e.tabIndex >= 0 && e.getClientRects().length > 0 && !e.disabled).map(e => e.id || (e.classList.contains("hbtn") ? "!" : e.tagName)));
-      check("עובד ארגון: בסעיף 5 בדיוק שני כפתורים — ״שמור בדרייב״ ו״✉ שלח למשרד נוטאם״, כל אחד עם ״!״", JSON.stringify(vc) === JSON.stringify(["btnDrive", "btnSend"]) && JSON.stringify(hw) === JSON.stringify(["btnDrive", "btnSend"]) && (await page.textContent("#btnDrive")) === "שמור בדרייב" && (await page.textContent("#btnSend")) === "✉ שלח למשרד נוטאם" && JSON.stringify(tab) === JSON.stringify(["btnDrive", "!", "btnSend", "!"]), JSON.stringify([vc, hw, tab]));
-      const tools = await page.evaluate(() => { const d = document.getElementById("manualTools"); return { hidden: d.hidden, open: d.open, shown: d.getClientRects().length > 0, inner: ["btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnMail"].map(id => document.getElementById(id).getClientRects().length > 0), text: document.getElementById("actions").innerText, inc: document.getElementById("incChecks").checked }; });
-      check("עובד ארגון: ״הורדות ידניות (למנהל)״ מוסתר (hidden), אף אחד מהכפתורים הידניים אינו נראה, ואין בסעיף טקסט על מייל ידני / הורדות / העתקה", tools.hidden && !tools.open && !tools.shown && tools.inner.every(v => !v) && !/פתח מייל|העתק טקסט|הורד Word|הורד KML|הורדות ידניות|מצרפים ידנית|הורד תצ/.test(tools.text), JSON.stringify(tools).slice(0, 300));
-      check("עובד ארגון: ״כולל דף בדיקות״ המוסתר נשאר מסומן (ברירת המחדל), ולכן ה-Word בדרייב כולל את דף הבדיקות", tools.inc === true && (await docxOf(fo)).includes("מצאי לפי קבוצות"), "");
+      const tab = () => page.evaluate(() => [...document.querySelectorAll("#actions button, #actions a, #actions input")].filter(e => e.tabIndex >= 0 && e.getClientRects().length > 0 && !e.disabled).map(e => e.id || (e.classList.contains("hbtn") ? "!" : e.tagName)));
+      const ms0 = await moreState(page);
+      check("עובד ארגון: בסעיף 5 בדיוק שלושה כפתורים — ״שמור בדרייב״, ״✉ שלח למשרד נוטאם״ ו״אפשרויות נוספות״, כל אחד עם ״!״ שלו, ובסדר הטאבים", JSON.stringify(vc) === JSON.stringify(THREE) && JSON.stringify(hw) === JSON.stringify(THREE) && (await page.textContent("#btnDrive")) === "שמור בדרייב" && (await page.textContent("#btnSend")) === "✉ שלח למשרד נוטאם" && ms0.txt === "אפשרויות נוספות" && JSON.stringify(await tab()) === JSON.stringify(["btnDrive", "!", "btnSend", "!", "btnMore", "!"]), JSON.stringify([vc, hw]));
+      check("עובד ארגון: ״אפשרויות נוספות״ סגור כברירת מחדל (aria-expanded=false, aria-controls=moreOptions, הלוח hidden וללא תיבת פריסה), וההורדות והמייל הידני אינם גלויים", ms0.exp === "false" && ms0.ctl === "moreOptions" && ms0.panelHidden && !ms0.panelShown && ms0.mailHidden && !ms0.mailShown && !/פתח מייל|העתק טקסט|הורד Word|הורד KML|הדפס|מצרפים ידנית|הורד תצ/.test(ms0.text), JSON.stringify(ms0).slice(0, 300));
+      { const hm = await page.getAttribute(".hw:has(#btnMore) > .hbtn", "data-help");
+        check("עובד ארגון: הסבר ״!״ של ״אפשרויות נוספות״ מתאר את ההורדות ואומר שהשליחה מצרפת את הקבצים בעצמה, בלי להזכיר מייל ידני (שאינו מוצג לו)", /רשימת ההורדות/.test(hm) && /השליחה במייל מצרפת את הקבצים בעצמה/.test(hm) && !/העתקת נוסח המייל|ביומן|למנהל/.test(hm), hm.slice(0, 160)); }
+      await page.click("#btnMore");
+      const ms1 = await moreState(page), vc1 = await visibleControls(page), en1 = await enabledOf(page, DOWNLOADS), tab1 = await tab();
+      check("עובד ארגון: לחיצה על ״אפשרויות נוספות״ פותחת את כל ההורדות (הדפסה/PDF, Word, ״כולל דף בדיקות״ מסומן, KML וארבע התמונות), פעילות, עם aria-expanded=true", ms1.exp === "true" && ms1.panelShown && !ms1.panelHidden && JSON.stringify(vc1) === JSON.stringify(THREE.concat(DOWNLOADS)) && en1.every(Boolean) && (await page.isChecked("#incChecks")) && DOWNLOADS.filter(id => id !== "incChecks").every(id => tab1.includes(id)), JSON.stringify([vc1, en1]));
+      const mailBlock = await page.evaluate(() => ({ focused: (() => { document.getElementById("btnMail").focus(); document.getElementById("btnCopy").focus(); return document.activeElement && document.activeElement.id; })(), shown: ["btnCopy", "btnMail", "mailTo", "mailInfo"].map(id => document.getElementById(id).getClientRects().length > 0) }));
+      check("עובד ארגון: גם כשהלוח פתוח המייל הידני (העתק טקסט מייל, פתח מייל, כתובות הנמענים והנושא) מוסתר — אינו מקבל פוקוס ואינו בסדר הטאבים, ואין בלוח טקסט עליו", mailBlock.focused !== "btnCopy" && mailBlock.focused !== "btnMail" && mailBlock.shown.every(v => !v) && !tab1.includes("btnCopy") && !tab1.includes("btnMail") && !/פתח מייל|העתק טקסט|notamoffice|nofm@|מצרפים ידנית/.test(ms1.text), JSON.stringify(mailBlock));
+      { const [d] = await Promise.all([page.waitForEvent("download"), page.click("#btnKml")]); const nm = d.suggestedFilename();
+        check("עובד ארגון: הורדה מ״אפשרויות נוספות״ עובדת למי שאינו מנהל (KML)", /\.kml$/.test(nm), nm); }
+      await page.click("#btnMore");
+      const ms2 = await moreState(page);
+      check("עובד ארגון: לחיצה נוספת על ״אפשרויות נוספות״ סוגרת את הלוח (aria-expanded=false)", ms2.exp === "false" && ms2.panelHidden && !ms2.panelShown, JSON.stringify(ms2).slice(0, 200));
+      check("עובד ארגון: ״כולל דף בדיקות״ נשאר מסומן (ברירת המחדל), ולכן ה-Word בדרייב כולל את דף הבדיקות", (await page.isChecked("#incChecks")) && (await docxOf(fo)).includes("מצאי לפי קבוצות"), "");
       // לא שמירה שנייה לאותה גרסה, גם כש-refreshGate נקרא שוב ושוב
       await page.evaluate(() => window.__REQ.selfTest()); await page.evaluate(() => window.__REQ.selfTest()); await sleepMs(2600);
       check("עובד ארגון: אותה גרסה לא נשמרת שוב (אחרי קריאות חוזרות ל-refreshGate והמתנה מעבר להשהיה: saveBegin אחד)", n(page, "saveBegin") === 1 && folders().length === 1, "saveBegin=" + n(page, "saveBegin"));
@@ -2970,7 +2986,7 @@ try {
       await ctx.close();
     }
 
-    /* ---- ד. מטיס עצמאי (כתובת שמורה): אותם שני כפתורים, שמירה אוטומטית ל״מטיסים/<משתמש>״, בלי קישור ---- */
+    /* ---- ד. מטיס עצמאי (כתובת שמורה): אותם שלושה כפתורים, שמירה אוטומטית ל״מטיסים/<משתמש>״, בלי קישור ---- */
     {
       const { ctx, page } = await openAs("pia.pilot", "pia-pass-12345");
       await runOnly(page, { org: "פיה צילום" }); await sleepMs(2300);
@@ -2978,24 +2994,30 @@ try {
       await page.check("#reviewOk"); await ready(page); await autoDone(page);
       const fo = folders().find(f => /^מטיסים\/pia\.pilot\//.test(folderPath(env, f))), vc = await visibleControls(page);
       check("מטיס עצמאי: נשמר אוטומטית ל״מטיסים/pia.pilot/…״ עם 7 קבצים, סדרת saveBegin→7×saveFile→saveEnd אחת, בלי קישור לתיקייה", !!fo && fo.files.filter(f => !f.trashed).length === 7 && n(page, "saveBegin") === 1 && n(page, "saveEnd") === 1 && n(page, "saveFile") === 7 && (await page.locator("#driveMsg a").count()) === 0 && AUTO_RE.test(await page.textContent("#driveMsg")), fo ? folderPath(env, fo) : "אין תיקייה");
-      check("מטיס עצמאי: רק שני הכפתורים (שמור בדרייב, שלח), בלי הורדות ידניות", JSON.stringify(vc) === JSON.stringify(["btnDrive", "btnSend"]) && (await page.evaluate(() => document.getElementById("manualTools").hidden)), JSON.stringify(vc));
+      const ps0 = await moreState(page);
+      check("מטיס עצמאי: שלושת הכפתורים (שמור בדרייב, שלח, אפשרויות נוספות), הלוח סגור והמייל הידני מוסתר", JSON.stringify(vc) === JSON.stringify(THREE) && ps0.exp === "false" && ps0.panelHidden && ps0.mailHidden && !ps0.mailShown, JSON.stringify([vc, ps0]).slice(0, 300));
+      await page.click("#btnMore");
+      const ps1 = await moreState(page), pvc = await visibleControls(page);
+      check("מטיס עצמאי: ״אפשרויות נוספות״ פותח את כל ההורדות (פעילות), בלי המייל הידני ובלי קישור לתיקייה", ps1.exp === "true" && JSON.stringify(pvc) === JSON.stringify(THREE.concat(DOWNLOADS)) && (await enabledOf(page, DOWNLOADS)).every(Boolean) && ps1.mailHidden && !ps1.mailShown && (await page.locator("#driveMsg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && !/פתח מייל|העתק טקסט|notamoffice/.test(ps1.text), JSON.stringify(pvc));
       await ctx.close();
     }
 
-    /* ---- ה. מנהל: שמירה אוטומטית עם קישור לתיקייה; ״הורדות ידניות (למנהל)״ סגור כברירת מחדל ובתוכו כל הכפתורים הישנים ---- */
+    /* ---- ה. מנהל: שמירה אוטומטית עם קישור לתיקייה; ״אפשרויות נוספות״ סגור כברירת מחדל ובתוכו כל ההורדות וגם המייל הידני (רק אצלו) ---- */
     {
       const before = folders().length;
       const { ctx, page } = await openAs();
       await readyRequest(page, { org: "חברת המנהל בע״מ" }); await autoDone(page);
       const am = await page.innerHTML("#driveMsg"), fid = (/href="https:\/\/drive\/([^"]+)"/.exec(am) || [])[1], adminFolder = env.folders[fid];
       check("מנהל: שמירה אוטומטית עם הקישור ״פתח את התיקייה״ לדרייב (למנהל בלבד)", /^נשמר אוטומטית בדרייב ✔ \(\d\d:\d\d\) — <a href="https:\/\/drive\/[^"]+" target="_blank" rel="noopener">פתח את התיקייה<\/a>$/.test(am.trim()), am.slice(0, 240));
-      const st = await page.evaluate(() => { const d = document.getElementById("manualTools"); return { hidden: d.hidden, open: d.open, summary: d.querySelector("summary").textContent.trim(), shown: d.getClientRects().length > 0 }; });
       let vc = await visibleControls(page);
-      check("מנהל: ״הורדות ידניות (למנהל)״ מוצג וסגור כברירת מחדל; בסעיף נראים רק שני הכפתורים, קישור התיקייה בהודעה וכותרת הפרטים", !st.hidden && !st.open && st.shown && st.summary === "הורדות ידניות (למנהל)" && JSON.stringify(vc) === JSON.stringify(["btnDrive", "btnSend", "A", "SUMMARY"]), JSON.stringify([st, vc]));   // A = הקישור לתיקייה בהודעת השמירה (למנהל בלבד)
-      await page.click("#manualTools > summary");
+      const as0 = await moreState(page);
+      check("מנהל: שלושת הכפתורים מוצגים, ״אפשרויות נוספות״ סגור כברירת מחדל, וקישור התיקייה נמצא בהודעה (A) — רק למנהל", JSON.stringify(vc) === JSON.stringify(["btnDrive", "btnSend", "btnMore", "A"]) && as0.exp === "false" && as0.panelHidden && !as0.panelShown, JSON.stringify([vc, as0]).slice(0, 300));   // A = הקישור לתיקייה בהודעת השמירה
+      await page.click("#btnMore");
       vc = await visibleControls(page);
-      const en = await page.evaluate(ids => ids.map(id => { const e = document.getElementById(id); return e.id === "btnMail" ? e.getAttribute("aria-disabled") !== "true" : !e.disabled; }), MANUAL);
-      check("מנהל: בפתיחת הפרטים כל הכפתורים הישנים גלויים ופעילים (הדפסה, Word, ״כולל דף בדיקות״, KML, ארבע תמונות, העתקה, פתח מייל) ו״כולל דף בדיקות״ מסומן", MANUAL.every(id => vc.includes(id)) && en.every(Boolean) && (await page.isChecked("#incChecks")) && /הנמענים/.test(await page.textContent("#manualTools")) && /נושא: /.test(await page.textContent("#mailInfo")), JSON.stringify([vc, en]));
+      const en = await enabledOf(page, DOWNLOADS.concat(MAIL)), as1 = await moreState(page), mi = await page.textContent("#mailInfo"), mt = await page.textContent("#mailTo");
+      check("מנהל: בפתיחת ״אפשרויות נוספות״ גלויים ופעילים כל ההורדות (״כולל דף בדיקות״ מסומן) וגם המייל הידני — העתק טקסט מייל, פתח מייל, כתובות הנמענים והנושא", DOWNLOADS.concat(MAIL).every(id => vc.includes(id)) && en.every(Boolean) && (await page.isChecked("#incChecks")) && as1.mailShown && !as1.mailHidden && /notamoffice@iaa\.gov\.il, nofm@iaa\.gov\.il/.test(mt) && /^נושא: בקשה לסגירה אווירית — /.test(mi) && /למנהל בלבד/.test(as1.text) && /mailto אינו יכול לצרף קבצים/.test(as1.text), JSON.stringify([vc, en]));
+      { const hx = await page.getAttribute(".hw:has(#btnMore) > .hbtn", "data-help");
+        check("מנהל: הסבר ״!״ של ״אפשרויות נוספות״ כולל את ההורדות ואת המייל הידני (למנהל בלבד)", /ההורדות/.test(hx) && /העתקת נוסח המייל ופתיחת המייל/.test(hx) && /אינה נרשמת ביומן השליחות/.test(hx), hx.slice(0, 120)); }
       // שינוי ״כולל דף בדיקות״ משנה את ה-Word: נשמר שוב אוטומטית
       const sb = n(page, "saveBegin");
       await page.click("#incChecks"); await autoDone(page);
