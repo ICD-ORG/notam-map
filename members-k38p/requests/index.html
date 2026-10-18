@@ -395,10 +395,10 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     </div>
   </div>
   <div id="reportHost"><div id="report"></div></div>
-  <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (לעיון על המסך בלבד — אינן חלק מהדוח, מהטופס או מקובץ ה-Word)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
+  <details class="card nonprint" id="limitsBox" hidden><summary>מגבלות המקורות (לעיון על המסך בלבד — אינן חלק מהדוח, מהטופס או מקובץ ה-Word)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
 </section>
 
-<details class="card" id="stBox">
+<details class="card" id="stBox" hidden>
   <summary>בדיקה עצמית של המערכת</summary>
   <p class="small" style="margin:8px 0">מריצה את החישובים על נתוני אמת שנשמרו מראש (נקודת הירקון) ומשווה לתוצאות שחושבו בנפרד. בכל טעינה של הדף היא רצה אוטומטית; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה.</p>
   <button type="button" id="stRun">הרץ בדיקה עצמית</button>

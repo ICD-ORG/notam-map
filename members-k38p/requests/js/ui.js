@@ -1173,6 +1173,17 @@
   // ״שמור בדרייב״, השמירה האוטומטית ו״אפשרויות נוספות״ (הדפסה/PDF, Word, KML, ארבע התמונות) זמינים לכל חשבון (ארכיון מרכזי: ארגוני תחת ״הארגון״, מטיס תחת ״מטיסים/<משתמש>״). התיקייה בדרייב של בעל המערכת, ולכן הקישור אליה למנהל בלבד;
   // וכן המייל הידני (העתקה ופתיחת mailto, ב-#manualMail) והפירוט הטכני — למנהל בלבד: mailto אינו מצרף קבצים ואינו נרשם ביומן השליחות
   const isAdmin = () => !!(window.ReqAuth && window.ReqAuth.getRole && window.ReqAuth.getRole() === "admin");
+  // תצוגה מתקדמת (auth.js: isAdv — מנהל תמיד; אחרת adv מהשרת, ובשרת ישן לפי סוג החשבון): הכלים הפנימיים — מגבלות המקורות, הבדיקה העצמית וסעיף ההגשה המלא בדף הבדיקות ובקובץ ה-Word. מנותק — לא (נכשל סגור)
+  const isAdv = () => !!(window.ReqAuth && window.ReqAuth.isAdv && window.ReqAuth.isAdv());
+  // באנר כשל הבדיקה העצמית (#selftestBanner). עם תצוגה מתקדמת — הנוסח המפורט שמפנה לתיבת הבדיקה העצמית (נפתחת); בלעדיה — הניסוח הניטרלי של המערכת (maintNote: בלי פירוט טכני ובלי הוראות, עם כתובת התמיכה) והתיבה נשארת מוסתרת.
+  // הבדיקה עצמה רצה ומונעת מוכנות לכל משתמש (setStatus); נקרא אחרי כל הרצה ושוב כשהתפקיד / התצוגה המתקדמת ידועים או השתנו
+  function renderSelftestBanner() {
+    const b = $("selftestBanner"); if (!b) return;
+    if (!S.selfFailed) { b.style.display = "none"; return; }
+    b.style.display = "block";
+    if (isAdv()) { b.textContent = sup("הבדיקה העצמית של המערכת נכשלה — לא ניתן לסמן בקשה כמוכנה לשליחה. פתחו את 'בדיקה עצמית' למטה לפרטים, ואם הבעיה נמשכת פנו לתמיכה."); $("stBox").open = true; }
+    else b.textContent = maintNote();
+  }
   // רמזי שדות הגורם המבקש, אות הקריאה ומס׳ הרישום בחשבון ארגוני (בחשבון עצמאי נשאר הנוסח שב-index.html: אין ברירת מחדל)
   const ORG_HINTS = {
     hReqOrg: "נספח ג׳ שדה 2 — חובה, עד 80 תווים. בחשבון ארגוני נטען כאן שם הארגון כברירת מחדל; אפשר לערוך אותו, והעריכה נשמרת.",
@@ -1188,6 +1199,11 @@
     const org = isOrg(), sb = $("btnSend"), hb = sb && sb.closest(".hw") && sb.closest(".hw").querySelector(".hbtn");
     if (hb) hb.setAttribute("data-help", org ? HELP_SEND_ORG : HELP.btnSend);
     Object.keys(ORG_HINTS).forEach(id => { const e = $(id); if (!e) return; if (e.dataset.base == null) e.dataset.base = e.textContent; e.textContent = org ? ORG_HINTS[id] : e.dataset.base; });
+    // הכלים הפנימיים — מגבלות המקורות והבדיקה העצמית (עם כפתור ההרצה וה-״!״ שלו) — רק עם תצוגה מתקדמת. hidden = גם לא נגישים במקלדת ובקורא מסך; מנותק — מוסתרים. הבדיקה העצמית ממשיכה לרוץ ולחסום מוכנות גם כשהתיבה מוסתרת
+    const adv = isAdv();
+    ["limitsBox", "stBox"].forEach(id => { const e = $(id); if (e) e.hidden = !adv; });
+    if (S.res && !S.resetting) renderLimits();
+    renderSelftestBanner();
   }
   const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
   // auto: שמירה אוטומטית (scheduleAutoSave) — אותה זרימה כמו הכפתור, בלי A.setBusy (לא חוסמת חלונות), ובלי הודעת שגיאה כשהבקשה שונתה בזמן השמירה
@@ -1476,9 +1492,9 @@
     } catch (e) { add("טעינת נתוני הבדיקה", false, e.message); }
     const ok = out.every(x => x.ok);
     $("stList").innerHTML = out.map(x => '<li class="' + (x.ok ? "ok" : "no") + '">' + (x.ok ? "✔ " : "✖ ") + esc(x.name) + (x.detail ? ' <span class="hint">— ' + esc(x.detail) + "</span>" : "") + "</li>").join("");
-    setStatus("selftest", ok, ok ? "" : out.filter(x => !x.ok).map(x => x.name).join("; "));
-    const b = $("selftestBanner");
-    if (ok) { b.style.display = "none"; } else { b.style.display = "block"; b.textContent = sup("הבדיקה העצמית של המערכת נכשלה — לא ניתן לסמן בקשה כמוכנה לשליחה. פתחו את 'בדיקה עצמית' למטה לפרטים, ואם הבעיה נמשכת פנו לתמיכה."); $("stBox").open = true; }
+    S.selfFailed = !ok;
+    setStatus("selftest", ok, ok ? "" : out.filter(x => !x.ok).map(x => x.name).join("; "), { maint: true, adv: true });   // שמות הבדיקות שנכשלו: למנהל ולמי שיש לו תצוגה מתקדמת (התיבה גלויה לו); מטיס אחר מקבל בשער את הניסוח הניטרלי
+    renderSelftestBanner();
     return ok;
   }
 
@@ -1500,6 +1516,11 @@
       S.lastUser = u;
       applyRole();
       renderSyncBanner(); refreshGate();   // התפקיד ידוע רק עכשיו: הודעות הסנכרון והשער מוצגות לפי תפקיד
+    });
+    // התצוגה המתקדמת של המשתמש המחובר השתנתה (המנהל החליף אותה; נקלטה ברענון me): הכלים הפנימיים מוצגים / מוסתרים, ואם יש בקשה — סעיף ההגשה בדף ובקובץ ה-Word משתנה איתה, ולכן התוצאות שנשמרו או נשלחו אינן הגרסה הנוכחית (clearOutcome; נשמרת שוב אוטומטית)
+    document.addEventListener("req-adv", () => {
+      applyRole();
+      if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
     });
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
