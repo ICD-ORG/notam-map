@@ -51,12 +51,13 @@
     ["driveMsg", "sendMsg"].forEach(id => { const e = $(id); if (e) { e.textContent = ""; e.className = "small"; } });
     if (S.onStale) { if ($("sendProg")) S.onStale(); else S.onStale = null; }   // חלון שליחה פתוח (sendToNotam): הבקשה השתנתה מאחוריו — הוא ננעל ומסביר, במקום להמתין ללחיצה
   }
-  // opts.maint: ההודעה היא פירוט תחזוקה (שמות קבצים, HTTP, מהדורות, הוראות למתחזק) — מוצגת רק למנהל; מטיס רגיל מקבל opts.user אם ניתן, ואחרת ניסוח ניטרלי (maintNote)
-  function setStatus(k, ok, msg, opts) { S.statuses[k] = { ok: !!ok, msg: msg || "", maint: !!(opts && opts.maint), user: opts && typeof opts.user === "string" ? opts.user : null }; refreshGate(); }
+  // opts.maint: ההודעה היא פירוט תחזוקה (שמות קבצים, HTTP, מהדורות, הוראות למתחזק) — מוצגת רק למנהל; מטיס רגיל מקבל opts.user אם ניתן, ואחרת ניסוח ניטרלי (maintNote). opts.adv: הפירוט מוצג גם למי שיש לו תצוגה מתקדמת
+  function setStatus(k, ok, msg, opts) { S.statuses[k] = { ok: !!ok, msg: msg || "", maint: !!(opts && opts.maint), adv: !!(opts && opts.adv), user: opts && typeof opts.user === "string" ? opts.user : null }; refreshGate(); }
   // כתובת התמיכה (config.json → support_email) מצורפת לכל הודעה שמפנה ל"תמיכה" (auth.js: withSupport); ללא כתובת תקינה — ההודעה כמות שהיא
   const sup = t => (window.ReqAuth && window.ReqAuth.withSupport) ? window.ReqAuth.withSupport(t) : t;
   const maintNote = () => sup("הנתונים מתעדכנים כעת; נסו שוב בעוד מספר דקות, ואם זה נמשך פנו לתמיכה.");
-  const statusMsg = st => !st ? "" : (isAdmin() || !st.maint) ? st.msg : (st.user != null ? st.user : maintNote());
+  // st.adv: פירוט שגם משתמש עם תצוגה מתקדמת רואה (הבדיקה העצמית — הפירוט גלוי לו בתיבת הבדיקה העצמית); מטיס בלעדיה מקבל את הניסוח הניטרלי
+  const statusMsg = st => !st ? "" : (isAdmin() || !st.maint || (st.adv && isAdv())) ? st.msg : (st.user != null ? st.user : maintNote());
 
   /* ---------- טעינת נתונים סטטיים ---------- */
   // טוען את כל הנתונים שנגזרים מהמפה ומהנוטמים (אזורים, שמורות, חוקי ב-09, מנחתים חקלאיים, נוטמים) — וגם בטעינה מחדש אחרי עדכון
@@ -152,9 +153,10 @@
     qBtn: "מחפש את המקום שהקלדתם בשדה החיפוש באתר Nominatim של OpenStreetMap (ישראל והשטחים) ומציג עד 6 תוצאות לבחירה. בחירת תוצאה קובעת אותה כמרכז הסגירה ומזיזה אליה את המפה; ואם כבר הורצו בדיקות, יש להריץ אותן שוב. החיפוש עצמו אינו מריץ בדיקות.",
     baseSat: "מחליף את רקע מפת העבודה שלמעלה לצילום אוויר (Esri). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
     baseOsm: "מחליף את רקע מפת העבודה שלמעלה למפת רחובות (OpenStreetMap). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
-    runBtn: "מריץ את כל הבדיקות לנקודה, לרדיוס, לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את הסקירה האנושית.",
+    runBtn: "מריץ את כל הבדיקות לנקודה, לרדיוס, לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את ההצהרה בסעיף 4.",
     mPick: "אחרי הלחיצה, לחיצה אחת על המפה שמעל מכניסה את הנ״צ שנלחץ לשדה ״נ״צ״ של התוספת הידנית. הלחיצה הזו אינה משנה את מרכז הסגירה.",
-    mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור הסקירה — יש לאשר אותה שוב.",
+    mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור ההצהרה — יש לאשר אותה שוב.",
+    btnZip: "שומר במחשב שלכם קובץ ZIP אחד עם כל קבצי הבקשה: טופס Word (כולל דף הבדיקות אם ״כולל דף בדיקות״ מסומן), קובץ KML וארבע תמונות המפה. אפשר לשמור אותו כארכיון אישי. אין בכך צורך כדי לשלוח את הבקשה.",
     btnPrint: "פותח את חלון ההדפסה של הדפדפן, ומשם אפשר להדפיס או לשמור כ-PDF. מודפס הדוח בלבד: הטופס, ארבע התמונות, וכן דף הבדיקות אם ״כולל דף בדיקות״ מסומן.",
     btnDocx: "מוריד קובץ Word לעריכה: טופס נספח ג׳, ארבע התמונות וטבלת המכשולים והתשתיות. דף הבדיקות נכלל רק אם ״כולל דף בדיקות״ מסומן.",
     incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והבקשה תישמר מחדש בדרייב (אוטומטית).",
@@ -163,9 +165,9 @@
     btnStreet: "מוריד את מפת הרחובות (OpenStreetMap) בתקריב (PNG), עם שמות הרחובות וכל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
     btnRegion: "מוריד את מפת האזור המרוחקת (PNG), בטווח של כ-10 ק״מ ומעלה, עם סמן וחץ שמצביעים על המיקום. הפריטים מסומנים בה בלי מספרים.",
-    btnMore: "פותח וסוגר את רשימת ההורדות: הדפסה או שמירה כ-PDF, קובץ Word לעריכה (עם ״כולל דף בדיקות״), קובץ KML וארבע תמונות המפה (PNG). אין בהן צורך כדי לשלוח: השליחה במייל מצרפת את הקבצים בעצמה, והבקשה נשמרת בדרייב אוטומטית.",
+    btnMore: "פותח וסוגר את רשימת ההורדות: שמירת כל הקבצים במחשב בקובץ ZIP אחד, הדפסה או שמירה כ-PDF, קובץ Word לעריכה (עם ״כולל דף בדיקות״), קובץ KML וארבע תמונות המפה (PNG). אין בהן צורך כדי לשלוח: השליחה במייל מצרפת את הקבצים בעצמה, והבקשה נשמרת בדרייב אוטומטית.",
     btnCopy: "מעתיק ללוח את נוסח המייל המוכן (נמענים, נושא וגוף ההודעה) כדי להדביק בתוכנת המייל. לא שולח ולא שומר דבר.",
-    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בארכיון המרכזי של הארגון בדרייב (בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. השמירה מתבצעת אוטומטית כשכל הבדיקות הושלמו, הכול סומן והסקירה אושרה — אין צורך ללחוץ; הכפתור מיועד לשמירה ידנית חוזרת, למשל כשהשמירה האוטומטית נכשלה. התיקייה נמצאת בדרייב של בעל המערכת ולכן הקישור אליה מוצג לבעל המערכת בלבד. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
+    btnDrive: "שומר את כל קבצי הבקשה — Word, KML, ארבע התמונות וקובץ נתוני הבקשה — בארכיון המרכזי של הארגון בדרייב (בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש), בלי לשלוח. השמירה מתבצעת אוטומטית כשכל הבדיקות הושלמו, הכול סומן וההצהרה אושרה — אין צורך ללחוץ; הכפתור מיועד לשמירה ידנית חוזרת, למשל כשהשמירה האוטומטית נכשלה. התיקייה נמצאת בדרייב של בעל המערכת ולכן הקישור אליה מוצג לבעל המערכת בלבד. שמירה חוזרת של אותה בקשה מחליפה את הקבצים באותה תיקייה.",
     btnSend: "פותח חלון אישור; אחרי שתאשרו הוא שולח את הבקשה במייל כשכל הקבצים מצורפים אוטומטית (טופס Word, KML וארבע תמונות המפה) — אין צורך להוריד או לצרף דבר; גוף המייל קצר, וכל הפרטים בטופס המצורף. אם הגרסה הנוכחית עדיין לא נשמרה בארכיון המרכזי בדרייב (בדרך כלל היא כבר נשמרה אוטומטית) היא נשמרת קודם; התיקייה אינה נפתחת למטיס. במצב חי תבחרו: ״שלח למשרד נוטאם״ (notamoffice@iaa.gov.il, nofm@iaa.gov.il) — המייל יוצא בשם הגורם המבקש שהצהרתם עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), עותק נשלח אליכם לכתובת שנרשמה בחשבון, ותשובות המשרד יגיעו אליכם; או ״שלח רק לעצמי״ — עותק לבדיקה אליכם בלבד, שלא נשלח למשרד. במצב בדיקה המייל נשלח רק אליכם. בכל שליחה צוות התמיכה של המערכת מקבל עותק סמוי לצורכי תמיכה בלבד. שליחה למשרד נוטאם אינה ניתנת לביטול.",
     btnMail: "פותח את תוכנת המייל עם הנמענים, הנושא וגוף ההודעה ממולאים. הקבצים אינם מצורפים אוטומטית — יש לצרף אותם ידנית (לשליחה עם הקבצים מצורפים אוטומטית — ״שלח למשרד נוטאם״).",
     acAdd: "מוסיף את שם כלי הטיס שהקלדתם לרשימה ומסמן אותו. הוא נשמר בדפדפן הזה בלבד (לא בשרת), ורק עבור החשבון שלכם, ויופיע גם בביקורים הבאים — עד " + MAX_EXTRA_AC + " כלי טיס נוספים; מעל זה יש להסיר כלי כדי להוסיף. כלי שנוסף כך מוצג עם × שמסיר אותו מהרשימה השמורה; כלים הקבועים בהגדרות המערכת אינם ניתנים להסרה.",
@@ -181,7 +183,7 @@
   const HELP_MORE_ADMIN = " למנהל נוספים כאן גם העתקת נוסח המייל ופתיחת המייל בתוכנת המייל — שליחה כזו אינה מצרפת קבצים ואינה נרשמת ביומן השליחות.";
   // שם קצר וסטטי של מה שהלחצן מסביר — ל-aria-label של קורא מסך ("הסבר על: <שם>"). נקבע כאן ולא נקרא מתווית הכפתור, שעשויה להשתנות
   const HELP_NAME = {
-    qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
+    qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnZip: "שמירת כל הקבצים במחשב", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
     incChecks: "כולל דף בדיקות", btnKml: "הורדת KML", btnAerial: "הורדת תצ״א תקריב", btnStreet: "הורדת מפת רחובות תקריב", btnOverview: "הורדת הדמיה במבט כללי", btnRegion: "הורדת מפת אזור", btnCopy: "העתקת טקסט מייל",
     btnMore: "אפשרויות נוספות", btnDrive: "שמירה בדרייב", btnSend: "שליחה למשרד נוטאם", btnMail: "פתיחת מייל", acAdd: "הוספת כלי טיס", puAdd: "הוספת מהות פעילות", addContact: "הוספת איש קשר", addPart: "הוספת משתתף", wipePerson: "מחיקת פרטים מהמכשיר", stRun: "בדיקה עצמית",
     knownObs: "מכשולים שידועים למבקש", visitNotes: "הערות המבקש"
@@ -436,7 +438,7 @@
       S.res = null; S.report = null; S.reportHtml = false; S.reportDraft = false; S.imgs = {}; S.imgSite = null; S.manual = []; S.manualKey = ""; S.reviewAt = null; S.scanKey = null; S.analysisStamp = null;
       S.sent = null; S.sendFolder = null; S.rid = ""; S.ridKey = ""; S.driveUrl = ""; S.center = null; S.autoSite = ""; S.pick = false;
       S.data.near = S.data.far = S.data.ext = S.data.reverse = undefined;
-      S.statuses.review = { ok: false, msg: "לא אושרה סקירה" }; S.statuses.input = { ok: false, msg: "" };
+      S.statuses.review = { ok: false, msg: O.DECLARATION.gate }; S.statuses.input = { ok: false, msg: "" };
       ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });   // סטטוסי ההרצה האחרונה
       step(clearOutcome);   // מקדם את S.rev: שמירה או שליחה של הקודם שעדיין באוויר נעצרת בבדיקת הגרסה
       step(() => window.ReqAuth.closeModal());
@@ -453,7 +455,7 @@
         $("btnMail").href = "#";
       });
       step(() => {
-        ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
+        ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
         const mailA = $("btnMail"); mailA.querySelector("button").disabled = true; mailA.style.pointerEvents = "none"; mailA.tabIndex = -1; mailA.setAttribute("aria-disabled", "true");
       });
     } finally {
@@ -769,6 +771,8 @@
     const g = C.gate(S.statuses);
     S.ready = g.ready && !S.stale && !S.pending;     // pending = הדמיות המפה נבנות מחדש אחרי עריכה — עד שהסתיימו אסור לשמור או לשלוח (התמונות עדיין של הגרסה הקודמת)
     // באנר ״מעדכן את ההדמיות״ רק כשההמתנה היא להדמיות (שם האתר שונה או בנייה רצה); עריכה רכה אחרת שממתינה לרינדור נועלת את הלחצנים בלבד, והבאנר נשאר כפי שהיה
+    // הודעת השער ליד כפתורי ההפקה (#declGate, סעיף 5) כל עוד ההצהרה לא אושרה; נגזרת מסטטוס "review" (נכשל סגור: בלי סטטוס — מוצגת). textContent רק כשהשתנה, כדי שקורא מסך לא יקריא שוב בכל רינדור
+    { const dg = $("declGate"), rv = S.statuses.review, t = rv && rv.ok ? "" : O.DECLARATION.gate; if (dg && dg.textContent !== t) dg.textContent = t; }
     const imgWait = S.pending && !S.stale && (S.building || (S.imgSite != null && S.imgSite !== ($("siteName").value || "").trim()));
     const showReady = S.ready || (S.pending && !imgWait && g.ready && !S.stale);
     const skipHtml = !!(opts && opts.quiet) && !imgWait && box._html !== undefined;   // הקלדה בשדה רך בלי שינוי הדמיות: אזור השער אינו משתנה — לא בונים מחדש (גם לא את האזהרות, שחישובן כבד יחסית) ולא נוגעים ב-DOM
@@ -780,7 +784,7 @@
       : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(statusMsg(S.statuses[f.key]) || f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     if (!skipHtml && box._html !== html) { box.innerHTML = html; box._html = html; }   // לא מחליפים DOM זהה
-    ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
+    ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
     // הקישור "פתח מייל" הוא <a href=mailto>: disabled על ה-button שבתוכו ו-pointer-events חוסמים עכבר בלבד — Enter על הקישור עצמו (מקלדת) היה פותח את תוכנת המייל גם כשהבקשה אינה מוכנה. לכן גם tabindex ו-aria-disabled, ומאזין click (ב-init) שמבטל את הפעולה כש-!S.ready
     const mailA = $("btnMail");
     mailA.querySelector("button").disabled = !S.ready;
@@ -874,7 +878,7 @@
     S.buildSeq++; S.building = false; clearTimeout(rebuildTimer); rebuildTimer = null; S.pending = false;
     S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.imgs = {}; S.imgSite = null; clearOutcome();
     { const ck = inp0.lat + "," + inp0.lon; if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
-    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "לא אושרה סקירה" };
+    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: O.DECLARATION.gate };
     ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso };
     const q = C.buildQueries(inp0.lat, inp0.lon, inp0.radius, S.cfg);
@@ -993,13 +997,14 @@
 
   /* ---------- הדוח ---------- */
   function renderAll() { if (!S.res || S.resetting) return; S.report = true; refreshGate(); renderLimits(); const m = O.mail(S.res, S.cfg); $("btnMail").href = m.mailto; $("mailInfo").textContent = "נושא: " + m.subject; }
-  function renderLimits() { $("limits").innerHTML = O.sourceNotes(S.res, S.data.zones ? { zones: S.data.zones, inpa: S.data.inpa } : {}, S.cfg).concat("זריחה ושקיעה לפי חישוב אסטרונומי לנקודה, לא לוח רשמי. ההתייחסות לגובה ולתנאים זהה ביום ובלילה.").map(x => "<li>" + esc(x) + "</li>").join(""); }
+  // מגבלות המקורות הן כלי פנימי (תצוגה מתקדמת): למי שאין לו — התיבה מוסתרת (applyRole) וגם ריקה
+  function renderLimits() { if (!isAdv()) { $("limits").innerHTML = ""; return; } $("limits").innerHTML = O.sourceNotes(S.res, S.data.zones ? { zones: S.data.zones, inpa: S.data.inpa } : {}, S.cfg).concat("זריחה ושקיעה לפי חישוב אסטרונומי לנקודה, לא לוח רשמי. ההתייחסות לגובה ולתנאים זהה ביום ובלילה.").map(x => "<li>" + esc(x) + "</li>").join(""); }
   const reportData = () => ({ zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near });
-  const reviewText = () => S.reviewAt ? "המבקש אישר ב-" + S.reviewAt.toLocaleString("he-IL") + " שעבר על התצ״א, על רשימת המצאי ועל המפה, ושאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוסיף אותה ידנית)." : "";
+  const reviewText = () => O.reviewText(S.reviewAt);   // ״אישור סקירה אנושית״ בדף הבדיקות וב-Word: המבקש אישר את ההצהרה ב-<מועד> (הנוסח ב-output.js)
   // אפשרויות משותפות למסך ול-Word: שם ספק הרקע בכל תמונה (לכותרות), טקסט אישור הסקירה, והאם לכלול דף בדיקות
   function modelOpts(images) {
     const pn = {}; IMGS.forEach(m => { const x = S.imgs[m.k]; pn[m.k] = x ? ((M.PROVIDERS[x.provider] || {}).name || "") : ""; });
-    return { images: images || {}, providerName: (M.PROVIDERS.esri || {}).name || "", providerNames: pn, includeChecks: $("incChecks").checked, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו" };
+    return { images: images || {}, providerName: (M.PROVIDERS.esri || {}).name || "", providerNames: pn, includeChecks: $("incChecks").checked, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו", adv: isAdv() };   // adv: סעיף ההגשה במסך וב-Word לפי תצוגת המבקש (מלא / סיכום)
   }
   // מבנה הדוח על המסך זהה לזה שב-Word: הכול נבנה מאותו מודל (O.docxModel) — טופס, ארבעה עמודי תמונה, ודף בדיקות עם כותרות סעיף ממוספרות ברצף
   function renderReport() {
@@ -1037,7 +1042,7 @@
       (visitNote ? "<p>" + visitNote + "</p>" : "") +
       secH("הבדיקות שבוצעו") + "<table class='t ck'><tr><th>#</th><th>בדיקה</th><th>מקור</th><th>תוצאה</th></tr>" + chk + "</table>" + covHtml() +
       (dn ? secH("יום ולילה בחלון הפעילות") + "<table class='t'><tr>" + mdl.dayNightHead.map(h => "<th>" + esc(h) + "</th>").join("") + "</tr>" + dn + "</table>" : "") +
-      secH("הגשה") + "<p>" + mdl.submission + "</p>" +
+      secH(mdl.submissionHead) + (mdl.summary ? "<ul>" + mdl.summary.map(l => "<li>" + l + "</li>").join("") + "</ul>" : "<p>" + mdl.submission + "</p>") +   // סיכום בנקודות (בלי תצוגה מתקדמת) או הנוסח המלא
       (rv ? secH("אישור סקירה אנושית") + "<p>" + esc(rv) + "</p>" : "") +
       "<div class='foot'><span>" + esc(mdl.footer) + "</span></div></div>";
     $("report").className = $("incChecks").checked ? "" : "nochecks";
@@ -1061,7 +1066,7 @@
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near, far: S.data.far, ext: S.data.ext, reverse: S.data.reverse };
     const prev = S.res; S.res = C.analyze(inp, data, S.cfg, new Date());
     S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };
-    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — יש לאשר מחדש" }; clearOutcome();
+    S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — " + O.DECLARATION.gate + " מחדש" }; clearOutcome();
     const building = buildMapImage(null, null);   // מתחילה מיד ומסמנת "ממתין" (נגזר מהבנייה הרצה ומטיימר עריכה, לא מדגל שבנייה מיושנת מאפסת)
     refreshGate();
     try { await building; } finally { renderAll(); }
@@ -1078,7 +1083,7 @@
   function onReviewChange() {
     clearOutcome();   // נוסח אישור הסקירה נכנס לקובץ ה-Word, ולכן הגרסה השמורה בדרייב כבר לא תואמת
     S.reviewAt = $("reviewOk").checked ? new Date() : null;
-    setStatus("review", $("reviewOk").checked, $("reviewOk").checked ? "" : "לא אושרה סקירה");
+    setStatus("review", $("reviewOk").checked, $("reviewOk").checked ? "" : O.DECLARATION.gate);
   }
 
   /* ---------- הורדות והעתקה ---------- */
@@ -1117,7 +1122,8 @@
   // הנתונים שהוזנו (בלי שמות וטלפונים) — מאפשרים להריץ את הבדיקות שוב על אותה בקשה
   function inputsForRecord() {
     const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester|participant|callsign|registration)/i.test(k)) o[k] = S.res.inp[k]; });
-    return { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", inputs: o,
+    // declaration: הצהרת המבקש (גרסת הנוסח, מועד האישור והטקסט) — ללא שם או טלפון; בקשה שנשמרת מוכנה תמיד נושאת אותה (השער S.ready דורש את הסימון), null רק כרשת ביטחון
+    return { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", declaration: O.declarationRecord(S.reviewAt), inputs: o,
       zones: [...S.res.zones.inside, ...S.res.zones.near].map(z => ({ id: z.id, d: Math.round(z.d) })), items: S.res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })) };
   }
   function imageFile(m, label) {
@@ -1125,6 +1131,30 @@
     const png = m.dataUrl && m.dataUrl.split(",")[1];
     if (png && png.length < MAX_B64) return { name: baseName() + " — " + label + ".png", mime: "image/png", b64: png };
     return m.jpegUrl ? { name: baseName() + " — " + label + ".jpg", mime: "image/jpeg", b64: m.jpegUrl.split(",")[1] } : null;
+  }
+  // קבצי הבקשה (Word, KML, ארבע התמונות, ובדרייב גם קובץ נתוני הבקשה) כ-{name,mime,b64}: אותם קבצים נשמרים בדרייב וגם ב״שמור הכול במחשב״ (ZIP)
+  async function requestFiles(withData) {
+    return [
+      { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
+      { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
+      ...IMGS.map(m => imageFile(S.imgs[m.k], m.file)),
+      ...(withData ? [{ name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }] : [])
+    ].filter(Boolean);
+  }
+  // ״שמור הכול במחשב״: כל קבצי הבקשה (בלי קובץ הנתונים הפנימי) בקובץ ZIP אחד, בלי שרת ובלי דרייב — ארכיון אישי של המבקש
+  async function downloadZip() {
+    if (!authed() || !S.res || !S.ready || !window.JSZip || S.zipping) return;
+    const rev0 = S.rev, res0 = S.res, btn = $("btnZip"), out = $("driveMsg");   // הבנייה אסינכרונית: עריכה באמצע (שם האתר, הערות) לא תערבב גרסאות בקובץ אחד
+    S.zipping = true; if (btn) btn.disabled = true;
+    try {
+      const zip = new window.JSZip();
+      (await requestFiles(false)).forEach(f => zip.file(f.name, f.b64, { base64: true }));
+      const blob = await zip.generateAsync({ type: "blob" }), name = baseName() + " — בקשה לסגירה אווירית.zip";
+      if (S.rev !== rev0 || S.res !== res0) { if (out) { out.className = "small err"; out.textContent = "הבקשה שונתה בזמן הכנת הקובץ — לחצו שוב על ״שמור הכול במחשב״."; } return; }
+      download(name, "application/zip", blob);
+    } catch (e) {
+      if (out) { out.className = "small err"; out.textContent = "לא ניתן היה להכין את קובץ ה-ZIP — נסו שוב."; }
+    } finally { S.zipping = false; if (btn) btn.disabled = !S.ready; }
   }
   // שומר את כל קבצי הבקשה בתיקייה בדרייב ומחזיר {folderId,url,name,count}; זורק שגיאה בכשל.
   // rid: אותה בקשה נשמרת לאותה תיקייה; כשהמקום או התאריך השתנו זו בקשה אחרת — מזהה חדש, כדי לא לדרוס בקשה קודמת בדרייב.
@@ -1139,12 +1169,7 @@
     // הבקשה הקודמת עם אותו מזהה כבר נשלחה (והתיקייה שלה נעולה) והבקשה השתנתה מאז — זו בקשה חדשה, בתיקייה חדשה
     if (!begin.ok && begin.error === "already_sent") { S.rid = newRid(); begin = await A.call("saveBegin", { folderName: baseName(), rid: S.rid }); }
     if (!begin.ok) { const e = new Error(A.msg(begin)); e.code = begin.error; throw e; }
-    const files = [
-      { name: baseName() + " — בקשה לסגירה אווירית.docx", mime: DOCX_MIME, b64: bytesToB64(await docxBytes()) },
-      { name: baseName() + ".kml", mime: "application/vnd.google-earth.kml+xml", b64: utf8B64(O.kml(S.res, { zones: S.data.zones }, S.cfg)) },
-      ...IMGS.map(m => imageFile(S.imgs[m.k], m.file)),
-      { name: baseName() + " — נתוני הבקשה.json", mime: "application/json", b64: utf8B64(JSON.stringify(inputsForRecord(), null, 1)) }
-    ].filter(Boolean);
+    const files = await requestFiles(true);
     let n = 0;
     for (const f of files) {
       if (progress) progress(++n, files.length, f.name);
@@ -1156,7 +1181,8 @@
     // הקוד request_changed סוגר את חלון השליחה (guarded) ופותח אותו מחדש; בשמירה ידנית ההודעה מוצגת בשורת הסטטוס, ובשמירה אוטומטית היא לא מוצגת (עריכה בזמן השמירה — הבקשה תישמר שוב כשתהיה מוכנה)
     const changedErr = () => { const e = new Error("הבקשה שונתה בזמן השמירה — הקבצים בדרייב אינם מעודכנים; יש לשמור שוב."); e.code = "request_changed"; return e; };
     const changed = S.rev !== rev0;
-    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed });
+    const dr = O.declarationRecord(S.reviewAt);   // הצהרת המבקש: השרת מסמן ״מוכנה״ רק עם גרסת הנוסח ומועד האישור, ורושם אותם ביומן
+    const end = await A.call("saveEnd", { folderId: begin.folderId, ready: !!S.ready && !changed, decl: dr ? { v: dr.version, at: dr.confirmedAt } : null });
     if (!end.ok) throw new Error(A.msg(end));
     if (changed || S.rev !== rev0) throw changedErr();   // השני: שינוי שהגיע בזמן שקריאת saveEnd עצמה הייתה בדרך
     if (!end.ready) throw new Error(isAdmin() ? "השרת לא סימן את הבקשה כמוכנה לשליחה (חסר קובץ Word או תמונת מפה/תצ״א, או שהבדיקות לא הושלמו) — יש לשמור שוב" : sup("לא ניתן היה להכין את הבקשה לשליחה — נסו שוב; אם הבעיה חוזרת, פנו לתמיכה."));
@@ -1168,6 +1194,17 @@
   // ״שמור בדרייב״, השמירה האוטומטית ו״אפשרויות נוספות״ (הדפסה/PDF, Word, KML, ארבע התמונות) זמינים לכל חשבון (ארכיון מרכזי: ארגוני תחת ״הארגון״, מטיס תחת ״מטיסים/<משתמש>״). התיקייה בדרייב של בעל המערכת, ולכן הקישור אליה למנהל בלבד;
   // וכן המייל הידני (העתקה ופתיחת mailto, ב-#manualMail) והפירוט הטכני — למנהל בלבד: mailto אינו מצרף קבצים ואינו נרשם ביומן השליחות
   const isAdmin = () => !!(window.ReqAuth && window.ReqAuth.getRole && window.ReqAuth.getRole() === "admin");
+  // תצוגה מתקדמת (auth.js: isAdv — מנהל תמיד; אחרת adv מהשרת, ובשרת ישן לפי סוג החשבון): הכלים הפנימיים — מגבלות המקורות, הבדיקה העצמית וסעיף ההגשה המלא בדף הבדיקות ובקובץ ה-Word. מנותק — לא (נכשל סגור)
+  const isAdv = () => !!(window.ReqAuth && window.ReqAuth.isAdv && window.ReqAuth.isAdv());
+  // באנר כשל הבדיקה העצמית (#selftestBanner). עם תצוגה מתקדמת — הנוסח המפורט שמפנה לתיבת הבדיקה העצמית (נפתחת); בלעדיה — הניסוח הניטרלי של המערכת (maintNote: בלי פירוט טכני ובלי הוראות, עם כתובת התמיכה) והתיבה נשארת מוסתרת.
+  // הבדיקה עצמה רצה ומונעת מוכנות לכל משתמש (setStatus); נקרא אחרי כל הרצה ושוב כשהתפקיד / התצוגה המתקדמת ידועים או השתנו
+  function renderSelftestBanner() {
+    const b = $("selftestBanner"); if (!b) return;
+    if (!S.selfFailed) { b.style.display = "none"; return; }
+    b.style.display = "block";
+    if (isAdv()) { b.textContent = sup("הבדיקה העצמית של המערכת נכשלה — לא ניתן לסמן בקשה כמוכנה לשליחה. פתחו את 'בדיקה עצמית' למטה לפרטים, ואם הבעיה נמשכת פנו לתמיכה."); $("stBox").open = true; }
+    else b.textContent = maintNote();
+  }
   // רמזי שדות הגורם המבקש, אות הקריאה ומס׳ הרישום בחשבון ארגוני (בחשבון עצמאי נשאר הנוסח שב-index.html: אין ברירת מחדל)
   const ORG_HINTS = {
     hReqOrg: "נספח ג׳ שדה 2 — חובה, עד 80 תווים. בחשבון ארגוני נטען כאן שם הארגון כברירת מחדל; אפשר לערוך אותו, והעריכה נשמרת.",
@@ -1183,6 +1220,11 @@
     const org = isOrg(), sb = $("btnSend"), hb = sb && sb.closest(".hw") && sb.closest(".hw").querySelector(".hbtn");
     if (hb) hb.setAttribute("data-help", org ? HELP_SEND_ORG : HELP.btnSend);
     Object.keys(ORG_HINTS).forEach(id => { const e = $(id); if (!e) return; if (e.dataset.base == null) e.dataset.base = e.textContent; e.textContent = org ? ORG_HINTS[id] : e.dataset.base; });
+    // הכלים הפנימיים — מגבלות המקורות והבדיקה העצמית (עם כפתור ההרצה וה-״!״ שלו) — רק עם תצוגה מתקדמת. hidden = גם לא נגישים במקלדת ובקורא מסך; מנותק — מוסתרים. הבדיקה העצמית ממשיכה לרוץ ולחסום מוכנות גם כשהתיבה מוסתרת
+    const adv = isAdv();
+    ["limitsBox", "stBox"].forEach(id => { const e = $(id); if (e) e.hidden = !adv; });
+    if (S.res && !S.resetting) renderLimits();
+    renderSelftestBanner();
   }
   const hhmm = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
   // auto: שמירה אוטומטית (scheduleAutoSave) — אותה זרימה כמו הכפתור, בלי A.setBusy (לא חוסמת חלונות), ובלי הודעת שגיאה כשהבקשה שונתה בזמן השמירה
@@ -1302,12 +1344,12 @@
       title: "שליחה למשרד נוטאם",
       banner: '<div class="banner ok" style="margin:0 0 8px"><b>מצב חי:</b> אפשר לשלוח את הבקשה באמת למשרד נוטאם בשם הארגון, או לשלוח רק לעצמך עותק לבדיקה.</div>',
       to: '<p><b>שלח למשרד נוטאם</b><br>אל: ' + officeTo + ' · עותק: ' + orgCc + ' · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '</p>' +
-        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + ' בלבד · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + ' · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
+        '<p><b>שלח רק לעצמי (עותק לבדיקה)</b><br>אל: ' + adr + (toOwner ? ' בלבד' : ' · עותק: הארגון') + ' · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + ' · לא נשלח למשרד</p><p><b>נושא:</b> ' + subjOf("") + ' <span class="hint">(בשליחה לעצמך הנושא יסומן ״' + esc(SUBJ_SELF.trim()) + '״)</span></p>',
       archive: ARCHIVE_ORG, go: "שלח למשרד נוטאם", self: "on"
     } : {   // הפרדה, חשבון ארגוני, מצב בדיקה
       title: "שליחת בדיקה",
-      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח רק אל ' + adr + ' ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
-      to: '<p><b>אל:</b> ' + adr + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
+      banner: '<div class="banner warn" style="margin:0 0 8px"><b>מצב בדיקה</b> — המייל יישלח ' + (toOwner ? 'רק אל ' + adr : 'אל ' + adr + ' (עם עותק לארגון)') + ' ולא למשרד נוטאם · התשובות יחזרו אל הארגון · שם השולח: ' + orgName + '. (מנהל יכול להעביר למצב חי בניהול משתמשים.)</div>',
+      to: '<p><b>אל:</b> ' + adr + '</p>' + (toOwner ? '' : '<p><b>עותק:</b> הארגון</p>') + '<p><b>נושא:</b> ' + subjOf("test") + '</p>',
       archive: ARCHIVE_ORG, go: "שלח בדיקה אליי", self: ""
     }) : (live ? {   // הפרדה, מטיס עצמאי, מצב חי
       title: "שליחה למשרד נוטאם",
@@ -1411,7 +1453,7 @@
       if ((A.getMailMode() === "live" ? "live" : "test") !== shown) { const e = new Error("מצב השליחה השתנה"); e.code = "mode_changed"; throw e; }
       // גם היעד שהוצג בחלון (כתובת העותק, האם היא של הבעלים, ויכולת "לעצמי" של השרת) חייב להיות זהה למה שהשרת מדווח עכשיו — אחרת המשתמש אישר טקסט שאינו תואם למציאות
       if (A.hasFeature("sendTarget") !== newSrv || (A.hasFeature("orgSplit") && newSrv) !== split || (split && A.isOrg() !== org) || A.getCopyTo() !== addr || A.getCopyToIsOwner() !== toOwner || (split && (A.getEmail() || "") !== personal)) { const e = new Error("יעד השליחה השתנה"); e.code = "dest_changed"; throw e; }
-      if (!S.ready || !$("reviewOk").checked) throw new Error("הבקשה אינה מוכנה לשליחה (בדיקות שלא הושלמו, נתונים ששונו או סקירה שלא אושרה) — לא נשלח");
+      if (!S.ready || !$("reviewOk").checked) throw new Error("הבקשה אינה מוכנה לשליחה (בדיקות שלא הושלמו, נתונים ששונו או הצהרה שלא אושרה) — לא נשלח");
       prog.textContent = "בודק סנכרון עם המפה…";
       if (!(await checkSync())) throw new Error("הנתונים אינם מסונכרנים עם מפת החברים — לא נשלח");
       if (!S.ready) throw new Error("הנתונים השתנו מאז הרצת הבדיקות — לא נשלח");
@@ -1471,9 +1513,9 @@
     } catch (e) { add("טעינת נתוני הבדיקה", false, e.message); }
     const ok = out.every(x => x.ok);
     $("stList").innerHTML = out.map(x => '<li class="' + (x.ok ? "ok" : "no") + '">' + (x.ok ? "✔ " : "✖ ") + esc(x.name) + (x.detail ? ' <span class="hint">— ' + esc(x.detail) + "</span>" : "") + "</li>").join("");
-    setStatus("selftest", ok, ok ? "" : out.filter(x => !x.ok).map(x => x.name).join("; "));
-    const b = $("selftestBanner");
-    if (ok) { b.style.display = "none"; } else { b.style.display = "block"; b.textContent = sup("הבדיקה העצמית של המערכת נכשלה — לא ניתן לסמן בקשה כמוכנה לשליחה. פתחו את 'בדיקה עצמית' למטה לפרטים, ואם הבעיה נמשכת פנו לתמיכה."); $("stBox").open = true; }
+    S.selfFailed = !ok;
+    setStatus("selftest", ok, ok ? "" : out.filter(x => !x.ok).map(x => x.name).join("; "), { maint: true, adv: true });   // שמות הבדיקות שנכשלו: למנהל ולמי שיש לו תצוגה מתקדמת (התיבה גלויה לו); מטיס אחר מקבל בשער את הניסוח הניטרלי
+    renderSelftestBanner();
     return ok;
   }
 
@@ -1496,6 +1538,11 @@
       applyRole();
       renderSyncBanner(); refreshGate();   // התפקיד ידוע רק עכשיו: הודעות הסנכרון והשער מוצגות לפי תפקיד
     });
+    // התצוגה המתקדמת של המשתמש המחובר השתנתה (המנהל החליף אותה; נקלטה ברענון me): הכלים הפנימיים מוצגים / מוסתרים, ואם יש בקשה — סעיף ההגשה בדף ובקובץ ה-Word משתנה איתה, ולכן התוצאות שנשמרו או נשלחו אינן הגרסה הנוכחית (clearOutcome; נשמרת שוב אוטומטית)
+    document.addEventListener("req-adv", () => {
+      applyRole();
+      if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
+    });
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); else scheduleLayerUpdate(); });   // טקסט שאינו נ״צ: הפס מתעדכן להנחיה (layerPoint), ולא ממשיך להציג את הנקודה הקודמת
@@ -1517,6 +1564,7 @@
     $("btnKml").onclick = () => S.res && download(baseName() + ".kml", "application/vnd.google-earth.kml+xml", O.kml(S.res, { zones: S.data.zones }, S.cfg));
     IMGS.forEach(m => { $(m.btn).onclick = () => downloadImg(m); });
     $("btnDocx").onclick = downloadDocx;
+    $("btnZip").onclick = downloadZip;
     $("mAdd").onclick = addManual;
     $("mPick").onclick = () => { S.pick = true; $("mPick").textContent = "לחצו על המפה למעלה…"; $("map").scrollIntoView({ behavior: "smooth", block: "center" }); };
     $("reviewOk").addEventListener("change", onReviewChange);

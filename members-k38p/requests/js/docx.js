@@ -44,11 +44,13 @@
     }).join("");
   }
   const brRun = size => "<w:r><w:rPr>" + FONT + '<w:sz w:val="' + (size || 22) + '"/></w:rPr><w:br/></w:r>';
+  const tabRun = size => "<w:r><w:rPr>" + FONT + '<w:sz w:val="' + (size || 22) + '"/></w:rPr><w:tab/></w:r>';
 
-  // HTML מצומצם (<br>, <b>, <i>, <small>, <span>) -> ריצות
+  // HTML מצומצם (<br>, <b>, <i>, <small>, <span>) -> ריצות.
+  // <span class='fs'>…</span> הוא מפריד שורת פריט (output.js itemLine): הטקסט שבו (" — ") לא נכתב ובמקומו בא טאב — הטאב ימני עם קו מנחה (pos בפסקה, ראו para ו-tabEnd), ולכן המרחק שאחריו נצמד לקצה השורה
   function htmlRuns(html, o) {
     o = o || {};
-    let bold = !!o.bold, italic = !!o.italic, small = false, out = "";
+    let bold = !!o.bold, italic = !!o.italic, small = false, sep = false, out = "";
     String(html).split(/(<[^>]+>)/).forEach(tok => {
       if (!tok) return;
       if (tok[0] === "<") {
@@ -57,8 +59,11 @@
         else if (tag === "<b>") bold = true; else if (tag === "</b>") bold = !!o.bold;
         else if (tag === "<i>") italic = true; else if (tag === "</i>") italic = !!o.italic;
         else if (tag === "<small>") small = true; else if (tag === "</small>") small = false;
+        else if (/^<span class=['"]fs['"]>$/.test(tag)) { out += tabRun(o.size); sep = true; }
+        else if (tag === "</span>") sep = false;
         return;
       }
+      if (sep) return;
       const txt = decode(tok); if (!txt) return;
       out += runsOf(txt, { bold, italic, size: small ? Math.max(16, (o.size || 22) - 4) : o.size, color: o.color });
     });
@@ -67,7 +72,8 @@
 
   const para = (runs, o) => {
     o = o || {};
-    return "<w:p><w:pPr><w:bidi/>" + (o.keepNext ? "<w:keepNext/>" : "") + (o.pageBreakBefore ? "<w:pageBreakBefore/>" : "") +
+    // o.tabEnd: טאב ימני עם קו מנחה בקצה השורה (twips מתחילת הפסקה). בפסקה מימין לשמאל "ימני" הוא קצה השורה (שמאל חזותי) — כך המרחק בשורת פריט נצמד לקצה (ראו htmlRuns)
+    return "<w:p><w:pPr>" + (o.tabEnd ? '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="' + o.tabEnd + '"/></w:tabs>' : "") + "<w:bidi/>" + (o.keepNext ? "<w:keepNext/>" : "") + (o.pageBreakBefore ? "<w:pageBreakBefore/>" : "") +
       '<w:spacing w:before="' + (o.before || 0) + '" w:after="' + (o.after == null ? 60 : o.after) + '" w:line="' + (o.line || 264) + '" w:lineRule="auto"/>' +
       (o.shade ? '<w:shd w:val="clear" w:color="auto" w:fill="' + o.shade + '"/>' : "") + (o.center ? '<w:jc w:val="center"/>' : "") + "</w:pPr>" + runs + "</w:p>";
   };
@@ -97,7 +103,7 @@
 
   // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], attachLine, mailLine, formFooter, aerialTitle, streetTitle, overviewTitle, regionTitle, mapNote, items:[{n,title,dist,where}],
   //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
-  //         submission, review, footer, includeChecks}
+  //         submissionHead, submission (HTML; הנוסח המלא) או summary ([HTML] נקודות הסיכום), review, footer, includeChecks}
   async function build(m) {
     const body = [];
     // ----- עמוד 1: הטופס -----
@@ -109,7 +115,7 @@
     const wl = (CONTENT_W * 0.40) | 0, wv = CONTENT_W - wl;
     body.push(tableXml([wl, wv], m.rows.map(r => ({ cells: [
       cell(para(runsOf(r.n + ". " + r.label, { bold: true, size: 19 }), { after: r.sub ? 20 : 0 }) + (r.sub ? textPara(r.sub, { size: 14, color: "444444", after: 0 }) : ""), wl, { fill: "EFEFEF" }),
-      cell(htmlPara(r.html, { size: 19, after: 0, line: 245 }), wv)] }))));
+      cell(htmlPara(r.html, { size: 19, after: 0, line: 245, tabEnd: /class=['"]fs['"]/.test(r.html) ? wv - 200 : 0 }), wv)] }))));   // שורות פריט בשדה 8: הטאב הימני בקצה התא (רוחב התא פחות שולי התא)
     body.push(htmlPara((m.attachLine || "<b>חובה לצרף מפה/תצ״א</b>") + "<br>" + esc(m.mailLine || ""), { size: 20, before: 100 }));
     body.push(textPara(m.formFooter || "", { size: 16, color: "555555" }));
 
@@ -167,7 +173,9 @@
         body.push(tableXml(dw, [{ header: true, cells: (m.dayNightHead || []).map((t, i) => cell(textPara(t, { bold: true, size: 19, after: 0 }), dw[i], { fill: "EEEEEE" })) }]
           .concat(m.dayNight.map(r => ({ cells: r.map((t, i) => cell(textPara(String(t), { size: 19, after: 0 }), dw[i])) })))));
       }
-      if (m.submission) { body.push(secHeading("הגשה")); body.push(htmlPara(m.submission, { size: 20 })); }
+      // סעיף ההגשה לפי תצוגת המבקש (O.docxModel): סיכום קצר בנקודות ("סיכום והגשה") או הנוסח המלא ("הגשה")
+      if (m.summary && m.summary.length) { body.push(secHeading(m.submissionHead || "סיכום והגשה")); m.summary.forEach(l => body.push(htmlPara("• " + l, { size: 20 }))); }
+      else if (m.submission) { body.push(secHeading(m.submissionHead || "הגשה")); body.push(htmlPara(m.submission, { size: 20 })); }
       if (m.review) { body.push(secHeading("אישור סקירה אנושית")); body.push(textPara(m.review, { size: 20 })); }
     }
     body.push(textPara(m.footer || "", { size: 16, color: "555555", before: 120 }));

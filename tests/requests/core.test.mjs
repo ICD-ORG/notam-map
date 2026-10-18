@@ -749,8 +749,9 @@ test("טופס שדות 8, 11, 12: מכשולים שידועים (טקסט כל�
   const data = mkData(fixture("yarkon"));
   const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה <b>x</b>\n  קו מתח  \n\nמגדל מים & אחר" }), data, cfg, now), f = O.buildForm(res, cfg);
   assert.equal(f.length, 17);
-  // שדה 8: בסוף השורה, שורות חדשות כ-"; ", בלי תוצאות הצלבה, ו-HTML מנוטרל
-  assert.ok(f[7].html.endsWith("<br>מכשולים שידועים למבקש: עגורן בנייה &lt;b&gt;x&lt;/b&gt;; קו מתח; מגדל מים &amp; אחר"), f[7].html.slice(-160));
+  // שדה 8: בסוף השדה, כותרת מודגשת ואחריה פריט בשורה (• לכל שורה שהוקלדה, בלי שורות ריקות), בלי תוצאות הצלבה, ו-HTML מנוטרל
+  assert.ok(f[7].html.endsWith("<br><b>מכשולים שידועים למבקש:</b><br>• עגורן בנייה &lt;b&gt;x&lt;/b&gt;<br>• קו מתח<br>• מגדל מים &amp; אחר"), f[7].html.slice(-200));
+  assert.ok(f[7].text.includes("מכשולים שידועים למבקש:") && f[7].text.split("\n").some(l => l.trim() === "• קו מתח") || /• קו מתח/.test(f[7].text), f[7].text.slice(-200));
   assert.ok(!/<b>x<\/b>/.test(f[7].html)); assert.ok(!/התאמה אפשרית|לא נמצא בסריקה/.test(f[7].text));
   // שדה 11: מבקש + משתתפים נוספים (שורה ריקה מתעלמים), כל אחד בשורה ממוספרת, הטלפון ב-ltr, בלי הערה
   assert.equal(f[10].html, "בודק, " + ltrSpan("050-0000000") + "<br><b>משתתפים נוספים בטיסה:</b><br>1. נועה אברהם, " + ltrSpan("050-9998877") + "<br>2. אלון שמעוני, " + ltrSpan("053-4445566"));
@@ -897,7 +898,7 @@ test("Word: ארבע תמונות בסדר העמודים, כותרות סעיף
   const jpeg = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64"), img = { bytes: jpeg, w: 1280, h: 960 };
   const BIDI = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");   // LRE, PDF ו-RLM (נוסף אחרי כל PDF — ראו runsOf)
   const build = async o => {
-    const model = O.docxModel(res, data, cfg, Object.assign({ images: { aerial: img, street: img, overview: img, region: img }, includeChecks: true, review: "אושר", providerName: "Esri" }, o));
+    const model = O.docxModel(res, data, cfg, Object.assign({ images: { aerial: img, street: img, overview: img, region: img }, includeChecks: true, review: "אושר", providerName: "Esri", adv: true }, o));   // adv: true = תצוגה מתקדמת (סעיף ההגשה המלא); בלי adv — סיכום (נכשל סגור)
     const z = await JSZipNode.loadAsync(await D.build(model)), doc = await z.file("word/document.xml").async("string");
     const lines = doc.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").split("\n");
     return { model, z, doc, lines, plain: lines.join("\n") };
@@ -1457,7 +1458,7 @@ test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך ה
   assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
   assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
   assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
-  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=7"><\/script>/, "גרסת המטמון של auth.js");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=8"><\/script>/, "גרסת המטמון של auth.js");
 });
 
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
@@ -1493,7 +1494,7 @@ test("n=10: כל שדה קלט, טקסט ובחירה ב-main של index.html (�
   const ra = ui.slice(ui.indexOf("function renderAircraft"), ui.indexOf("function addAircraft"));
   assert.ok((ra.match(/<input autocomplete="off" type="checkbox"/g) || []).length === 2, "תיבות כלי הטיס הדינמיות");
   assert.ok(/maxlength="' \+ max \+ '" autocomplete="off"/.test(ui), "שורות אנשי קשר ומשתתפים");
-  for (const id of ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"]) assert.match(html, new RegExp('<button[^>]*id="' + id + '"[^>]*disabled'), id + " מושבת בקובץ");
+  for (const id of ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"]) assert.match(html, new RegExp('<button[^>]*id="' + id + '"[^>]*disabled'), id + " מושבת בקובץ");
   assert.match(html, /<a id="btnMail"[^>]*aria-disabled="true"[^>]*tabindex="-1"|<a id="btnMail"[^>]*tabindex="-1"[^>]*aria-disabled="true"/);
   assert.ok(/id="auUser"[^>]*autocomplete="username"/.test(readReq("js/auth.js")) && /autocomplete="' \+ \(boot \? "new-password" : "current-password"\)/.test(readReq("js/auth.js")), "טופס הכניסה נשאר עם autocomplete של מנהל סיסמאות");
 });
@@ -1625,12 +1626,295 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=9/);
+  assert.match(html, /js\/ui\.js\?v=11/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
   const au = readReq("js/auth.js"), html = readReq("index.html");
   assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
   assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
-  assert.match(html, /js\/auth\.js\?v=7/);
+  assert.match(html, /js\/auth\.js\?v=8/);
+});
+
+/* ===== תצוגה מתקדמת (A2): סעיף 5 "הגשה" המלא רק למי שיש לו תצוגה מתקדמת; כל השאר מקבלים "סיכום והגשה" קצר בלי הפניות לפמ״ת ובלי הנחיות למודיעין טיס (החלטת בעל המערכת) ===== */
+// כל מה שמסמן הפניה לפמ״ת (פרק, סעיף, עמוד, עדכון, מספרי נוהל) או הנחיה להגיש מחדש תכנית טיסה / לפנות למודיעין טיס
+const PMT_REF = /פמ״ת|פמ"ת|א-1[0-9]|ב-0[0-9]|סעיף|פרק|עמ'|עדכון|מודיעין טיס|תכנית|הגש(ה|ת|ו)? .*שנית|שנית|3\.ד|6\(ד\)|7\(ח\)|6\.ב|\bAIP\b|ENR/;
+test("סיכום והגשה: הספירות וימי העבודה מאותו ניתוח של הטופס (✔ כשיש מספיק ימים, ✘ כשאין), בנוסח שנקבע ובלי הפניות לפמ״ת", () => {
+  const data = mkData(fixture("yarkon")), at = d => C.analyze(Object.assign({}, baseInput, { dateFrom: d, dateTo: d }), data, cfg, now);
+  const far = at("2026-11-20"), nearD = at("2026-10-20"), zr = zones.zones.find(x => x.id === "LLR24"), c = centroid(zr);
+  const inZone = C.analyze(Object.assign({}, baseInput, { lat: c[0], lon: c[1] }), data, cfg, now);
+  assert.ok(inZone.zones.inside.length > 0 && far.nearScan.items.length > 0 && far.notams.hits.length + far.notams.obstacles.length > 0, "הנתונים לבדיקה: אזור חופף, מכשולים ונוטם בקרבה");
+  for (const res of [far, nearD, inZone]) {
+    const s = O.summaryModel(res, cfg), t = s.lines.map(O.toText);
+    assert.equal(s.head, "סיכום והגשה");
+    assert.deepEqual(s.counts, { zones: res.zones.inside.filter(z => z.src !== "b09").length, notams: res.notams.hits.length + res.notams.obstacles.length, items: res.nearScan.items.length });
+    assert.equal(t.length, 2);
+    assert.equal(t[0], "נמצאו בסריקה: אזורי איסור/הגבלה חופפים " + s.counts.zones + " · נוטמים בקרבה " + s.counts.notams + " · מכשולים ותשתיות " + s.counts.items);
+    assert.equal(s.workingDays, res.workingDays); assert.equal(s.minWorkingDays, cfg.thresholds.min_working_days);
+    assert.equal(t[1], "ימי עבודה עד הפעילות: " + res.workingDays + " (נדרשים לפחות " + cfg.thresholds.min_working_days + ") " + (res.workingDays >= cfg.thresholds.min_working_days ? "✔" : "✘"));
+    assert.ok(!PMT_REF.test(s.head + "\n" + t.join("\n")), "הפניה לפמ״ת בסיכום: " + t.join(" | "));
+    assert.ok(s.lines.every(l => !/<(a|script|img)\b/i.test(l)), "HTML בטוח");
+  }
+  assert.equal(O.summaryModel(far, cfg).daysOk, true); assert.equal(O.summaryModel(nearD, cfg).daysOk, false);
+  assert.ok(O.toText(O.summaryModel(far, cfg).lines[1]).endsWith("✔") && O.toText(O.summaryModel(nearD, cfg).lines[1]).endsWith("✘"));
+  assert.ok(O.summaryModel(inZone, cfg).counts.zones > 0);
+  // אזורי טיסה לכטב״ם של פרק ב-09 (src "b09") הם אזורים ייעודיים לטיסה ולא איסור: אינם נספרים כ״אזורי איסור/הגבלה חופפים״
+  { const b09 = { src: "b09", id: "B09-1" }, a17 = { src: "a17", id: "LLR1" }, mix = Object.assign({}, far, { zones: Object.assign({}, far.zones, { inside: [b09, b09, a17] }) }), only = Object.assign({}, far, { zones: Object.assign({}, far.zones, { inside: [b09, b09] }) });
+    assert.equal(O.summaryModel(mix, cfg).counts.zones, 1); assert.equal(O.summaryModel(only, cfg).counts.zones, 0);
+    assert.match(O.toText(O.summaryModel(only, cfg).lines[0]), /אזורי איסור\/הגבלה חופפים 0 ·/); }
+  // ימי עבודה לא ידועים (אין תאריך תקין): בלי שורה (כמו בנוסח המלא), בלי ✔ / ✘ מומצא
+  const unk = O.summaryModel(Object.assign({}, far, { workingDays: null }), cfg);
+  assert.equal(unk.lines.length, 1); assert.equal(unk.daysOk, null); assert.ok(!/✔|✘|ימי עבודה/.test(unk.lines.join("")));
+  // הסף נלקח מההגדרות
+  assert.match(O.toText(O.summaryModel(far, Object.assign({}, cfg, { thresholds: Object.assign({}, cfg.thresholds, { min_working_days: 30 }) })).lines[1]), /\(נדרשים לפחות 30\) ✘$/);
+});
+
+test("סעיף ההגשה לפי תצוגת המבקש: adv === true — הנוסח המלא כמות שהוא (בלי שינוי); כל ערך אחר או חסר — הסיכום (נכשל סגור)", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now);
+  const fullHtml = O.submissionHtml(res, cfg, data), full = O.submissionSection(res, cfg, data, true);
+  assert.deepEqual(full, { head: "הגשה", html: fullHtml, lines: null });
+  assert.match(O.toText(fullHtml), /3\.ד\.4/); assert.match(O.toText(fullHtml), /6\(ד\)/); assert.match(O.toText(fullHtml), /מודיעין טיס/);
+  for (const v of [false, undefined, null, 1, "true", "yes", 0, {}]) {
+    const s = O.submissionSection(res, cfg, data, v);
+    assert.equal(s.head, "סיכום והגשה", String(v)); assert.equal(s.html, ""); assert.deepEqual(s.lines, O.summaryModel(res, cfg).lines);
+  }
+  assert.equal(O.docxModel(res, data, cfg, {}).submissionHead, "סיכום והגשה", "בלי adv במודל — סיכום");
+});
+
+test("Word / מודל: למבקש בלי תצוגה מתקדמת סעיף 5 הוא ״סיכום והגשה״ (שתי נקודות, בלי הפניות לפמ״ת), ולמי שיש לו — ״הגשה״ המלא; שאר הדף זהה", async () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(Object.assign({}, baseInput, people), data, cfg, now);
+  const BIDI = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");
+  const build = async adv => {
+    const model = O.docxModel(res, data, cfg, { includeChecks: true, review: "אושר", adv });
+    const z = await JSZipNode.loadAsync(await D.build(model)), doc = await z.file("word/document.xml").async("string");
+    const lines = doc.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").split("\n");
+    return { model, doc, lines, plain: lines.join("\n") };
+  };
+  const pilot = await build(false), adm = await build(true), sum = O.summaryModel(res, cfg);
+  // המודל
+  assert.equal(pilot.model.submissionHead, "סיכום והגשה"); assert.equal(pilot.model.submission, ""); assert.deepEqual(pilot.model.summary, sum.lines);
+  assert.equal(adm.model.submissionHead, "הגשה"); assert.equal(adm.model.summary, null); assert.equal(adm.model.submission, O.submissionHtml(res, cfg, data));
+  // הקובץ: כותרת סעיף 5, שתי נקודות, ואחריהן סעיף 6 (אישור סקירה) — בלי שום הפניה לפמ״ת בין הכותרות
+  const a = pilot.lines.indexOf("5. סיכום והגשה"), b = pilot.lines.indexOf("6. אישור סקירה אנושית");
+  assert.ok(a > 0 && b === a + 3, "מיקום הסעיף " + a + "," + b);
+  assert.deepEqual(pilot.lines.slice(a + 1, b), sum.lines.map(l => "• " + O.toText(l)));
+  assert.ok(!PMT_REF.test(pilot.lines.slice(a, b).join("\n")), "הפניה לפמ״ת בסעיף 5 של ה-Word");
+  assert.ok(!pilot.lines.includes("5. הגשה") && !/אינה מנכה חגים|למודיעין טיס|יש לבדוק מול/.test(pilot.plain));
+  // תצוגה מתקדמת: הנוסח המלא (עם 3.ד.4 ו-6(ד)) ובלי הסיכום
+  const a2 = adm.lines.indexOf("5. הגשה"); assert.ok(a2 > 0 && adm.lines[a2 + 1].includes("3.ד.4") && adm.lines[a2 + 1].includes("6(ד)") && adm.lines[a2 + 1].includes("מודיעין טיס"), "הנוסח המלא תחת ״5. הגשה״");
+  assert.ok(!adm.lines.includes("5. סיכום והגשה") && !adm.plain.includes("נמצאו בסריקה:"));
+  // כל השאר זהה בשני הקבצים: אותן כותרות סעיף ואותו מספר עמודים (רק סעיף 5 שונה)
+  const heads = l => l.filter(x => /^\d+\. /.test(x)).map(x => x.replace(/^\d+\. /, "")).filter(x => x !== "סיכום והגשה" && x !== "הגשה");
+  assert.deepEqual(heads(pilot.lines), heads(adm.lines));
+  assert.equal((pilot.doc.match(/<w:drawing>/g) || []).length, (adm.doc.match(/<w:drawing>/g) || []).length);
+  // בלי דף בדיקות — אין סעיף 5 כלל (בשני המצבים)
+  const none = O.docxModel(res, data, cfg, { includeChecks: false, adv: false }), nz = await JSZipNode.loadAsync(await D.build(none)), nd = (await nz.file("word/document.xml").async("string")).replace(/<[^>]+>/g, "");
+  assert.ok(!nd.includes("סיכום והגשה") && !nd.includes("נמצאו בסריקה"));
+});
+
+test("תצוגה מתקדמת בלקוח: auth.js חושף isAdv (מנהל תמיד; adv מהשרת; שרת ישן — לפי הסוג; מנותק — לא) ושגיאות setAdv; ui.js מסתיר את הכלים הפנימיים ב-hidden ומעביר adv לדוח ולקובץ ה-Word; index.html מסתיר אותם כברירת מחדל", () => {
+  const au = readReq("js/auth.js"), ui = readReq("js/ui.js"), html = readReq("index.html");
+  // auth.js
+  assert.match(au, /const isAdv = \(\) => A\.loggedIn\(\) && \(A\.role === "admin" \|\| \(A\.advKnown \? A\.adv : isOrg\(\)\)\);/);
+  assert.match(au, /A\.isAdv = isAdv;/);
+  assert.match(au, /if \(r\.adv === true \|\| r\.adv === false\) \{ A\.adv = r\.adv; A\.advKnown = true; \}/);
+  assert.match(au, /bad_adv: "[^"]+"/); assert.match(au, /is_admin_adv: "[^"]+"/);
+  assert.match(au, /call\("setAdv", \{ target: who, adv: to \}\)/); assert.match(au, /<th>תצוגה מתקדמת<\/th>/); assert.match(au, /data-setadv=/);
+  assert.match(au, /new CustomEvent\("req-adv"/);
+  // ui.js: הסתרה אמיתית (hidden), באנר ניטרלי, הבדיקה העצמית ממשיכה לחסום, adv בדוח ובמודל
+  assert.match(ui, /\["limitsBox", "stBox"\]\.forEach\(id => \{ const e = \$\(id\); if \(e\) e\.hidden = !adv; \}\);/);
+  assert.match(ui, /else b\.textContent = maintNote\(\);/);
+  assert.match(ui, /setStatus\("selftest", ok, [^\n]*\{ maint: true, adv: true \}\)/);
+  assert.match(ui, /adv: isAdv\(\) \};/);
+  assert.match(ui, /secH\(mdl\.submissionHead\) \+ \(mdl\.summary \?/);
+  assert.match(ui, /document\.addEventListener\("req-adv"/);
+  assert.ok(/function renderLimits\(\) \{ if \(!isAdv\(\)\)/.test(ui), "מגבלות המקורות ריקות למי שאין לו תצוגה מתקדמת");
+  // index.html: ברירת מחדל מוסתרת גם בלי JS
+  assert.match(html, /<details class="card nonprint" id="limitsBox" hidden>/); assert.match(html, /<details class="card" id="stBox" hidden>/);
+});
+
+/* ===== הצהרה ואישור המבקש + רשימת המכשולים בשדה 8 (שלב א) ===== */
+// הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד: כל שינוי בנוסח (ב-output.js או ב-index.html) ייתפס. גרשיים ״ (U+05F4) כבנוסח
+const DECL = {
+  version: "2026-10-19", title: "הצהרה ואישור המבקש", label: "קראתי, הבנתי ואני מאשר את האמור לעיל", gate: "יש לאשר את ההצהרה",
+  ps: ["אני מאשר כי עברתי באופן אישי על התצ״א, על רשימת המצאי ועל המפה, וכי אני מודע לאזור ולסכנות הקיימות בו. אין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוספתי אותם ידנית).",
+    "אני מבין כי נתוני המערכת הם כלי עזר בלבד ואין להסתמך עליהם באופן בלעדי: האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור, ולביצוע הטיסה, היא עליי בלבד.",
+    "לא תהיה לי כל טענה כלפי המערכת, מפעיליה או יוצריה, בגין מידע חסר, שגוי או לא מעודכן, או בגין פעילות הטיסה."]
+};
+const BIDI_MARKS = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
+
+test("הצהרת המבקש: output.js DECLARATION נושא את הנוסח המאושר כלשונו (כותרת, שלוש פסקאות, תווית, הודעת שער) וגרסה 2026-10-19", () => {
+  const d = O.DECLARATION;
+  assert.equal(d.version, DECL.version); assert.equal(d.title, DECL.title); assert.deepEqual(d.paragraphs, DECL.ps); assert.equal(d.label, DECL.label); assert.equal(d.gate, DECL.gate);
+  assert.ok(d.paragraphs[0].includes("התצ" + fcc(0x5f4) + "א"), "גרשיים U+05F4 בנוסח");
+});
+
+test("הצהרת המבקש: index.html — #declBox זהה לנוסח המאושר (כותרת, שלוש פסקאות, תווית מודגשת), reviewOk נשאר, CSS בולט (מסגרת ענבר 2px, רקע מוטה, תיבה ≥28px, טקסט ≥15px), והודעת השער #declGate בסעיף 5 ליד הכפתורים", () => {
+  const html = readReq("index.html"), m = html.match(/<div class="decl" id="declBox"([^>]*)>([\s\S]*?)<\/label>\s*<\/div>/);
+  assert.ok(m, "#declBox");
+  assert.match(m[1], /role="group"/); assert.match(m[1], /aria-labelledby="declTitle"/);
+  assert.equal((m[2].match(/<h3 id="declTitle">([^<]*)<\/h3>/) || [])[1], DECL.title);
+  assert.deepEqual([...m[2].matchAll(/<p id="declP\d">([^<]*)<\/p>/g)].map(x => x[1]), DECL.ps, "שלוש הפסקאות כלשונן");
+  const lab = m[2].match(/<label class="declok" for="reviewOk"><input ([^>]*)><b>([^<]*)<\/b>$/);
+  assert.ok(lab, "תווית עם תיבת סימון"); assert.match(lab[1], /type="checkbox"/); assert.match(lab[1], /id="reviewOk"/); assert.match(lab[1], /aria-required="true"/); assert.match(lab[1], /aria-describedby="declP1 declP2 declP3"/, "תיבת הסימון מקושרת לנוסח ההצהרה (קורא מסך)"); assert.equal(lab[2], DECL.label);
+  assert.equal((html.match(/id="reviewOk"/g) || []).length, 1, "מזהה reviewOk פעם אחת");
+  assert.ok(!/עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר/.test(html), "השורה הקטנה הישנה הוסרה");
+  // בולטות: מסגרת ענבר 2px, רקע מוטה בענבר, פסקאות ≥15px, תיבת סימון ≥28px, שורת סימון גבוהה (מגע)
+  assert.match(html, /\.decl\{[^}]*border:2px solid var\(--amber\)[^}]*background:rgba\(255,184,77,\.10\)/);
+  assert.ok(parseFloat((html.match(/\.decl p\{font-size:([\d.]+)px/) || [])[1]) >= 15, "פסקאות ≥15px");
+  const cb = html.match(/\.declok input\{width:(\d+)px;height:(\d+)px/); assert.ok(cb && +cb[1] >= 28 && +cb[2] >= 28, "תיבת סימון ≥28px");
+  assert.ok(parseFloat((html.match(/\.declok\{[^}]*min-height:(\d+)px/) || [])[1]) >= 44, "שורת סימון ≥44px");
+  assert.match(html, /\.declok b\{[^}]*overflow-wrap:anywhere/); assert.match(html, /\.declgate:empty\{display:none\}/);
+  // הודעת השער: בכרטיס ההפקות, אחרי שורת הכפתורים ולפני ההסבר
+  assert.match(html, /id="actions"[\s\S]*?id="btnMore"[\s\S]*?<div role="status" aria-live="polite"><p class="declgate" id="declGate"><\/p><\/div>\s*<p class="small" id="actionsHint"/);
+});
+
+test("הצהרת המבקש: declarationRecord (גרסה, מועד ISO, שלוש הפסקאות מחוברות ב-\\n; null בלי אישור) ו-reviewText קצר ועובדתי — מי אישר ומתי, בלי סעיף הוויתור ובלי כתובת הארגון", () => {
+  const at = new Date("2026-10-19T08:30:15.123Z");
+  assert.deepEqual(O.declarationRecord(at), { version: DECL.version, confirmedAt: "2026-10-19T08:30:15.123Z", text: DECL.ps.join("\n") });
+  assert.equal(O.declarationRecord(null), null); assert.equal(O.declarationRecord(undefined), null);
+  const rt = O.reviewText(at);
+  assert.ok(rt.startsWith("המבקש אישר ב-" + at.toLocaleString("he-IL") + " את ״" + DECL.title + "״: "), rt);
+  assert.ok(rt.includes("שעבר באופן אישי על התצ״א, על רשימת המצאי ועל המפה") && rt.includes("שאין מכשול או תשתית נוספת שלא הופיעו בטופס (או שהוסיף אותם ידנית)") && rt.includes("האחריות לבדיקת כלל הסכנות, המגבלות והאיסורים באזור ולביצוע הטיסה היא עליו בלבד"), rt);
+  assert.ok(!/טענה|מפעיליה|יוצריה/.test(rt), "סעיף הוויתור אינו נכנס לדף הבדיקות ול-Word"); assert.ok(!/office@icd\.org\.il/.test(rt) && rt.length < 450, "קצר: " + rt.length);
+  assert.equal(O.reviewText(null), ""); assert.equal(O.reviewText(undefined), "");
+  assert.ok(!/שעבר על התצ״א, על רשימת המצאי ועל המפה, ושאין/.test(rt), "הנוסח הישן הוחלף");
+});
+
+test("הצהרת המבקש: אישור ההצהרה נכנס לדף הבדיקות ול-Word (סעיף ״אישור סקירה אנושית״), ובלי אישור הסעיף נעדר", async () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), at = new Date("2026-10-19T08:30:15.123Z"), rt = O.reviewText(at);
+  const text = async review => { const z = await JSZipNode.loadAsync(await D.build(O.docxModel(res, data, cfg, { includeChecks: true, review }))); return (await z.file("word/document.xml").async("string")).replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI_MARKS, ""); };
+  const withRv = await text(rt), none = await text("");
+  assert.ok(withRv.includes("אישור סקירה אנושית") && withRv.includes(rt.replace(BIDI_MARKS, "")), "האישור ב-Word");
+  assert.ok(!none.includes("אישור סקירה אנושית"), "בלי אישור — בלי הסעיף");
+  assert.equal(O.docxModel(res, data, cfg, { review: rt }).review, rt);
+});
+
+test("שער: ״הצהרה ואישור המבקש״ הוא התנאי האחרון שחסר — התווית וההודעה ״יש לאשר את ההצהרה״", () => {
+  const st = {}; C.REQUIRED_CHECKS.forEach(([k]) => { st[k] = { ok: true }; }); st.review = { ok: false, msg: O.DECLARATION.gate };
+  const g = C.gate(st);
+  assert.equal(g.ready, false); assert.deepEqual(g.failing, [{ key: "review", label: "הצהרה ואישור המבקש", msg: "יש לאשר את ההצהרה" }]);
+  assert.ok(!C.REQUIRED_CHECKS.some(([, l]) => /אישור סקירה אנושית של התצ״א והמצאי/.test(l)));
+});
+
+test("ui.js: סטטוס ״review״ והודעות השער מה-DECLARATION; הרשומה בנתוני הבקשה; reviewText מה-output; הודעת #declGate נגזרת מהסטטוס; השער נשאר נכשל סגור", () => {
+  const ui = readReq("js/ui.js");
+  assert.ok(!/לא אושרה סקירה|הרשימה השתנתה — יש לאשר מחדש"/.test(ui), "הנוסחים הישנים הוסרו");
+  assert.equal((ui.match(/S\.statuses\.review = \{ ok: false, msg: O\.DECLARATION\.gate \}/g) || []).length, 2, "איפוס בהרצה ובאיפוס הדף");
+  assert.match(ui, /S\.statuses\.review = \{ ok: false, msg: "הרשימה השתנתה — " \+ O\.DECLARATION\.gate \+ " מחדש" \}/);
+  assert.match(ui, /setStatus\("review", \$\("reviewOk"\)\.checked, \$\("reviewOk"\)\.checked \? "" : O\.DECLARATION\.gate\)/);
+  assert.match(ui, /S\.reviewAt = \$\("reviewOk"\)\.checked \? new Date\(\) : null;/, "מועד האישור נקבע בסימון");
+  assert.match(ui, /const reviewText = \(\) => O\.reviewText\(S\.reviewAt\);/);
+  assert.match(ui, /declaration: O\.declarationRecord\(S\.reviewAt\), inputs: o,/, "הרשומה נכנסת לנתוני הבקשה");
+  assert.match(ui, /const dg = \$\("declGate"\), rv = S\.statuses\.review, t = rv && rv\.ok \? "" : O\.DECLARATION\.gate;/, "ההודעה ליד הכפתורים: בלי סטטוס מאושר — מוצגת");
+  assert.match(ui, /if \(!S\.ready \|\| !\$\("reviewOk"\)\.checked\) throw new Error\(/, "השליחה בודקת גם את הסימון עצמו");
+  assert.ok(/\["btnZip", "btnPrint", "btnDocx", "btnKml"[^\]]*"btnDrive", "btnSend"\]\.forEach\(id => \{ \$\(id\)\.disabled = !S\.ready/.test(ui), "ההפקות נעולות לפי S.ready");
+});
+
+/* --- שדה 8: כותרת מודגשת לכל קבוצה, ופריט בשורה (מספר, שם, ומרחק בקצה) --- */
+test("טופס שדה 8: כותרת מודגשת לכל קבוצה ופריט בשורה — התוכן, המספור והמרחקים כפי שחושבו (itemText), לא פסקה רצופה", () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), f = O.buildForm(res, cfg)[7], ns = res.nearScan, lines = f.text.split("\n");
+  const groups = [["מכשולים ותשתיות בתוך האזור (עד 200 מ׳):", ns.inside], ["בקרבת האזור (עד 400 מ׳):", ns.ring], ["אתרים ותשתיות נוספים בקרבת האזור (עד 1.2 ק״מ מהנקודה):", ns.near]];
+  assert.ok(groups.every(([, a]) => a.length > 0), "תנאי הבדיקה: בשלוש הקבוצות יש פריטים");
+  let i = lines.indexOf(groups[0][0]); assert.ok(i >= 0, f.text);
+  for (const [h, items] of groups) { assert.equal(lines[i], h); items.forEach((it, k) => assert.equal(lines[i + 1 + k], O.itemText(it), "שורה " + k + " של " + h)); i += 1 + items.length; }
+  assert.equal(i, lines.length, "אין טקסט אחרי הרשימה האחרונה (בלי מכשולים שידועים)");
+  assert.ok(!/\): \d+\. |מ׳; \d+\. |; ועוד/.test(f.text), "לא פסקה רצופה עם ״; ״");
+  assert.equal(lines.find(l => /^1\. /.test(l)), "1. קו מתח עליון 161 ק״ו — 109 מ׳"); assert.ok(lines.includes("12. מתקן שעשועים — 312 מ׳ · גובה 11 מ׳"), "גובה אחרי המרחק, כמו ב-itemText");
+  // HTML: כותרת מודגשת לכל קבוצה, שורת פריט (fl) לכל פריט עם שם (fn), מפריד (fs) ומרחק (fd) — ללא טבלה
+  assert.deepEqual([...f.html.matchAll(/<b>([^<]*):<\/b>/g)].map(x => x[1] + ":"), groups.map(g => g[0]));
+  assert.equal((f.html.match(/<span class='fl'>/g) || []).length, groups.reduce((a, g) => a + g[1].length, 0));
+  assert.ok(f.html.includes("<b>מכשולים ותשתיות בתוך האזור (עד 200 מ׳):</b><br><span class='fl'><span class='fn'>1. קו מתח עליון 161 ק״ו</span><span class='fs'> — </span><span class='fd'>109 מ׳</span></span><br><span class='fl'><span class='fn'>2. עמוד חשמל 1491</span>"));
+  assert.ok(f.html.includes("<span class='fn'>12. מתקן שעשועים</span><span class='fs'> — </span><span class='fd'>312 מ׳ · גובה 11 מ׳</span>"));
+  assert.ok(!/<table|<ol|<ul|<li|\t/.test(f.html), "בלי טבלה, רשימת HTML או טאב בטקסט");
+  // itemText נשאר זהה לפני ואחרי: שם עם מספר + " — " + מרחק (+ גובה)
+  assert.equal(O.itemText({ n: 7, title: "מגדל", d: 0.4, height: 35 }), "7. מגדל — בתוך השטח · גובה 35 מ׳"); assert.equal(O.itemText({ n: 8, title: "עמוד", d: 1500 }), "8. עמוד — 1.5 ק״מ");
+});
+
+test("טופס שדה 8: שמות מפריטים ידניים (HTML עוין) נכנסים לשורת הפריט כטקסט בלבד, ובטקסט הפשוט כלשונם", () => {
+  const evil = "מגדל <b>x</b> & \"y\" <img src=x onerror=1>", data = mkData(fixture("yarkon"));
+  const res = C.analyze(Object.assign({}, baseInput, { manualItems: [{ name: evil, lat: 32.0995, lon: 34.8168, heightM: 40 }] }), data, cfg, now), f = O.buildForm(res, cfg)[7];
+  assert.ok(f.html.includes("<span class='fn'>") && f.html.includes(E(evil)) && !/<img|<b>x/.test(f.html), "escape בתוך שורת הפריט");
+  assert.ok(f.text.split("\n").some(l => l.includes(evil + "״ — ") && /— \d+ מ׳ · גובה 40 מ׳$/.test(l)), f.text);
+});
+
+test("טופס שדה 8: תקרת הרשימה (25 פריטים לקבוצה) נשמרת — שורה אחת ״ועוד N פריטים (ראו דף הבדיקות)״ אחרי הפריט ה-25, בלי ״; ״ מפריד", () => {
+  const data = mkData(fixture("yarkon")), manual = Array.from({ length: 30 }, (_, i) => ({ name: "עגורן " + (i + 1), lat: 32.0995, lon: 34.8168 + i * 0.00001, heightM: 20 }));
+  const res = C.analyze(Object.assign({}, baseInput, { manualItems: manual }), data, cfg, now), ns = res.nearScan, f = O.buildForm(res, cfg)[7], lines = f.text.split("\n");
+  assert.ok(ns.inside.length > 25, "תנאי הבדיקה: יותר מ-25 פריטים בתוך האזור: " + ns.inside.length);
+  const h = lines.indexOf("מכשולים ותשתיות בתוך האזור (עד 200 מ׳):"); assert.ok(h >= 0);
+  ns.inside.slice(0, 25).forEach((it, k) => assert.equal(lines[h + 1 + k], O.itemText(it)));
+  assert.equal(lines[h + 26], "ועוד " + (ns.inside.length - 25) + " פריטים (ראו דף הבדיקות)", "שורת ההמשך אחרי 25 פריטים");
+  assert.ok(!lines.includes(O.itemText(ns.inside[25])), "הפריט ה-26 אינו מוצג"); assert.ok(!/; ועוד/.test(f.text));
+  assert.equal(lines[h + 27], "בקרבת האזור (עד 400 מ׳):", "הקבוצה הבאה אחרי שורת ההמשך");
+  assert.ok(f.html.includes("<br>ועוד " + (ns.inside.length - 25) + " פריטים (ראו דף הבדיקות)<br><b>בקרבת האזור"), f.html.slice(-200));
+  assert.equal((f.html.match(/<span class='fl'>/g) || []).length, 25 + Math.min(25, ns.ring.length) + Math.min(25, ns.near.length));
+});
+
+test("Word שדה 8: כל פריט בפסקה אחת עם טאב ימני וקו מנחה בקצה התא (טאב אחד לכל פריט), כותרות מודגשות, בלי טבלה בתוך התא, ה-XML תקין והטקסט כפי שבמסך", async () => {
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), ns = res.nearScan, items = [].concat(ns.inside, ns.ring, ns.near);
+  const z = await JSZipNode.loadAsync(await D.build(O.docxModel(res, data, cfg, { includeChecks: false }))), xml = await z.file("word/document.xml").async("string");
+  assert.ok(wellFormed(xml)); const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+  const cellX = xml.split("<w:tc>").find(c => c.includes("מכשולים ותשתיות בתוך האזור")), plain = cellX.replace(/<[^>]+>/g, "").replace(BIDI_MARKS, "");
+  assert.ok(cellX, "תא שדה 8");
+  assert.match(cellX, /<w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="(\d+)"\/><\/w:tabs><w:bidi\/>/, "טאב ימני עם קו מנחה לפני bidi (סדר הסכמה)");
+  const pos = +cellX.match(/w:pos="(\d+)"/)[1], wv = D.helpers.CONTENT_W - ((D.helpers.CONTENT_W * 0.40) | 0);
+  assert.ok(pos < wv - 180 && pos > wv - 400, "הטאב בקצה התא (רוחב התא פחות שולי התא): " + pos + " מתוך " + wv);
+  assert.equal((cellX.match(/<w:tab\/>/g) || []).length, items.length, "טאב אחד לכל פריט"); assert.equal((xml.match(/<w:tab\/>/g) || []).length, items.length, "אין טאבים במקום אחר בטופס");
+  assert.ok(!/<w:tbl>/.test(cellX), "בלי טבלה מקוננת");
+  for (const h of ["מכשולים ותשתיות בתוך האזור (עד", "בקרבת האזור (עד", "אתרים ותשתיות נוספים בקרבת האזור (עד"]) { const run = cellX.split("</w:r>").find(r => r.replace(/<[^>]+>/g, "").includes(h)); assert.ok(run && /<w:b\/>/.test(run), "כותרת מודגשת: " + h); }
+  let at = 0; for (const it of items) { const p = O.itemText(it).split(" — "), i = plain.indexOf(p[0] + p.slice(1).join(" — "), at); assert.ok(i >= 0, "פריט חסר או שלא לפי הסדר ב-Word: " + O.itemText(it)); at = i + 1; }
+  assert.ok(!plain.includes(" — 109 מ׳"), "המפריד ״ — ״ אינו נכתב ב-Word (במקומו הטאב)");
+  // פסקאות אחרות בטופס — בלי טאבים: tabEnd רק כשיש שורת פריט
+  assert.ok(!/<w:tabs>/.test(xml.replace(cellX, "")), "tabs רק בתא שדה 8");
+  // htmlRuns: מפריד fs => טאב בלי הטקסט שבו; para: tabEnd
+  const r = D.htmlRuns("<span class='fl'><span class='fn'>1. א</span><span class='fs'> — </span><span class='fd'>9 מ׳</span></span>");
+  assert.equal((r.match(/<w:tab\/>/g) || []).length, 1); assert.ok(!r.includes(" — ") && !r.includes("—"));
+  assert.ok(D.helpers.para("", { tabEnd: 5000 }).startsWith('<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="5000"/></w:tabs><w:bidi/>')); assert.ok(!/<w:tabs>/.test(D.helpers.para("", {})));
+});
+
+// בדיקת ההצגה בפועל (כמו בדיקת LibreOffice הקיימת): בכל שורת פריט המספר והשם מימין, המרחק בקצה השמאלי, וכל המרחקים מסתיימים באותו קו. מדלג אם soffice/pdftotext לא מותקנים
+test("Word + LibreOffice: שורות הפריטים בשדה 8 — המספר והשם מימין, המרחק בקצה השמאלי של התא וכל המרחקים באותו קו (מדלג בלי soffice/pdftotext)", async t => {
+  const has = (c, a) => { const r = spawnSync(c, a, { encoding: "utf8", timeout: 20000 }); return !r.error && r.status === 0; };
+  if (!has("soffice", ["--version"]) || !has("pdftotext", ["-v"])) return t.skip("soffice/pdftotext לא מותקנים");
+  const data = mkData(fixture("yarkon")), res = C.analyze(baseInput, data, cfg, now), first = res.nearScan.inside.slice(0, 4);
+  assert.equal(first.length, 4, "תנאי המבחן: ארבעה פריטים בתוך האזור");
+  const bytes = await D.build(O.docxModel(res, data, cfg, { includeChecks: false })), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reqlist-"));
+  try {
+    fs.writeFileSync(path.join(tmp, "r.docx"), bytes);
+    const cv = spawnSync("soffice", ["--headless", "-env:UserInstallation=file://" + path.join(tmp, "profile"), "--convert-to", "pdf", "--outdir", tmp, path.join(tmp, "r.docx")], { encoding: "utf8", timeout: 170000 });
+    if (!fs.existsSync(path.join(tmp, "r.pdf"))) return t.skip("LibreOffice לא הפיק PDF: " + (cv.error ? cv.error.message : String(cv.stderr).slice(0, 120)));
+    assert.equal(spawnSync("pdftotext", ["-bbox", path.join(tmp, "r.pdf"), path.join(tmp, "r.html")], { encoding: "utf8" }).status, 0, "pdftotext");
+    const html = fs.readFileSync(path.join(tmp, "r.html"), "utf8"), re = /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="[\d.]+">([^<]*)<\/word>/g;
+    const ws = [...html.split("<page ")[1].matchAll(re)].map(m => ({ x0: +m[1], y: +m[2], x1: +m[3], t: m[4] }));
+    // שורה = כל המילים באותו גובה (±2 נק׳); נקודות הקו המנחה אינן נספרות. האסימונים: המרחק (למשל 109) והמספר 161 שבשם הפריט הראשון
+    const lineOf = tok => { const w = ws.find(v => v.t === tok); assert.ok(w, "חסר ב-PDF: " + tok); return ws.filter(v => Math.abs(v.y - w.y) < 2 && !/^\.+$/.test(v.t)).sort((a, b) => a.x0 - b.x0); };
+    const lines = first.map(it => lineOf(O.dLabel(it.d).split(" ")[0]));
+    const left = lines.map(l => l[0].x0), right = lines.map(l => l[l.length - 1].x1);
+    assert.ok(Math.max(...left) - Math.min(...left) <= 1.5, "המרחקים מסתיימים באותו קו שמאלי: " + left.join(", "));
+    assert.ok(Math.max(...right) - Math.min(...right) <= 1.5, "המספרים והשמות מתחילים באותו קו ימני: " + right.join(", "));
+    const l1 = lines[0], x = tok => { const w = l1.find(v => v.t === tok); assert.ok(w, "חסר בשורה: " + tok + " | " + l1.map(v => v.t).join(" ")); return w.x0; };
+    assert.ok(x("109") < x("161"), "המרחק משמאל לשם (בקריאה מימין לשמאל: שם ואז מרחק): " + l1.map(v => v.t).join(" "));
+    assert.ok(Math.min(...left) < Math.max(...right) - 150, "המרחק רחוק מהשם — בקצה התא, לא צמוד אליו");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+/* ===== השער (gate.js) הוסר מדף הבקשות: מי שרכש רק כרטיס בקשות (בלי מנוי מפה) לא מופנה לדף התשלום של המפה; הגישה לבקשות נקבעת בשרת לפי כרטיס האירוע. המפה עצמה ממשיכה להיות מוגנת בשער ===== */
+test("״שמור הכול במחשב״: כפתור ZIP בתוך ״אפשרויות נוספות״ לכל חשבון, מושבת עד שהבקשה מוכנה, ובונה את אותם קבצים שנשמרים בדרייב (בלי קובץ הנתונים הפנימי)", () => {
+  const html = readReq("index.html"), ui = readReq("js/ui.js");
+  assert.match(html, /<div id="moreOptions" hidden>\s*<div class="row">\s*<button type="button" class="primary" id="btnZip" disabled>שמור הכול במחשב/, "הכפתור ראשון בלוח ״אפשרויות נוספות״ ומושבת בקובץ");
+  assert.match(ui, /async function requestFiles\(withData\)/); assert.match(ui, /const files = await requestFiles\(true\);/, "הדרייב משתמש באותה רשימת קבצים (כולל נתוני הבקשה)");
+  assert.match(ui, /\(await requestFiles\(false\)\)\.forEach\(f => zip\.file\(f\.name, f\.b64, \{ base64: true \}\)\)/, "ה-ZIP בלי קובץ הנתונים הפנימי");
+  assert.match(ui, /if \(!authed\(\) \|\| !S\.res \|\| !S\.ready \|\| !window\.JSZip \|\| S\.zipping\) return;/, "בלי התחברות או בלי מוכנות אין הורדה");
+  assert.match(ui, /if \(S\.rev !== rev0 \|\| S\.res !== res0\) \{[^}]*הבקשה שונתה בזמן הכנת הקובץ/, "עריכה בזמן הבנייה: לא מורידים קובץ מעורב");
+  assert.match(ui, /\$\("btnZip"\)\.onclick = downloadZip;/);
+  assert.ok(/btnZip: "שומר במחשב שלכם קובץ ZIP אחד/.test(ui) && /btnZip: "שמירת כל הקבצים במחשב"/.test(ui), "הסבר ״!״ ושם נגיש");
+});
+
+test("דף הבקשות בלי gate.js (כניסה לפי כרטיס האירוע בשרת), והמפה עדיין מוגנת בשער", () => {
+  const html = readReq("index.html");
+  assert.ok(!/gate\.js/.test(html), "אין טעינה של gate.js בדף הבקשות");
+  assert.ok(!/icdGate/.test(html), "אין שאריות של השער בדף הבקשות");
+  const map = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8");
+  assert.match(map, /<script src="gate\.js"><\/script>/, "המפה עדיין טוענת את השער");
 });
