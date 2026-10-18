@@ -7,6 +7,7 @@
  *  - יומן בקשות: מי שמר ושלח מה ומתי (קובץ _יומן בקשות.json בתיקיית הבקשות), עם סוג כל בקשה (kind) — המנהל רואה את כולם.
  *  - שליחה במייל, עם הקבצים מהתיקייה: למשרד נוטאם (הכתובות הקבועות מפמ"ת א-11 סעיף 6(א) בלבד) או רק למבקש עצמו.
  *    המבקש = המשתמש המחובר, בכתובת המייל ששמורה אצלו (נרשמה ואומתה בקוד). כתובת הארגון (CFG.ADMIN_COPY_TO) מקבלת עותק: סמוי (BCC) ממטיס עצמאי, גלוי (CC) מחשבון ארגוני בשליחה חיה.
+ *  - "הבקשות שלי" (myRequests), טעינת בקשה שנשמרה (getRequest) ושמירת דוח בדיקה חוזרת בתת-תיקייה של הבקשה (saveRecheck) — פעולות נוספות בלבד, השמירה והשליחה אינן משתנות.
  * התקנה: ראו apps-script/README.md. הקוד אינו מכיל סיסמאות או מזהים סודיים; הם נשמרים ב-Script Properties בלבד.
  */
 
@@ -45,7 +46,7 @@ var CFG = {
   MAX_COPIES_PER_HOUR_ALL: 120,  // ... ובסך הכול לכל המערכת (לא נמוכה מ-60: עיון בעותקים הוא הפעולה השכיחה, ומאה מטיסים לא אמורים לחסום זה את זה)
   MAX_SEND_ATTEMPTS_PER_HOUR: 40, // ניסיונות שליחה שהגיעו עד MailApp (גם כושלים) לכל משתמש — שליחה שנכשלה אינה צורכת את הדליים למעלה, אבל לולאת ניסיונות לא תציף את היומן
   MAIL_QUOTA_RESERVE: 20,        // רזרבה במכסת המיילים היומית של גוגל (נמענים) שעותקים אינם צורכים — כדי שהשליחה האמיתית למשרד וקודי ההרשמה לא יורעבו
-  FEATURES: ['sendTarget', 'orgSplit', 'advView'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי"; בלי orgSplit הלקוח גוזר את סוג החשבון מ-role ואינו שולח שם שולח; בלי advView אין שדה adv והלקוח נשאר עם ברירת המחדל לפי סוג החשבון)
+  FEATURES: ['sendTarget', 'orgSplit', 'advView', 'myRequests', 'recheck'],      // יכולות שהשרת מדווח עליהן ללקוח (שרת ישן לא מדווח — והלקוח משבית "שלח רק לעצמי"; בלי orgSplit הלקוח גוזר את סוג החשבון מ-role ואינו שולח שם שולח; בלי advView אין שדה adv והלקוח נשאר עם ברירת המחדל לפי סוג החשבון; בלי myRequests אין "הבקשות שלי" (myRequests/getRequest); בלי recheck אין בדיקה חוזרת (saveRecheck))
   MAX_MAIL_BYTES: 24 * 1024 * 1024,
   LOG_NAME: '_יומן בקשות.json',
   LOG_MAX: 2000,           // יעד רך: מעבר לכך נמחקות רק הישנות ביותר שלא נשלחו חי ולא נגעו בהן LOG_KEEP_DAYS ימים; כשהכול מוגן היומן פשוט גדל
@@ -60,6 +61,19 @@ var CFG = {
   MAX_UPLOAD_BYTES_PER_DAY: 1000 * 1024 * 1024,   // ... וביום (שעון ישראל) לכל משתמש
   MAX_OPEN_REQUESTS_PER_USER: 60, // בקשות של משתמש שלא נשלחו חי ושנגעו בהן ב-LOG_KEEP_DAYS הימים האחרונים — מעבר לכך אין תיקייה חדשה (בקשה שנשלחה חי משחררת מקום)
   MAX_SENT_PER_REQUEST: 100,     // רשומות שליחה בבקשה אחת ביומן; מעבר לכך נמחקות הישנות ביותר שאינן שליחה חיה
+  // --- שלב ב׳: "הבקשות שלי" (myRequests, getRequest) ובדיקה חוזרת (saveRecheck). כל הקריאות רצות תחת נעילת הסקריפט הכללית, ולכן קטנות וחסומות: myRequests נבנית מהיומן בלבד (בלי קריאת דרייב לכל שורה),
+  // getRequest קוראת קובץ אחד קטן, saveRecheck מפענחת קובץ אחד קטן. בדיקה חוזרת נכתבת בתת-תיקייה של תיקיית הבקשה (לא בתיקייה עצמה: שם היא הייתה מצורפת למייל ונספרת בתקרות הקבצים)
+  MAX_MYREQ_ROWS: 50,            // שורות ב"הבקשות שלי" (החדשות ביותר)
+  MAX_MYREQ_ROWS_ADMIN: 100,     // ... למנהל (כולל all / user)
+  MAX_MYREQ_PER_HOUR: 60,        // קריאות myRequests בשעה לכל משתמש
+  MAX_RECORD_BYTES: 600000,      // גודל מרבי של קובץ "נתוני הבקשה" ש-getRequest מוכנה לקרוא (תחת הנעילה)
+  MAX_RECORD_SCAN_FILES: 80,     // כמה קבצים בתיקיית הבקשה getRequest סורקת בחיפוש קובץ נתוני הבקשה (תיקייה מנופחת לא נסרקת עד הסוף)
+  MAX_RECORD_READS_PER_HOUR: 30, // קריאות getRequest בשעה לכל משתמש (מנהל פטור)
+  RECHECK_FOLDER_NAME: 'בדיקות חוזרות',   // תת-התיקייה (בתוך תיקיית הבקשה) שבה נשמרים דוחות הבדיקה החוזרת; נוצרת לפי דרישה
+  MAX_RECHECK_B64: 3 * 1024 * 1024,        // תקרת דוח בדיקה חוזרת אחד אחרי קידוד base64
+  MAX_RECHECKS_PER_REQUEST: 20,            // דוחות בדיקה חוזרת לבקשה אחת
+  MAX_RECHECK_FOLDER_BYTES: 16 * 1024 * 1024,   // נפח כולל של תת-התיקייה
+  MAX_RECHECK_SAVES_PER_HOUR: 10,          // שמירות בדיקה חוזרת בשעה לכל משתמש (מנהל פטור); בנוסף נספרות בתקציבי ההעלאה (MAX_UPLOAD_BYTES_PER_HOUR / PER_DAY)
   // --- מנוי מטיס מסחרי: כרטיס "בקשת אישורי טיסה" באתר הארגון (Wix Events). הרשמה רק למי שיש לו הזמנה ששולמה בפועל.
   WIX_SITE_ID: '29dca6d8-08d4-4679-a6e5-c5f4f3317d90',        // icd.org.il
   WIX_EVENT_ID: 'fbcb2cc1-4dc7-4545-b9d5-08febf9f8153',       // האירוע "בקשת אישורי טיסה"
@@ -1142,8 +1156,160 @@ var ACTIONS = {
     } catch (e4) { /* הסימון אינו חיוני */ }
     // כתובת הארגון לא מוחזרת ללקוח אלא לחשבון ארגוני (to/cc של מטיס מכילים רק את כתובת המבקש וכתובות משרד נוטאם; ה-BCC לא מוחזר). adminCopy = כתובת הארגון בין הנמענים (בכל תפקיד)
     return { ok: true, mode: mode, target: target, to: shownTo, cc: shownCc, adminCopy: [].concat(plan.to, plan.cc, plan.bcc).some(function (x) { return String(x).toLowerCase() === orgA; }), from: sender, files: c.names, sentAt: t };
+  },
+
+  // ----- שלב ב׳: "הבקשות שלי" ובדיקה חוזרת. רק מוסיפות פעולות: שמירה ושליחה (saveBegin / saveFile / saveEnd / sendRequest) לא נוגעות בשום שדה או קובץ שהפעולות האלה כותבות -----
+
+  // "הבקשות שלי": הבקשות של המשתמש המחובר (e.user === שמו; לא lastUser: מנהל ששמר בשם מטיס לא "גונב" לו שורה), מהחדשה לישנה, עד MAX_MYREQ_ROWS (למנהל MAX_MYREQ_ROWS_ADMIN).
+  // נבנית מהיומן בלבד — אין קריאת דרייב לשורה (נעילת הסקריפט כללית). כל משתמש מחובר (לא חסום) רשאי, גם מטיס עצמאי; רק מנהל רשאי להעביר all:true (כל הבקשות) או user (בקשות משתמש אחר).
+  // רשומה של משתמש שנמחק נושאת שם מוחלף (ראו deleteUser) ולכן לא מופיעה אצל מי שנרשם אחריו בשם הזה. קישור לתיקיית הדרייב (folderUrl) ושם הבעלים (user) — למנהל בלבד.
+  myRequests: function (r) {
+    var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
+    var admin = a.user.role === 'admin', wantAll = r.all === true, hasUser = r.user !== undefined && r.user !== null && r.user !== '';
+    if ((wantAll || hasUser) && !admin) return { ok: false, error: 'forbidden' };
+    if (hasUser && typeof r.user !== 'string') return { ok: false, error: 'bad_user' };
+    if (readRateHit_('myreq', a.name, CFG.MAX_MYREQ_PER_HOUR)) return readRateErr_();
+    var who = hasUser ? r.user : a.name, cap = admin ? CFG.MAX_MYREQ_ROWS_ADMIN : CFG.MAX_MYREQ_ROWS;
+    var mine = readLog_().filter(function (e) { return e && typeof e === 'object' && (wantAll || e.user === who); })
+      .sort(function (x, y) { return (Number(y.saved) || 0) - (Number(x.saved) || 0) || (Number(y.created) || 0) - (Number(x.created) || 0); });
+    return { ok: true, requests: mine.slice(0, cap).map(function (e) { return myReqRow_(e, admin); }), total: mine.length };
+  },
+
+  // בקשה אחת במלואה (נתוני הבקשה ששמר הדפדפן, JSON) — לטעינת בקשה לבדיקה חוזרת. בעלים או מנהל. התיקייה חייבת להיות תיקיית בקשה תקפה ורשומה ביומן ולא בפח; הקובץ נבחר בשרת
+  // (קובץ אחד ששמו מסתיים ב-" — נתוני הבקשה.json", בסריקה חסומה של MAX_RECORD_SCAN_FILES קבצים), נקרא רק אם גודלו עד MAX_RECORD_BYTES, ומוחזר רק אם הוא JSON תקין מסוג אובייקט.
+  // תוכן הקובץ מגיע מהדפדפן ואינו אמין — השרת מחזיר אותו כמות שהוא והלקוח מאמת אותו לפני שימוש.
+  getRequest: function (r) {
+    var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
+    var admin = a.user.role === 'admin';
+    if (typeof r.folderId !== 'string' || !r.folderId) return { ok: false, error: 'bad_folder' };
+    if (!admin && readRateHit_('rrec', a.name, CFG.MAX_RECORD_READS_PER_HOUR)) return readRateErr_();
+    var folder = requestFolder_(r.folderId);
+    if (!folder || folder.isTrashed()) return { ok: false, error: 'bad_folder' };
+    var log = readLog_(), e = findById_(log, folder.getId());
+    if (!e) return { ok: false, error: 'bad_folder' };
+    if (e.user !== a.name && !admin) return { ok: false, error: 'forbidden' };
+    var f = recordFile_(folder);
+    if (!f) return { ok: false, error: 'no_record', message: 'לא נמצא קובץ נתוני הבקשה בתיקיית הבקשה' };
+    if (f.getSize() > CFG.MAX_RECORD_BYTES) return { ok: false, error: 'too_big', message: 'קובץ נתוני הבקשה גדול מדי' };
+    var rec = null;
+    try {
+      var txt = String(f.getBlob().getDataAsString('UTF-8'));
+      rec = JSON.parse(txt.charCodeAt(0) === 0xfeff ? txt.slice(1) : txt);      // BOM בתחילת הקובץ נסבל (editor/כלי חיצוני)
+      JSON.stringify(rec);      // קינון עמוק מאוד (שהפענוח עוד עובר) היה מפיל את בניית התשובה; רשומה אמיתית רדודה — כאן הוא נדחה כפגום
+    } catch (err) { rec = null; }
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return { ok: false, error: 'bad_record', message: 'קובץ נתוני הבקשה פגום' };
+    return { ok: true, meta: myReqRow_(e, admin), rec: rec };
+  },
+
+  // שמירת דוח "בדיקה חוזרת" (Word) לבקשה שכבר נשלחה (חי או בדיקה). בעלים או מנהל, ורק מי שיש לו תצוגה מתקדמת (advOf_; אחרת recheck_off).
+  // הדוח נכתב בתת-התיקייה RECHECK_FOLDER_NAME של תיקיית הבקשה — לא בתיקייה עצמה: folderFiles_ מצרף למייל כל Word שבה, ו-MAX_FOLDER_FILES / MAX_FOLDER_BYTES נספרים עליה; תת-תיקייה אינה נראית להם,
+  // ואינה נמחקת בניקוי של saveBegin. שם הקובץ נבנה בשרת בלבד (בלי שום שם מהלקוח). בתיקיית הבקשה נכתב סימון .txt ("לא צורף לבקשה שנשלחה ב-...") — גם הוא לא מצורף ולא נספר.
+  // הפעולה לא נוגעת ב-ready, ב-sent[] ובקבצי הבקשה, ולכן אינה פותחת את הבקשה לעריכה ואינה משנה מה שיצורף בשליחה הבאה. הבקשה נשארת נעולה לשמירה (saveFile) אם נשלחה חי.
+  // sum = ספירות הממצאים {a: חדשים, r: הוסרו, c: שונו} — מספרים שלמים בלבד (כל ערך אחר הופך ל-0); נרשמות ביומן ב-rc כ-[זמן, a, r, c].
+  saveRecheck: function (r) {
+    var a = auth_(r.token); if (a.error) return { ok: false, error: a.error };
+    if (!advOf_(a.user)) return { ok: false, error: 'recheck_off', message: 'בדיקה חוזרת זמינה רק בתצוגה מתקדמת — פנו לבעל המערכת' };
+    var b64 = r.b64;
+    if (typeof b64 !== 'string' || !b64 || b64.length > CFG.MAX_RECHECK_B64 || b64.indexOf('UEsD') !== 0 || !/^[A-Za-z0-9+\/]+={0,2}$/.test(b64))
+      return { ok: false, error: 'bad_file', message: 'הקובץ אינו דוח Word תקין' };
+    var admin = a.user.role === 'admin';
+    if (typeof r.folderId !== 'string' || !r.folderId) return { ok: false, error: 'bad_folder' };
+    if (!admin && readRateHit_('rsave', a.name, CFG.MAX_RECHECK_SAVES_PER_HOUR)) return readRateErr_();
+    var folder = requestFolder_(r.folderId);
+    if (!folder || folder.isTrashed()) return { ok: false, error: 'bad_folder' };
+    var log = readLog_(), e = findById_(log, folder.getId());
+    if (!e) return { ok: false, error: 'bad_folder' };
+    if (e.user !== a.name && !admin) return { ok: false, error: 'forbidden' };
+    var sent = sentSummary_(e), rc = Array.isArray(e.rc) ? e.rc : [];
+    if (!(sent.live || sent.test)) return { ok: false, error: 'not_sent', message: 'בדיקה חוזרת נשמרת רק לבקשה שנשלחה' };
+    if (rc.length >= CFG.MAX_RECHECKS_PER_REQUEST) return { ok: false, error: 'recheck_limit', message: 'הגעתם למספר הבדיקות המרבי לבקשה זו — פנו לתמיכה' };
+    var size = Math.floor(b64.length * 3 / 4), skip = folderIdSet_(log), subName = cleanFolderName_(CFG.RECHECK_FOLDER_NAME) || 'בדיקות חוזרות';
+    var sub = findFolder_(folder, subName, skip);
+    if (sub) { var use = subUsage_(sub); if (use.full || use.bytes + size > CFG.MAX_RECHECK_FOLDER_BYTES) return { ok: false, error: 'recheck_full', message: 'תיקיית הבדיקות החוזרות מלאה — פנו לתמיכה' }; }
+    var up = admin ? null : uploadUsed_(a.name);
+    if (up && (up.h + size > CFG.MAX_UPLOAD_BYTES_PER_HOUR || up.d + size > CFG.MAX_UPLOAD_BYTES_PER_DAY))
+      return { ok: false, error: 'rate', scope: 'user', kind: 'upload', message: 'הגעתם למגבלת נפח ההעלאה ה' + (up.h + size > CFG.MAX_UPLOAD_BYTES_PER_HOUR ? 'שעתית (' + Math.round(CFG.MAX_UPLOAD_BYTES_PER_HOUR / 1048576) + 'MB בשעה)' : 'יומית (' + Math.round(CFG.MAX_UPLOAD_BYTES_PER_DAY / 1048576) + 'MB ביום)') + ' — נסו שוב מאוחר יותר' };
+    var sm = r.sum && typeof r.sum === 'object' ? r.sum : {}, cnt = [cleanCount_(sm.a), cleanCount_(sm.r), cleanCount_(sm.c)];
+    var t = now_(), stem = recheckStem_(t, sub, folder), name = stem + '.docx';
+    sub = sub || childFolder_(folder, subName, skip);
+    var file = sub.createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', name));
+    if (up) uploadAdd_(up, size);
+    rc = rc.slice(-(CFG.MAX_RECHECKS_PER_REQUEST - 1)); rc.push([t, cnt[0], cnt[1], cnt[2]]); e.rc = rc;
+    try { writeLog_(log, e.id); } catch (err) { try { file.setTrashed(true); } catch (e1) { /* מיטב המאמץ */ } throw err; }      // הרישום נכשל: לא משאירים דוח יתום שאינו נספר
+    try {   // סימון בתיקיית הבקשה, כדי שגם מי שפותח את התיקייה בדרייב יראה שנעשתה בדיקה חוזרת ושהיא לא חלק ממה שנשלח
+      folder.createFile(stem + '.txt', ['בדיקה חוזרת — דוח נפרד, לא חלק מהבקשה שנשלחה', 'נשמרה ע"י: ' + a.name, 'מתי: ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'dd.MM.yyyy HH:mm'),
+        'ממצאים: חדשים ' + cnt[0] + ' · הוסרו ' + cnt[1] + ' · שונו ' + cnt[2],
+        'דוח זה לא צורף לבקשה שנשלחה ב-' + (sent.at ? fmtDate_(sent.at) : '—'), 'סוג השליחה: ' + (sent.mode === 'live' ? 'חי — למודיעין טיס' : 'בדיקה — למבקש בלבד, לא נשלח למודיעין טיס'),
+        'קובץ הדוח: ' + subName + '/' + name].join('\n'), 'text/plain');
+    } catch (e2) { /* הסימון אינו חיוני */ }
+    var out = { ok: true, name: name, rechecks: rc.length };
+    if (admin) out.url = file.getUrl();
+    return out;
   }
 };
+
+/* ---------- שלב ב׳: "הבקשות שלי" ובדיקה חוזרת — עזרים ---------- */
+// סיכום השליחות של בקשה ליומן: live / test = כמה שליחות שלא נכשלו (sentOk_) בכל סוג, ו-at / mode = המועד והמצב של השליחה האחרונה — חיה אם יש כזו, אחרת בדיקה (0 / '' כשאין).
+// "לעצמו" (sendKind_ === 'self') אינה שליחה למשרד ואינה נספרת בשום שדה. אותו סיווג כמו liveSentAt_: שליחה שלא ידוע אם הסתיימה ('sending') נחשבת שליחה (שמרני)
+function sentSummary_(e) {
+  var out = { live: 0, test: 0, at: 0, mode: '' }, lastLive = 0, lastTest = 0;
+  ((e && e.sent) || []).forEach(function (s) {
+    if (!s || !sentOk_(s)) return;
+    var k = sendKind_(s), t = Number(s.t) || 0;
+    if (k === 'live') { out.live++; if (t > lastLive) lastLive = t; } else if (k === 'test') { out.test++; if (t > lastTest) lastTest = t; }
+  });
+  if (out.live) { out.at = lastLive; out.mode = 'live'; } else if (out.test) { out.at = lastTest; out.mode = 'test'; }
+  return out;
+}
+// שורה ל"הבקשות שלי" (גם meta של getRequest). state: draft = לא נשלחה למשרד (גם לא בבדיקה), sent_test = נשלחה רק במצב בדיקה, sent_live = נשלחה חי.
+// folderUrl ו-user — למנהל בלבד (למטיס אין גישה לדרייב, ושם בעלים אחר לא רלוונטי לו)
+function myReqRow_(e, admin) {
+  var s = sentSummary_(e), row = { id: e.id, name: e.name, kind: kindOf_(e), created: Number(e.created) || 0, saved: Number(e.saved) || 0, ready: !!e.ready,
+    state: s.live ? 'sent_live' : s.test ? 'sent_test' : 'draft', sentAt: s.at, sentMode: s.mode, sentLive: s.live, sentTest: s.test, rechecks: Array.isArray(e.rc) ? e.rc.length : 0 };
+  if (admin) { row.folderUrl = 'https://drive.google.com/drive/folders/' + e.id; row.user = e.user; }
+  return row;
+}
+// הגבלת קצב שעתית לקריאות (מונה ב-CacheService לכל משתמש): true = עברו את התקרה (לא נספר), אחרת הקריאה נספרת
+function readRateHit_(kind, name, limit) {
+  var cache = CacheService.getScriptCache(), k = kind + ':' + sha256Hex_(name).slice(0, 16) + ':' + Math.floor(now_() / 3600000), n = Number(cache.get(k)) || 0;
+  if (n >= limit) return true;
+  cache.put(k, String(n + 1), 3600);
+  return false;
+}
+function readRateErr_() { return { ok: false, error: 'rate', scope: 'user', kind: 'read', message: 'יותר מדי פעולות בשעה האחרונה — נסו שוב בעוד זמן מה' }; }
+// מספר שלם 0..99999 (ספירת ממצאים מהלקוח); כל ערך אחר (טקסט, שלילי, NaN, אובייקט) הופך ל-0
+function cleanCount_(v) { return (typeof v === 'number' && v >= 0) ? Math.min(Math.floor(v), 99999) : 0; }
+var RECORD_SUFFIX_ = ' — נתוני הבקשה.json';   // כמו שהדף כותב אותו: "<מקום> — <תאריך> — נתוני הבקשה.json" (מקף ארוך)
+// קובץ נתוני הבקשה בתיקייה: בדיוק אחד ששמו מסתיים ב-RECORD_SUFFIX_, בין MAX_RECORD_SCAN_FILES הקבצים הראשונים (ילדים ישירים בלבד). אין / כמה כאלה = null
+function recordFile_(folder) {
+  var it = folder.getFiles(), seen = 0, hits = [], sl = RECORD_SUFFIX_.length;
+  while (it.hasNext() && seen < CFG.MAX_RECORD_SCAN_FILES && hits.length < 2) {
+    var f = it.next(), n = String(f.getName()); seen++;
+    if (n.length >= sl && n.slice(-sl) === RECORD_SUFFIX_) hits.push(f);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+// תת-תיקייה בשם נתון *בלי ליצור אותה*: הראשונה שאינה בפח ואינה תיקיית בקשה מהיומן (כמו childFolder_), או null
+function findFolder_(parent, name, skip) {
+  var it = parent.getFoldersByName(name);
+  while (it.hasNext()) { var f = it.next(); if (!skip[f.getId()] && !f.isTrashed()) return f; }
+  return null;
+}
+// נפח הדוחות בתת-התיקייה. הסריקה חסומה (פי 3 מתקרת הדוחות לבקשה): תת-תיקייה מנופחת (למשל קבצים שנוספו ידנית) מסומנת full ואינה נסרקת עד הסוף
+function subUsage_(sub) {
+  var out = { count: 0, bytes: 0, full: false }, it = sub.getFiles(), cap = CFG.MAX_RECHECKS_PER_REQUEST * 3;
+  while (it.hasNext()) {
+    if (out.count >= cap) { out.full = true; break; }
+    out.count++; out.bytes += it.next().getSize();
+  }
+  return out;
+}
+// שם הדוח (ללא סיומת): "בדיקה חוזרת — yyyy-MM-dd HH-mm" בשעון ישראל, ו-" (2)", " (3)"… כשכבר קיים דוח (בתת-התיקייה) או סימון (בתיקיית הבקשה) בשם הזה. sub יכול להיות null (עוד לא נוצרה)
+function recheckStem_(t, sub, folder) {
+  var base = 'בדיקה חוזרת — ' + Utilities.formatDate(new Date(t), 'Asia/Jerusalem', 'yyyy-MM-dd HH-mm'), stem = base, n = 1;
+  while (n < 50 && ((sub && sub.getFilesByName(stem + '.docx').hasNext()) || folder.getFilesByName(stem + '.txt').hasNext())) stem = base + ' (' + (++n) + ')';
+  return stem;
+}
 
 // קבצי הבקשה בתיקייה (Word, KML, תמונות) — לא יומן, לא JSON ולא סימוני שליחה.
 // תיקייה עם יותר מ-MAX_FOLDER_FILES קבצים (לא נוצרה דרך saveFile, שאוכף תקרה) מסומנת tooMany ותכניה לא נקראים: קריאת מאות קבצים תחת נעילת הסקריפט הייתה מחזיקה את כל המטיסים ב"השרת עסוק"

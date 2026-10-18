@@ -5,12 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import crypto from "node:crypto";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HTML = path.join(ROOT, "members-k38p", "index.html");
 const META = path.join(ROOT, "members-k38p", "pamat-meta.json");
 const OUT = path.join(ROOT, "members-k38p", "data", "zones.json");
+// מנוע פרטי הקשר של "דיווח לגורמים נוספים" (UMD; אותו קוד בדיוק רץ בדפדפן) — המייצא משתמש בו כדי שכל שינוי בפרטי קשר של הפמ"ת יופיע כשינוי ב-diff של zones.json
+const PARTIES = createRequire(import.meta.url)(path.join(ROOT, "members-k38p", "requests", "js", "parties.js"));
 
 function slice(src, from, to, label) {
   const a = src.indexOf(from);
@@ -96,6 +99,26 @@ function generalQuote(areas, re) {
 }
 
 
+// ציטוטי הפמ"ת שבכרטיס המפה: "<תווית> (<הפניה>): <i>…</i>" — רק ציטוט (<i>) מילולי. לעולם לא span.mapnote ("הערת המפה — אינה מהפמ"ת" / "הודעה קבועה של המפה"),
+// ולא טבלת הקואורדינטות (details / div.xlb). התווית נשמרת כלשונה (היא ההפניה: "סעיף 2 בפמ"ת (עמ' 8, עדכון 2/25)")
+export function cardQuotes(noteHtml) {
+  const h = String(noteHtml || "")
+    .replace(/<span class="mapnote">[\s\S]*?<\/span>/g, "<br>")
+    .replace(/<details[\s\S]*?<\/details>/g, "<br>")
+    .replace(/<div class="xlb">[\s\S]*?<\/div>/g, "<br>");
+  const out = [], re = /([^<>]*?):\s*<i>([\s\S]*?)<\/i>/g;
+  let m;
+  while ((m = re.exec(h))) { const label = stripHtml(m[1]).trim(), text = stripHtml(m[2]); if (label && text) out.push({ label, text }); }
+  return out;
+}
+// פרטי הקשר שבכרטיס אזור (zone.contacts): לכל ציטוט — הקטעים שבהם טלפון/דוא"ל, כלשונם, עם ההפניה. ציטוט של סעיף/פרק (שהכרטיס מצטט) הוא scope:"general";
+// שורת האזור עצמה — "zone"; ומשפט כללי שמצביע במפורש על האזור ("לאזור LLU21 לטלפון …") מניב גם רשומת "zone". כתובות הארגון נפסלות; בקשת חריגה מסומנת role:"exception"
+export function contactsOf(noteHtml, zoneId) {
+  const out = [];
+  for (const q of cardQuotes(noteHtml)) out.push(...PARTIES.quoteEntries(q.text, { ref: q.label, scope: /^(סעיף|לשון פרק)/.test(q.label) ? "general" : "zone", zoneId }));
+  return out;
+}
+
 // גובה מזערי באלפי רגל מעפ"י (מספר) — GND או היעדר גובה מזערי = 0; מחרוזת שלא מפוענחת = null (הבדיקה תכשיל)
 function b09MinFt(u) {
   if (u.t === "B1" || !u.mn || /^\s*GND\s*$/i.test(u.mn)) return 0;
@@ -110,10 +133,12 @@ function b09Record(u, H) {
   else { if (u.mn) cells.push("גובה מזערי: " + u.mn); if (u.mx) cells.push("גובה מרבי: " + u.mx); if (u.co) cells.push("תיאום: " + u.co); }
   const alt = u.t === "B1" ? (u.mx ? 'גובה מרבי (רגל מעפ"י): ' + u.mx : "") : [u.mn ? "גובה מזערי: " + u.mn : "", u.mx ? "גובה מרבי: " + u.mx : ""].filter(Boolean).join(" · ");
   const geo = u.g.k === "circle" ? { rings: [closed(H.circlePoly(u.g.c, u.g.r, 72))], c: rp(u.g.c), r: u.g.r } : { rings: [closed(u.g.pts)] };
+  const contacts = PARTIES.quoteEntries(cells.join(" · "), { ref: H.U09_APP[u.t] + ", " + H.pg09(u.p), scope: "zone" });   // שורות ב-09: הטלפונים שבשורת האזור עצמה (הערות / תיאום)
   return {
     id: u.id, cat: u.t === "B3" ? "B09B" : "B09", name: u.n, appendix: H.U09_APP[u.t], alt,
     ...(u.g.k === "map" ? { approx: true } : {}),
     minFt: b09MinFt(u), ...geo, pmt: cells.join(" · "), pmtRef: H.pg09(u.p), coord: u.co || "", note: u.nt || "",
+    ...(contacts.length ? { contacts } : {}),
   };
 }
 
@@ -127,11 +152,13 @@ export function build(html, meta) {
     const q = firstQuote(a.note);
     const z = byId.get(id);
     if (z) { z.rings.push(...geo.rings); continue; } // LLU22 מפוצל לשני חלקים בפמ"ת
+    const contacts = contactsOf(a.note, id);
     byId.set(id, {
       id, cat, name: a.name, alt: a.alt || "",
       ...(a.approx ? { approx: true } : {}),
       rings: geo.rings, ...(geo.c ? { c: geo.c, r: geo.r } : {}),
       pmt: q ? q.text : "", pmtRef: q ? q.ref : "",
+      ...(contacts.length ? { contacts } : {}),
     });
   }
   const b09 = (H.UAS09 || []).map(u => b09Record(u, H));
