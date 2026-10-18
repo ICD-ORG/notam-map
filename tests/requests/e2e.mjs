@@ -85,7 +85,7 @@ const apiHandler = (env, calls, opts) => async r => {
   if (m === "POST") { API_STATS.posts++; if (!/^text\/plain/i.test(req.headers()["content-type"] || "")) API_STATS.nonSimple++; }
   if (opts && opts.apiDown) return r.abort();
   const body = m === "POST" ? JSON.parse(req.postData() || "{}") : null;
-  if (body && calls) { calls.actions.push(body.action); if (body.action === "sendRequest") (calls.sends = calls.sends || []).push(body); if (body.action === "saveEnd") (calls.saveEnds = calls.saveEnds || []).push({ ready: body.ready }); }
+  if (body && calls) { calls.actions.push(body.action); (calls.at = calls.at || []).push(Date.now()); if (body.action === "sendRequest") (calls.sends = calls.sends || []).push(body); if (body.action === "saveEnd") (calls.saveEnds = calls.saveEnds || []).push({ ready: body.ready }); }
   if (opts && opts.apiDelay) await new Promise(x => setTimeout(x, opts.apiDelay));
   if (opts && opts.apiDelayBy && body && opts.apiDelayBy[body.action]) await new Promise(x => setTimeout(x, opts.apiDelayBy[body.action]));   // השהיה לפעולה אחת בלבד (למשל sendRequest באוויר)
   // opts.intercept(body): תשובה מדומה שמחליפה את השרת (השרת לא נקרא כלל); opts.patchResp(body, resp): שינוי תשובת השרת האמיתי (למשל mailQuotaLeft) — לבדיקת ממשק שאינו תלוי בהתנהגות השרת
@@ -109,6 +109,8 @@ async function newPage(browser, opts) {
   await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
   await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API; d.sync_retry_ms = 400;
+    if ("renewUrl" in opts) { if (opts.renewUrl === null) delete d.renew_url; else d.renew_url = opts.renewUrl; }   // כתובת רכישת הכרטיס (renew_url): null = חסרה בהגדרות; כל ערך אחר נכנס כמות שהוא (לבדיקת אימות הכתובת במסכי הכניסה וההרשמה)
+    if (typeof opts.autosave === "number") d.autosave_ms = opts.autosave; else if (!opts.autosave) d.autosave_ms = 0;   // שמירה אוטומטית בדרייב (ui.js: autosave_ms) כבויה כברירת מחדל בתרחישים הקיימים (הם בודקים שמירה ושליחה ידניות); opts.autosave: true = בלי המפתח, כלומר ברירת המחדל של המוצר (1500 מ״ש); מספר = השהיה אחרת
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
   });
   const tamperedHtml = () => fs.readFileSync(path.join(ROOT, "members-k38p", "index.html"), "utf8").replace('name:"שמורת הטבע החולה"', 'name:"שמורת הטבע החולה (עודכן)"');
@@ -165,6 +167,8 @@ async function login(page, user, pass) {
 // מפתח האחסון המקומי של המשתמש המחובר (בסיס + ":" + גיבוב שם המשתמש); null אם אין משתמש
 const uk = (page, base) => page.evaluate(b => window.__REQ.userKey(b), base);
 const lsRead = (page, base) => uk(page, base).then(k => page.evaluate(x => localStorage.getItem(x), k));
+// ״אפשרויות נוספות״: #moreOptions (כל ההורדות, לכל סוג חשבון) סגור כברירת מחדל ונפתח בלחיצה על #btnMore; בדיקות שלוחצות על כפתור שבתוכו פותחות אותו קודם, בלחיצה אמיתית
+const openMore = async page => { if ((await page.getAttribute("#btnMore", "aria-expanded")) !== "true") await page.click("#btnMore"); await page.waitForSelector("#moreOptions", { state: "visible" }); };
 
 async function readyRequest(page, over) {
   await fillExample(page, over); await page.click("#runBtn");
@@ -293,6 +297,7 @@ try {
     }
     const pngTxt = await page.evaluate(() => window.__REQ.S.imgs.aerial.dataUrl);
     fs.writeFileSync(path.join(OUT, "map.png"), Buffer.from(pngTxt.split(",")[1], "base64"));
+    await openMore(page);
     const dl = async sel => { const [d] = await Promise.all([page.waitForEvent("download"), page.click(sel)]); const p = path.join(OUT, d.suggestedFilename()); await d.saveAs(p); return p; };
     const kmlPath = await dl("#btnKml"); const kml = fs.readFileSync(kmlPath, "utf8");
     check("KML הורד ותקין", /<kml/.test(kml) && /קו מתח עליון/.test(kml) && /LLU20/.test(kml), kml.length + " בתים");
@@ -530,12 +535,12 @@ try {
     const bubble = () => page.evaluate(() => { const b = document.getElementById("hbubble"); if (!b || b.hidden) return null; const r = b.getBoundingClientRect(); return { text: b.textContent, left: r.left, right: r.right, top: r.top, bottom: r.bottom, z: +getComputedStyle(b).zIndex, vw: innerWidth, vh: innerHeight }; });
     const hs = await page.$$eval(".hbtn", els => els.map(e => ({ t: e.dataset.help || "", a: e.getAttribute("aria-label"), x: e.getAttribute("aria-expanded"), txt: e.textContent, w: Math.round(e.getBoundingClientRect().width) })));
     check("לחצני ״!״ ליד כפתורי הדף (חיפוש, רקעי המפה, הרצה, הוספה ידנית, הפקות, כלי טיס, אנשי קשר, משתתפים, מחיקה, בדיקה עצמית, שדות מלל) — כל אחד עם הסבר, aria-label ייחודי ״הסבר על: <שם>״ וקוטר 20–22px", hs.length >= 26 && hs.every(h => h.t.length > 25 && /^הסבר על: \S.*/.test(h.a) && h.x === "false" && h.txt === "!" && (h.w === 0 || (h.w >= 20 && h.w <= 22))) && new Set(hs.map(h => h.a)).size === hs.length && hs.filter(h => h.w > 0).length >= 8, hs.length + " לחצנים, גלויים: " + hs.filter(h => h.w > 0).length + ", רוחבים: " + [...new Set(hs.map(h => h.w))].join(",") + " | " + hs.map(h => h.a).join(" ; "));   // ללחצנים בסעיפי התוצאות (מוסתרים לפני הרצה) אין רוחב
-    for (const id of ["runBtn", "mPick", "mAdd", "btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend", "btnMail", "acAdd", "addContact", "addPart", "wipePerson", "qBtn", "baseSat", "baseOsm", "stRun"]) {
+    for (const id of ["runBtn", "mPick", "mAdd", "btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend", "btnMore", "btnMail", "acAdd", "addContact", "addPart", "wipePerson", "qBtn", "baseSat", "baseOsm", "stRun"]) {
       if (!(await hb("#" + id).count())) check("יש לחצן ״!״ ליד #" + id, false, "");
     }
     check("aria-label סטטי ומתאר: ״שלח למשרד נוטאם״ ו״צילום אוויר/מפת רחובות״ (רקעי מפת העבודה) מסבירים שהם משפיעים על התצוגה בלבד", (await hb("#btnSend").getAttribute("aria-label")) === "הסבר על: שליחה למשרד נוטאם" && (await hb("#qBtn").getAttribute("aria-label")) === "הסבר על: חיפוש מקום" && /לא על ארבע התמונות/.test(await hb("#baseSat").getAttribute("data-help")) && /לא על ארבע התמונות/.test(await hb("#baseOsm").getAttribute("data-help")) && /Nominatim/.test(await hb("#qBtn").getAttribute("data-help")) && /בדיקה העצמית/.test(await hb("#stRun").getAttribute("data-help")), "");
     { const dh = await hb("#btnDrive").getAttribute("data-help"), sh = await hb("#btnSend").getAttribute("data-help");
-      check("הסברים מדויקים (מנהל = חשבון ארגוני): ״שמור בדרייב״ — שמירה בלי שליחה, בדרייב של בעל המערכת ולמנהל בלבד, לפי סוג הבקשה; ״שלח״ — שומר בארכיון הארגון ושולח בשם הארגון: למשרד (עותק לארגון, התשובות אל הארגון) או רק לעצמי, בבדיקה רק לכתובת המבקש", /בדרייב של בעל המערכת \(הארכיון המרכזי: בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש\), בלי לשלוח/.test(dh) && /מוצג למנהל המערכת בלבד/.test(dh) && /שומר את הבקשה בארכיון הארגון בדרייב \(תיקיית ״הארגון״\) ושולח אותה/.test(sh) && /בשם הארגון \(שם השולח ״הארגון הישראלי לרב להב״\)/.test(sh) && /שלח למשרד נוטאם/.test(sh) && /שלח רק לעצמי/.test(sh) && /עותק נשלח לארגון/.test(sh) && /תשובות המשרד יחזרו אל הארגון/.test(sh) && /במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון/.test(sh) && !/owner@|בעל המערכת \(בדיקה\)/.test(sh), dh.slice(0, 80) + " | " + sh.slice(0, 80)); }
+      check("הסברים מדויקים (מנהל = חשבון ארגוני): ״שמור בדרייב״ — שמירה בלי שליחה, אוטומטית כשהכול סומן ואפשר גם ידנית, בארכיון המרכזי לפי סוג הבקשה, הקישור לתיקייה לבעל המערכת בלבד; ״שלח״ — שולח בשם הארגון עם הקבצים מצורפים אוטומטית (ושומר בארכיון הארגון אם טרם נשמר): למשרד (עותק לארגון, התשובות אל הארגון) או רק לעצמי, בבדיקה רק לכתובת המבקש", /בארכיון המרכזי של הארגון בדרייב \(בקשות הארגון בתיקיית ״הארגון״, בקשות מטיסים עצמאיים בתיקיית ״מטיסים״ תחת שם המשתמש\), בלי לשלוח/.test(dh) && /השמירה מתבצעת אוטומטית/.test(dh) && /הקישור אליה מוצג לבעל המערכת בלבד/.test(dh) && !/הכפתור מוצג למנהל/.test(dh) && /כל הקבצים מצורפים אוטומטית/.test(sh) && /בארכיון הארגון בדרייב \(תיקיית ״הארגון״/.test(sh) && /בשם הארגון \(שם השולח ״הארגון הישראלי לרב להב״\)/.test(sh) && /שלח למשרד נוטאם/.test(sh) && /שלח רק לעצמי/.test(sh) && /עותק נשלח לארגון/.test(sh) && /תשובות המשרד יחזרו אל הארגון/.test(sh) && /במצב בדיקה המייל נשלח רק לכתובת שנרשמה בחשבון/.test(sh) && !/owner@|בעל המערכת \(בדיקה\)/.test(sh), dh.slice(0, 80) + " | " + sh.slice(0, 80)); }
     await hb("#runBtn").click();
     let b = await bubble();
     check("״!״ נפתח: בועת הסבר מוצגת בתוך המסך, aria-expanded=true", !!b && /מריץ את כל הבדיקות/.test(b.text) && (await hb("#runBtn").getAttribute("aria-expanded")) === "true" && b.left >= 0 && b.right <= b.vw && b.top >= 0 && b.bottom <= b.vh, JSON.stringify(b));
@@ -696,14 +701,15 @@ try {
     const form = await page.$$eval("#report .paper:first-child table.f tr", trs => trs.map(t => t.innerText.replace(/\s+/g, " ").trim()));
     const mailBody = await page.evaluate(() => window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg).body), mailHref = decodeURIComponent(await page.getAttribute("#btnMail", "href"));
     check("הערות הסיור ותאריכו אינם בשדות הטופס ואינם בגוף המייל (ולא בקישור mailto)", !/ערימת מכולות|שורה שנייה|ממצאי/.test(form.join(" ") + mailBody + mailHref) && !new RegExp(vd + "\\." + vm + "\\." + vy).test(mailBody), "");
+    await openMore(page);
     const dlp = async sel => { const [d] = await Promise.all([page.waitForEvent("download"), page.click(sel)]); const p = path.join(OUT, "s9-" + d.suggestedFilename()); await d.saveAs(p); return p; };
     { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), z = await JZ.loadAsync(fs.readFileSync(await dlp("#btnDocx")));
       const doc = await z.file("word/document.xml").async("string"), plain = doc.replace(/<[^>]+>/g, "").replace(new RegExp("[" + String.fromCharCode(0x202a, 0x202c) + "]", "g"), "").replace(/&quot;/g, '"');
       check("הערות הסיור והתאריך בקובץ ה-Word (בסעיף ״הנקודה״ של דף הבדיקות), ה-HTML מוצג כטקסט", plain.includes("הערות המבקש (סיור באתר ב-" + vd + "." + vm + "." + vy + ")") && /ערימת מכולות ליד השער/.test(plain) && plain.includes("&lt;b&gt;x&lt;/b&gt;") && !doc.includes("<b>x</b>") && /שורה שנייה/.test(plain), ""); }
     // (ב) שני משתתפים תקינים נכנסים לשדה 11 ולמייל; ה-HTML שלהם מוצג כטקסט
     check("שני המשתתפים התקינים בשדה 11 (ממוספרים, עם טלפון), שורה ריקה לא נכנסה, ואין הערה לאף משתתף", /משתתפים נוספים בטיסה:/.test(form[10]) && /1\. דנה כהן, 050-1112222/.test(form[10]) && /2\. יוסי לוי <i>x<\/i>, 050-1113333/.test(form[10]) && !/3\./.test(form[10]) && (await page.locator("#report .paper:first-child table.f tr").nth(10).locator("i").count()) === 0, form[10]);
-    check("שני המשתתפים במייל (גוף ו-mailto) כל אחד בשורה ממוספרת", /משתתפים נוספים בטיסה:\n1\. דנה כהן, 050-1112222\n2\. יוסי לוי <i>x<\/i>, 050-1113333/.test(mailBody) && /משתתפים נוספים בטיסה/.test(mailHref), mailBody.slice(0, 500));
-    check("מכשולים שידועים למבקש בשדה 8 (כלשונם) ובמייל", /מכשולים שידועים למבקש: עמוד חשמל; דינוזאור מתנפח כחול, <i>חלל<\/i> אפל/.test(form[7]) && /מכשולים שידועים למבקש: עמוד חשמל; /.test(mailBody), "");
+    check("המשתתפים הנוספים אינם במייל הקצר (גוף ו-mailto) — הם בטופס ה-Word בלבד", !/משתתפים|דנה כהן|1112222|1113333/.test(mailBody + mailHref), mailBody.slice(0, 500));
+    check("מכשולים שידועים למבקש בשדה 8 (כלשונם), ולא במייל הקצר", /מכשולים שידועים למבקש: עמוד חשמל; דינוזאור מתנפח כחול, <i>חלל<\/i> אפל/.test(form[7]) && !/מכשולים|עמוד חשמל|דינוזאור/.test(mailBody), "");
     // רינדור מחדש בעריכה רכה: הערות, משתתפים וטלפון איש קשר (אזהרה לפי איש קשר) — בלי לבטל את הניתוח
     await page.evaluate(() => { document.getElementById("driveMsg").textContent = "x"; document.getElementById("sendMsg").textContent = "y"; });
     await page.fill("#visitNotes", "ממצא חדש: חסום ליד הגדר");
@@ -999,7 +1005,7 @@ try {
       check("שליחת בדיקה הצליחה (לבעלים בלבד)", /נשלח במצב בדיקה/.test(pr) && /לא נשלח למשרד נוטאם/.test(pr), pr.slice(0, 160));
       const mails = page._env.mails;
       check("נשלח מייל אחד לכתובת הארגון עם 6 קבצים מצורפים (Word, KML וארבע תמונות — בלי JSON) ללא נמען חיצוני", mails.length === 1 && mails[0].to === "office@icd.org.il" && mails[0].attachments.length === 6 && !/iaa\.gov\.il/.test(JSON.stringify(mails[0].to + mails[0].cc)), mails.length + " מיילים; " + (mails[0] && mails[0].attachments.map(a => a.name).join(" | ")));
-      check("נושא הבדיקה מסומן ונוסח המייל נשמר", /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית — /.test(mails[0].subject) && /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\)/.test(mails[0].body), mails[0].subject.slice(0, 80));
+      check("נושא הבדיקה מסומן ונוסח המייל נשמר", /^\[בדיקה — לא נשלח למשרד נוטאם\] בקשה לסגירה אווירית — /.test(mails[0].subject) && /קבצים מצורפים: טופס הבקשה \(Word\), קובץ KML וארבע תמונות מפה/.test(mails[0].body) && /^• גורם מבקש: /m.test(mails[0].body), mails[0].subject.slice(0, 80));
       const folder = reqFolders(page._env)[0];
       check("סימון 'נשלח (בדיקה)' נוצר בתיקייה בדרייב", folder.files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folder.files.map(f => f.name).join(" | ").slice(0, 200));
       const sm = await page.textContent("#sendMsg"); check("ההודעה בעמוד מציינת שליחה לבדיקה בלבד", /בדיקה/.test(sm), sm.slice(0, 120));
@@ -1009,7 +1015,7 @@ try {
       const nBegin = () => page._calls.actions.filter(a => a === "saveBegin").length, b0 = nBegin();
       await sendAgainTest();
       check("בקשה שלא השתנתה: שליחה חוזרת (בדיקה) משתמשת בתיקייה השמורה — בלי saveBegin נוסף", nBegin() === b0 && page._env.mails.length === 2, "saveBegin " + b0 + "→" + nBegin() + ", מיילים " + page._env.mails.length);
-      await page.click("#incChecks");                                   // משנה את קובץ ה-Word
+      await openMore(page); await page.click("#incChecks");            // משנה את קובץ ה-Word (ההורדות — ב״אפשרויות נוספות״)
       await sendAgainTest();
       check("אחרי שינוי שמשפיע על הקבצים: נשמר מחדש לפני השליחה (saveBegin נוסף)", nBegin() === b0 + 1 && page._env.mails.length === 3, "saveBegin " + nBegin() + ", מיילים " + page._env.mails.length);
       // הודעות 'נשלח'/'נשמר' שייכות לבקשה שנשלחה — כשהבקשה משתנה הן נמחקות ולא מטעות לגבי הבקשה החדשה
@@ -1111,7 +1117,8 @@ try {
       await page.click("#auReg"); await page.waitForSelector("#regForm");
       // כתובת בלי כרטיס שולם (רוכש שאינו חבר): אותה תשובה, אין מייל, והקוד לא יעבוד
       await page.fill("#rgEmail", "visitor@example.com"); await page.click("#rgSend"); await page.waitForSelector("#rgStep2", { state: "visible" });
-      check("בלי כרטיס זכאי: אותה הודעה גנרית ולא נשלח קוד", /אם נמצא כרטיס ששולם/.test(await page.textContent("#rgInfo")) && env.mails.length === 0, "");
+      // אותה הודעה גנרית על המסך; לא נשלח קוד. השרת שולח לכתובת בלי כרטיס זכאי (גם רוכש אורח) לכל היותר הודעת ״לא נמצא כרטיס״ — ורק לכתובת שהוקלדה (התוצאה הספציפית נמסרת במייל בלבד, לא על המסך)
+      check("בלי כרטיס זכאי: אותה הודעה גנרית על המסך, ולא נשלח קוד (לכל היותר הודעת ״לא נמצא כרטיס״ לכתובת שהוקלדה בלבד)", /אם נמצא כרטיס ששולם/.test(await page.textContent("#rgInfo")) && env.mails.every(m => m.to === "visitor@example.com" && !/\b\d{6}\b/.test(m.subject + " " + m.body)), JSON.stringify(env.mails.map(m => [m.to, m.subject])));
       await page.fill("#rgCode", "123456"); await page.fill("#rgUser", "vis.user"); await page.fill("#rgPass", "visitor-pass-12"); await page.click("#rgGo");
       await page.waitForFunction(() => document.querySelector("#rgErr").textContent.length > 0);
       check("קוד שגוי נדחה בהודעה ברורה ולא נוצר חשבון", /הקוד שגוי/.test(await page.textContent("#rgErr")) && !env.props["U:vis.user"], await page.textContent("#rgErr"));
@@ -1119,8 +1126,8 @@ try {
       await page.fill("#rgEmail", "pilot@example.com"); await page.click("#rgSend");
       await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0);
       await page.waitForFunction(() => true); await page.waitForTimeout(300);
-      const mailRec = env.mails[env.mails.length - 1], code = /(\d{6})/.exec(mailRec.subject)[1];
-      check("נשלח קוד בן 6 ספרות רק לכתובת הרכישה", mailRec.to === "pilot@example.com" && env.mails.length === 1, mailRec.to);
+      const codeMails = env.mails.filter(m => /\b\d{6}\b/.test(m.subject)), mailRec = codeMails[codeMails.length - 1], code = mailRec ? /(\d{6})/.exec(mailRec.subject)[1] : "";
+      check("נשלח קוד בן 6 ספרות רק לכתובת הרכישה (ואף קוד לא נשלח לכתובת אחרת; לכתובת בלי כרטיס יצאה לכל היותר הודעת ״לא נמצא כרטיס״)", !!mailRec && codeMails.length === 1 && mailRec.to === "pilot@example.com" && env.mails.every(m => m.to === "pilot@example.com" || m.to === "visitor@example.com"), env.mails.map(m => m.to).join(","));
       await page.fill("#rgCode", code); await page.fill("#rgUser", "dana.pilot"); await page.fill("#rgPass", "dana-pass-1234"); await page.click("#rgGo");
       await page.waitForSelector("#authCover", { state: "detached", timeout: 20000 });
       const sub = await page.textContent("#ubSub");
@@ -1349,7 +1356,7 @@ try {
     check("מהות שהוסרה לא חוזרת אחרי טעינה מחדש", !(await chips()).includes(P1) && !(await opts()).includes(P1) && !(await opts()).includes("Survey Mode"), (await chips()).join("|"));
     // לחצן ״!״ ליד כפתור ההוספה
     { const hb = page.locator(".hw:has(#puAdd) > .hbtn"), help = await hb.getAttribute("data-help");
-      check("״!״ ליד ״הוסף מהות פעילות״: צמוד לכפתור, aria-label ייחודי, והסבר מדויק (מה נשמר, איפה, שדה 4 בטופס ובמייל, ורק מה שהוספת ניתן להסרה)", (await hb.count()) === 1 && (await hb.getAttribute("aria-label")) === "הסבר על: הוספת מהות פעילות" && (await page.locator('.hbtn[aria-label="הסבר על: הוספת מהות פעילות"]').count()) === 1 && /בדפדפן הזה בלבד/.test(help) && /לא בשרת/.test(help) && /עד 30 מהויות נוספות/.test(help) && /שדה 4 בטופס הרשמי/.test(help) && /למייל/.test(help) && /אי אפשר להסיר/.test(help), help);
+      check("״!״ ליד ״הוסף מהות פעילות״: צמוד לכפתור, aria-label ייחודי, והסבר מדויק (מה נשמר, איפה, שדה 4 בטופס ובקובץ ה-Word ולא בגוף המייל הקצר, ורק מה שהוספת ניתן להסרה)", (await hb.count()) === 1 && (await hb.getAttribute("aria-label")) === "הסבר על: הוספת מהות פעילות" && (await page.locator('.hbtn[aria-label="הסבר על: הוספת מהות פעילות"]').count()) === 1 && /בדפדפן הזה בלבד/.test(help) && /לא בשרת/.test(help) && /עד 30 מהויות נוספות/.test(help) && /שדה 4 בטופס הרשמי/.test(help) && /לקובץ ה-Word/.test(help) && /לא לגוף המייל הקצר/.test(help) && !/ולמייל/.test(help) && /אי אפשר להסיר/.test(help), help);
       await hb.click();
       check("״!״ של המהות נפתח: הבועה מציגה את ההסבר, aria-expanded=true", (await bubble()) === help && (await hb.getAttribute("aria-expanded")) === "true", "");
       await hb.click(); check("לחיצה נוספת על ״!״ סוגרת", (await bubble()) === null && (await hb.getAttribute("aria-expanded")) === "false", "");
@@ -1413,7 +1420,8 @@ try {
       const rows = p2.locator("#report .paper:first-child table.f tr"), row4 = rows.nth(3), form = await row4.innerText(), formHtml = await row4.innerHTML();
       check("מהות מותאמת עוינת: מופיעה בשדה 4 בטופס כטקסט (escaped), בלי תגית מוזרקת ובלי הפעלת סקריפט", /מהות הפעילות המבוקשת/.test(form) && form.replace(/\s+/g, " ").includes(HOSTILE) && formHtml.includes("&lt;img src=x onerror=") && !formHtml.includes("<img") && (await p2.locator("#report img[src='x']").count()) === 0 && (await p2.evaluate(() => window.__xss === undefined)), form.slice(0, 160));
       const mailBody = await p2.evaluate(() => window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg).body), mailHref = decodeURIComponent(await p2.getAttribute("#btnMail", "href"));
-      check("המהות המותאמת בגוף המייל ובקישור mailto (שורה ״מהות הפעילות: …״)", mailBody.split("\n").includes("מהות הפעילות: " + HOSTILE) && mailHref.includes("מהות הפעילות: " + HOSTILE), mailBody.slice(0, 200));
+      check("המהות המותאמת אינה במייל הקצר (גוף ו-mailto) — היא בטופס ובקובץ ה-Word", !mailBody.includes("מהות הפעילות") && !mailBody.includes(HOSTILE) && !mailHref.includes(HOSTILE), mailBody.slice(0, 200));
+      await openMore(p2);
       { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), [d] = await Promise.all([p2.waitForEvent("download"), p2.click("#btnDocx")]), pth = path.join(OUT, "s12-" + d.suggestedFilename());
         await d.saveAs(pth);
         const doc = await (await JZ.loadAsync(fs.readFileSync(pth))).file("word/document.xml").async("string"), plain = doc.replace(/<[^>]+>/g, "").replace(new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g"), "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -1422,7 +1430,7 @@ try {
       await p2.click("#btnSend"); await p2.waitForSelector(".sendBox"); await p2.check("#sendOk"); await p2.click("#sendGo");
       await p2.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
       const mails = p2._env.mails, folder = reqFolders(p2._env)[0], jf = folder && folder.files.find(f => f.name.endsWith(".json")), rec = jf ? JSON.parse(jf.bytes.toString("utf8")) : {};
-      check("המהות המותאמת במייל שנשלח (שרת Apps Script) ובקובץ נתוני הבקשה בדרייב (inputs.purpose)", mails.length === 1 && mails[0].body.split("\n").includes("מהות הפעילות: " + HOSTILE) && rec.inputs && rec.inputs.purpose === HOSTILE, mails.length + " מיילים");
+      check("המהות המותאמת בקובץ נתוני הבקשה בדרייב (inputs.purpose), ולא במייל שנשלח (שרת Apps Script)", mails.length === 1 && !mails[0].body.includes(HOSTILE) && rec.inputs && rec.inputs.purpose === HOSTILE, mails.length + " מיילים");
       await p2.click("#mdClose");
       // בחירה במהות אחרת אחרי ההרצה: שדה רך — הטופס מתעדכן והבקשה נשארת מוכנה
       await p2.selectOption("#purpose", cfgPu[0]);
@@ -1865,14 +1873,14 @@ try {
     check("שדה 2 בטופס הוא הגורם שהוקלד; שדה 13 = אות הקריאה; שדה 14 = מס׳ הרישום", /חברת אלפא בע״מ/.test(form[1]) && /אלפא 1/.test(form[12]) && /4X-ALF/.test(form[13]) && !/לרב להב|ICD/.test(form.join(" ")), form[1] + " | " + form[12] + " | " + form[13]);
     const mailNow = () => page.evaluate(() => { const m = window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg); return { body: m.body, mailto: decodeURIComponent(m.mailto) }; });
     let mn = await mailNow();
-    check("המייל: שורת ״שם/גורם המבקש״ והחתימה לפי הגורם שהוקלד (גם ב-mailto)", mn.body.split("\n").includes("שם/גורם המבקש: חברת אלפא בע״מ") && /בברכה,\nבודק ראשון\nחברת אלפא בע״מ\n050-0000001/.test(mn.body) && mn.mailto.includes("חברת אלפא בע״מ") && !/לרב להב/.test(mn.body), "");
+    check("המייל: שורת ״גורם מבקש״ והחתימה לפי הגורם שהוקלד (גם ב-mailto)", mn.body.split("\n").includes("• גורם מבקש: חברת אלפא בע״מ") && /בברכה,\nבודק ראשון\nחברת אלפא בע״מ\n050-0000001/.test(mn.body) && mn.mailto.includes("חברת אלפא בע״מ") && !/לרב להב/.test(mn.body), "");
     // עריכת הגורם אחרי ההרצה: שדה רך — הטופס והמייל מתעדכנים, הבקשה נשארת מוכנה, התוצאות הקודמות נמחקות
     await page.evaluate(() => { document.getElementById("sendMsg").textContent = "x"; });
     await page.fill("#reqOrg", "חברת בטא");
     await page.waitForFunction(() => /חברת בטא/.test((document.querySelector("#report .paper:first-child table.f tr:nth-child(2)") || {}).innerText || ""), null, { timeout: 15000 });
     await page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending, null, { timeout: 30000 });
     form = await formRows(); mn = await mailNow();
-    check("עריכת הגורם המבקש אחרי ההרצה: שדה 2 והמייל מתעדכנים, הבקשה נשארת מוכנה לשליחה, והודעת ״נשלח״ הקודמת נמחקת", /חברת בטא/.test(form[1]) && !/אלפא/.test(form[1]) && mn.body.includes("שם/גורם המבקש: חברת בטא") && !(await page.isDisabled("#btnSend")) && (await page.textContent("#sendMsg")) === "", form[1]);
+    check("עריכת הגורם המבקש אחרי ההרצה: שדה 2 והמייל מתעדכנים, הבקשה נשארת מוכנה לשליחה, והודעת ״נשלח״ הקודמת נמחקת", /חברת בטא/.test(form[1]) && !/אלפא/.test(form[1]) && mn.body.includes("• גורם מבקש: חברת בטא") && !(await page.isDisabled("#btnSend")) && (await page.textContent("#sendMsg")) === "", form[1]);
     // מחיקת הגורם: אימות נכשל, השער נסגר והשליחה חסומה; החזרה מחזירה מוכנות
     await page.fill("#reqOrg", "");
     await page.waitForFunction(() => document.getElementById("e_requesterOrg").textContent.length > 0 && window.__REQ.S.ready === false && /הבקשה אינה מוכנה/.test(document.getElementById("gate").textContent), null, { timeout: 15000 });
@@ -1883,6 +1891,7 @@ try {
     // Word: שם הגורם בטופס, ב-core.xml (יוצר המסמך), ובלי ארגון קבוע
     const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), BIDI = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200f) + "]", "g");
     const docxParts = async buf => { const z = await JZ.loadAsync(buf); return { doc: await z.file("word/document.xml").async("string"), core: await z.file("docProps/core.xml").async("string") }; };
+    await openMore(page);
     { const [d] = await Promise.all([page.waitForEvent("download"), page.click("#btnDocx")]); const p = path.join(OUT, "indep-" + d.suggestedFilename()); await d.saveAs(p);
       const { doc, core } = await docxParts(fs.readFileSync(p)), plain = doc.replace(/<[^>]+>/g, "").replace(BIDI, "");
       check("Word שהורד: שדה 2 = ״חברת בטא״, אות הקריאה ומס׳ הרישום בשדות 13 ו-14, יוצר המסמך = הגורם המבקש, ואין ארגון קבוע", plain.includes("חברת בטא") && plain.includes("אלפא 1") && plain.includes("4X-ALF") && /<dc:creator>חברת בטא<\/dc:creator>/.test(core) && !/לרב להב|ICD/.test(plain + core), core.slice(core.indexOf("<dc:creator>"), core.indexOf("</dc:creator>") + 13)); }
@@ -1894,7 +1903,7 @@ try {
     check("מנהל: אחרי שליחה מוצג הקישור ״פתח את התיקייה בדרייב״", /נשלח במצב בדיקה/.test(sm) && /פתח את התיקייה בדרייב/.test(sm) && /href="https:\/\/drive\//.test(sm), sm.slice(0, 200));
     { const env = page._env, folder = reqFolders(env)[0], dx = folder.files.find(f => /\.docx$/.test(f.name)), js = folder.files.find(f => /\.json$/.test(f.name));
       const { doc, core } = await docxParts(dx.bytes), plain = doc.replace(/<[^>]+>/g, "");
-      check("הקובץ שנשמר בארכיון: Word עם הגורם המבקש ויוצר המסמך; מייל הבדיקה נושא את הגורם; קובץ נתוני הבקשה אינו כולל שם גורם, אות קריאה או מס׳ רישום", plain.includes("חברת בטא") && /<dc:creator>חברת בטא<\/dc:creator>/.test(core) && env.mails.length === 1 && env.mails[0].body.includes("שם/גורם המבקש: חברת בטא") && !/חברת בטא|אלפא 1|4X-ALF/.test(js.bytes.toString("utf8")), "מיילים " + env.mails.length); }
+      check("הקובץ שנשמר בארכיון: Word עם הגורם המבקש ויוצר המסמך; מייל הבדיקה נושא את הגורם; קובץ נתוני הבקשה אינו כולל שם גורם, אות קריאה או מס׳ רישום", plain.includes("חברת בטא") && /<dc:creator>חברת בטא<\/dc:creator>/.test(core) && env.mails.length === 1 && env.mails[0].body.includes("• גורם מבקש: חברת בטא") && !/חברת בטא|אלפא 1|4X-ALF/.test(js.bytes.toString("utf8")), "מיילים " + env.mails.length); }
     await ctx.close();
   }
   {
@@ -1921,8 +1930,8 @@ try {
     const newSite = async name => { await page.fill("#siteName", name); await page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending && !window.__REQ.S.building, null, { timeout: 90000 }); };
     const waitSent = re => page.waitForFunction(r => new RegExp(r).test(document.querySelector("#sendProg").textContent), re, { timeout: 120000 });
     const lastMail = () => env.mails[env.mails.length - 1], sends = () => page._calls.sends || [];
-    const driveHidden = async () => !(await page.isVisible("#btnDrive")) && !(await page.locator(".hw:has(#btnDrive)").isVisible());
-    check("משתמש רגיל: כפתור ״שמור בדרייב״ וה-״!״ שלו מוסתרים", await driveHidden(), "");
+    const driveShown = async () => (await page.isVisible("#btnDrive")) && (await page.locator(".hw:has(#btnDrive)").isVisible()) && (await page.locator("#driveMsg a").count()) === 0 && !(await page.isVisible("#manualMail")) && (await page.evaluate(() => document.getElementById("manualMail").hidden));
+    check("משתמש רגיל: כפתור ״שמור בדרייב״ וה-״!״ שלו מוצגים (כמו ״שלח״), המייל הידני (למנהל) מוסתר, ואין קישור לתיקייה", await driveShown(), "");
     // --- א. dana, מצב חי: שני כפתורים, הטקסט מפרט מי מקבל מה; שלח רק לעצמי -> למשרד באותו חלון ---
     setMode("live");
     let t = await dlg();
@@ -1997,7 +2006,7 @@ try {
     await page.click("#ubOut"); await login(page, "dave.pilot", "dave-pass-12345"); setMode("live"); await readyRequest(page, { org: "דייב צילום" });
     g = await ga();
     check("חשבון ארגוני שנוצר ידנית בלי כתובת: org=true, email ריק, copyTo=כתובת הארגון, copyToIsOwner=true", g.org === true && g.email === "" && g.copyTo === ORGA && g.own === true && g.role === "user", JSON.stringify(g));
-    check("משתמש רגיל אחר: כפתור הדרייב עדיין מוסתר", await driveHidden(), "");
+    check("משתמש רגיל אחר: כפתור הדרייב מוצג והמייל הידני מוסתר", await driveShown(), "");
     t = await dlg();
     check("דיאלוג ארגוני (חי, בלי כתובת רשומה): ״עותק: הארגון (office@icd.org.il) · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב״, בלי הכתובת של הבעלים", t.includes("עותק: הארגון (" + ORGA + ") · התשובות יחזרו אל הארגון · שם השולח: הארגון הישראלי לרב להב") && !t.includes(OWNER) && !t.includes("בעל המערכת") && (await page.textContent("#sendSelf")) === "שלח רק לעצמי (עותק לבדיקה)", t.slice(0, 500));
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה");
@@ -2005,9 +2014,9 @@ try {
     check("שליחה למשרד מחשבון ארגוני בלי כתובת: cc=כתובת הארגון (ללא bcc), replyTo=הארגון, name=שם הארגון, ההודעה ״(עותק לארגון)״", /^נשלחה למשרד נוטאם ✔ \(עותק לארגון\)/.test(pr) && m.to === OFFICE && m.cc === ORGA && !m.bcc && m.replyTo === ORGA && m.name === "הארגון הישראלי לרב להב", pr + " | " + JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, name: m.name }));
     await closeDlg();
     const sb0 = page._calls.actions.filter(a => a === "saveBegin").length;
-    await page.evaluate(() => { document.getElementById("btnDrive").click(); });   // הגנה לעומק: גם לחיצה תוכנתית על הכפתור המוסתר לא שומרת בדרייב
+    await page.click("#btnDrive");   // הגרסה הזו כבר נשלחה חי למשרד (והתיקייה נעולה): שמירה נוספת הייתה פותחת תיקייה כפולה
     await page.waitForTimeout(500);
-    check("משתמש רגיל: לחיצה תוכנתית על ״שמור בדרייב״ המוסתר אינה פותחת שמירה (אין saveBegin נוסף ואין הודעה)", page._calls.actions.filter(a => a === "saveBegin").length === sb0 && (await page.textContent("#driveMsg")) === "", "");
+    check("משתמש רגיל: ״שמור בדרייב״ אחרי שהגרסה נשלחה חי אינו פותח תיקייה כפולה (אין saveBegin נוסף) ומציג הודעה בלי קישור לתיקייה", page._calls.actions.filter(a => a === "saveBegin").length === sb0 && /כבר נשלחה למשרד נוטאם ושמורה בדרייב/.test(await page.textContent("#driveMsg")) && (await page.locator("#driveMsg a").count()) === 0, await page.textContent("#driveMsg"));
     setMode("test"); await newSite("אתר ד דייב בדיקה"); t = await dlg();
     check("דיאלוג ארגוני (בדיקה, בלי כתובת רשומה): המייל יישלח רק אל כתובת הארגון, ולא למשרד", t.includes("המייל יישלח רק אל " + ORGA + " ולא למשרד נוטאם · התשובות יחזרו אל הארגון") && (await page.textContent("#sendGo")) === "שלח בדיקה אליי", t.slice(0, 300));
     await page.check("#sendOk"); await page.click("#sendGo"); await waitSent("נשלח במצב בדיקה|נכשלה");
@@ -2227,7 +2236,7 @@ try {
       await page.click("#runBtn");
       await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
       const inp = await page.evaluate(() => { const S = window.__REQ.S, m = window.__REQ.O.mail(S.res, S.cfg); return { ac: S.res.inp.aircraft, mail: m.subject + "\n" + m.body, form: window.__REQ.O.buildForm(S.res, S.cfg).map(r => r.text).join("\n") }; });
-      check("n=15: הכלי היחיד בבקשה (מודל, טופס ומייל) הוא זה שהמטיס בחר — בלי כלי של הארגון", JSON.stringify(inp.ac) === JSON.stringify(["Noa Own Drone"]) && inp.mail.includes("Noa Own Drone") && inp.form.includes("Noa Own Drone") && !cfgAc.some(a => inp.mail.includes(a) || inp.form.includes(a)), JSON.stringify(inp.ac));
+      check("n=15: הכלי היחיד בבקשה (מודל וטופס; המייל הקצר אינו מפרט כלי טיס) הוא זה שהמטיס בחר — בלי כלי של הארגון", JSON.stringify(inp.ac) === JSON.stringify(["Noa Own Drone"]) && inp.form.includes("Noa Own Drone") && !cfgAc.some(a => inp.mail.includes(a) || inp.form.includes(a)), JSON.stringify(inp.ac));
       await ctx.close();
     }
     // 16ו: הודעות סנכרון ותחזוקה — ניסוח ניטרלי עם כתובת תמיכה למטיס רגיל (בבאנר, ברשימת השער ובהודעת עצירת ההרצה), ופירוט מלא למנהל (n=11/12)
@@ -2340,7 +2349,8 @@ try {
     await settle();
     const d3 = await page.evaluate(() => ({ pend: document.body.classList.contains("pendDraft"), content: getComputedStyle(document.querySelector("#report .paper"), "::before").content, draftEl: !!document.querySelector("#report .draft"), name: /בודק ראשון x/.test(document.getElementById("report").innerText) }));
     check("n=12: אחרי תום העדכון הדוח נבנה מחדש עם הערך החדש, בלי באנר טיוטה ובלי המחלקה pendDraft", !d3.pend && !/טיוטה/.test(d3.content) && !d3.draftEl && d3.name, JSON.stringify(d3));
-    // --- n=13: ״פתח מייל״ אינו ניתן להפעלה במקלדת כשהבקשה לא מוכנה
+    // --- n=13: ״פתח מייל״ אינו ניתן להפעלה במקלדת כשהבקשה לא מוכנה (הקישור מוצג למנהל בלבד, ב-#manualMail שבתוך ״אפשרויות נוספות״; כאן המשתמש רגיל ולכן חושפים את הבלוק כמו שהמנהל רואה אותו — שער המוכנות אינו תלוי בתפקיד)
+    await page.evaluate(() => { document.getElementById("moreOptions").hidden = false; document.getElementById("manualMail").hidden = false; });
     const mailOk = await page.evaluate(() => { const a = document.getElementById("btnMail"); return { tab: a.tabIndex, aria: a.getAttribute("aria-disabled") }; });
     await page.uncheck("#reviewOk");
     await page.evaluate(() => { const a = document.getElementById("btnMail"); window.__dp = null; a.addEventListener("click", e => { window.__dp = e.defaultPrevented; }); a.focus(); });
@@ -2476,8 +2486,11 @@ try {
       let pr = await probe();
       check("n=21: " + (noApi ? "מסך ״שרת ההתחברות לא הוגדר״" : "מסך הכניסה") + " (390px): קישור ״← חזרה למפה״ אל ../ בתוך הכיסוי, לחיץ (הנקודה במרכזו פוגעת בו), גובה 44px לפחות ובתוך האזור הבטוח", !!pr && pr.text === "← חזרה למפה" && pr.hit && pr.h >= 44 && pr.top >= 44 && pr.bottom <= pr.vh - 34, JSON.stringify(pr));
       if (!noApi) {
-        await page.click("#auReg"); await page.waitForSelector("#regForm"); pr = await probe();
-        check("n=21: מסך ההרשמה: אותו קישור ״← חזרה למפה״ לחיץ, 44px לפחות", !!pr && pr.hit && pr.h >= 44, JSON.stringify(pr));
+        await page.click("#auReg"); await page.waitForSelector("#regForm");
+        // מסך ההרשמה ארוך יותר מהמסך (תיבת ההסבר על הכרטיס בראשו): הכיסוי נגלל, והקישור שבסופו נבדק אחרי גלילה לסוף — לחיץ, 44px לפחות ובתוך האזור הבטוח
+        await page.evaluate(() => { const c = document.getElementById("authCover"); c.scrollTop = c.scrollHeight; });
+        pr = await probe();
+        check("n=21: מסך ההרשמה: אותו קישור ״← חזרה למפה״ (בסוף הכיסוי הנגלל) לחיץ, 44px לפחות ובתוך האזור הבטוח", !!pr && pr.hit && pr.h >= 44 && pr.top >= 44 && pr.bottom <= pr.vh - 34, JSON.stringify(pr));
         // חוזה השרת החדש: מכסת המייל היומית מלאה גם בהרשמה (קוד האימות לא יכול להישלח) — הודעה ברורה ולא ״שגיאה לא ידועה״
         o21.intercept = b => b.action === "regStart" ? { ok: false, error: "mail_quota", message: "הודעת שרת" } : undefined;
         await page.fill("#rgEmail", "someone@example.com"); await page.click("#rgSend");
@@ -2648,7 +2661,7 @@ try {
     g = await page.evaluate(() => ({ email: ReqAuth.getEmail(), copyTo: ReqAuth.getCopyTo(), own: ReqAuth.getCopyToIsOwner(), org: ReqAuth.isOrg(), role: ReqAuth.getRole() }));
     check("olga: ארגונית (org=true, role=user) עם כתובת שמורה — copyTo=הכתובת שלה", g.org === true && g.role === "user" && g.email === "olga@example.com" && g.copyTo === "olga@example.com" && g.own === false, JSON.stringify(g));
     t = await dlg();
-    check("דיאלוג ארגוני עם כתובת שמורה: ״עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון״; כפתור ״שמור בדרייב״ מוסתר (לא מנהלת)", t.includes("עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME) && !(await page.locator(".hw:has(#btnDrive)").isVisible()), t.slice(0, 400));
+    check("דיאלוג ארגוני עם כתובת שמורה: ״עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון״; כפתור ״שמור בדרייב״ מוצג (לכולם) והמייל הידני מוסתר (לא מנהלת)", t.includes("עותק: הארגון ואליך (olga@example.com) · התשובות יחזרו אל הארגון · שם השולח: " + ORG_NAME) && (await page.locator(".hw:has(#btnDrive)").isVisible()) && !(await page.isVisible("#manualMail")), t.slice(0, 400));
     await sendOffice("נשלחה למשרד נוטאם|נכשלה|כבר נשלחה"); m = lastMail();
     check("ארגונית עם כתובת, למשרד: cc=כתובת הארגון וגם כתובתה (בלי כפילות), בלי bcc, replyTo=הארגון, name=שם הארגון; ההודעה ״(עותק אליך ולארגון)״; בלי קישור לתיקייה", m.to === OFFICE && m.cc === ORG_ADDR + ",olga@example.com" && !m.bcc && m.replyTo === ORG_ADDR && m.name === ORG_NAME && /\(עותק אליך ולארגון\)/.test(norm(await page.textContent("#sendProg"))) && !(await page.$("#sendMsg a")), JSON.stringify({ to: m.to, cc: m.cc, bcc: m.bcc, replyTo: m.replyTo }));
     await closeDlg();
@@ -2804,6 +2817,341 @@ try {
     await ctx.close();
   }
 
+  /* NEW18-BEGIN */
+  /* ===== תרחיש 18: הפקות פשוטות — שלושה כפתורים לכל חשבון (שמור בדרייב, שליחה במייל, אפשרויות נוספות = כל ההורדות), המייל הידני (העתקה ו-mailto) והקישור לתיקייה למנהל בלבד; שמירה אוטומטית בדרייב כשהכול סומן (עובד ארגון, מטיס עצמאי, מנהל); מייל קצר בנקודות ושליחה עם הקבצים ===== */
+  if (!LIVE) {
+    const sleepMs = ms => new Promise(r => setTimeout(r, ms));
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    env.call({ action: "addUser", token: admTok, newUser: "ora.org", newPass: "ora-pass-12345" });   // עובד ארגון: חשבון ארגוני שאינו מנהל
+    env.props.WIX_API_KEY = "test-key";                                                              // מטיס עצמאי עם כתובת שמורה: נרשם בכרטיס Wix ששולם, אחרי אימות קוד
+    env.wix.orders.push({ orderNumber: "ORD-AUTO-1", status: "PAID", created: new Date(Date.now() - 3 * 86400000).toISOString(), email: "pia@example.com", firstName: "פיה", memberId: "m-auto", tickets: [] });
+    env.call({ action: "regStart", email: "pia@example.com" });
+    const regCode = /(\d{6})/.exec(env.mails[env.mails.length - 1].subject)[1], reg = env.call({ action: "regFinish", email: "pia@example.com", code: regCode, user: "pia.pilot", pass: "pia-pass-12345" });
+    env.mails.length = 0;
+    check("הכנה: ora.org ארגונית (לא מנהלת), pia.pilot עצמאית עם כתובת שמורה", reg.ok && reg.org === false && reg.email === "pia@example.com", JSON.stringify([reg.ok, reg.org, reg.email]));
+    const openAs = async (user, pass, extra) => {
+      const popts = Object.assign({ env, autosave: true }, extra || {}), { ctx, page } = await newPage(browser, popts);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, pass);
+      return { ctx, page, popts };
+    };
+    const n = (page, a) => page._calls.actions.filter(x => x === a).length;
+    const folders = () => reqFolders(env);
+    const ready = page => page.waitForFunction(() => window.__REQ.S.ready === true && !window.__REQ.S.pending && !window.__REQ.S.building, null, { timeout: 90000 });
+    const softEdit = (page, id, v) => page.evaluate(([i, x]) => { const e = document.getElementById(i); e.value = x; e.dispatchEvent(new Event("input", { bubbles: true })); }, [id, v]);
+    const AUTO_RE = /^נשמר אוטומטית בדרייב ✔ \(\d\d:\d\d\)/, autoDone = page => page.waitForFunction(re => new RegExp(re).test(document.getElementById("driveMsg").textContent), AUTO_RE.source, { timeout: 90000 });
+    const runOnly = async (page, over) => { await fillExample(page, over); await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 }); };
+    // הפקדים הגלויים בסעיף 5 (כפתורים, קישורים ותיבות סימון; בלי ״!״): מזהים בסדר המסמך. מה שבתוך ״אפשרויות נוספות״ הסגור, או ב-#manualMail המוסתר, אינו נספר (אין לו תיבת פריסה)
+    const visibleControls = page => page.evaluate(() => [...document.querySelectorAll("#actions button:not(.hbtn), #actions a, #actions input")].filter(e => e.getClientRects().length > 0).map(e => e.id || e.tagName));
+    const docxOf = async folder => { const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), f = folder.files.find(x => !x.trashed && /\.docx$/.test(x.name)); return (await (await JZ.loadAsync(f.bytes)).file("word/document.xml").async("string")).replace(/<[^>]+>/g, ""); };
+    const THREE = ["btnDrive", "btnSend", "btnMore"], DOWNLOADS = ["btnPrint", "btnDocx", "incChecks", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion"], MAIL = ["btnCopy", "btnMail"];
+    // מצב הלוח ״אפשרויות נוספות״ והמייל הידני: aria של הכפתור, האם נפתח, והאם מוצג (תיבת פריסה) — ובנפרד מה שבלוח גלוי / פעיל (כפתור, ״כולל דף בדיקות״, ושני פקדי המייל)
+    const moreState = page => page.evaluate(() => { const b = document.getElementById("btnMore"), p = document.getElementById("moreOptions"), m = document.getElementById("manualMail"), on = e => e.getClientRects().length > 0;
+      return { exp: b.getAttribute("aria-expanded"), ctl: b.getAttribute("aria-controls"), txt: b.textContent.trim(), panelHidden: p.hidden, panelShown: on(p), mailHidden: m.hidden, mailShown: on(m), text: document.getElementById("actions").innerText }; });
+    const enabledOf = (page, ids) => page.evaluate(l => l.map(id => { const e = document.getElementById(id); return e.id === "btnMail" ? e.getAttribute("aria-disabled") !== "true" : !e.disabled; }), ids);
+
+    /* ---- א. עובד ארגון: שלושה כפתורים; ההורדות ב״אפשרויות נוספות״; שמירה אוטומטית רק אחרי שהכול סומן, בהשהיה, פעם אחת לגרסה ---- */
+    {
+      const { ctx, page, popts } = await openAs("ora.org", "ora-pass-12345");
+      await runOnly(page, { org: "חברת עובד הארגון" });
+      await sleepMs(2600);   // יותר מההשהיה (1.5 שנ׳)
+      check("עובד ארגון: אחרי ההרצה אך לפני אישור הסקירה (לא הכול סומן) לא נשמר דבר בדרייב — אין saveBegin ואין תיקייה", n(page, "saveBegin") === 0 && folders().length === 0 && (await page.evaluate(() => window.__REQ.S.ready)) === false && (await page.evaluate(() => window.__REQ.autoPending())) === false, "saveBegin=" + n(page, "saveBegin"));
+      await page.check("#reviewOk"); await ready(page);
+      const tReady = Date.now();
+      await sleepMs(400);
+      check("עובד ארגון: מיד אחרי שהבקשה מוכנה השמירה ממתינה (השהיה של כ-1.5 שנ׳) — עדיין אין saveBegin", n(page, "saveBegin") === 0 && (await page.evaluate(() => window.__REQ.autoPending())) === true, "saveBegin=" + n(page, "saveBegin"));
+      await autoDone(page);
+      const i0 = page._calls.actions.indexOf("saveBegin"), at0 = page._calls.at[i0];
+      check("עובד ארגון: השמירה האוטומטית התחילה כ-1.5 שנ׳ אחרי שהבקשה נהייתה מוכנה (לא מיד)", at0 - tReady >= 1000 && at0 - tReady < 20000, (at0 - tReady) + " מ״ש");
+      check("עובד ארגון: סדרה אחת בדיוק saveBegin → 7×saveFile → saveEnd (בלי קריאות אחרות באמצע)", JSON.stringify(page._calls.actions.slice(i0)) === JSON.stringify(["saveBegin", ...Array(7).fill("saveFile"), "saveEnd"]), page._calls.actions.slice(i0).join(","));
+      const fo = folders()[0];
+      check("עובד ארגון: התיקייה בארכיון המרכזי תחת ״הארגון״ עם 7 קבצים (Word, KML, ארבע תמונות, נתוני בקשה), והשרת סימן את הבקשה מוכנה", folders().length === 1 && /^הארגון\//.test(folderPath(env, fo)) && fo.files.filter(f => !f.trashed).length === 7 && !fo.files.some(f => /^נשלח/.test(f.name)) && env.call({ action: "listRequests", token: admTok }).requests.find(r => r.name === fo.name).ready === true, folderPath(env, fo));   // והשמירה האוטומטית לא כותבת סימן ״נשלח״
+      const msg = await page.textContent("#driveMsg");
+      check("עובד ארגון: ההודעה ״נשמר אוטומטית בדרייב ✔ (HH:MM)״ — בלי קישור לתיקייה (התיקייה בדרייב של בעל המערכת)", AUTO_RE.test(msg) && msg.trim().length < 40 && (await page.locator("#driveMsg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && !/drive\./.test(await page.locator("#actions").innerHTML()), msg);
+      // הפקדים: שלושה כפתורים בלבד (כל אחד עם ״!״ שלו); ״אפשרויות נוספות״ סגור; המייל הידני (למנהל) מוסתר לגמרי (לא בסדר הטאבים, לא בעץ הנגישות), בלי טקסט ישן על מייל ידני
+      const vc = await visibleControls(page), hw = await page.evaluate(() => [...document.querySelectorAll("#actions .hw")].filter(e => e.getClientRects().length).map(e => e.querySelector("button:not(.hbtn)").id));
+      const tab = () => page.evaluate(() => [...document.querySelectorAll("#actions button, #actions a, #actions input")].filter(e => e.tabIndex >= 0 && e.getClientRects().length > 0 && !e.disabled).map(e => e.id || (e.classList.contains("hbtn") ? "!" : e.tagName)));
+      const ms0 = await moreState(page);
+      check("עובד ארגון: בסעיף 5 בדיוק שלושה כפתורים — ״שמור בדרייב״, ״✉ שלח למשרד נוטאם״ ו״אפשרויות נוספות״, כל אחד עם ״!״ שלו, ובסדר הטאבים", JSON.stringify(vc) === JSON.stringify(THREE) && JSON.stringify(hw) === JSON.stringify(THREE) && (await page.textContent("#btnDrive")) === "שמור בדרייב" && (await page.textContent("#btnSend")) === "✉ שלח למשרד נוטאם" && ms0.txt === "אפשרויות נוספות" && JSON.stringify(await tab()) === JSON.stringify(["btnDrive", "!", "btnSend", "!", "btnMore", "!"]), JSON.stringify([vc, hw]));
+      check("עובד ארגון: ״אפשרויות נוספות״ סגור כברירת מחדל (aria-expanded=false, aria-controls=moreOptions, הלוח hidden וללא תיבת פריסה), וההורדות והמייל הידני אינם גלויים", ms0.exp === "false" && ms0.ctl === "moreOptions" && ms0.panelHidden && !ms0.panelShown && ms0.mailHidden && !ms0.mailShown && !/פתח מייל|העתק טקסט|הורד Word|הורד KML|הדפס|מצרפים ידנית|הורד תצ/.test(ms0.text), JSON.stringify(ms0).slice(0, 300));
+      { const hm = await page.getAttribute(".hw:has(#btnMore) > .hbtn", "data-help");
+        check("עובד ארגון: הסבר ״!״ של ״אפשרויות נוספות״ מתאר את ההורדות ואומר שהשליחה מצרפת את הקבצים בעצמה, בלי להזכיר מייל ידני (שאינו מוצג לו)", /רשימת ההורדות/.test(hm) && /השליחה במייל מצרפת את הקבצים בעצמה/.test(hm) && !/העתקת נוסח המייל|ביומן|למנהל/.test(hm), hm.slice(0, 160)); }
+      await page.click("#btnMore");
+      const ms1 = await moreState(page), vc1 = await visibleControls(page), en1 = await enabledOf(page, DOWNLOADS), tab1 = await tab();
+      check("עובד ארגון: לחיצה על ״אפשרויות נוספות״ פותחת את כל ההורדות (הדפסה/PDF, Word, ״כולל דף בדיקות״ מסומן, KML וארבע התמונות), פעילות, עם aria-expanded=true", ms1.exp === "true" && ms1.panelShown && !ms1.panelHidden && JSON.stringify(vc1) === JSON.stringify(THREE.concat(DOWNLOADS)) && en1.every(Boolean) && (await page.isChecked("#incChecks")) && DOWNLOADS.filter(id => id !== "incChecks").every(id => tab1.includes(id)), JSON.stringify([vc1, en1]));
+      const mailBlock = await page.evaluate(() => ({ focused: (() => { document.getElementById("btnMail").focus(); document.getElementById("btnCopy").focus(); return document.activeElement && document.activeElement.id; })(), shown: ["btnCopy", "btnMail", "mailTo", "mailInfo"].map(id => document.getElementById(id).getClientRects().length > 0) }));
+      check("עובד ארגון: גם כשהלוח פתוח המייל הידני (העתק טקסט מייל, פתח מייל, כתובות הנמענים והנושא) מוסתר — אינו מקבל פוקוס ואינו בסדר הטאבים, ואין בלוח טקסט עליו", mailBlock.focused !== "btnCopy" && mailBlock.focused !== "btnMail" && mailBlock.shown.every(v => !v) && !tab1.includes("btnCopy") && !tab1.includes("btnMail") && !/פתח מייל|העתק טקסט|notamoffice|nofm@|מצרפים ידנית/.test(ms1.text), JSON.stringify(mailBlock));
+      { const [d] = await Promise.all([page.waitForEvent("download"), page.click("#btnKml")]); const nm = d.suggestedFilename();
+        check("עובד ארגון: הורדה מ״אפשרויות נוספות״ עובדת למי שאינו מנהל (KML)", /\.kml$/.test(nm), nm); }
+      await page.click("#btnMore");
+      const ms2 = await moreState(page);
+      check("עובד ארגון: לחיצה נוספת על ״אפשרויות נוספות״ סוגרת את הלוח (aria-expanded=false)", ms2.exp === "false" && ms2.panelHidden && !ms2.panelShown, JSON.stringify(ms2).slice(0, 200));
+      check("עובד ארגון: ״כולל דף בדיקות״ נשאר מסומן (ברירת המחדל), ולכן ה-Word בדרייב כולל את דף הבדיקות", (await page.isChecked("#incChecks")) && (await docxOf(fo)).includes("מצאי לפי קבוצות"), "");
+      // לא שמירה שנייה לאותה גרסה, גם כש-refreshGate נקרא שוב ושוב
+      await page.evaluate(() => window.__REQ.selfTest()); await page.evaluate(() => window.__REQ.selfTest()); await sleepMs(2600);
+      check("עובד ארגון: אותה גרסה לא נשמרת שוב (אחרי קריאות חוזרות ל-refreshGate והמתנה מעבר להשהיה: saveBegin אחד)", n(page, "saveBegin") === 1 && folders().length === 1, "saveBegin=" + n(page, "saveBegin"));
+      // שמירה ידנית (הכפתור זמין לכל חשבון): ההודעה הרגילה, בלי קישור
+      check("עובד ארגון: ״שמור בדרייב״ זמין לשמירה ידנית חוזרת", !(await page.isDisabled("#btnDrive")), "");
+      await page.evaluate(() => { document.getElementById("driveMsg").textContent = ""; });
+      await page.click("#btnDrive"); await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      const mm = await page.textContent("#driveMsg");
+      check("עובד ארגון: שמירה ידנית — ״✔ נשמרו 7 קבצים בדרייב (HH:MM)״ בלי קישור, באותה תיקייה (מחליפה קבצים)", /^✔ נשמרו 7 קבצים בדרייב \(\d\d:\d\d\)$/.test(mm.trim()) && (await page.locator("#driveMsg a").count()) === 0 && n(page, "saveBegin") === 2 && folders().length === 1 && folders()[0].id === fo.id && folders()[0].files.filter(f => !f.trashed).length === 7, mm);
+      // עריכה → לא מוכן → מוכן שוב: נשמר שוב לאותה תיקייה (אותו rid), והקבצים מוחלפים (הטלפון החדש ב-Word)
+      await softEdit(page, "reqPhone", "050-7654321"); await ready(page); await autoDone(page);
+      check("עובד ארגון: אחרי עריכה והכנה מחדש — נשמר שוב אוטומטית לאותה תיקייה (saveBegin נוסף, תיקייה אחת), וה-Word בדרייב מעודכן", n(page, "saveBegin") === 3 && folders().length === 1 && folders()[0].id === fo.id && (await docxOf(folders()[0])).includes("050-7654321"), "saveBegin=" + n(page, "saveBegin"));
+      // שתי עריכות רצופות לפני שההשהיה הסתיימה: ההשהיה מתאפסת ונשמרת גרסה אחת בלבד (האחרונה)
+      const sb = n(page, "saveBegin");
+      await softEdit(page, "reqPhone", "050-1111111"); await ready(page); await softEdit(page, "reqPhone", "050-2222222"); await ready(page); await autoDone(page); await sleepMs(2600);
+      check("עובד ארגון: שתי עריכות בתוך ההשהיה נשמרות פעם אחת — בגרסה האחרונה בלבד", n(page, "saveBegin") === sb + 1 && (await docxOf(folders()[0])).includes("050-2222222") && !(await docxOf(folders()[0])).includes("050-1111111"), "saveBegin " + sb + "→" + n(page, "saveBegin"));
+      // שמירה בעיצומה: הכפתורים נעולים, ושום שמירה שנייה לא מתחרה; עריכה באמצע שמירה — saveEnd עם ready:false, בלי הודעת שגיאה, ושמירה נוספת כשמוכן שוב
+      await page.evaluate(() => { window.__driveMsgs = []; const e = document.getElementById("driveMsg"); new MutationObserver(() => window.__driveMsgs.push(e.textContent)).observe(e, { childList: true, characterData: true, subtree: true }); });
+      popts.apiDelayBy = { saveFile: 350 };
+      const sb2 = n(page, "saveBegin");
+      await softEdit(page, "reqPhone", "050-3333333"); await ready(page);
+      await page.waitForFunction(() => /\(3\/7\)/.test(document.getElementById("driveMsg").textContent), null, { timeout: 60000 });
+      const mid = await page.evaluate(() => ({ sending: window.__REQ.S.sending, drive: document.getElementById("btnDrive").disabled, send: document.getElementById("btnSend").disabled }));
+      await page.evaluate(() => window.__REQ.selfTest());
+      check("שמירה אוטומטית בעיצומה: S.sending, ״שמור בדרייב״ ו״שלח״ נעולים, וקריאה חוזרת ל-refreshGate אינה פותחת שמירה שנייה", mid.sending && mid.drive && mid.send && n(page, "saveBegin") === sb2 + 1, JSON.stringify(mid) + " saveBegin=" + n(page, "saveBegin"));
+      await autoDone(page); await sleepMs(300);
+      check("בסיום השמירה האוטומטית הכפתורים חוזרים לפעול", !(await page.isDisabled("#btnDrive")) && !(await page.isDisabled("#btnSend")), "");
+      const sb3 = n(page, "saveBegin"), se0 = (page._calls.saveEnds || []).length;
+      await softEdit(page, "reqPhone", "050-4444444"); await ready(page);
+      await page.waitForFunction(() => /\(2\/7\)/.test(document.getElementById("driveMsg").textContent), null, { timeout: 60000 });
+      await softEdit(page, "reqPhone", "050-5555555");   // עריכה באמצע השמירה
+      await ready(page); await autoDone(page); await sleepMs(300);
+      const ends = (page._calls.saveEnds || []).slice(se0), seen = await page.evaluate(() => window.__driveMsgs);
+      check("עריכה באמצע שמירה אוטומטית: saveEnd נשלח עם ready:false, לא מוצגת הודעת שגיאה, ושמירה נוספת בסיום (saveEnd עם ready:true) — שתי שמירות בדיוק", ends.length === 2 && ends[0].ready === false && ends[1].ready === true && n(page, "saveBegin") === sb3 + 2 && !seen.some(t => /נכשלה|שונתה/.test(t)) && (await docxOf(folders()[0])).includes("050-5555555"), JSON.stringify(ends) + " | " + seen.filter(t => /נכשלה|שונתה/.test(t)).join(" | "));
+      popts.apiDelayBy = null;
+      // שליחה: מצרפת את הקבצים אוטומטית; הגרסה כבר שמורה (אוטומטית) ולכן אין שמירה נוספת לפני השליחה; מייל קצר בנקודות עם htmlBody RTL
+      const sb4 = n(page, "saveBegin"), want = await page.evaluate(() => window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg));
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      const mail = env.mails[env.mails.length - 1];
+      check("שליחה: הגרסה השמורה אוטומטית אינה נשמרת שוב לפני השליחה (saveBegin ללא שינוי), ונשלח מייל אחד עם 6 קבצים מצורפים (Word, KML וארבע תמונות)", n(page, "saveBegin") === sb4 && env.mails.length === 1 && mail.attachments.length === 6 && mail.attachments.some(a => /\.docx$/.test(a.name)) && mail.attachments.some(a => /\.kml$/.test(a.name)) && mail.attachments.filter(a => /\.(png|jpg)$/.test(a.name)).length === 4, "saveBegin " + sb4 + "→" + n(page, "saveBegin") + ", " + mail.attachments.map(a => a.name).join(" | "));
+      const bl = mail.body.split("\n");
+      check("המייל שנשלח: הגוף הקצר בנקודות כפי שהלקוח בנה (4 שורות ״• ״), בלי כלי טיס / מהות / קואורדינטות / אנשי קשר, ושורת ״כל הפרטים — בטופס המצורף.״", mail.body === want.body && bl.filter(l => l.startsWith("\u2022 ")).length === 4 && bl.includes("כל הפרטים — בטופס המצורף.") && !/DJI|מהות הפעילות|כלי טיס|°|אנשי קשר|בודק שני/.test(mail.body), mail.body.slice(0, 300));
+      check("המייל שנשלח: ל-MailApp מועבר גם htmlBody — div RTL מיושר לימין, רשימת <ul> עם ארבעה <li> של הנקודות, והטקסט escaped", typeof mail.htmlBody === "string" && /^<div dir="rtl" style="direction:rtl;text-align:right/.test(mail.htmlBody) && (mail.htmlBody.match(/<li\b/g) || []).length === 4 && (mail.htmlBody.match(/<ul\b/g) || []).length === 1 && mail.htmlBody.includes("גורם מבקש: חברת עובד הארגון") && !mail.htmlBody.includes("\u2022") && !/<(a|img|script)\b/i.test(mail.htmlBody) && mail.body === want.body, String(mail.htmlBody).slice(0, 200));
+      check("עובד ארגון: אחרי השליחה ההודעה בלי קישור לתיקייה (בחלון ובעמוד), ובתיקייה סימן ״נשלח (בדיקה)״ — שנכתב בשליחה בלבד, לא בשמירה האוטומטית", (await page.locator("#sendProg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && (await page.locator("#driveMsg a").count()) === 0 && folders()[0].files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folders()[0].files.map(f => f.name).join(" | ").slice(0, 160));
+      await page.click("#mdClose");
+      await ctx.close();
+    }
+
+    /* ---- ב. שגיאות שרת בשמירה האוטומטית: ההודעה של השרת ב-#driveMsg, בלי ניסיון חוזר בלולאה; ניסיון ידני וגרסה חדשה מנסים שוב ---- */
+    {
+      const { ctx, page, popts } = await openAs("ora.org", "ora-pass-12345");
+      await readyRequest(page, { org: "חברת עובד הארגון" });
+      await autoDone(page);
+      const errCase = async (label, error, extra, intercept, phone) => {
+        const sb = n(page, "saveBegin"), sf = n(page, "saveFile"); popts.intercept = intercept;
+        await softEdit(page, "reqPhone", phone); await ready(page);
+        await page.waitForFunction(() => /נכשלה/.test(document.getElementById("driveMsg").textContent), null, { timeout: 60000 });
+        const t = await page.textContent("#driveMsg"), cls = await page.getAttribute("#driveMsg", "class");
+        await sleepMs(3300);   // מעבר להשהיה: אין ניסיון חוזר
+        check("שגיאת שרת " + label + ": ההודעה של השרת מוצגת ב-#driveMsg (בשגיאה), והשמירה האוטומטית לא חוזרת על עצמה בלולאה", t.startsWith("השמירה האוטומטית בדרייב נכשלה: ") && t.includes(extra.message) && cls.includes("err") && n(page, "saveBegin") === sb + 1 && !(await page.isDisabled("#btnDrive")) && !(await page.isDisabled("#btnSend")), t + " | saveBegin " + sb + "→" + n(page, "saveBegin"));
+        return { sb, sf };
+      };
+      const M1 = { message: "יש לכם יותר מדי בקשות שמורות שעדיין לא נשלחו (60) — שלחו או המתינו, ואם נדרש פנו לתמיכה" };
+      await errCase("too_many_open", "too_many_open", M1, b => b.action === "saveBegin" ? { ok: false, error: "too_many_open", message: M1.message } : undefined, "050-6000001");
+      const M2 = { message: "התיקייה מלאה — יותר מדי קבצים או נפח" };
+      let k = 0;
+      const se1 = (page._calls.saveEnds || []).length;
+      const e2 = await errCase("folder_full (באמצע ההעלאה)", "folder_full", M2, b => b.action === "saveFile" && ++k === 3 ? { ok: false, error: "folder_full", message: M2.message } : undefined, "050-6000002");
+      check("folder_full: ההעלאה נעצרה בקובץ השלישי (לא נשלחו שאר הקבצים ולא saveEnd), והודעת השגיאה מציינת את הקובץ", n(page, "saveFile") === e2.sf + 3 && (page._calls.saveEnds || []).length === se1 && (await page.textContent("#driveMsg")).includes(": " + M2.message), "saveFile +" + (n(page, "saveFile") - e2.sf));
+      const M3 = { message: "יותר מדי שליחות בשעה האחרונה — נסו שוב מאוחר יותר" };
+      await errCase("rate (scope=user)", "rate", M3, b => b.action === "saveBegin" ? { ok: false, error: "rate", scope: "user", message: M3.message } : undefined, "050-6000003");
+      // כשל אינו חוסם: ניסיון ידני (השרת כבר תקין) מצליח; ובגרסה חדשה — שוב ניסיון אוטומטי
+      popts.intercept = null;
+      await page.evaluate(() => { document.getElementById("driveMsg").textContent = ""; });   // אחרת הודעת השגיאה הקודמת מספקת את ההמתנה
+      await page.click("#btnDrive"); await page.waitForFunction(() => /נשמרו \d+ קבצים|נכשלה/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      check("אחרי כשל: הכפתור ״שמור בדרייב״ מאפשר ניסיון ידני שמצליח", /✔ נשמרו 7 קבצים/.test(await page.textContent("#driveMsg")) && folders().filter(f => f.files.filter(x => !x.trashed).length === 7).length >= 1, await page.textContent("#driveMsg"));
+      const sbn = n(page, "saveBegin");
+      await softEdit(page, "reqPhone", "050-6000004"); await ready(page); await autoDone(page);
+      check("אחרי כשל: גרסה חדשה (עריכה והכנה מחדש) נשמרת שוב אוטומטית", n(page, "saveBegin") === sbn + 1, "");
+      await ctx.close();
+    }
+
+    /* ---- ג. התנתקות / החלפת משתמש לפני שההשהיה הסתיימה: הטיימר מבוטל ושום דבר לא נכתב לדרייב ---- */
+    {
+      const before = folders().length;
+      const { ctx, page } = await openAs("ora.org", "ora-pass-12345");
+      await runOnly(page, { org: "חברה להתנתקות" }); await page.check("#reviewOk"); await ready(page);
+      const r = await page.evaluate(() => { const was = window.__REQ.autoPending(); window.ReqAuth.logout(); return { was, now: window.__REQ.autoPending() }; }).catch(e => ({ err: String(e.message || e) }));
+      check("התנתקות לפני ההשהיה: השמירה הממתינה מבוטלת מיד (איפוס הדף), והטיימר לא נשאר", r.was === true && r.now === false, JSON.stringify(r));
+      await page.waitForSelector("#authForm", { timeout: 30000 }); await sleepMs(3000);
+      check("התנתקות לפני ההשהיה: אף קריאת שמירה לא יצאה (אין saveBegin ואין תיקייה חדשה), גם אחרי שעבר זמן ההשהיה", n(page, "saveBegin") === 0 && folders().length === before, "saveBegin=" + n(page, "saveBegin"));
+      await ctx.close();
+    }
+    {
+      const before = folders().length;
+      const { ctx, page } = await openAs("ora.org", "ora-pass-12345");
+      await runOnly(page, { org: "חברה להחלפת משתמש" }); await page.check("#reviewOk"); await ready(page);
+      const r = await page.evaluate(() => { const was = window.__REQ.autoPending(); document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: "someone.else", role: "user" } })); return { was, now: window.__REQ.autoPending() }; }).catch(e => ({ err: String(e.message || e) }));
+      check("החלפת משתמש (req-auth של משתמש אחר) לפני ההשהיה: השמירה הממתינה מבוטלת מיד", r.was === true && r.now === false, JSON.stringify(r));
+      await page.waitForFunction(() => window.__REQ_READY === true && !window.__REQ_SWITCHING, null, { timeout: 60000 }).catch(() => {}); await sleepMs(3000);
+      check("החלפת משתמש לפני ההשהיה: לא נכתב דבר לדרייב — לא תחת החשבון הקודם ולא תחת החדש", n(page, "saveBegin") === 0 && folders().length === before, "saveBegin=" + n(page, "saveBegin"));
+      await ctx.close();
+    }
+
+    /* ---- ד. מטיס עצמאי (כתובת שמורה): אותם שלושה כפתורים, שמירה אוטומטית ל״מטיסים/<משתמש>״, בלי קישור ---- */
+    {
+      const { ctx, page } = await openAs("pia.pilot", "pia-pass-12345");
+      await runOnly(page, { org: "פיה צילום" }); await sleepMs(2300);
+      check("מטיס עצמאי: לפני אישור הסקירה לא נשמר דבר", n(page, "saveBegin") === 0, "saveBegin=" + n(page, "saveBegin"));
+      await page.check("#reviewOk"); await ready(page); await autoDone(page);
+      const fo = folders().find(f => /^מטיסים\/pia\.pilot\//.test(folderPath(env, f))), vc = await visibleControls(page);
+      check("מטיס עצמאי: נשמר אוטומטית ל״מטיסים/pia.pilot/…״ עם 7 קבצים, סדרת saveBegin→7×saveFile→saveEnd אחת, בלי קישור לתיקייה", !!fo && fo.files.filter(f => !f.trashed).length === 7 && n(page, "saveBegin") === 1 && n(page, "saveEnd") === 1 && n(page, "saveFile") === 7 && (await page.locator("#driveMsg a").count()) === 0 && AUTO_RE.test(await page.textContent("#driveMsg")), fo ? folderPath(env, fo) : "אין תיקייה");
+      const ps0 = await moreState(page);
+      check("מטיס עצמאי: שלושת הכפתורים (שמור בדרייב, שלח, אפשרויות נוספות), הלוח סגור והמייל הידני מוסתר", JSON.stringify(vc) === JSON.stringify(THREE) && ps0.exp === "false" && ps0.panelHidden && ps0.mailHidden && !ps0.mailShown, JSON.stringify([vc, ps0]).slice(0, 300));
+      await page.click("#btnMore");
+      const ps1 = await moreState(page), pvc = await visibleControls(page);
+      check("מטיס עצמאי: ״אפשרויות נוספות״ פותח את כל ההורדות (פעילות), בלי המייל הידני ובלי קישור לתיקייה", ps1.exp === "true" && JSON.stringify(pvc) === JSON.stringify(THREE.concat(DOWNLOADS)) && (await enabledOf(page, DOWNLOADS)).every(Boolean) && ps1.mailHidden && !ps1.mailShown && (await page.locator("#driveMsg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && !/פתח מייל|העתק טקסט|notamoffice/.test(ps1.text), JSON.stringify(pvc));
+      await ctx.close();
+    }
+
+    /* ---- ה. מנהל: שמירה אוטומטית עם קישור לתיקייה; ״אפשרויות נוספות״ סגור כברירת מחדל ובתוכו כל ההורדות וגם המייל הידני (רק אצלו) ---- */
+    {
+      const before = folders().length;
+      const { ctx, page } = await openAs();
+      await readyRequest(page, { org: "חברת המנהל בע״מ" }); await autoDone(page);
+      const am = await page.innerHTML("#driveMsg"), fid = (/href="https:\/\/drive\/([^"]+)"/.exec(am) || [])[1], adminFolder = env.folders[fid];
+      check("מנהל: שמירה אוטומטית עם הקישור ״פתח את התיקייה״ לדרייב (למנהל בלבד)", /^נשמר אוטומטית בדרייב ✔ \(\d\d:\d\d\) — <a href="https:\/\/drive\/[^"]+" target="_blank" rel="noopener">פתח את התיקייה<\/a>$/.test(am.trim()), am.slice(0, 240));
+      let vc = await visibleControls(page);
+      const as0 = await moreState(page);
+      check("מנהל: שלושת הכפתורים מוצגים, ״אפשרויות נוספות״ סגור כברירת מחדל, וקישור התיקייה נמצא בהודעה (A) — רק למנהל", JSON.stringify(vc) === JSON.stringify(["btnDrive", "btnSend", "btnMore", "A"]) && as0.exp === "false" && as0.panelHidden && !as0.panelShown, JSON.stringify([vc, as0]).slice(0, 300));   // A = הקישור לתיקייה בהודעת השמירה
+      await page.click("#btnMore");
+      vc = await visibleControls(page);
+      const en = await enabledOf(page, DOWNLOADS.concat(MAIL)), as1 = await moreState(page), mi = await page.textContent("#mailInfo"), mt = await page.textContent("#mailTo");
+      check("מנהל: בפתיחת ״אפשרויות נוספות״ גלויים ופעילים כל ההורדות (״כולל דף בדיקות״ מסומן) וגם המייל הידני — העתק טקסט מייל, פתח מייל, כתובות הנמענים והנושא", DOWNLOADS.concat(MAIL).every(id => vc.includes(id)) && en.every(Boolean) && (await page.isChecked("#incChecks")) && as1.mailShown && !as1.mailHidden && /notamoffice@iaa\.gov\.il, nofm@iaa\.gov\.il/.test(mt) && /^נושא: בקשה לסגירה אווירית — /.test(mi) && /למנהל בלבד/.test(as1.text) && /mailto אינו יכול לצרף קבצים/.test(as1.text), JSON.stringify([vc, en]));
+      { const hx = await page.getAttribute(".hw:has(#btnMore) > .hbtn", "data-help");
+        check("מנהל: הסבר ״!״ של ״אפשרויות נוספות״ כולל את ההורדות ואת המייל הידני (למנהל בלבד)", /ההורדות/.test(hx) && /העתקת נוסח המייל ופתיחת המייל/.test(hx) && /אינה נרשמת ביומן השליחות/.test(hx), hx.slice(0, 120)); }
+      // שינוי ״כולל דף בדיקות״ משנה את ה-Word: נשמר שוב אוטומטית
+      const sb = n(page, "saveBegin");
+      await page.click("#incChecks"); await autoDone(page);
+      check("מנהל: ביטול ״כולל דף בדיקות״ (משנה את ה-Word) → נשמר שוב אוטומטית לאותה תיקייה, וה-Word בדרייב בלי דף הבדיקות", n(page, "saveBegin") === sb + 1 && folders().length === before + 1 && !!adminFolder && !(await docxOf(adminFolder)).includes("מצאי לפי קבוצות"), "saveBegin " + sb + "→" + n(page, "saveBegin") + " folders " + before + "→" + folders().length);
+      await ctx.close();
+    }
+
+    /* ---- ו. חלון השליחה פתוח (עוד לא נשלח דבר): השמירה האוטומטית לא מתחרה בו ונדחית עד שייסגר; ואחרי שליחה — לא נשמרת שוב ---- */
+    {
+      const { ctx, page } = await openAs("ora.org", "ora-pass-12345", { autosave: 3000 });
+      await runOnly(page, { org: "חברת החלון הפתוח" }); await page.check("#reviewOk"); await ready(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      await sleepMs(7500);   // יותר מפעמיים ההשהיה (3 שנ׳)
+      check("חלון השליחה פתוח: השמירה האוטומטית נדחית (אין saveBegin) וממתינה לסגירת החלון", n(page, "saveBegin") === 0 && (await page.evaluate(() => window.__REQ.autoPending())) === true, "saveBegin=" + n(page, "saveBegin"));
+      await page.click("#mdClose"); await page.waitForSelector(".sendBox", { state: "detached" });
+      await autoDone(page);
+      check("אחרי סגירת החלון (בלי שליחה) הבקשה נשמרת אוטומטית פעם אחת", n(page, "saveBegin") === 1 && n(page, "saveEnd") === 1, "saveBegin=" + n(page, "saveBegin"));
+      await ctx.close();
+    }
+  }
+
+  /* NEW18-END */
+
+  /* REG19-BEGIN */
+  /* ===== תרחיש 19: הסבר מראש על הכרטיס — בראש מסך הכניסה ומסך ההרשמה (שימו לב, מה מקבלים, כפתור רכישה), והודעה אחרי ״שלחו לי קוד״ שזהה לכל כתובת ומלווה בכפתור הרכישה; בלי כתובת https תקינה אין כפתור ===== */
+  {
+    // הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד, כדי שכל שינוי בו ייתפס
+    const NOTICE = "שימו לב: מנוי או הרשמה למפת הנוט״מים אינם כוללים בקשות טיסה. בקשות טיסה מיועדות למטיסים מסחריים בלבד, ודורשות רכישה נפרדת של הכרטיס ״בקשת אישורי טיסה״.";
+    const BENEFIT = "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.";
+    const BUY = "לרכישת הכרטיס והצטרפות";
+    const NOCODE = "לא הגיע קוד? כנראה שלא נרכש הכרטיס ״בקשת אישורי טיסה״. מנוי למפת הנוט״מים בלבד אינו מקנה גישה לבקשות טיסה.";
+    const RENEW = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")).renew_url;
+    const norm = t => t.replace(/\s+/g, " ").trim();
+    const ready19 = async page => { await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await page.waitForSelector("#authForm", { timeout: 20000 }); };
+    const buyLinks = (page, sel) => page.$$eval(sel + " a.buyBtn", a => a.map(x => ({ href: x.getAttribute("href"), target: x.getAttribute("target"), rel: x.getAttribute("rel"), text: x.textContent.trim(), h: Math.round(x.getBoundingClientRect().height), vis: x.getClientRects().length > 0 })));
+    const boxInfo = (page, formId) => page.evaluate(id => { const f = document.getElementById(id), b = document.getElementById("buyBox"); if (!b) return null; const r = b.getBoundingClientRect(), a = b.querySelector("a.buyBtn"), ar = a && a.getBoundingClientRect();
+      return { afterTitle: f.children[0].tagName === "H2" && f.children[1] === b, notice: b.querySelector(".buyNote") && b.querySelector(".buyNote").textContent, why: b.querySelector(".buyWhy") && b.querySelector(".buyWhy").textContent, dir: getComputedStyle(b).direction,
+        inside: r.left >= 0 && r.right <= innerWidth && (!ar || (ar.left >= 0 && ar.right <= innerWidth)), noHScroll: document.documentElement.scrollWidth <= innerWidth, w: innerWidth }; }, formId);
+    const hrefs = (page, sel) => page.$$eval(sel + " a[href]", a => a.map(x => x.getAttribute("href")));
+    const SAFE_HREF = /^(mailto:[^ ]+|\.\.\/)$/;
+
+    /* ---- א. הגדרות אמיתיות (renew_url מ-config.json) בטלפון: תיבת ההסבר בראש מסך הכניסה ובראש מסך ההרשמה, והכפתור הוא קישור אמיתי ללשונית חדשה ---- */
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    env.props.WIX_API_KEY = "test-key";
+    env.wix.orders.push({ orderNumber: "ORD-N19-1", status: "PAID", created: new Date(Date.now() - 3 * 86400000).toISOString(), email: "member@example.com", firstName: "דנה", memberId: "m-19", tickets: [] });
+    const seen = [];
+    {
+      const { ctx, page } = await newPage(browser, { env, viewport: { width: 375, height: 700 }, touch: true, patchResp: (b, r) => { if (b.action === "regStart") seen.push(JSON.stringify(r)); return undefined; } });
+      await ready19(page);
+      check("תרחיש 19: renew_url בהגדרות הוא כתובת https", /^https:\/\/[^\s"'<>]+$/.test(RENEW || ""), String(RENEW));
+      for (const [scr, formId] of [["הכניסה", "authForm"], ["ההרשמה", "regForm"]]) {
+        if (formId === "regForm") { await page.click("#auReg"); await page.waitForSelector("#regForm"); }
+        const bi = await boxInfo(page, formId), links = await buyLinks(page, "#buyBox"), html = await page.content();
+        check("מסך " + scr + ": תיבת ההסבר מיד אחרי הכותרת, בנוסח המאושר (שימו לב + מה מקבלים), מיושרת לימין", !!bi && bi.afterTitle && bi.notice === NOTICE && bi.why === BENEFIT && bi.dir === "rtl", JSON.stringify(bi));
+        check("מסך " + scr + ": כפתור הרכישה הוא קישור אמיתי לכתובת מההגדרות, בלשונית חדשה (noopener noreferrer), בתווית המאושרת, גלוי ובגובה מגע (44px)", links.length === 1 && links[0].href === RENEW && links[0].target === "_blank" && /\bnoopener\b/.test(links[0].rel) && /\bnoreferrer\b/.test(links[0].rel) && links[0].text === BUY && links[0].vis && links[0].h >= 44, JSON.stringify(links));
+        check("מסך " + scr + ": התיבה נכנסת ברוחב הטלפון (375) בלי גלילה אופקית ובלי חיתוך", !!bi && bi.w === 375 && bi.inside && bi.noHScroll, JSON.stringify(bi));
+        await page.setViewportSize({ width: 320, height: 640 });
+        const b320 = await boxInfo(page, formId);
+        check("מסך " + scr + ": גם ברוחב 320 התיבה והכפתור נכנסים בלי חיתוך ובלי גלילה אופקית", !!b320 && b320.w === 320 && b320.inside && b320.noHScroll, JSON.stringify(b320));
+        await page.screenshot({ path: path.join(OUT, "reg19-" + formId + "-320.png") });
+        await page.setViewportSize({ width: 375, height: 700 });
+        check("מסך " + scr + ": כתובת הארגון office@icd.org.il אינה מוצגת (רק כתובת התמיכה)", !html.includes("office@icd.org.il") && html.includes('href="mailto:' + SUPPORT + '"'), "");
+        check("מסך " + scr + ": ההסבר מלווה את הטופס — השדות והכפתור הראשי עדיין קיימים ולחיצים", formId === "authForm" ? (await page.locator("#auGo").isEnabled()) && !!(await page.$("#auUser")) && !!(await page.$("#auPass")) : (await page.locator("#rgSend").isEnabled()) && !!(await page.$("#rgEmail")), "");
+        if (formId === "authForm") check("מסך הכניסה: ההסבר לא הוסיף קישור שאינו https או mailto או ״חזרה למפה״", (await hrefs(page, "#authCover")).every(h => SAFE_HREF.test(h) || h === RENEW), JSON.stringify(await hrefs(page, "#authCover")));
+      }
+      /* ---- ב. אחרי ״שלחו לי קוד״: אותה הודעה בדיוק (ואותו כפתור) לכתובת עם כרטיס ולכתובת בלי כרטיס ---- */
+      const outs = [];
+      for (const em of ["member@example.com", "nobody@example.com"]) {
+        await page.fill("#rgEmail", em); await page.click("#rgSend");
+        await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+        outs.push({ text: norm(await page.textContent("#rgInfo")), html: await page.innerHTML("#rgInfo"), links: await buyLinks(page, "#rgInfo") });
+        if (em === "member@example.com") await page.screenshot({ path: path.join(OUT, "reg19-after-code-375.png") });
+        await page.evaluate(() => { document.getElementById("rgInfo").innerHTML = ""; });
+      }
+      const o = outs[0];
+      check("אחרי ״שלחו לי קוד״: ההודעה והכפתור זהים לגמרי לכתובת עם כרטיס ולכתובת בלי כרטיס (אין חשיפה מי רכש)", outs.length === 2 && outs[0].html === outs[1].html && outs[0].text === outs[1].text && JSON.stringify(outs[0].links) === JSON.stringify(outs[1].links), outs.map(x => x.text).join(" || "));
+      check("אחרי ״שלחו לי קוד״: נשארו המשפט על קוד תקף ל-15 דקות ובדיקות הספאם / מייל הרכישה / רכישה כחבר, ונוסף המשפט החדש (לא הגיע קוד? כנראה שלא נרכש הכרטיס…)", /נשלח אליה קוד \(תקף ל-15 דקות\)/.test(o.text) && /ספאם/.test(o.text) && /מייל הרכישה/.test(o.text) && /כחברים רשומים באתר/.test(o.text) && o.text.includes(NOCODE), o.text);
+      check("אחרי ״שלחו לי קוד״: כתובת התמיכה מופיעה, ואין office@icd.org.il ואין ״מנהל המערכת״", o.text.includes(SUPPORT) && !o.html.includes("office@icd.org.il") && !/מנהל המערכת/.test(o.text), o.text);
+      check("אחרי ״שלחו לי קוד״: כפתור הרכישה — קישור אמיתי, אותה כתובת, לשונית חדשה, noopener noreferrer, תווית מאושרת", o.links.length === 1 && o.links[0].href === RENEW && o.links[0].target === "_blank" && /\bnoopener\b/.test(o.links[0].rel) && /\bnoreferrer\b/.test(o.links[0].rel) && o.links[0].text === BUY && o.links[0].vis, JSON.stringify(o.links));
+      check("תשובות regStart מהשרת זהות לשתי הכתובות (המסך אינו נשען על תשובה שונה)", seen.length >= 2 && seen.every(x => x === seen[0]) && JSON.parse(seen[0]).ok === true, seen.join(" | "));
+      await ctx.close();
+    }
+
+    /* ---- ג. כתובת רכישה שאינה https תקין — חסרה, http, javascript:, מירכאות ותגית, יחסית, לא מחרוזת: אין כפתור באף מסך (ואין קישור מסוכן בדף), וההסבר עצמו נשאר ---- */
+    // כל מקרה שולח קוד לכתובת אחרת: לשרת תקרת בקשות לכתובת בשעה (REG_PER_EMAIL_HOUR), והבדיקה כאן אינה בודקת אותה
+    for (const [ci, [label, val]] of [["חסרה בהגדרות", null], ["http (לא https)", "http://www.icd.org.il/events-1/bqst-yswry-tysh"], ["javascript:", "javascript:alert(1)"], ["מירכאות ותגית", 'https://www.icd.org.il/x"><img src=x onerror=alert(1)>'], ["יחסית (//)", "//evil.example/x"], ["לא מחרוזת", 42]].entries()) {
+      const { ctx, page } = await newPage(browser, { env, renewUrl: val });
+      await ready19(page);
+      const lg = { box: await boxInfo(page, "authForm"), links: await buyLinks(page, "#authCover"), hrefs: await hrefs(page, "#authCover") };
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      const rg = { box: await boxInfo(page, "regForm"), links: await buyLinks(page, "#authCover"), hrefs: await hrefs(page, "#authCover") };
+      await page.fill("#rgEmail", "case" + ci + "@example.com"); await page.click("#rgSend");
+      await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+      const after = { text: norm(await page.textContent("#rgInfo")), links: await buyLinks(page, "#authCover") };
+      check("renew_url " + label + ": אין כפתור רכישה בכניסה, בהרשמה ואחרי ״שלחו לי קוד״; אין קישור מסוכן בדף", lg.links.length === 0 && rg.links.length === 0 && after.links.length === 0 && lg.hrefs.every(h => SAFE_HREF.test(h)) && rg.hrefs.every(h => SAFE_HREF.test(h)), JSON.stringify({ lg: lg.hrefs, rg: rg.hrefs, n: after.links.length }));
+      check("renew_url " + label + ": ההסבר (שימו לב + מה מקבלים) והמשפט החדש אחרי שליחת הקוד נשארים במקומם, והזרימה ממשיכה (שדה הקוד מוצג)", !!lg.box && lg.box.notice === NOTICE && lg.box.why === BENEFIT && !!rg.box && rg.box.notice === NOTICE && after.text.includes(NOCODE) && (await page.isVisible("#rgStep2")), "");
+      await ctx.close();
+    }
+
+    /* ---- ד. כתובת https עם פרמטרים (&): נכנסת ל-href בלי שינוי (הליכה הלוך ושוב דרך ההמרה ל-HTML), בכניסה ובהרשמה ואחרי שליחת הקוד ---- */
+    {
+      const U = "https://www.icd.org.il/events-1/bqst-yswry-tysh?a=1&b=2";
+      const { ctx, page } = await newPage(browser, { env, renewUrl: U });
+      await ready19(page);
+      const l0 = await buyLinks(page, "#buyBox");
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      const l1 = await buyLinks(page, "#buyBox");
+      await page.fill("#rgEmail", "nobody@example.com"); await page.click("#rgSend");
+      await page.waitForFunction(() => document.querySelector("#rgInfo").textContent.length > 0, null, { timeout: 15000 });
+      const l2 = await buyLinks(page, "#rgInfo");
+      check("renew_url עם & : הקישור נשמר כפי שהוא בשלושת המקומות", l0.length === 1 && l1.length === 1 && l2.length === 1 && l0[0].href === U && l1[0].href === U && l2[0].href === U, JSON.stringify([l0, l1, l2].map(x => x.map(y => y.href))));
+      await ctx.close();
+    }
+
+    /* ---- ה. שרת ישן (תשובות בלי השדות החדשים): ההסבר, הכפתור וההודעה עובדים והזרימה לא נשברת ---- */
+    {
+      const { ctx, page } = await newPage(browser, { env, oldServer: true });
+      await ready19(page);
+      const l0 = await buyLinks(page, "#buyBox");
+      await page.click("#auReg"); await page.waitForSelector("#regForm");
+      await page.fill("#rgEmail", "member@example.com"); await page.click("#rgSend");
+      await page.waitForSelector("#rgStep2", { state: "visible", timeout: 15000 });
+      const t = norm(await page.textContent("#rgInfo")), l1 = await buyLinks(page, "#rgInfo");
+      check("שרת ישן: ההסבר והכפתור במסך הכניסה, וההודעה והכפתור אחרי ״שלחו לי קוד״ (שדה הקוד מוצג)", l0.length === 1 && l0[0].href === RENEW && t.includes(NOCODE) && l1.length === 1 && l1[0].href === RENEW, t);
+      await ctx.close();
+    }
+  }
+  /* REG19-END */
   check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();

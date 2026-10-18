@@ -87,6 +87,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .banner ul{margin:6px 18px 0;font-weight:500}
 details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-weight:700;font-size:13.5px}
 .small{font-size:12.5px;color:var(--muted);line-height:1.7}
+#moreOptions{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:10px}   /* ״אפשרויות נוספות״: כל ההורדות; סגור כברירת מחדל ונפתח ב-#btnMore */
+#manualMail{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}   /* מייל ידני (העתקה ו-mailto) — למנהל בלבד; hidden לכל השאר */
+#btnMore::after{content:" ▾" / ""}#btnMore[aria-expanded=true]::after{content:" ▴" / ""}
 .person{border:1px dashed var(--line);border-radius:12px;padding:12px;margin-top:12px}
 .plh{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:14px;font-size:13px}
 .plist{display:grid;gap:6px;margin-top:6px}
@@ -179,6 +182,11 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 .authBox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(420px, 100%); color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .linkBtn { background: none; border: 0; color: #7cc4ff; text-decoration: underline; cursor: pointer; padding: 6px 0; font-size: 13px; min-height: 0; }
 .authBox a.backMap { display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 8px; font-size: 14px; font-weight: 700; text-decoration: none; }   /* "← חזרה למפה" בתוך כיסוי הכניסה/ההרשמה (הכותרת מכוסה): אזור לחיצה של 44px; הכיסוי עצמו כבר מרוחק מהאזורים הבטוחים */
+.buyBox { display: flex; flex-direction: column; gap: 8px; padding: 11px 12px; border: 1px solid rgba(255,184,77,.5); background: rgba(255,184,77,.10); border-radius: 10px; }   /* הסבר מראש על הכרטיס, בראש מסך הכניסה וההרשמה: מסגרת ענבר (אזהרה) שנקראת גם בטלפון */
+.buyBox p { margin: 0; font-size: 13px; line-height: 1.65; } .buyBox .buyNote { color: #ffe0b0; font-weight: 700; } .buyBox .buyWhy { color: var(--ink); font-weight: 400; }
+.authBox a.buyBtn { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 6px 14px; border: 1.5px solid var(--amber); border-radius: 10px; background: rgba(255,184,77,.14); color: var(--amber); font-size: 14.5px; font-weight: 700; text-align: center; text-decoration: none; }   /* קישור אמיתי בצורת כפתור; 44px לפחות (מגע) */
+.authBox a.buyBtn:hover { background: var(--amber); color: #1a1204; } .authBox a.buyBtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+#rgInfo a.buyBtn { margin-top: 8px; }
 .authBox.wide { width: min(860px, 100%); display: block; max-height: calc(92vh - var(--safe-top) - var(--safe-bottom)); overflow: auto; }
 .admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
 .userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
@@ -333,23 +341,33 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="card nonprint" id="actions">
     <h2>5 · הפקות</h2>
     <div class="row">
-      <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
-      <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
-      <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
-      <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
-      <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
-      <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
-      <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
-      <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
-      <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
       <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
-      <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
+      <button type="button" id="btnMore" aria-expanded="false" aria-controls="moreOptions">אפשרויות נוספות</button>
     </div>
-    <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
-    <p class="small" id="mailInfo"></p>
+    <p class="small" id="actionsHint" style="margin-top:8px">הבקשה נשמרת אוטומטית בדרייב כשכל הבדיקות הושלמו והסקירה אושרה. השליחה במייל מצרפת את כל הקבצים אוטומטית — אין צורך להוריד או לצרף דבר.</p>
     <p class="small" id="driveMsg" role="status"></p>
     <p class="small" id="sendMsg" role="status"></p>
+    <div id="moreOptions" hidden>
+      <div class="row">
+        <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
+        <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
+        <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
+        <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
+        <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
+        <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
+        <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
+        <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
+      </div>
+      <div id="manualMail" hidden>
+        <div class="row">
+          <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
+          <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
+        </div>
+        <p class="small" style="margin-top:8px">מייל ידני (למנהל בלבד): קישור mailto אינו יכול לצרף קבצים ואינו נרשם ביומן השליחות — את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
+        <p class="small" id="mailInfo"></p>
+      </div>
+    </div>
   </div>
   <div id="reportHost"><div id="report"></div></div>
   <details class="card nonprint" id="limitsBox"><summary>מגבלות המקורות (לעיון על המסך בלבד — אינן חלק מהדוח, מהטופס או מקובץ ה-Word)</summary><ul class="small" id="limits" style="margin:8px 18px"></ul></details>
@@ -367,13 +385,13 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/help.js?v=2"></script>
-<script src="js/auth.js?v=5"></script>
+<script src="js/auth.js?v=7"></script>
 <script src="js/sync.js?v=2"></script>
 <script src="js/core.js?v=6"></script>
 <script src="js/maplayers.js?v=1"></script>
-<script src="js/output.js?v=5"></script>
+<script src="js/output.js?v=6"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=7"></script>
+<script src="js/ui.js?v=9"></script>
 </body>
 </html>

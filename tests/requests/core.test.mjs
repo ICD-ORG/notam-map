@@ -610,9 +610,9 @@ test("הערת שוליים ¹ של נספח ב׳-1 מצוטטת במלואה כ
   assert.ok(!/1500 רגל אנכית/.test(O.buildForm(none, cfg).find(r => r.n === 8).text));
 });
 
-test("נוסח המייל: ארבע התמונות (בלי תצ״א נקי); שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
+test("נוסח המייל: שורה אחת למצורפים (Word, KML וארבע התמונות, בלי תצ״א נקי); שמות הקבצים נשארים מתחת לתקרת השרת גם לשם ארוך", () => {
   const res = C.analyze(baseInput, mkData(fixture("yarkon")), cfg, now), m = O.mail(res, cfg);
-  assert.match(m.body, /מצורפים: טופס הבקשה \(נספח ג׳, קובץ Word\), ארבע תמונות — תצ״א בתקריב, מפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת עם סימון המיקום \(המפה\/התצ״א הנדרשים בנספח ג׳\), וקובץ KML\./);
+  assert.ok(m.body.split("\n").includes("קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת."), "שורת המצורפים");
   assert.ok(!/תצ״א נקי|תצ״א עם סימון|הדמיות עם סימון/.test(m.body));
   const long = C.analyze(Object.assign({}, baseInput, { siteName: "מקום ארוך מאוד ".repeat(20) }), mkData(fixture("yarkon")), cfg, now), base = O.fileBase(long);
   for (const tail of [" — בקשה לסגירה אווירית.docx", " — תצ״א תקריב.png", " — מפת רחובות תקריב.png", " — הדמיה מבט כללי.png", " — מפת אזור.png", " — נתוני הבקשה.json"]) assert.ok((base + tail).length <= 110, tail + " " + (base + tail).length);
@@ -776,21 +776,32 @@ test("הזרקת HTML בשדות אנשי הקשר, המשתתפים והמכש�
   assert.ok(/&lt;img src=x onerror=alert\(1\)&gt;/.test(html));
 });
 
-test("מייל: אנשי קשר כל אחד בשורה ממוספרת, משתתפים נוספים, מכשולים שידועים, בלי הערות סיור, ושורת ארבע התמונות", () => {
-  const data = mkData(fixture("yarkon"));
-  const res = C.analyze(Object.assign({}, baseInput, people, { knownObstacles: "עגורן בנייה\nקו מתח", visitDate: "2026-10-15", visitNotes: "ממצא סיור פנימי" }), data, cfg, now), body = O.mail(res, cfg).body, lines = body.split("\n");
-  const at = t => lines.indexOf(t);
-  assert.ok(at("אנשי קשר בשטח:") > 0);
-  assert.deepEqual(lines.slice(at("אנשי קשר בשטח:") + 1, at("אנשי קשר בשטח:") + 3), ["1. דנה כהן — 050-1112233", "2. יוסי לוי — ללא טלפון"]);
-  assert.deepEqual(lines.slice(at("משתתפים נוספים בטיסה:") + 1, at("משתתפים נוספים בטיסה:") + 3), ["1. נועה אברהם, 050-9998877", "2. אלון שמעוני, 053-4445566"]);
-  assert.ok(lines.includes("מכשולים שידועים למבקש: עגורן בנייה; קו מתח"));
-  assert.ok(at("אנשי קשר בשטח:") < at("משתתפים נוספים בטיסה:") && at("משתתפים נוספים בטיסה:") < lines.findIndex(l => /^מכשולים שידועים למבקש/.test(l)));
-  assert.ok(!/ממצא סיור פנימי|הערות המבקש|סיור/.test(body), "הערות הסיור אינן במייל");
-  assert.ok(lines.some(l => l.startsWith("מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), ארבע תמונות")));
-  // בלי משתתפים ובלי מכשולים: השורות האלה לא מופיעות
-  const bare = O.mail(C.analyze(baseInput, data, cfg, now), cfg).body;
-  assert.ok(!/משתתפים נוספים|מכשולים שידועים/.test(bare)); assert.ok(/אנשי קשר בשטח:\n1\. א — 050-0000001\n2\. ב — 050-0000002\n/.test(bare));
-  assert.ok(!/contactNames|undefined/.test(bare));
+test("מייל קצר בנקודות: הנוסח המדויק (יום בודד / כמה ימים), שורות הנקודות פותחות ב-״• ״, ושום פרט שכבר בטופס (כלי טיס, מהות, קואורדינטות, אנשי קשר, משתתפים, מכשולים, סיור) לא במייל", () => {
+  const data = mkData(fixture("yarkon")), mailOf = over => O.mail(C.analyze(Object.assign({}, baseInput, over), data, cfg, now), cfg);
+  const TAIL = ["", "קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת.", "כל הפרטים — בטופס המצורף.", "", "בברכה,"];
+  const head = ["שלום רב,", "", "מצורפת בקשה לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26).", ""];
+  const bullets = when => ["• גורם מבקש: חברת הבדיקה בע״מ", "• מיקום: בדיקה", "• מועד: " + when + " 17:00–20:00 (שעון מקומי)", "• סגירה: מעגל ברדיוס 200 מטר · גובה 262.5 רגל (80 מטר) מעפ״ש (AGL)"];
+  // כמה ימים: ״, בכל יום״ אחרי הטווח
+  const multi = mailOf({});
+  assert.equal(multi.body, head.concat(bullets("יום שלישי 20.10.2026 עד יום שישי 23.10.2026, בכל יום")).concat(TAIL, ["בודק", "חברת הבדיקה בע״מ", "050-0000000"]).join("\n"));
+  // יום בודד: בלי ״בכל יום״
+  const one = mailOf({ dateTo: "2026-10-20" });
+  assert.equal(one.body, head.concat(bullets("יום שלישי 20.10.2026")).concat(TAIL, ["בודק", "חברת הבדיקה בע״מ", "050-0000000"]).join("\n"));
+  // כל שורת נקודה פותחת ב-״• ״ (U+2022 ורווח) ואין עוד שורה שנראית כנקודה; ארבע נקודות בדיוק
+  const lines = multi.body.split("\n"), pts = lines.filter(l => l.startsWith("\u2022 "));
+  assert.equal(pts.length, 4); assert.ok(lines.every(l => !/^[-*·●▪]/.test(l)), "רק ״• ״ כסימון נקודה");
+  // הנושא והצורה המוחזרת {to, subject, body, mailto} לא השתנו
+  assert.deepEqual(Object.keys(multi).sort(), ["body", "mailto", "subject", "to"]);
+  assert.equal(multi.subject, "בקשה לסגירה אווירית — בדיקה — יום שלישי 20.10.2026 עד יום שישי 23.10.2026");
+  assert.equal(decodeURIComponent(multi.mailto.split("&body=")[1]), multi.body);
+  // הטלפון אופציונלי: ריק => אין שורה ריקה או חסרה בסוף הגוף
+  const nophone = mailOf({ requesterPhone: "" }).body;
+  assert.ok(nophone.endsWith("בברכה,\nבודק\nחברת הבדיקה בע״מ"), JSON.stringify(nophone.slice(-40)));
+  // פרטים שנמצאים בטופס ה-Word בלבד
+  const full = mailOf(Object.assign({}, people, { knownObstacles: "עגורן בנייה\nקו מתח", visitDate: "2026-10-15", visitNotes: "ממצא סיור פנימי" })).body;
+  assert.equal(full, multi.body, "אנשי קשר, משתתפים, מכשולים והערות סיור אינם משנים את הגוף");
+  for (const t of [baseInput.aircraft[0], baseInput.purpose, "DJI", "32°", "34°", "32.0991", "קשר עין", "אנשי קשר", "משתתפים", "מכשולים", "סיור", "ממצא", "עגורן", "דנה כהן", "050-1112233", "מהות הפעילות", "כלי טיס", "(עשרוני"]) assert.ok(!full.includes(t), "לא אמור להופיע במייל: " + t);
+  assert.ok(!/undefined|null|NaN/.test(full));
 });
 
 test("O.attachmentsLine ו-O.visitNoteHtml: שורת המצורפים, הערות המבקש עם תאריך / בלי תאריך / ריקות / עם HTML", () => {
@@ -1144,7 +1155,7 @@ test("אימות מהות הפעילות: מהות מותאמת תקינה; רי
 });
 
 
-test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל ול-Word כטקסט בלבד: escape ב-HTML, XML תקין, בלי הזרקה", async () => {
+test("מהות מותאמת (גם עוינת) זורמת לשדה 4 ול-Word כטקסט בלבד (ולא למייל הקצר): escape ב-HTML, XML תקין, בלי הזרקה", async () => {
   const data = mkData(fixture("yarkon")), BID = new RegExp("[" + fcc(0x202a, 0x202c, 0x200f) + "]", "g");
   const hostile = ["<img src=x onerror=1>", "]]>", "</w:t>", "<script>alert(1)</script> & \"q\" 'r'", "&lt;b&gt;&amp;lt;", "<![CDATA[ x ]]> <?xml?>", "לצורך הדרכה " + fcc(0xd83d, 0xde00), "לצורך מיפוי חקלאי (מותאם)"];
   for (const p of hostile) {
@@ -1156,7 +1167,7 @@ test("מהות מותאמת (גם עוינת) זורמת לשדה 4, למייל 
     assert.equal(row.text, p, "טקסט שדה 4");
     // מייל: שורה אחת בגוף, וגם בקישור mailto (אחרי פענוח)
     const m = O.mail(res, cfg);
-    assert.ok(m.body.split("\n").includes("מהות הפעילות: " + p), "גוף המייל: " + p);
+    assert.ok(!m.body.includes("מהות הפעילות") && !m.body.includes(p), "המהות אינה במייל הקצר (היא בטופס ה-Word בלבד): " + p);
     assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");
     // Word: XML מאוזן ותקין, ללא תגית מוזרקת, והטקסט נשמר כלשונו אחרי פענוח ה-entities
     const model = O.docxModel(res, data, cfg, { includeChecks: true }), z = await JSZipNode.loadAsync(await D.build(model)), xml = await z.file("word/document.xml").async("string");
@@ -1278,7 +1289,7 @@ test("הטופס: שדה 2 = הגורם שהוקלד; שדות 13 ו-14 = מה �
 
 test("מייל: ״שם/גורם המבקש״ והחתימה לפי הגורם שהוקלד (בלי ארגון קבוע); mailto מקודד אותם במלואם", () => {
   const data = mkData(fixture("yarkon")), org = 'חברת "אלפא" & בטא', res = C.analyze(Object.assign({}, baseInput, { requesterOrg: org, requesterName: "דנה לוי", requesterPhone: "050-1234567" }), data, cfg, now), m = O.mail(res, cfg), lines = m.body.split("\n");
-  assert.ok(lines.includes("שם/גורם המבקש: " + org), "שורת הגורם המבקש");
+  assert.ok(lines.includes("• גורם מבקש: " + org), "שורת הגורם המבקש");
   const i = lines.indexOf("בברכה,"); assert.ok(i > 0); assert.deepEqual(lines.slice(i, i + 4), ["בברכה,", "דנה לוי", org, "050-1234567"], "חתימה: שם, גורם, טלפון");
   assert.ok(!/הארגון הישראלי|לרב להב/.test(m.body));
   assert.equal(decodeURIComponent(m.mailto.split("&body=")[1]), m.body, "mailto מקודד את הגוף במלואו");
@@ -1380,6 +1391,75 @@ test("n=12: ערך support_email לא תקין (HTML, סכמה, רווחים, ח
   assert.equal(loadAuth(null).supportEmail(), "", "בלי הגדרות");
 });
 
+/* ---------- הסבר מראש על הכרטיס (שימו לב + מה מקבלים + כפתור רכישה) במסכי הכניסה וההרשמה, והודעה אחרי ״שלחו לי קוד״ ---------- */
+// הנוסח המאושר (בעל המערכת) מוחזק כאן בנפרד מהקוד: כל שינוי בו ייתפס
+const BUY_NOTICE = "שימו לב: מנוי או הרשמה למפת הנוט״מים אינם כוללים בקשות טיסה. בקשות טיסה מיועדות למטיסים מסחריים בלבד, ודורשות רכישה נפרדת של הכרטיס ״בקשת אישורי טיסה״.";
+const BUY_BENEFIT = "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.";
+const BUY_LABEL = "לרכישת הכרטיס והצטרפות";
+const BUY_NO_CODE = "לא הגיע קוד? כנראה שלא נרכש הכרטיס ״בקשת אישורי טיסה״. מנוי למפת הנוט״מים בלבד אינו מקנה גישה לבקשות טיסה.";
+const RENEW_OK = "https://www.icd.org.il/events-1/bqst-yswry-tysh";
+const anchorsOf = html => [...html.matchAll(/<a\b[^>]*>/g)].map(m => m[0]);
+
+test("הסבר הכרטיס: config.json מגדיר renew_url בכתובת https, והלקוח מקבל אותה כפי שהיא", () => {
+  assert.equal(typeof cfg.renew_url, "string");
+  assert.match(cfg.renew_url, /^https:\/\/[^\s"'<>]+$/);
+  assert.equal(loadAuth({ renew_url: cfg.renew_url }).renewHref(), new URL(cfg.renew_url).href);
+});
+
+test("הסבר הכרטיס: כתובת הרכישה נכנסת לקישור רק כשהיא https תקין — חסרה, http, javascript:, data:, יחסית, עם רווח / מירכאות / סוגריים משולשים, עם שם משתמש וסיסמה, או לא מחרוזת = אין כתובת (נכשל סגור)", () => {
+  const good = new Map([[RENEW_OK, RENEW_OK], ["  " + RENEW_OK + "  ", RENEW_OK], ["HTTPS://WWW.ICD.ORG.IL/x", "https://www.icd.org.il/x"], ["https://www.icd.org.il/p?a=1&b=2", "https://www.icd.org.il/p?a=1&b=2"]]);
+  for (const [inp, out] of good) assert.equal(loadAuth({ renew_url: inp }).renewHref(), out, JSON.stringify(inp));
+  const bad = ["", "   ", "http://www.icd.org.il/x", "javascript:alert(1)", "JAVASCRIPT:alert(1)", "data:text/html,<b>x</b>", "//evil.example/x", "/events-1/x", "www.icd.org.il/x", "https://", "https:///x", "https://user:pw@www.icd.org.il/x", "https://www.icd.org.il/a b", 'https://www.icd.org.il/x"><img src=x>', "https://www.icd.org.il/x'onmouseover='y", "https://www.icd.org.il/<b>", "https://www.icd.org.il/\\x", "https://www.icd.org.il/`x", "ftp://www.icd.org.il/x", "mailto:a@b.co", null, undefined, 42, true, {}, [RENEW_OK]];
+  for (const inp of bad) assert.equal(loadAuth({ renew_url: inp }).renewHref(), "", JSON.stringify(inp));
+  assert.equal(loadAuth({}).renewHref(), "", "הגדרות בלי renew_url (הגדרות / שרת ישנים)");
+  assert.equal(loadAuth(null).renewHref(), "", "בלי הגדרות");
+});
+
+test("הסבר הכרטיס: תיבת ההסבר — הנוסח המאושר במלואו, כפתור הרכישה כקישור אמיתי ללשונית חדשה (noopener noreferrer) והכתובת רק ב-href; בלי כתובת תקינה אין קישור אבל ההסבר נשאר", () => {
+  const A = loadAuth({ renew_url: RENEW_OK, support_email: "info@icd.org.il" }), html = A.buyBox();
+  assert.ok(html.includes(">" + BUY_NOTICE + "<") && html.includes(">" + BUY_BENEFIT + "<"), "שימו לב ויתרון הצטרפות בנוסח המאושר");
+  assert.deepEqual(anchorsOf(html), ['<a class="buyBtn" id="buyBtn" href="' + RENEW_OK + '" target="_blank" rel="noopener noreferrer">'], "קישור אחד בלבד: href, target, rel");
+  assert.ok(html.includes(">" + BUY_LABEL + "</a>"), "תווית הכפתור");
+  assert.ok(!/<button/.test(html), "קישור אמיתי, לא button");
+  assert.equal(html.split(RENEW_OK).length - 1, 1, "הכתובת מופיעה פעם אחת, ב-href בלבד");
+  // & בכתובת: מומר ל-&amp; בתוך ה-href (HTML תקין), ובדפדפן חוזר ל-&
+  assert.ok(loadAuth({ renew_url: "https://www.icd.org.il/p?a=1&b=2" }).buyBox().includes('href="https://www.icd.org.il/p?a=1&amp;b=2"'));
+  for (const bad of [undefined, null, "", "http://www.icd.org.il/x", "javascript:alert(1)", 'https://x.y/"><img src=x>']) {
+    const h = loadAuth({ renew_url: bad }).buyBox();
+    assert.deepEqual(anchorsOf(h), [], "בלי קישור: " + JSON.stringify(bad));
+    assert.ok(h.includes(BUY_NOTICE) && h.includes(BUY_BENEFIT) && !h.includes(BUY_LABEL), "ההסבר נשאר, בלי כפתור: " + JSON.stringify(bad));
+  }
+  assert.ok(!html.includes("office@icd.org.il") && !/מנהל המערכת/.test(html), "בלי כתובת הארגון ובלי ״מנהל המערכת״ בטקסט למטיס");
+});
+
+test("הסבר הכרטיס: ההודעה אחרי ״שלחו לי קוד״ — המשפט החדש נוסף למשפט הקיים (קוד ל-15 דקות, ספאם, מייל הרכישה, רכישה כחבר), כתובת התמיכה נשארת, והיא נגזרת רק מההגדרות (זהה לכל כתובת)", () => {
+  const A = loadAuth({ support_email: "info@icd.org.il", renew_url: RENEW_OK }), m = A.regSentMessage();
+  assert.ok(m.startsWith("אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם; ודאו שהכרטיס שולם, שהמייל שהקלדתם הוא מייל הרכישה"), "המשפט הקיים נשמר");
+  assert.ok(m.includes(", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר. " + BUY_NO_CODE + " "), "ברירת מחדל (דרישת החברות לא דווחה): סעיף החברות, ואחריו המשפט החדש");
+  assert.ok(m.endsWith("אם הבעיה נמשכת — פנו לתמיכה: info@icd.org.il."), "כתובת התמיכה צורפה (withSupport)");
+  assert.ok(!m.includes("office@icd.org.il") && !/מנהל המערכת/.test(m));
+  assert.equal(A.regSentMessage(), m, "קריאה חוזרת — אותו טקסט");
+  assert.equal(loadAuth({ support_email: "info@icd.org.il", renew_url: "http://x.y/z" }).regSentMessage(), m, "הכתובת (תקינה או לא) אינה משפיעה על הטקסט");
+  A.requireMember = true; assert.equal(A.regSentMessage(), m);
+  A.requireMember = false;   // השרת דיווח שדרישת החברות כבויה: סעיף החברות נעלם, והמשפט החדש נשאר
+  const off = A.regSentMessage();
+  assert.ok(!/חברים רשומים/.test(off) && off.includes("מייל הרכישה. " + BUY_NO_CODE + " אם הבעיה נמשכת"), off);
+  // בלי כתובת תמיכה תקינה: בלי כתובת, ובלי כישלון
+  const n = loadAuth({}).regSentMessage();
+  assert.ok(n.includes(BUY_NO_CODE) && n.endsWith("אם הבעיה נמשכת — פנו לתמיכה.") && !n.includes("@"), n);
+});
+
+test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך הכניסה (לא בהקמה ראשונית) ובראש מסך ההרשמה, והודעת הקוד נבנית מ-regSentMessage בלבד (בלי תלות בתשובת השרת) עם כפתור הרכישה", () => {
+  const au = readReq("js/auth.js");
+  assert.ok(/<h2>בקשות טיסה — כניסה<\/h2>' \+ \(boot \? "" : buyBox\(\)\)/.test(au), "מסך הכניסה");
+  assert.ok(/<h2>הרשמה \/ חידוש מנוי<\/h2>' \+ buyBox\(\)/.test(au), "מסך ההרשמה");
+  const send = au.slice(au.indexOf('$("rgSend").onclick'), au.indexOf('$("regForm").onsubmit'));
+  assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
+  assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
+  assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=7"><\/script>/, "גרסת המטמון של auth.js");
+});
+
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
   const SY = require(path.join(ROOT, REQ_DIR, "js/sync.js")), html = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8"), meta = J("members-k38p/pamat-meta.json");
   const T = "2026-10-17T06:00:00Z", base = () => ({ html, meta: { ...meta }, zones, cfg, mapNotam: { fetched_iso: T }, notamAll: { fetched_iso: T } });
@@ -1455,7 +1535,8 @@ test("n=11/12/17/18: מבנה — הודעות הסנכרון לפי תפקיד,
   assert.ok(/id="rgMember"[^]*האירוע לחברי האתר בלבד/.test(auth), "הסבר דרישת החברות בהרשמה");
   assert.ok(/if \(\$\("rgStep2"\)\.style\.display === "none"\) \{ \$\("rgSend"\)\.click\(\); return; \}/.test(auth), "Enter בשדה המייל שולח קוד");
   const rs = auth.slice(auth.indexOf('$("rgSend").onclick'), auth.indexOf('$("regForm").onsubmit'));
-  assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
+  const rm = auth.slice(auth.indexOf("const regSentMessage"), auth.indexOf("function expiredNote"));   // הנוסח עצמו נגזר מההגדרות בלבד (regSentMessage), והמטפל רק מציג אותו
+  assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rm) && /esc\(regSentMessage\(\)\)/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs + rm), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
   for (const f of ["js/auth.js", "js/ui.js", "js/sync.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f + ": בלי רצפי unicode-escape");
 });
 
@@ -1528,4 +1609,28 @@ test("הפרדה: חלון הניהול — עמודת סוג עם setOrg, תי�
 test("הפרדה: אין רצפי unicode-escape בקבצי הלקוח שהשתנו, ו-config.json תקין", () => {
   for (const f of ["js/auth.js", "js/ui.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f);
   assert.doesNotThrow(() => JSON.parse(readReq("config.json")));
+});
+
+test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חלון השליחה, S.saved אחרי כשל, חץ ה״אפשרויות נוספות״ מחוץ לשם הנגיש, וניסוח ״בעל המערכת״ בעזרת הדרייב", () => {
+  const ui = readReq("js/ui.js"), html = readReq("index.html");
+  // השמירה האוטומטית לא מתחילה בזמן שחלון השליחה נבנה (S.opening), והלחצן ״שלח״ מכסה את כל הבנייה בדגל
+  assert.match(ui, /if \(S\.sending \|\| S\.opening \|\| \$\("sendProg"\)\) \{ autoFor = rev;/);
+  assert.match(ui, /async function sendToNotam\(\) \{\s*if \(S\.opening\) return;\s*S\.opening = true;\s*try \{ await sendToNotamOpen\(\); \} finally \{ S\.opening = false; \}\s*\}/);
+  // שמירה חדשה מבטלת את ״נשמר לגרסה הזו״ עד שהיא מצליחה
+  assert.match(ui, /S\.driveTry = rev0;[^\n]*\n\s*S\.saved = null;/);
+  // guarded אינו שותק כשיש שמירה בעיצומה
+  assert.match(ui, /const guarded = async fn => \{\s*if \(S\.sending\) \{ prog\.className = "small"; prog\.textContent = "שמירה בדרייב בעיצומה/);
+  // החץ הוא טקסט חלופי ריק: לא נכנס לשם הנגיש של הכפתור
+  assert.ok(html.includes('#btnMore::after{content:" ▾" / ""}') && html.includes('#btnMore[aria-expanded=true]::after{content:" ▴" / ""}'));
+  // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
+  const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
+  // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
+  assert.match(html, /js\/ui\.js\?v=9/);
+});
+
+test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
+  const au = readReq("js/auth.js"), html = readReq("index.html");
+  assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(html, /js\/auth\.js\?v=7/);
 });

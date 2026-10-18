@@ -54,8 +54,10 @@ var CFG = {
   // --- תקרות אחסון (saveFile / saveBegin): מטיס אחד לא ממלא את הדרייב של הבעלים, לא מנפח את היומן ולא מאט את השרת (נעילת הסקריפט) לאחרים. מנהל פטור מהמכסות האישיות (לא מהתקרות לתיקייה).
   MAX_FOLDER_FILES: 12,          // קבצי בקשה (Word, KML, תמונות, JSON) בתיקייה אחת — הלקוח כותב 7 (Word, KML, 4 תמונות, JSON); סימוני "נשלח — ....txt" אינם נספרים
   MAX_FOLDER_BYTES: 24 * 1024 * 1024,   // נפח כולל של קבצי הבקשה בתיקייה — לא מעל תקרת המייל (MAX_MAIL_BYTES): בקשה גדולה יותר לא תישלח בכל מקרה
-  MAX_UPLOAD_BYTES_PER_HOUR: 200 * 1024 * 1024,   // בייטים שנכתבו בשעה לכל משתמש (נמדדים בכתיבה, לא בנפח שנשמר: גרסה ישנה שנזרקה לאשפה עדיין תופסת מקום בדרייב)
-  MAX_UPLOAD_BYTES_PER_DAY: 500 * 1024 * 1024,    // ... וביום (שעון ישראל) לכל משתמש
+  // הדף מעלה לדרייב אוטומטית בכל פעם שהבקשה הופכת מוכנה (saveBegin + 7-8 קבצים + saveEnd, ושמירה חוזרת מוחקת את הקודמים — הקבצים בתיקייה לא מצטברים), ולכן נפח השעה והיום מוגדר לפי מחזורים:
+  // מחזור שמגיע לתקרת התיקייה (24MB, המקסימום האפשרי) × 5 מחזורים × 3 בקשות בשעה = 360MB ≤ 400MB; ו-10 בקשות × 4 מחזורים ביום = 960MB ≤ 1000MB. (בגודל טיפוסי, כ-10–15MB למחזור: ארבע תמונות 1280×960 + Word + KML, אלה 26–40 מחזורים בשעה)
+  MAX_UPLOAD_BYTES_PER_HOUR: 400 * 1024 * 1024,   // בייטים שנכתבו בשעה לכל משתמש (נמדדים בכתיבה, לא בנפח שנשמר: גרסה ישנה שנזרקה לאשפה עדיין תופסת מקום בדרייב)
+  MAX_UPLOAD_BYTES_PER_DAY: 1000 * 1024 * 1024,   // ... וביום (שעון ישראל) לכל משתמש
   MAX_OPEN_REQUESTS_PER_USER: 60, // בקשות של משתמש שלא נשלחו חי ושנגעו בהן ב-LOG_KEEP_DAYS הימים האחרונים — מעבר לכך אין תיקייה חדשה (בקשה שנשלחה חי משחררת מקום)
   MAX_SENT_PER_REQUEST: 100,     // רשומות שליחה בבקשה אחת ביומן; מעבר לכך נמחקות הישנות ביותר שאינן שליחה חיה
   // --- מנוי מטיס מסחרי: כרטיס "בקשת אישורי טיסה" באתר הארגון (Wix Events). הרשמה רק למי שיש לו הזמנה ששולמה בפועל.
@@ -74,6 +76,10 @@ var CFG = {
   REG_MAILS_PER_DAY: 400,        // ... וביום (שעון ישראל)
   REG_MAILS_PER_EMAIL_DAY: 10,   // קודי הרשמה/חידוש שנשלחו בפועל לכתובת ביום — מעבר לכך נדחה בשקט (אותה תשובה), כדי שכתובת אחת לא תצרוך את התקציב הכללי ולא תוצף
   REG_EXISTS_HOURS: 24,          // הודעת "כבר קיים חשבון" לכל היותר פעם בחלון הזה לכתובת (חותמת ב-Script Properties; המטמון מוגבל ל-6 שעות)
+  // הודעת "לא נמצא כרטיס" (regStart): נשלחת רק לכתובת שהקלידו, ורק כששאילתת Wix הצליחה ואין לכתובת כרטיס זכאי וגם לא חשבון. התקציב שלה נפרד לגמרי מתקציב קודי ההרשמה (REG_MAILS_*), כדי שמי שמקליד כתובות אקראיות לא יאכל קודים אמיתיים
+  REG_NOTICKET_HOURS: 24,        // לכל היותר הודעה אחת בחלון הזה לכתובת (נרשם ברשומה אחת ב-Script Properties בשם REG_NOTICKET, שגוזמת את עצמה — לא נוצר מאפיין לכל כתובת זבל)
+  REG_NOTICKET_PER_HOUR: 20,     // הודעות כאלה שיצאו בפועל בשעה האחרונה, בסך הכול (חלון מתגלגל)
+  REG_NOTICKET_PER_DAY: 100,     // ... ובעשרים וארבע השעות האחרונות (עד 300 — הרשומה היא מאפיין אחד, עד 9KB). חריגה מכל תקרה = דילוג בשקט, באותה תשובה; ההודעה משאירה גם את MAIL_QUOTA_RESERVE
   MAIL_QUOTA_RESERVE_REG: 8,     // רזרבה במכסת המיילים היומית שקודי הרשמה אינם צורכים (שתי שליחות חיות למשרד נוטאם); הודעת "כבר קיים חשבון" משאירה MAIL_QUOTA_RESERVE כמו עותקים
   RECHECK_ORDERS: true,         // בבדיקה היומית: הזמנה שבוטלה/הוחזרה — החשבון נחסם
   WIX_MAX_PAGES: 5
@@ -255,6 +261,30 @@ function cleanFileName_(s) {   // חיתוך אורך לא שומט את הסי�
 // נושא מייל: שורה אחת בלבד (מונע הזרקת כותרות), ללא תווי בקרה — כולל תווי C1 (ביניהם NEL), מפרידי השורה של יוניקוד וסימוני כיווניות (שמסתירים/הופכים טקסט)
 function cleanSubject_(s) { return String(s || '').replace(HIDDEN_RE_, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
 function cleanBody_(s) { return String(s || '').replace(/\r\n?/g, '\n').replace(/\r/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').slice(0, 20000); }
+// גרסת ה-HTML של גוף המייל (htmlBody; ה-body הטקסטואלי נשאר כגיבוי לקורא בלי HTML), מימין לשמאל ומיושרת לימין: שורות רצופות שמתחילות ב"• " (תבליט + רווח) הופכות לרשימה אחת,
+// שורה אחרת — שורה בפני עצמה (גוף ישן בלי תבליטים נשאר שורות), שורה ריקה — רווח. הגוף מגיע מהלקוח ואינו אמין: כל טקסט עובר escape, ולא נוצרים קישורים, תמונות או סקריפטים.
+function escapeHtml_(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function htmlBody_(text) { return rtlWrap_(htmlLines_(text)); }
+// העטיפה המשותפת (מימין לשמאל, מיושרת לימין) — גם למייל "לא נמצא כרטיס", שמוסיף לה כפתור אחד משלו (ראו noTicketMail_)
+function rtlWrap_(inner) { return '<div dir="rtl" style="direction:rtl;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6">' + inner + '</div>'; }
+function htmlLines_(text) {
+  var out = [], items = null;
+  var flush = function () {
+    if (items) out.push('<ul dir="rtl" style="direction:rtl;text-align:right;margin:4px 0;padding:0 22px 0 0">' + items.join('') + '</ul>');
+    items = null;
+  };
+  var lines = String(text).split('\n'), a = 0, b = lines.length;
+  while (a < b && !lines[a].trim()) a++;                  // שורות ריקות בהתחלה ובסוף לא הופכות לרווח (בלי regex על רצף רווחים: ריצוד ריבועי)
+  while (b > a && !lines[b - 1].trim()) b--;
+  lines.slice(a, b).forEach(function (line) {
+    var m = /^\u2022 ([\s\S]*)$/.exec(line);       // [\s\S] ולא . — נקודה לא תופסת U+2028/2029 שנשארים בגוף
+    if (m) { (items = items || []).push('<li style="text-align:right">' + escapeHtml_(m[1].trim()) + '</li>'); return; }
+    flush();
+    out.push(line.trim() ? '<div style="text-align:right">' + escapeHtml_(line.trim()) + '</div>' : '<br>');
+  });
+  flush();
+  return out.join('');
+}
 
 /* ---------- אתחול (פעם אחת, מהעורך) ---------- */
 // קוד ההקמה הוא הדבר היחיד שמאפשר ליצור מנהל מרחוק, ולכן הוא ארוך (128 ביט) ו*אין נעילה לניסיונות שגויים* ב-bootstrap: כל נעילה ללא זהות (Apps Script לא מוסר כתובת IP)
@@ -398,6 +428,33 @@ function regBudgetAdd_(cache, hk) {
 function regOk_() { return { ok: true, sent: true }; }
 // חריגה במכסה כללית (שאילתות Wix / תקציב מיילי ההרשמה): אותה תשובה לכל כתובת. scope:'all' = המגבלה אינה אישית (הדף מציג את ההודעה כפי שהיא)
 function regBusyErr_() { return { ok: false, error: 'rate', scope: 'all', message: 'המערכת עמוסה כרגע בבקשות הרשמה — המגבלה אינה אישית; נסו שוב בעוד זמן קצר' }; }
+// ----- הודעת "לא נמצא כרטיס": ספר ההודעות שיצאו (REG_NOTICKET) -----
+// מאפיין אחד בלבד: { l: ['<10 תווי גיבוב של הכתובת>:<שניות>', ...] }, נגזם לפי הזמן בכל קריאה — כך כתובות זבל שרירותיות לא יוצרות מאפיין לכל כתובת ולא ממלאות את Script Properties
+// (בניגוד ל-M:, שנוצר רק לבעלי כרטיס/חשבון). משמש גם לחותמת הכתובת (REG_NOTICKET_HOURS) וגם לתקציב השעתי והיומי; המערכת רצה תחת נעילת הסקריפט, ולכן אין מרוץ בין קריאה לכתיבה.
+var NOTICKET_PROP_ = 'REG_NOTICKET', NOTICKET_MAX_TRACKED_ = 300;   // 300 רשומות ≈ 8KB, מתחת לתקרת מאפיין בודד (9KB)
+function noTicketLog_(t0) {
+  var rec = readJsonProp_(NOTICKET_PROP_), cut = Math.floor(t0 / 1000) - Math.max(CFG.REG_NOTICKET_HOURS, 24) * 3600, out = [];
+  ((rec && Array.isArray(rec.l)) ? rec.l : []).forEach(function (s) {
+    var m = /^([0-9a-f]{10}):([0-9]{9,11})$/.exec(String(s));
+    if (m && Number(m[2]) > cut) out.push({ h: m[1], s: Number(m[2]) });      // רשומה פגומה או ישנה נשמטת
+  });
+  return out;
+}
+// מותר לשלוח עכשיו? הכתובת לא קיבלה בחלון REG_NOTICKET_HOURS, התקציב השעתי והיומי של ההודעה הזו לא מלאים (נפרדים מתקציב הקודים), והרשומה לא גדולה מדי. תלוי רק בכתובת ובמצב המערכת
+function noTicketOk_(log, h, t0) {
+  var sec = Math.floor(t0 / 1000), seen = false, hour = 0, day = 0;
+  log.forEach(function (e) {
+    if (e.h === h && sec - e.s < CFG.REG_NOTICKET_HOURS * 3600) seen = true;
+    if (sec - e.s < 3600) hour++;
+    if (sec - e.s < 86400) day++;
+  });
+  return !seen && hour < CFG.REG_NOTICKET_PER_HOUR && day < CFG.REG_NOTICKET_PER_DAY && log.length < NOTICKET_MAX_TRACKED_;
+}
+function noTicketWrite_(log, h, t0) {
+  var l = log.map(function (e) { return e.h + ':' + e.s; });
+  l.push(h + ':' + Math.floor(t0 / 1000));
+  props_().setProperty(NOTICKET_PROP_, JSON.stringify({ l: l }));
+}
 // בעת מחיקת משתמש: מונים שעתיים/יומיים ששמורים לפי שם המשתמש לא עוברים למי שיתפוס את השם אחריו
 function clearUserCounters_(name) {
   var c = CacheService.getScriptCache(), uh = sha256Hex_(name).slice(0, 16), h = Math.floor(now_() / 3600000);
@@ -409,6 +466,26 @@ function applyOrders_(until, orders) {
   var u = Number(until) || 0;
   orders.forEach(function (o) { u = addMonths_(Math.max(u, o.created), CFG.VALID_MONTHS); });
   return u;
+}
+// כתובת https בלבד לכפתור: מארח (בלי פרטי משתמש) ונתיב ב-ASCII הניתן להדפסה, בלי רווחים, מירכאות, סוגריים משולשים ולוכסן הפוך. כל דבר אחר = '' (בלי כפתור; נכשל סגור)
+function safeHttpsUrl_(u) {
+  u = String(u || '');
+  return (u.length <= 300 && /^https:\/\/[a-z0-9]([a-z0-9.\-]*[a-z0-9])?(:[0-9]{1,5})?([\/?#][\x21-\x7e]*)?$/i.test(u) && !/[<>"'\\]/.test(u)) ? u : '';
+}
+// מייל "לא נמצא כרטיס" (regStart): נבנה אך ורק ממחרוזות קבועות בשרת וממה שבקונפיגורציה — שום טקסט מהלקוח, והנמען הוא הכתובת שהוקלדה בלבד.
+// כפתור אחד לכל היותר (<a> עם כתובת CFG.RENEW_URL אם היא https תקינה, אחרת בלי כפתור); כתובת הארגון אינה מופיעה בגוף (רק ב"השב ל"); כתובת התמיכה נדפסת רק אם היא לא כתובת הארגון.
+function noTicketMail_(email) {
+  var sup = normEmail_(CFG.SUPPORT_EMAIL), url = safeHttpsUrl_(CFG.RENEW_URL), label = 'לרכישת הכרטיס והצטרפות';
+  if (sup && sup === orgAddr_()) sup = '';
+  var head = ['שלום,', '',
+    'ביקשתם להירשם לבקשות טיסה בכתובת הזו. בדקנו את הרישומים ולא נמצא כרטיס ששולם עבור ״בקשת אישורי טיסה״.', '',
+    'ייתכן שנרשמתם רק למפת הנוט״מים — היא אינה כוללת בקשות טיסה, שמיועדות למטיסים מסחריים ודורשות רכישה נפרדת של הכרטיס.', '',
+    'הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.'].join('\n');
+  var tail = 'אם כבר רכשתם את הכרטיס, ודאו שהמייל שהקלדתם הוא מייל הרכישה' + (CFG.REQUIRE_MEMBER ? ', ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר' : '') + '.' + (sup ? ' לשאלות: ' + sup : '');
+  var button = url ? '<div style="text-align:right;margin:12px 0"><a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 22px;background:#0b5cad;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold">' + escapeHtml_(label) + '</a></div>' : '<br>';
+  return { to: email, name: CFG.SENDER_NAME, replyTo: orgAddr_() || '', subject: 'לא נמצא כרטיס ״בקשת אישורי טיסה״ על הכתובת הזו',
+    body: head + '\n\n' + (url ? label + ': ' + url + '\n\n' : '') + tail,      // גיבוי טקסטואלי לקורא בלי HTML
+    htmlBody: rtlWrap_(htmlLines_(head) + button + htmlLines_(tail)) };
 }
 function subscriptionMail_(u, name, days, until) {
   var first = String(u.displayName || '').trim(), hi = first ? 'שלום ' + first + ',' : 'שלום,', date = fmtDate_(until);
@@ -742,7 +819,8 @@ var ACTIONS = {
 
   // ----- הרשמה וחידוש מנוי (ללא התחברות): רק למי שרכש כרטיס "בקשת אישורי טיסה" ששולם בפועל -----
   // כלל ברזל: התשובה כאן זהה בין אם יש כרטיס, חשבון או שום דבר, כדי שאי אפשר לברר דרכה מי רכש כרטיס או מי רשום. מייל יוצא רק לכתובת שהשרת אימת: זו שבהזמנה ששולמה ב-Wix
-  // (נבדקת בשוויון מלא, ראו wixPaidOrders_) או זו ששמורה בחשבון (emailUser_) — מה שהוקלד בדף לא נשלח אליו כלום בלי אחד משני אלה.
+  // (נבדקת בשוויון מלא, ראו wixPaidOrders_) או זו ששמורה בחשבון (emailUser_) — מה שהוקלד בדף לא נשלח אליו קוד או פרטי חשבון בלי אחד משני אלה.
+  // יוצא מן הכלל היחיד: הודעת "לא נמצא כרטיס" לכתובת שהוקלדה — טקסט קבוע לגמרי (שום קלט מהלקוח, בלי פרטי חשבון), רק אחרי ששאילתת Wix הצליחה, פעם ב-REG_NOTICKET_HOURS לכתובת ובתקציב משלה (REG_NOTICKET_*).
   // לכן כל השערים שמחזירים שגיאה עומדים *לפני* בדיקת הכרטיס ותלויים רק בכתובת שהוקלדה (מספר בקשות) ובמצב המערכת הכללי; מה שתלוי בכרטיס/חשבון (מכסת קודים לכתובת,
   // חותמת "כבר קיים חשבון", נעילת ניחושים, כשל שליחה) נדחה או נכשל *בשקט* — עם אותה תשובה { ok:true, sent:true } שמקבלת גם כתובת בלי כרטיס.
   //  1. מכסה לכתובת (REG_PER_EMAIL_HOUR) — נספרת בכל בקשה תקינה, גם בלי כרטיס (ספירה רק של מיילים שנשלחו הייתה מגלה בעלי כרטיס).
@@ -763,18 +841,25 @@ var ACTIONS = {
     // כשלונות קוד מצטברים לכתובת בין קודים (חלון CODE_FAIL_HOURS): אחרי CODE_FAIL_MAX כשלונות לא נוצר קוד ולא נשלח מייל, והתשובה זהה לכתובת בלי כרטיס.
     // הבדיקה אחרי שאילתת Wix (ולא לפניה) כדי שגם כשל Wix יהיה זהה לכל הכתובות, כולל נעולות
     if (regLocked_(prev)) return regOk_();
+    // 'noticket' = שאילתת Wix הצליחה (כשל כבר חזר למעלה) ואין כרטיס זכאי ואין חשבון: הודעה מנומסת שמסבירה מה חסר (ראו noTicketMail_). כל ענף שלא נדחה בשקט שולח בדיוק מייל אחד
     var eu = emailUser_(email), fresh = eligibleOrders_(orders), mode = '';
     if (eu && eu.user) mode = fresh.length ? 'renew' : 'exists';
-    else if (fresh.length) mode = 'register';
-    if (!mode) return regOk_();
+    else mode = fresh.length ? 'register' : 'noticket';
     var mk = mailRecKey_(email), mrec = readJsonProp_(mk), day = dayKey_(), codes = (mrec && mrec.d === day) ? Number(mrec.n) || 0 : 0, lastExists = Number(mrec && mrec.x) || 0;
-    var msg, wroteReg = false;
+    var msg, wroteReg = false, ntWrote = false, ntRaw = null;
     try {
-      if (mode === 'exists') {
+      if (mode === 'noticket') {
+        // תקציב משלה (REG_NOTICKET_*), לא מתקציב הקודים, ורזרבת עותקים כמו ב"כבר קיים חשבון": כתובות אקראיות לא מרוקנות לא את הקודים ולא את מכסת גוגל. חריגה = דילוג בשקט
+        var ntLog = noTicketLog_(t0), ntH = sha256Hex_(email).slice(0, 10);
+        if (!noTicketOk_(ntLog, ntH, t0) || !mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE)) return regOk_();
+        ntRaw = props_().getProperty(NOTICKET_PROP_);
+        noTicketWrite_(ntLog, ntH, t0); ntWrote = true;       // נרשם לפני השליחה (נכשל סגור: אם הרישום נכשל לא שולחים) ומוחזר אם השליחה נכשלה — נספרים רק מיילים שיצאו
+        msg = noTicketMail_(email);
+      } else if (mode === 'exists') {
         // הודעת נימוס בלבד: פעם ב-REG_EXISTS_HOURS לכתובת (בלי להפריע לקודים), ומשאירה את הרזרבה של עותקים; אחרת מדלגים בשקט
         if (t0 - lastExists < CFG.REG_EXISTS_HOURS * 3600000 || !mailQuotaOk_(1, CFG.MAIL_QUOTA_RESERVE)) return regOk_();
         msg = { to: email, name: CFG.SENDER_NAME, replyTo: orgAddr_() || '', subject: 'כבר קיים חשבון לבקשות טיסה בכתובת הזו',
-          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה לתמיכה' + (normEmail_(CFG.SUPPORT_EMAIL) ? ' (' + normEmail_(CFG.SUPPORT_EMAIL) + ')' : '') + ' ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
+          body: 'שלום,\n\nכבר קיים חשבון בבקשות טיסה המשויך לכתובת הזו. שם המשתמש: ' + eu.name + (eu.user.until && Number(eu.user.until) >= t0 ? '\nהמנוי בתוך תוקף עד ' + fmtDate_(eu.user.until) + '.' : '') + '\n\nאם שכחת את הסיסמה — פנה לתמיכה' + (normEmail_(CFG.SUPPORT_EMAIL) ? ' (' + normEmail_(CFG.SUPPORT_EMAIL) + ')' : '') + ' ונאפס אותה.\nלחידוש מנוי: ' + CFG.RENEW_URL + '\n\nצוות הארגון הישראלי לרחפנים' };
       } else {
         if (codes >= CFG.REG_MAILS_PER_EMAIL_DAY) return regOk_();      // מכסת קודים יומית לכתובת: נדחה בשקט (אחרת התשובה הייתה מבדילה כתובת עם כרטיס)
         var code = ('000000' + (parseInt(randHex_(8), 16) % 1000000)).slice(-6), salt = randHex_(16);
@@ -784,7 +869,8 @@ var ACTIONS = {
           body: 'שלום,\n\nהקוד שלך ' + (mode === 'renew' ? 'לחידוש המנוי' : 'להרשמה לבקשות טיסה') + ': ' + code + '\nהקוד תקף ל-' + CFG.CODE_TTL_MIN + ' דקות. אם לא ביקשת — אפשר להתעלם מהמייל.\n\nצוות הארגון הישראלי לרחפנים' };
       }
       MailApp.sendEmail(msg);
-      wroteReg = false;
+      wroteReg = false; ntWrote = false;
+      if (mode === 'noticket') return regOk_();               // כבר נרשם בספר ההודעות; לא נספר בתקציב מיילי ההרשמה (קודים)
       // נספר רק אחרי שהמייל יצא
       regBudgetAdd_(cache, hk);
       props_().setProperty(mk, JSON.stringify({ d: day, n: mode === 'exists' ? codes : codes + 1, x: mode === 'exists' ? t0 : lastExists }));
@@ -792,6 +878,7 @@ var ACTIONS = {
       // כשל שליחה (MailApp זרק, מכסה, כתיבה): לא מגלים אותו — אותה תשובה כמו לכתובת בלי כרטיס. הרשומה הקודמת חוזרת במקום להימחק (מוני הכשלונות וקוד קודם שעדיין תקף נשמרים)
       Logger.log('regStart: שליחת מייל נכשלה — ' + String(err && err.message || err));
       if (wroteReg) { try { if (prevRaw) props_().setProperty(rk, prevRaw); else props_().deleteProperty(rk); } catch (e2) { /* שמרני: ממשיכים */ } }
+      if (ntWrote) { try { if (ntRaw) props_().setProperty(NOTICKET_PROP_, ntRaw); else props_().deleteProperty(NOTICKET_PROP_); } catch (e3) { /* שמרני: ממשיכים */ } }
     }
     return regOk_();
   },
@@ -1015,7 +1102,7 @@ var ACTIONS = {
     var sid = randHex_(12), t = logSentBegin_(a.name, folder.getId(), folder.getName(), toOffice ? mode : 'self', target, to, sid, sender);   // נרשם לפני היציאה: אם משהו קורס אחרי השליחה, אין מייל כפול
     cache.put(allKey, String(sendsAll + 1), 3600); cache.put(userKey, String(sendsUser + 1), 3600); cache.put(tryKey, String(tries + 1), 3600);
     try {
-      var opts = { to: to.join(','), replyTo: plan.replyTo, name: sender, subject: prefix + subject, body: body, attachments: c.blobs };
+      var opts = { to: to.join(','), replyTo: plan.replyTo, name: sender, subject: prefix + subject, body: body, htmlBody: htmlBody_(body), attachments: c.blobs };   // body = גיבוי טקסטואלי, htmlBody = המייל שנראה (RTL, תבליטים)
       if (plan.cc.length) opts.cc = plan.cc.join(',');
       if (plan.bcc.length) opts.bcc = plan.bcc.join(',');
       MailApp.sendEmail(opts);

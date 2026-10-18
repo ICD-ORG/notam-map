@@ -130,7 +130,7 @@
     }
     let boot = false;
     try { const r = await fetch(A.cfg.api_url, { redirect: "follow" }); const j = await r.json(); boot = !!j.needsBootstrap; if (typeof j.requireMember === "boolean") A.requireMember = j.requireMember; } catch (e) { note = note || "אין חיבור לשרת ההתחברות. בדקו את האינטרנט ונסו שוב."; }
-    c.innerHTML = '<form class="authBox" id="authForm" autocomplete="on"><h2>בקשות טיסה — כניסה</h2>' +
+    c.innerHTML = '<form class="authBox" id="authForm" autocomplete="on"><h2>בקשות טיסה — כניסה</h2>' + (boot ? "" : buyBox()) +
       (boot ? '<p class="small">הקמה ראשונה: הקלידו את קוד ההקמה שהוצג בהרצת <code>initialize()</code> ובחרו שם משתמש וסיסמה למנהל.</p><label class="f"><b>קוד הקמה</b><input id="auCode" type="text" autocomplete="off" dir="ltr"></label>' : '') +
       '<label class="f"><b>שם משתמש</b><input id="auUser" type="text" autocomplete="username" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה' + (boot ? ' (לפחות 10 תווים)' : '') + '</b><input id="auPass" type="password" autocomplete="' + (boot ? "new-password" : "current-password") + '" dir="ltr"></label>' +
@@ -149,14 +149,31 @@
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("auErr").textContent = "אין חיבור לשרת ההתחברות. נסו שוב."; btn.disabled = false; }
     };
-    const u = $("auUser"); if (u) u.focus();
+    const u = $("auUser"); if (u) u.focus({ preventScroll: true });   // בלי גלילה: בטלפון ב-landscape תיבת ההסבר גבוהה, והפוקוס היה מגלגל את החלון ומסתיר את הכותרת
   }
 
   // דרישת החברות (REQUIRE_MEMBER בשרת): הטקסט על חברות מוצג אלא אם השרת מדווח במפורש שהדרישה כבויה (requireMember === false בתשובת ה-GET הציבורית — שרת שאינו מדווח: מניחים שהדרישה פעילה). זה מידע כללי של המערכת, זהה לכל כתובת
   const memberRule = () => A.requireMember !== false;
   const fmtD = t => t ? new Date(t).toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) : "";
-  const renewUrl = () => (A.cfg && A.cfg.renew_url) || "";
+  // כתובת רכישת הכרטיס (config.json → renew_url): נכנסת ל-href רק אחרי אימות — https בלבד, בלי רווחים / מירכאות / סוגריים משולשים, בלי שם משתמש וסיסמה בכתובת. כתובת שאינה עומדת בכך (חסרה, http, javascript:...) = אין קישור (נכשל סגור); שרת / הגדרות ישנים בלי renew_url — פשוט בלי כפתור
+  const httpsUrl = s => {
+    if (typeof s !== "string") return "";
+    const t = s.trim();
+    if (!/^https:\/\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::\d{1,5})?(?:[\/?#][^\s"'<>\\`]*)?$/i.test(t)) return "";   // שרת ASCII בלבד (בלי @ ובלי רווח לפני הנתיב), ואחריו נתיב / שאילתה / עוגן בלי תווים מסוכנים
+    try { const u = new URL(t); return u.protocol === "https:" && u.hostname && !u.username && !u.password ? u.href : ""; } catch (e) { return ""; }
+  };
+  const renewUrl = () => httpsUrl(A.cfg && A.cfg.renew_url);
   const renewLink = () => renewUrl() ? ' <a href="' + esc(renewUrl()) + '" target="_blank" rel="noopener">לרכישת כרטיס</a>' : "";
+  /* ---------- הסבר מראש על הכרטיס (נוסח מאושר בעל המערכת — לא לשנות): בראש מסך הכניסה ומסך ההרשמה, ואחרי ״שלחו לי קוד״ ---------- */
+  const NOTICE = "שימו לב: מנוי או הרשמה למפת הנוט״מים אינם כוללים בקשות טיסה. בקשות טיסה מיועדות למטיסים מסחריים בלבד, ודורשות רכישה נפרדת של הכרטיס ״בקשת אישורי טיסה״.";
+  const BENEFIT = "הצטרפות למערכת בקשות הטיסה מאפשרת להכין ולהגיש בקשות לסגירה אווירית בקלות ובמהירות, עם פחות בירוקרטיה. המערכת בודקת מראש אזורי איסור, נוטמים ומכשולים באזור, ובכך מסייעת למנוע תאונות שנובעות מחוסר ידיעה.";
+  const BUY_LABEL = "לרכישת הכרטיס והצטרפות";
+  const NO_CODE = "לא הגיע קוד? כנראה שלא נרכש הכרטיס ״בקשת אישורי טיסה״. מנוי למפת הנוט״מים בלבד אינו מקנה גישה לבקשות טיסה.";
+  // כפתור הרכישה: קישור אמיתי (לא button) שנפתח בלשונית חדשה; בלי כתובת תקינה — ריק
+  const buyBtn = id => { const h = renewUrl(); return h ? '<a class="buyBtn" id="' + id + '" href="' + esc(h) + '" target="_blank" rel="noopener noreferrer">' + esc(BUY_LABEL) + "</a>" : ""; };
+  const buyBox = () => '<div class="buyBox" id="buyBox" role="note"><p class="buyNote">' + esc(NOTICE) + '</p><p class="buyWhy">' + esc(BENEFIT) + "</p>" + buyBtn("buyBtn") + "</div>";
+  // ההודעה אחרי ״שלחו לי קוד״: אותה הודעה בדיוק לכל כתובת (גם כשאין כרטיס, גם כשהכתובת רשומה, גם כשהכרטיס נרכש כאורח): אסור שהודעה כלשהי תגלה מי רכש כרטיס או מי רשום. לכן היא נגזרת רק מהגדרות המערכת (דרישת החברות), ולא מתשובת השרת
+  const regSentMessage = () => withSupport("אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם; ודאו שהכרטיס שולם, שהמייל שהקלדתם הוא מייל הרכישה" + (memberRule() ? ", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר" : "") + ". " + NO_CODE + " אם הבעיה נמשכת — פנו לתמיכה.");
   function expiredNote(r) {
     $("auErr").innerHTML = esc("המנוי הסתיים" + (r && r.until ? " ב-" + fmtD(r.until) : "") + ". לחידוש: רוכשים כרטיס חדש, ואז לוחצים על ״הרשמה / חידוש מנוי״ ומקלידים את המייל שבו קנו.") + renewLink();
   }
@@ -164,7 +181,7 @@
   function showRegister(email) {
     setLocked(true);
     const c = cover();
-    c.innerHTML = '<form class="authBox" id="regForm" autocomplete="on"><h2>הרשמה / חידוש מנוי</h2>' +
+    c.innerHTML = '<form class="authBox" id="regForm" autocomplete="on"><h2>הרשמה / חידוש מנוי</h2>' + buyBox() +
       '<p class="small">לבקשות טיסה נכנסים מטיסים מסחריים (מפעילים אוויריים) שרכשו באתר הארגון את הכרטיס ״בקשת אישורי טיסה״.' + renewLink() + '<br>הקלידו את המייל שבו רכשתם את הכרטיס — נשלח אליו קוד אימות. אחרי האימות בוחרים שם משתמש וסיסמה משלכם.</p>' +
       (memberRule() ? '<p class="small" id="rgMember"><b>האירוע לחברי האתר בלבד:</b> הכרטיס מזכה בהרשמה רק אם נרכש כשאתם מחוברים כחברים רשומים באתר הארגון. כרטיס שנרכש כאורח, בלי חשבון חבר, אינו מאפשר הרשמה — הירשמו כחברים באתר, התחברו אליו, ורק אז רכשו את הכרטיס.</p>' : "") +
       '<label class="f"><b>מייל הרכישה</b><input id="rgEmail" type="email" autocomplete="email" dir="ltr" value="' + esc(email || "") + '"></label>' +
@@ -182,8 +199,8 @@
       try {
         const r = await post({ action: "regStart", email: $("rgEmail").value.trim() });
         if (!r.ok) { $("rgErr").textContent = msg(r); return; }
-        // אותה הודעה בדיוק לכל כתובת (גם כשאין כרטיס, גם כשהכתובת רשומה, גם כשהכרטיס נרכש כאורח): אסור שהודעה כלשהי תגלה מי רכש כרטיס או מי רשום
-        $("rgInfo").textContent = withSupport("אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם; ודאו שהכרטיס שולם, שהמייל שהקלדתם הוא מייל הרכישה" + (memberRule() ? ", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר" : "") + ". אם הבעיה נמשכת — פנו לתמיכה.");
+        // אותה הודעה בדיוק לכל כתובת (regSentMessage), ואחריה כפתור הרכישה (אם יש כתובת תקינה): אסור שהודעה כלשהי תגלה מי רכש כרטיס או מי רשום
+        $("rgInfo").innerHTML = esc(regSentMessage()) + buyBtn("rgBuy");
         $("rgStep2").style.display = "block"; $("rgCode").focus();
       } catch (e) { $("rgErr").textContent = "אין חיבור לשרת. נסו שוב."; } finally { btn.disabled = false; }
     };
@@ -203,7 +220,7 @@
         document.dispatchEvent(new CustomEvent("req-auth", { detail: { user: A.user, role: A.role } }));
       } catch (e) { $("rgErr").textContent = "אין חיבור לשרת. נסו שוב."; } finally { btn.disabled = false; }
     };
-    $("rgEmail").focus();
+    $("rgEmail").focus({ preventScroll: true });
   }
 
   /* ---------- שורת משתמש, החלפת סיסמה וניהול משתמשים ---------- */
@@ -406,6 +423,9 @@
   A.setConfig = cfg => { if (cfg && typeof cfg === "object") A.cfg = A.cfg ? Object.assign(A.cfg, cfg) : cfg; };   // ui.js מעביר את ההגדרות מיד כשנטענו (לפני A.init), כדי שהודעות הסנכרון יכללו את כתובת התמיכה
   A.supportEmail = supportEmail;
   A.withSupport = withSupport;
+  A.renewHref = renewUrl;                       // כתובת הרכישה המאומתת (https בלבד) או "" — לבדיקות
+  A.buyBox = buyBox;                            // תיבת ההסבר + כפתור הרכישה (HTML) — לבדיקות
+  A.regSentMessage = regSentMessage;            // ההודעה שאחרי ״שלחו לי קוד״ (זהה לכל כתובת) — לבדיקות
   // המשתמש שבסשן השמור ב-sessionStorage (אם תקף ולא פג), בלי לשנות דבר בזיכרון — לשחזור מהיסטוריית הדפדפן (ui.js: pageshow)
   A.storedUser = () => { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); return s && s.token && s.exp > Date.now() ? String(s.user || "") : ""; } catch (e) { return ""; } };
   window.ReqAuth = A;

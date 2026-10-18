@@ -384,30 +384,25 @@
   }
 
   /* ---------- מייל ---------- */
+  // נוסח קצר בנקודות: כל הפרטים כבר בטופס ה-Word המצורף, ולכן במייל רק העיקר. שורות הנקודות פותחות ב-"• " (חוזה מול השרת: הוא בונה מהן רשימה ב-htmlBody RTL; בלי שורות כאלה הגוף מוצג כפסקאות)
   function mail(res, cfg) {
     const inp = res.inp, a = C.parseDate(inp.dateFrom), b = C.parseDate(inp.dateTo);
     const dates = inp.dateFrom === inp.dateTo ? "יום " + C.dayName(a) + " " + C.ddmmyyyy(a) : "יום " + C.dayName(a) + " " + C.ddmmyyyy(a) + " עד יום " + C.dayName(b) + " " + C.ddmmyyyy(b);
     const subject = "בקשה לסגירה אווירית — " + inp.siteName + " — " + dates;
     const win = res.sun.length ? res.sun[0].start + "–" + res.sun[0].end : inp.timeFrom + "–" + inp.timeTo;
+    const phone = String(inp.requesterPhone == null ? "" : inp.requesterPhone).trim();   // הטלפון אופציונלי בחתימה: ריק — בלי שורה ריקה בסוף
     const lines = [
       "שלום רב,", "",
       "מצורפת בקשה לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26).", "",
-      "שם/גורם המבקש: " + orgName(inp),
-      "כלי טיס: " + inp.aircraft.join(", ") + " — רב להב, " + (inp.vlos ? "קיים קשר עין" : "ללא קשר עין"),
-      "מהות הפעילות: " + inp.purpose,
-      "מיקום: " + inp.siteName,
-      "מועדים: " + dates + (inp.dateFrom === inp.dateTo ? "" : ", בכל יום") + " " + win + " (שעון מקומי)",
-      "סגירה: מעגל ברדיוס " + res.R + " מטר סביב " + C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon),
-      "גובה: " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)"
+      "• גורם מבקש: " + orgName(inp),
+      "• מיקום: " + inp.siteName,
+      "• מועד: " + dates + (inp.dateFrom === inp.dateTo ? "" : ", בכל יום") + " " + win + " (שעון מקומי)",
+      "• סגירה: מעגל ברדיוס " + res.R + " מטר · גובה " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)", "",
+      "קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת.",
+      "כל הפרטים — בטופס המצורף.", "",
+      "בברכה,", inp.requesterName, orgName(inp)
     ];
-    // אנשי קשר ומשתתפים נוספים: כל אחד בשורה ממוספרת; מכשולים שידועים למבקש בשורה אחת. הערות הסיור (visitNotes) אינן במייל
-    const contacts = namedContacts(inp), parts = fullParticipants(inp), ko = knownObstaclesText(inp);
-    if (contacts.length) lines.push("אנשי קשר בשטח:", ...contacts.map((c, i) => (i + 1) + ". " + c.name + " — " + (c.phone || "ללא טלפון")));
-    if (parts.length) lines.push("משתתפים נוספים בטיסה:", ...parts.map((p, i) => (i + 1) + ". " + p.name + ", " + p.phone));
-    if (ko) lines.push("מכשולים שידועים למבקש: " + ko);
-    lines.push("",
-      "מצורפים: טופס הבקשה (נספח ג׳, קובץ Word), ארבע תמונות — תצ״א בתקריב, מפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת עם סימון המיקום (המפה/התצ״א הנדרשים בנספח ג׳), וקובץ KML.", "",
-      "בברכה,", inp.requesterName, orgName(inp), inp.requesterPhone);
+    if (phone) lines.push(phone);
     const body = lines.join("\n");
     return { to: cfg.mail.to, subject, body, mailto: "mailto:" + cfg.mail.to.join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body) };
   }
