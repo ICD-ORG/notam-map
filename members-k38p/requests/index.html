@@ -225,34 +225,34 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <span class="row" style="flex-wrap:nowrap"><input type="text" id="q" placeholder="למשל: גבעת המופעים" autocomplete="off"><button type="button" id="qBtn">חפש</button></span>
       <span class="hint" id="qMsg"></span></label>
     <label class="f"><b>רדיוס (מטר)</b>
-      <input type="number" id="radius" min="10" max="5000" step="10" value="100">
+      <input autocomplete="off" type="number" id="radius" min="10" max="5000" step="10" value="100">
       <span class="hint">ירוק = הרדיוס · כתום = אותו מרחק שוב (עד פי 2) · אדום = אזורי איסור (א-17)</span>
       <span class="err" id="e_radius"></span></label>
     <label class="f"><b>גובה טיסה מרבי (מטר, מעל הקרקע)</b>
-      <input type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
+      <input autocomplete="off" type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
       <span class="hint" id="ftHint"></span>
       <span class="err" id="e_height"></span></label>
-    <label class="f"><b>מתאריך</b><input type="date" id="dateFrom"><span class="err" id="e_dateFrom"></span></label>
-    <label class="f"><b>עד תאריך</b><input type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
-    <label class="f"><b>משעה (שעון מקומי)</b><input type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
-    <label class="f"><b>עד שעה (שעון מקומי)</b><input type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
-    <div class="fld" id="puBox"><label for="purpose"><b>מהות הפעילות</b></label><select id="purpose"></select><span class="err" id="e_purpose"></span>
+    <label class="f"><b>מתאריך</b><input autocomplete="off" type="date" id="dateFrom"><span class="err" id="e_dateFrom"></span></label>
+    <label class="f"><b>עד תאריך</b><input autocomplete="off" type="date" id="dateTo"><span class="err" id="e_dateTo"></span></label>
+    <label class="f"><b>משעה (שעון מקומי)</b><input autocomplete="off" type="time" id="timeFrom"><span class="err" id="e_timeFrom"></span></label>
+    <label class="f"><b>עד שעה (שעון מקומי)</b><input autocomplete="off" type="time" id="timeTo"><span class="err" id="e_timeTo"></span></label>
+    <div class="fld" id="puBox"><label for="purpose"><b>מהות הפעילות</b></label><select autocomplete="off" id="purpose"></select><span class="err" id="e_purpose"></span>
       <div class="row"><input type="text" id="puNew" maxlength="320" placeholder="למשל: לצורך …" aria-label="מהות פעילות נוספת" autocomplete="off" style="flex:1 1 150px;min-width:0"><button type="button" id="puAdd">➕ הוסף מהות פעילות</button></div>
       <span class="hint" id="puMsg" role="status"></span>
       <div id="puSaved" hidden><span class="hint">שמורות בדפדפן הזה (× להסרה):</span><div class="checks" id="puList" style="margin-top:4px"></div></div></div>
-    <label class="f"><b>קשר עין (VLOS)</b><select id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
+    <label class="f"><b>קשר עין (VLOS)</b><select autocomplete="off" id="vlos"><option value="yes">קיים קשר עין</option><option value="no">אין קשר עין</option></select></label>
     <label class="f"><b>ישוב / אתר (ימולא אוטומטית, אפשר לערוך)</b>
-      <input type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
+      <input autocomplete="off" type="text" id="siteName" placeholder="יתמלא אחרי הרצת הבדיקות">
       <span class="err" id="e_siteName"></span></label>
   </div>
-  <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b>
+  <div style="margin-top:12px"><b style="font-size:13px">כלי טיס</b> <span class="hint" id="acHint">(חובה) סמנו את כלי הטיס שבו תבצעו את הטיסה. הרשימה היא הצעות בלבד — אף כלי אינו מסומן מראש, ואפשר להוסיף כלי טיס משלכם.</span>
     <div class="checks" id="aircraft" style="margin-top:6px"></div><span class="err" id="e_aircraft"></span>
     <div class="row" style="margin-top:8px"><input type="text" id="acNew" maxlength="60" placeholder="כלי טיס נוסף (שם הדגם)" aria-label="שם כלי טיס נוסף" autocomplete="off" style="flex:1 1 220px;max-width:340px"><button type="button" id="acAdd">➕ הוסף כלי טיס</button></div>
     <span class="hint" id="acMsg" role="status"></span></div>
 
   <div class="fld" style="margin-top:12px">
     <span class="flh"><label for="knownObs"><b>מכשולים שידועים למבקש</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
-    <textarea id="knownObs" rows="3" placeholder="למשל: עגורן ליד הכניסה, אנטנה על גג הבניין, קו חשמל מעל החניון — מופרדים בפסיק או בשורה חדשה"></textarea>
+    <textarea autocomplete="off" id="knownObs" rows="3" placeholder="למשל: עגורן ליד הכניסה, אנטנה על גג הבניין, קו חשמל מעל החניון — מופרדים בפסיק או בשורה חדשה"></textarea>
     <span class="hint">עד 20 פריטים, מופרדים בפסיק או בשורה חדשה. כל פריט נבדק מול הסריקה לפי מילים בלבד (בלי מיקום). פריט שלא נמצא יוצג כאזהרה — ואז יש להוסיף אותו ידנית בסעיף 4.</span>
     <span class="err" id="e_knownObstacles"></span></div>
 
@@ -281,8 +281,8 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <section class="card">
   <h2>2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
   <div class="lyrbar nonprint" id="layerBar">
-    <span class="lyrit"><label class="lyrchk"><input type="checkbox" id="lyrZones" checked> איסורים (פמ״ת)</label><span class="lyrnote" id="lyrZonesNote"></span></span>
-    <span class="lyrit"><label class="lyrchk"><input type="checkbox" id="lyrNotams" checked> נוטמים</label><span class="lyrnote" id="lyrNotamsNote"></span></span>
+    <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrZones" checked> איסורים (פמ״ת)</label><span class="lyrnote" id="lyrZonesNote"></span></span>
+    <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrNotams" checked> נוטמים</label><span class="lyrnote" id="lyrNotamsNote"></span></span>
     <div class="lyrkey" id="lyrKey">
       <span data-lyr="zones"><i style="background:#ff3b30"></i>א-17 (אסור/מוגבל)</span><span data-lyr="zones"><i style="background:#3b82f6"></i>ב-09 (אזורי טיסה לכטב״ם)</span><span data-lyr="zones"><i style="background:#a855f7"></i>שמורות וגנים (רט״ג)</span><span data-lyr="zones">קו מקווקו = שרטוט בקירוב</span>
       <span data-lyr="notams"><i style="background:#ffd400"></i>נוטמים</span>
@@ -310,37 +310,37 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <h2>4 · סקירה אנושית ותוספות</h2>
     <p class="small">המערכת סורקת את פמ״ת א-17, רט״ג, מנחתים חקלאיים, נוטמים ו-OpenStreetMap, ומציגה את כל מה שנמצא (ראו "דף בדיקות" ו"מצאי לפי קבוצות"). מכשול חדש או זמני — עגורן, אנטנה, בלון, מתקן אירוע — עלול לא להופיע באף מקור. <b>עברו על התצ״א ועל הרשימה, והוסיפו כאן כל דבר שהמערכת לא מצאה.</b> הוספות נכנסות לטופס, למפה ול-KML.</p>
     <div class="grid" style="margin-top:8px">
-      <label class="f"><b>מה (שם/תיאור)</b><input type="text" id="mName" placeholder="למשל: עגורן בנייה, אנטנה, בלון זמני"></label>
-      <label class="f"><b>נ״צ</b><input type="text" id="mCoord" dir="ltr" placeholder="32.0991, 34.8166"></label>
-      <label class="f"><b>גובה (מטר, אופציונלי)</b><input type="number" id="mHeight" min="1" step="1"></label>
+      <label class="f"><b>מה (שם/תיאור)</b><input autocomplete="off" type="text" id="mName" placeholder="למשל: עגורן בנייה, אנטנה, בלון זמני"></label>
+      <label class="f"><b>נ״צ</b><input autocomplete="off" type="text" id="mCoord" dir="ltr" placeholder="32.0991, 34.8166"></label>
+      <label class="f"><b>גובה (מטר, אופציונלי)</b><input autocomplete="off" type="number" id="mHeight" min="1" step="1"></label>
     </div>
     <div class="row" style="margin-top:8px"><button type="button" id="mPick">בחר מיקום מהמפה</button><button type="button" id="mAdd" class="primary">הוסף לבקשה</button><span class="err" id="e_manual"></span></div>
     <ul id="manualList" class="st-list" style="margin-top:8px"></ul>
     <div class="grid" style="margin-top:14px">
-      <label class="f"><b>תאריך סיור באתר (אופציונלי)</b><input type="date" id="visitDate"></label>
+      <label class="f"><b>תאריך סיור באתר (אופציונלי)</b><input autocomplete="off" type="date" id="visitDate"></label>
     </div>
     <div class="fld" style="margin-top:10px">
       <span class="flh"><label for="visitNotes"><b>הערות המבקש / ממצאי סיור באתר</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
-      <textarea id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
+      <textarea autocomplete="off" id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
       <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף "הנקודה") ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
       <span class="err" id="e_visitNotes"></span></div>
-    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
+    <label class="checks" style="margin-top:12px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input autocomplete="off" type="checkbox" id="reviewOk" style="margin-top:4px"> עברתי על התצ״א, על רשימת המצאי ועל המפה, ואני מאשר שאין מכשול או תשתית נוספת שלא הופיעה בטופס (או שהוספתי אותה ידנית).</span></label>
   </div>
   <div class="card nonprint" id="actions">
     <h2>5 · הפקות</h2>
     <div class="row">
-      <button type="button" class="primary" id="btnPrint">הדפס / שמור כ-PDF</button>
-      <button type="button" class="primary" id="btnDocx">הורד Word (ניתן לעריכה)</button>
-      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
-      <button type="button" id="btnKml">הורד KML (Google Earth)</button>
-      <button type="button" id="btnAerial">הורד תצ״א — תקריב (PNG)</button>
-      <button type="button" id="btnStreet">הורד מפת רחובות — תקריב (PNG)</button>
-      <button type="button" id="btnOverview">הורד הדמיה וסימונים — מבט כללי (PNG)</button>
-      <button type="button" id="btnRegion">הורד מפת אזור — מרוחק (PNG)</button>
-      <button type="button" id="btnCopy">העתק טקסט מייל</button>
+      <button type="button" class="primary" id="btnPrint" disabled>הדפס / שמור כ-PDF</button>
+      <button type="button" class="primary" id="btnDocx" disabled>הורד Word (ניתן לעריכה)</button>
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input autocomplete="off" type="checkbox" id="incChecks" checked> כולל דף בדיקות</label>
+      <button type="button" id="btnKml" disabled>הורד KML (Google Earth)</button>
+      <button type="button" id="btnAerial" disabled>הורד תצ״א — תקריב (PNG)</button>
+      <button type="button" id="btnStreet" disabled>הורד מפת רחובות — תקריב (PNG)</button>
+      <button type="button" id="btnOverview" disabled>הורד הדמיה וסימונים — מבט כללי (PNG)</button>
+      <button type="button" id="btnRegion" disabled>הורד מפת אזור — מרוחק (PNG)</button>
+      <button type="button" id="btnCopy" disabled>העתק טקסט מייל</button>
       <button type="button" class="primary" id="btnDrive" disabled>שמור בדרייב</button>
       <button type="button" class="primary" id="btnSend" disabled style="background:#b8860b;border-color:#b8860b">✉ שלח למשרד נוטאם</button>
-      <a id="btnMail" href="#" role="button" style="text-decoration:none"><button type="button" tabindex="-1">פתח מייל</button></a>
+      <a id="btnMail" href="#" role="button" tabindex="-1" aria-disabled="true" style="text-decoration:none;pointer-events:none"><button type="button" tabindex="-1" disabled>פתח מייל</button></a>
     </div>
     <p class="small" style="margin-top:8px">את הקבצים (PDF או Word, ארבע תמונות המפה ו-KML) מצרפים ידנית לתוכנת המייל — קישור mailto אינו יכול לצרף קבצים. כתובות הנמענים: <span dir="ltr" id="mailTo"></span>.</p>
     <p class="small" id="mailInfo"></p>
@@ -363,13 +363,13 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/help.js?v=2"></script>
-<script src="js/auth.js?v=4"></script>
-<script src="js/sync.js?v=1"></script>
+<script src="js/auth.js?v=5"></script>
+<script src="js/sync.js?v=2"></script>
 <script src="js/core.js?v=6"></script>
 <script src="js/maplayers.js?v=1"></script>
 <script src="js/output.js?v=5"></script>
 <script src="js/docx.js?v=3"></script>
 <script src="js/mapimg.js?v=4"></script>
-<script src="js/ui.js?v=6"></script>
+<script src="js/ui.js?v=7"></script>
 </body>
 </html>

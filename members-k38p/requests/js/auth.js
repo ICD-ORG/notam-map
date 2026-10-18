@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   const KEY = "icdReqSession";
-  const A = { cfg: null, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], email: "", copyTo: "", copyToIsOwner: false, features: [], busy: false, until: null };
+  const A = { cfg: null, requireMember: undefined, token: "", user: "", role: "", exp: 0, mode: "login", mailMode: "test", mailTo: [], email: "", copyTo: "", copyToIsOwner: false, features: [], busy: false, until: null };
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const ERR = {
@@ -24,7 +24,15 @@
   };
   // תקרת השליחות מחזירה scope: "user" = המגבלה האישית של המשתמש, "all" = מגבלה כללית של המערכת (המטיס צריך להבין שהמערכת עמוסה ולא הוא חרג). עם scope מוכר מציגים את הודעת השרת (היא מפרטת מה הוגבל: משרד נוטאם / עותקים / ניסיונות); בלעדיה — נוסח קבוע לפי ה-scope
   const SCOPE_ALL = /^(all|global|system|total|overall|shared)$/i, SCOPE_USER = /^(user|self|personal|requester|me)$/i;
-  const msg = r => {
+  // כתובת התמיכה (config.json → support_email): מוצגת בכל הודעה שמפנה את המטיס ל"תמיכה" / "מנהל המערכת" / "משרד הארגון", ובמסכי הכניסה וההרשמה. נתון ציבורי של ההגדרות; מוצג רק אם היא כתובת מייל תקינה (נכשל סגור: בלי כתובת תקינה — ההודעות נשארות כפי שהן).
+  // הערך נכנס ל-HTML רק דרך esc ובקישור mailto: שמותר לו רק תווי כתובת בטוחים (אין בו רווח, מירכאות או סוגריים)
+  const SUPPORT_RE = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){1,5}$/;
+  const supportEmail = () => { const e = A.cfg && typeof A.cfg.support_email === "string" ? A.cfg.support_email.trim() : ""; return SUPPORT_RE.test(e) ? e : ""; };
+  const REFER_RE = /(פנו לתמיכה|פנו למנהל המערכת|לפנות למנהל המערכת|פנו למשרד הארגון|לפנות למשרד הארגון)/;
+  const withSupport = t => { const e = supportEmail(), s = String(t == null ? "" : t); return (!e || s.indexOf(e) >= 0) ? s : s.replace(REFER_RE, "$1: " + e); };
+  // שורת עזרה קבועה במסכי הכניסה / ההרשמה / שרת לא מוגדר (HTML בטוח); בלי כתובת תקינה — ריקה
+  const supportLine = () => { const e = supportEmail(); return e ? '<p class="small" id="auSupport">תמיכה: <a href="mailto:' + esc(e) + '" dir="ltr">' + esc(e) + '</a></p>' : ""; };
+  const rawMsg = r => {
     if (!r) return "שגיאה לא ידועה";
     if (r.error === "rate") {
       const sc = String(r.scope == null ? "" : r.scope), all = SCOPE_ALL.test(sc);
@@ -36,6 +44,7 @@
     if (A.role !== "admin" && ERR_PILOT[r.error]) return ERR_PILOT[r.error];
     return ERR[r.error] || r.message || r.error || "שגיאה לא ידועה";
   };
+  const msg = r => withSupport(rawMsg(r));
   // מצב השליחה והנמענים מתשובת השרת (login / regFinish / me / changePassword). full: מאפס קודם — תשובה בלי features היא שרת ישן, ולכן "שלח רק לעצמי" מושבת והלקוח לא שולח target.
   // email = כתובת המבקש השמורה ("" אם אין); copyTo = לאן יישלחו עותקים (email, ובלי כתובת — כתובת הבעלים); copyToIsOwner = copyTo היא כתובת הבעלים כי אין למשתמש כתובת
   function applyMail(r, full) {
@@ -52,7 +61,7 @@
   const HELP = {
     pass: "פותח חלון להחלפת הסיסמה שלך: מקלידים את הסיסמה הנוכחית ואת החדשה פעמיים (לפחות 10 תווים). אחרי ההחלפה כל ההתחברויות האחרות של המשתמש שלך מתבטלות, וההתחברות הנוכחית נשארת.",
     admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): מצב השליחה, רשימת המשתמשים והפעולות עליהם, יומן הבקשות, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
-    out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה ומחזיר למסך הכניסה. אין בכך מחיקה של נתונים או של קבצים שנשמרו.",
+    out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה, מנקה מהדף את הבקשה, הדוח והפרטים שעל המסך (הדף נטען מחדש) ומחזיר למסך הכניסה. פרטי המבקש, אנשי הקשר וכלי הטיס ששמרתם בדפדפן נשארים שמורים לכניסה הבאה שלכם; אין בכך מחיקה של קבצים שכבר נשמרו או נשלחו.",
     mode: "מחליף את מצב השליחה של כל המערכת. במצב בדיקה (ברירת המחדל) כפתור ״שלח״ בדף הבקשה שולח את המייל רק למבקש עצמו (לכתובת שנרשמה בחשבונו; למשתמש בלי כתובת — לבעל המערכת). במצב חי המבקש בוחר: שליחה למשרד נוטאם (notamoffice@iaa.gov.il, nofm@iaa.gov.il) עם עותק למבקש, והתשובות מגיעות אליו, או שליחה רק לעצמו. בכל שליחה מנהל המערכת מקבל עותק סמוי לצורכי תמיכה. המעבר למצב חי מבקש אישור, והשינוי חל מיד על כל המשתמשים.",
     block: "חסום מבקשות: המשתמש לא יוכל להתחבר כלל, ולכן גם לא לשמור בדרייב או לשלוח. כל ההתחברויות הפעילות שלו מתבטלות מיד, וניסיון כניסה חדש (גם עם סיסמה נכונה) נדחה עד שתלחצו ״פתח מחדש את הבקשות״. הנתונים שלו והקבצים שכבר שמר אינם נמחקים. אי אפשר לחסום את עצמך.",
     unblock: "פתח מחדש את הבקשות: מסיר את החסימה, והמשתמש יוכל להתחבר שוב עם הסיסמה שלו. ההתחברויות הקודמות שלו נשארות מבוטלות, ולכן עליו להתחבר מחדש. הפעולה אינה משנה את תוקף המנוי (מי שהמנוי שלו הסתיים עדיין לא יוכל להתחבר) ואינה מוחקת דבר. חשבון שנחסם אוטומטית בגלל הזמנה שבוטלה עלול להיחסם שוב בבדיקה היומית כל עוד ההזמנה מבוטלת.",
@@ -79,10 +88,25 @@
   // קריאה מאומתת: אסימון נשלח אוטומטית; אסימון פסול/פג/חסום מחזיר למסך הכניסה
   async function call(action, payload) {
     const res = await post(Object.assign({ action, token: A.token }, payload || {}));
-    if (!res.ok && (res.error === "auth" || res.error === "expired" || res.error === "blocked" || res.error === "sub_expired")) { logout(); showCover(msg(res)); }
+    if (!res.ok && (res.error === "auth" || res.error === "expired" || res.error === "blocked" || res.error === "sub_expired")) logout(msg(res));
     return res;
   }
-  function logout() { clear(); closeModal(); renderBar(); showCover(); }
+  // התנתקות (יזומה, פקיעת אסימון, חסימה או שגיאת auth) = איפוס מיידי ומלא: מנקים את הסשן, נועלים את הדף באמת (inert, לא רק CSS), ומודיעים ל-ui.js (req-logout) שמוחק את כל מצב הבקשה והדף וטוען את הדף מחדש.
+  // ההודעה (למשל "פג תוקף ההתחברות") נשמרת ב-sessionStorage ומוצגת בכיסוי של הדף הנקי. אם איש לא טיפל באירוע (ui.js לא נטען) — מציגים את הכיסוי כאן. הטעינה מחדש היא הדרך הבטוחה: לא נשאר דבר מהמשתמש הקודם, גם לא במקלדת, בשחזור היסטוריה או בכלי מפתחים נקי
+  function logout(note) {
+    const n = typeof note === "string" ? note : "";
+    clear(); closeModal(); renderBar(); setLocked(true);
+    stashNote(n);
+    if (document.dispatchEvent(new CustomEvent("req-logout", { cancelable: true, detail: { note: n } }))) showCover(n);
+  }
+  const NOTE_KEY = "icdReqNote";
+  function stashNote(n) { try { if (n) sessionStorage.setItem(NOTE_KEY, String(n).slice(0, 400)); else sessionStorage.removeItem(NOTE_KEY); } catch (e) { /* ignore */ } }
+  function takeNote() { try { const n = sessionStorage.getItem(NOTE_KEY) || ""; sessionStorage.removeItem(NOTE_KEY); return n; } catch (e) { return ""; } }
+  // נעילת הדף: מחלקת authLocked (טשטוש ו-pointer-events ב-CSS) וגם inert + aria-hidden על הכותרת והטופס — כך Tab, Shift+Tab, Enter וקורא מסך לא מגיעים אליהם מאחורי הכיסוי (הכיסוי הוא אח של header ו-main ב-body ונשאר פעיל)
+  function setLocked(on) {
+    document.body.classList.toggle("authLocked", !!on);
+    ["header", "main"].forEach(t => { const e = document.querySelector(t); if (!e) return; if (on) { e.setAttribute("inert", ""); e.setAttribute("aria-hidden", "true"); } else { e.removeAttribute("inert"); e.removeAttribute("aria-hidden"); } });
+  }
 
   /* ---------- מסך כניסה ---------- */
   // הכיסוי (position:fixed, מעל הכותרת) מסתיר את "← חזרה למפה" שבכותרת, ובאפליקציה מותקנת (standalone) אין כפתור חזרה של הדפדפן — לכן קישור משלו בתוך כל גרסה של הכיסוי (כניסה, הרשמה, שרת לא מוגדר). הכיסוי מרוחק מהאזורים הבטוחים (padding ב-index.html); גובה 44px ב-.backMap
@@ -92,22 +116,22 @@
     if (!c) { c = document.createElement("div"); c.id = "authCover"; c.setAttribute("role", "dialog"); c.dir = "rtl"; document.body.appendChild(c); }
     return c;
   }
-  function hideCover() { const c = $("authCover"); if (c) c.remove(); document.body.classList.remove("authLocked"); }
+  function hideCover() { const c = $("authCover"); if (c) c.remove(); setLocked(false); }
   async function showCover(note) {
-    document.body.classList.add("authLocked");
+    setLocked(true);
     const c = cover();
     if (!A.cfg || !A.cfg.api_url) {
-      c.innerHTML = '<div class="authBox"><h2>בקשות טיסה</h2><p class="err">שרת ההתחברות עדיין לא הוגדר, ולכן אי אפשר להשתמש בדף. יש להשלים את ההתקנה (apps-script/README.md).</p>' + BACK_MAP + '</div>';
+      c.innerHTML = '<div class="authBox"><h2>בקשות טיסה</h2><p class="err">שרת ההתחברות עדיין לא הוגדר, ולכן אי אפשר להשתמש בדף כרגע. נסו שוב מאוחר יותר, ואם זה נמשך פנו לתמיכה.</p>' + supportLine() + BACK_MAP + '</div>';
       return;
     }
     let boot = false;
-    try { const r = await fetch(A.cfg.api_url, { redirect: "follow" }); const j = await r.json(); boot = !!j.needsBootstrap; } catch (e) { note = note || "אין חיבור לשרת ההתחברות. בדקו את האינטרנט ונסו שוב."; }
+    try { const r = await fetch(A.cfg.api_url, { redirect: "follow" }); const j = await r.json(); boot = !!j.needsBootstrap; if (typeof j.requireMember === "boolean") A.requireMember = j.requireMember; } catch (e) { note = note || "אין חיבור לשרת ההתחברות. בדקו את האינטרנט ונסו שוב."; }
     c.innerHTML = '<form class="authBox" id="authForm" autocomplete="on"><h2>בקשות טיסה — כניסה</h2>' +
       (boot ? '<p class="small">הקמה ראשונה: הקלידו את קוד ההקמה שהוצג בהרצת <code>initialize()</code> ובחרו שם משתמש וסיסמה למנהל.</p><label class="f"><b>קוד הקמה</b><input id="auCode" type="text" autocomplete="off" dir="ltr"></label>' : '') +
       '<label class="f"><b>שם משתמש</b><input id="auUser" type="text" autocomplete="username" dir="ltr"></label>' +
       '<label class="f"><b>סיסמה' + (boot ? ' (לפחות 10 תווים)' : '') + '</b><input id="auPass" type="password" autocomplete="' + (boot ? "new-password" : "current-password") + '" dir="ltr"></label>' +
       '<div class="err" id="auErr">' + esc(note || "") + '</div><button class="primary" id="auGo" type="submit">' + (boot ? "הקם מנהל והיכנס" : "כניסה") + '</button>' +
-      (boot ? "" : '<button type="button" class="linkBtn" id="auReg">מטיס מסחרי? הרשמה / חידוש מנוי</button>') + BACK_MAP + '</form>';
+      (boot ? "" : '<button type="button" class="linkBtn" id="auReg">מטיס מסחרי? הרשמה / חידוש מנוי</button>') + supportLine() + BACK_MAP + '</form>';
     if ($("auReg")) $("auReg").onclick = () => showRegister();
     $("authForm").onsubmit = async ev => {
       ev.preventDefault();
@@ -124,6 +148,8 @@
     const u = $("auUser"); if (u) u.focus();
   }
 
+  // דרישת החברות (REQUIRE_MEMBER בשרת): הטקסט על חברות מוצג אלא אם השרת מדווח במפורש שהדרישה כבויה (requireMember === false בתשובת ה-GET הציבורית — שרת שאינו מדווח: מניחים שהדרישה פעילה). זה מידע כללי של המערכת, זהה לכל כתובת
+  const memberRule = () => A.requireMember !== false;
   const fmtD = t => t ? new Date(t).toLocaleDateString("he-IL", { timeZone: "Asia/Jerusalem" }) : "";
   const renewUrl = () => (A.cfg && A.cfg.renew_url) || "";
   const renewLink = () => renewUrl() ? ' <a href="' + esc(renewUrl()) + '" target="_blank" rel="noopener">לרכישת כרטיס</a>' : "";
@@ -132,10 +158,11 @@
   }
   /* ---------- הרשמה וחידוש מנוי: רק למי שרכש כרטיס "בקשת אישורי טיסה" ששולם. שלבים: מייל -> קוד למייל -> שם משתמש וסיסמה ---------- */
   function showRegister(email) {
-    document.body.classList.add("authLocked");
+    setLocked(true);
     const c = cover();
     c.innerHTML = '<form class="authBox" id="regForm" autocomplete="on"><h2>הרשמה / חידוש מנוי</h2>' +
       '<p class="small">לבקשות טיסה נכנסים מטיסים מסחריים (מפעילים אוויריים) שרכשו באתר הארגון את הכרטיס ״בקשת אישורי טיסה״.' + renewLink() + '<br>הקלידו את המייל שבו רכשתם את הכרטיס — נשלח אליו קוד אימות. אחרי האימות בוחרים שם משתמש וסיסמה משלכם.</p>' +
+      (memberRule() ? '<p class="small" id="rgMember"><b>האירוע לחברי האתר בלבד:</b> הכרטיס מזכה בהרשמה רק אם נרכש כשאתם מחוברים כחברים רשומים באתר הארגון. כרטיס שנרכש כאורח, בלי חשבון חבר, אינו מאפשר הרשמה — הירשמו כחברים באתר, התחברו אליו, ורק אז רכשו את הכרטיס.</p>' : "") +
       '<label class="f"><b>מייל הרכישה</b><input id="rgEmail" type="email" autocomplete="email" dir="ltr" value="' + esc(email || "") + '"></label>' +
       '<button type="button" id="rgSend">שלחו לי קוד</button><div class="small" id="rgInfo" role="status"></div>' +
       '<div id="rgStep2" style="display:none"><label class="f"><b>קוד מהמייל (6 ספרות)</b><input id="rgCode" inputmode="numeric" autocomplete="one-time-code" dir="ltr" maxlength="8"></label>' +
@@ -143,7 +170,7 @@
       '<label class="f"><b>סיסמה (לפחות 10 תווים)</b><input id="rgPass" type="password" autocomplete="new-password" dir="ltr"></label>' +
       '<p class="small">אם כבר נרשמתם בעבר ואתם רק מחדשים מנוי — השאירו שם משתמש וסיסמה ריקים.</p>' +
       '<button class="primary" id="rgGo" type="submit">אישור</button></div>' +
-      '<div class="err" id="rgErr"></div><button type="button" class="linkBtn" id="rgBack">חזרה לכניסה</button>' + BACK_MAP + '</form>';
+      '<div class="err" id="rgErr"></div><button type="button" class="linkBtn" id="rgBack">חזרה לכניסה</button>' + supportLine() + BACK_MAP + '</form>';
     $("rgBack").onclick = () => showCover();
     $("rgSend").onclick = async () => {
       $("rgErr").textContent = ""; $("rgInfo").textContent = "";
@@ -151,12 +178,17 @@
       try {
         const r = await post({ action: "regStart", email: $("rgEmail").value.trim() });
         if (!r.ok) { $("rgErr").textContent = msg(r); return; }
-        $("rgInfo").textContent = "אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם, ושהקלדתם את המייל שבו רכשתם.";
+        // אותה הודעה בדיוק לכל כתובת (גם כשאין כרטיס, גם כשהכתובת רשומה, גם כשהכרטיס נרכש כאורח): אסור שהודעה כלשהי תגלה מי רכש כרטיס או מי רשום
+        $("rgInfo").textContent = withSupport("אם נמצא כרטיס ששולם עבור הכתובת הזו — נשלח אליה קוד (תקף ל-15 דקות). לא הגיע? בדקו בספאם; ודאו שהכרטיס שולם, שהמייל שהקלדתם הוא מייל הרכישה" + (memberRule() ? ", ושהכרטיס נרכש כשאתם מחוברים כחברים רשומים באתר" : "") + ". אם הבעיה נמשכת — פנו לתמיכה.");
         $("rgStep2").style.display = "block"; $("rgCode").focus();
       } catch (e) { $("rgErr").textContent = "אין חיבור לשרת. נסו שוב."; } finally { btn.disabled = false; }
     };
     $("regForm").onsubmit = async ev => {
       ev.preventDefault(); $("rgErr").textContent = "";
+      // Enter בשדה המייל (או ״Go״ במקלדת הנייד) לפני שנשלח קוד: הכפתור היחיד מסוג submit הוא ״אישור״ שבתוך האזור המוסתר, ולכן הדפדפן מפעיל אותו — שולחים קוד במקום ״אישור״ עם קוד ריק. אם ״שלחו לי קוד״ מושבת (בקשה רצה) לחיצה עליו אינה עושה דבר, כך שאין שליחה כפולה
+      if ($("rgStep2").style.display === "none") { $("rgSend").click(); return; }
+      // אחרי שנשלח קוד: Enter בשדה המייל עם שדה קוד ריק/לא שלם לא פונה לשרת (הקוד בן 6 ספרות); מוליך לשדה הקוד
+      if (($("rgCode").value.replace(/\D/g, "")).length !== 6) { $("rgErr").textContent = "יש להקליד את קוד האימות (6 ספרות) שנשלח למייל."; $("rgCode").focus(); return; }
       const btn = $("rgGo"); btn.disabled = true;
       try {
         const r = await post({ action: "regFinish", email: $("rgEmail").value.trim(), code: $("rgCode").value.trim(), user: $("rgUser").value.trim(), pass: $("rgPass").value });
@@ -179,7 +211,7 @@
     bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : "") + '</span> ' +
       (A.until ? '<span id="ubSub">מנוי עד ' + esc(fmtD(A.until)) + (daysLeft <= 30 ? ' — <b>מסתיים בעוד ' + daysLeft + ' ימים</b>' + renewLink() : "") + '</span> ' : "") +
       withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
-    $("ubPass").onclick = openPassword; $("ubOut").onclick = logout;
+    $("ubPass").onclick = openPassword; $("ubOut").onclick = () => logout();
     if (A.role === "admin") $("ubAdmin").onclick = openAdmin;
   }
   function modal(html) {
@@ -203,6 +235,7 @@
   // בזמן שחלון פתוח (שליחה, ניהול, סיסמה) הכותרת והטופס שמאחוריו אינם ניתנים למיקוד, להקלדה ולקורא מסך — אחרת אפשר לערוך את הבקשה מאחורי חלון האישור (Tab החוצה). inert על header ו-main בלבד (לא על body):
   // כיסוי הכניסה (#authCover) ובועת ה"!" הם אחים ב-body ונשארים פעילים. ההגנה העיקרית היא קשירת החלון לגרסת הבקשה (S.rev ב-ui.js); זו הגנה בעומק
   function setBackdropInert(on) {
+    if (!on && document.body.classList.contains("authLocked")) return;   // הדף נעול (כיסוי הכניסה): סגירת חלון מאוחרת, למשל אחרי פקיעת אסימון, לא משחררת את הנעילה
     ["header", "main"].forEach(t => { const e = document.querySelector(t); if (!e) return; if (on) e.setAttribute("inert", ""); else e.removeAttribute("inert"); });
   }
 
@@ -293,7 +326,8 @@
   /* ---------- ממשק ציבורי ---------- */
   A.init = async function (cfg) {
     A.cfg = cfg || {};
-    document.body.classList.add("authLocked");
+    setLocked(true);
+    const note = takeNote();   // הודעה מההתנתקות שקדמה לטעינה (פג תוקף, חסום...) — מוצגת בכיסוי; אם יש סשן תקף היא נזרקת
     if (A.cfg.api_url && restore()) {
       try {
         const r = await post({ action: "me", token: A.token });
@@ -302,7 +336,7 @@
       clear();
     }
     renderBar();
-    await showCover();
+    await showCover(note);
   };
   A.loggedIn = () => !!A.token && A.exp > Date.now();
   A.getMailMode = () => A.mailMode;
@@ -328,7 +362,13 @@
   A.user_ = () => A.user;
   A.call = call;
   A.msg = msg;
-  A.logout = logout;
+  A.logout = () => logout();
   A.show = () => showCover();
+  A.lock = () => setLocked(true);               // ui.js: נעילה מחדש של הדף בזמן איפוס (כניסת משתמש אחר)
+  A.setConfig = cfg => { if (cfg && typeof cfg === "object") A.cfg = A.cfg ? Object.assign(A.cfg, cfg) : cfg; };   // ui.js מעביר את ההגדרות מיד כשנטענו (לפני A.init), כדי שהודעות הסנכרון יכללו את כתובת התמיכה
+  A.supportEmail = supportEmail;
+  A.withSupport = withSupport;
+  // המשתמש שבסשן השמור ב-sessionStorage (אם תקף ולא פג), בלי לשנות דבר בזיכרון — לשחזור מהיסטוריית הדפדפן (ui.js: pageshow)
+  A.storedUser = () => { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); return s && s.token && s.exp > Date.now() ? String(s.user || "") : ""; } catch (e) { return ""; } };
   window.ReqAuth = A;
 })();

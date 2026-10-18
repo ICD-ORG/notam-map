@@ -602,6 +602,21 @@ const regOk = (env, over) => {
   assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);
   return env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env), user: "dana.pilot", pass: "dana-pass-1234", ...over });
 };
+const HOUR = 3600000;
+// מיישר את השעון המדומה ל-09:20 UTC (כ-12:20 בישראל): אמצע שעה ואמצע יום, כך שבדיקות שמונות לפי שעה/יום לא ייחתכו בגבול אקראי של השעון האמיתי. לקרוא לפני יצירת אסימונים (קידום עד 24 שעות)
+function calm(env) {
+  const day = 24 * HOUR, target = 9 * HOUR + 20 * 60000, off = env.now() % day;
+  env.advance(off <= target ? target - off : day - off + target);
+}
+// כמו withWix, עם שעון מיושר (ראו calm)
+function calmWix() {
+  const env = makeEnv(); calm(env);
+  const code = env.run("initialize"), r = env.call({ action: "bootstrap", code, user: "itzik", pass: PASS });
+  assert.ok(r.ok, JSON.stringify(r)); env.props.WIX_API_KEY = "test-key";
+  return { env, token: r.token };
+}
+const regAns = (env, email) => JSON.parse(JSON.stringify(env.call({ action: "regStart", email })));    // תשובת regStart כעותק פשוט להשוואת deepEqual
+const setCfg = (env, k, v) => vm.runInContext("CFG." + k + " = " + JSON.stringify(v), env.sandbox);
 
 test("הרשמה: כרטיס ששולם → קוד למייל → שם משתמש וסיסמה שהמשתמש בוחר → כניסה; תוקף 12 חודשים מיום הרכישה", () => {
   const { env, token } = withWix(); const o = addOrder(env);
@@ -692,12 +707,19 @@ test("בלי מפתח Wix או כש-Wix נופל: נכשל סגור, בלי קו
   assert.equal(env.call({ action: "regStart", email: "not-an-email" }).error, "bad_email");
 });
 
-test("הרשמה: הגבלת קצב לכתובת ולשרת כולו", () => {
-  const { env } = withWix();
-  for (let i = 0; i < 5; i++) assert.ok(env.call({ action: "regStart", email: "x@example.com" }).ok);
-  assert.equal(env.call({ action: "regStart", email: "x@example.com" }).error, "rate");
+// עודכן לדרישת ההשקה (n=1/13): המכסה הכללית של 60 בקשות בשעה נעלה את ההרשמה לכולם (60 כתובות זבל חסמו מטיס אמיתי, ו-100 מטיסים לגיטימיים — 40 מהם) והוחלפה בשערים כלליים
+// שאינם צורכים את תקציב המיילים (ראו "השקה" בהמשך). נשארה המכסה לכתובת — והיא נספרת בכל בקשה תקינה, בלי קשר לכרטיס: ספירה רק של מיילים שנשלחו הייתה מגלה בעלי כרטיס.
+test("הרשמה: מכסה לכתובת (5 בשעה) נספרת בכל בקשה תקינה — עם כרטיס ובלי — ומתאפסת בשעה הבאה; הסדרה זהה", () => {
+  const { env } = withWix(); calm(env); addOrder(env, { email: "holder@example.com" });
+  const seq = email => Array.from({ length: 7 }, () => regAns(env, email));
+  const holder = seq("holder@example.com"), none = seq("nobody@example.com");
+  assert.deepEqual(holder, none, "אין הבדל בין כתובת עם כרטיס לכתובת בלי");
+  assert.deepEqual(holder.map(x => x.error || "ok"), ["ok", "ok", "ok", "ok", "ok", "rate", "rate"]);
+  assert.equal(holder[5].scope, undefined, "מגבלה אישית של הכתובת, לא כללית");
+  assert.equal(env.mails.length, 5, "5 קודים לבעל הכרטיס; לכתובת בלי כרטיס לא נשלח דבר");
   env.advance(61 * 60000);
-  assert.ok(env.call({ action: "regStart", email: "x@example.com" }).ok);
+  assert.ok(regAns(env, "holder@example.com").ok);
+  assert.ok(regAns(env, "nobody@example.com").ok);
 });
 
 test("תוקף: אחרי תאריך הסיום אי אפשר להתחבר, והאסימון הקיים נפסל; מנהל ומשתמשים ידניים — ללא הגבלה", () => {
@@ -1346,8 +1368,11 @@ test("מכסת המיילים היומית בהרשמה (n=2): regStart נכשל
   assert.ok(!Object.keys(env.props).some(k => k.startsWith("R:")), "לא נכתבה רשומת קוד");
   assert.equal(env.wix.calls.length, 0, "גם לא נשלחה שאילתה ל-Wix");
   assert.equal(env.call({ action: "regStart", email: "not-an-email" }).error, "bad_email", "אימות הקלט קודם");
-  env.mailQuota.left = 1;                                  // נמען אחד מספיק (אין רזרבה לקודי הרשמה)
-  assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok); assert.equal(env.mails.length, 1);
+  // עודכן לדרישת ההשקה (n=1/2/14): קודי הרשמה כבר לא יורדים עד האפס — הם משאירים MAIL_QUOTA_RESERVE_REG (8 נמענים = שתי שליחות חיות למשרד נוטאם), כדי שהרשמות לא ישאירו את הארגון בלי יכולת לשלוח בקשה אמיתית
+  env.mailQuota.left = 8;                                  // בדיוק הרזרבה: אין נמען פנוי להרשמה
+  assert.deepEqual([env.call({ action: "regStart", email: "pilot@example.com" }).error, env.call({ action: "regStart", email: "nobody@example.com" }).error], ["mail_quota", "mail_quota"]);
+  env.mailQuota.left = 9;                                  // נמען אחד מעל הרזרבה מספיק
+  assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok); assert.equal(env.mails.length, 1); assert.equal(env.mailQuota.left, 8);
   assert.equal(env.call({ action: "regStart", email: "pilot@example.com" }).error, "mail_quota");
   env.mailQuota.left = 100000;
   for (let i = 0; i < 4; i++) assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok, "הניסיונות שנחסמו לא נצרכו מהקצב (נשארו 4 מתוך 5), i=" + i);
@@ -1570,15 +1595,455 @@ test("ניחושי קוד הרשמה (n=6): טעות הקלדה בודדת לא 
   assert.ok(renewed.ok && renewed.renewed, JSON.stringify(renewed));
 });
 
+/* ===== השקה של כ-100 מטיסים: הרשמה במקביל, מכסות שאינן ניתנות לניצול, אותה תשובה לכל כתובת (n=1/2/7/13/14) ===== */
+test("השקה (n=1/13): 100 מטיסים שונים נרשמים באותה שעה, כל אחד עם כרטיס ששולם — כולם מקבלים קוד אל הכתובת שבהזמנה ומשלימים הרשמה", () => {
+  const { env } = calmWix();
+  const emails = Array.from({ length: 100 }, (_, i) => "pilot" + i + "@example.com");
+  emails.forEach((email, i) => addOrder(env, { email, firstName: "מטיס" + i }));
+  for (const email of emails) assert.deepEqual(regAns(env, email), { ok: true, sent: true }, email);
+  assert.equal(env.mails.length, 100, "100 קודים");
+  emails.forEach((email, i) => assert.equal(env.mails[i].to, email, "הקוד נשלח לכתובת שבהזמנה בלבד"));
+  emails.forEach((email, i) => {
+    const f = env.call({ action: "regFinish", email, code: /(\d{6})/.exec(env.mails[i].subject)[1], user: "pilot.n" + i, pass: "pilot-pass-" + i + "-xx" });
+    assert.ok(f.ok && f.token, email + " " + JSON.stringify(f));
+  });
+  assert.equal(Object.keys(env.props).filter(k => k.startsWith("U:")).length, 101, "המנהל ו-100 המטיסים");
+  // מטיס 101 באותה שעה עדיין מקבל קוד (התקציב השעתי 150, שאילתות Wix 600)
+  addOrder(env, { email: "late@example.com" });
+  assert.deepEqual(regAns(env, "late@example.com"), { ok: true, sent: true }); assert.equal(env.mails.length, 101);
+});
+
+test("השקה (n=1/13): 150 בקשות אנונימיות לכתובות זבל לא חוסמות מטיס אמיתי ולא צורכות את תקציב מיילי ההרשמה (הוא נספר רק על מיילים שיצאו)", () => {
+  const { env } = calmWix(); addOrder(env, { email: "real@example.com" });
+  for (let i = 0; i < 150; i++) assert.deepEqual(regAns(env, "junk" + i + "@attacker.example"), { ok: true, sent: true });
+  assert.equal(env.mails.length, 0); assert.equal(env.wix.calls.length, 150, "כל בקשה שאלה את Wix פעם אחת");
+  assert.equal(env.props.REG_MAILS, undefined, "זבל לא נגע בתקציב המיילים היומי");
+  assert.deepEqual(regAns(env, "real@example.com"), { ok: true, sent: true });
+  assert.equal(env.mails.length, 1); assert.equal(env.mails[0].to, "real@example.com");
+  assert.equal(JSON.parse(env.props.REG_MAILS).n, 1, "נספר רק המייל שיצא");
+});
+
+// כל תרחיש מפעיל את אותה הפרעה בעולם זהה (כרטיס / חשבון קיים / כלום), ושולח 7 בקשות לכתובת אחת — הסדרות חייבות להיות זהות
+function oracleWorld() {
+  const { env } = calmWix();
+  addOrder(env, { email: "holder@example.com" });
+  pilotUser(env, "acct@example.com", "acct.user");           // חשבון קיים, בלי כרטיס חדש
+  env.mails.length = 0; env.advance(61 * 60000);              // שעה חדשה: מוני הכתובת מתאפסים
+  return env;
+}
+const ORACLE_SCENARIOS = {
+  "רגיל": () => {},
+  "MailApp זורק (n=7)": env => { env.fail.mail = true; },
+  "קריאת המכסה נכשלת והמכסה 0 (n=7)": env => { env.fail.quotaCall = true; env.mailQuota.left = 0; },
+  "המכסה על הרזרבה": env => { env.mailQuota.left = 8; },
+  "המכסה בין הרזרבות (קודים כן, 'כבר קיים' לא)": env => { env.mailQuota.left = 15; },
+  "תקציב מיילים שעתי מלא": env => setCfg(env, "REG_MAILS_PER_HOUR", 0),
+  "תקציב מיילים יומי מלא": env => setCfg(env, "REG_MAILS_PER_DAY", 0),
+  "שאילתות Wix מלאות": env => setCfg(env, "REG_WIX_PER_HOUR", 0),
+  "מכסת קודים יומית לכתובת מלאה": env => setCfg(env, "REG_MAILS_PER_EMAIL_DAY", 0),
+  "Wix נופל": env => { env.fail.wix = 500; },
+  "בלי מפתח Wix": env => { delete env.props.WIX_API_KEY; },
+};
+test("הרשמה — אין אורקל (n=1/2/7/13/14): סדרת תשובות זהה לכתובת עם כרטיס, עם חשבון קיים ובלי כלום — גם בכשל מייל, כשל קריאת מכסה, מכסה נמוכה וחריגת כל מכסה כללית", () => {
+  for (const [title, perturb] of Object.entries(ORACLE_SCENARIOS)) {
+    const seqs = ["holder@example.com", "acct@example.com", "nobody@example.com"].map(email => { const env = oracleWorld(); perturb(env); return Array.from({ length: 7 }, () => regAns(env, email)); });
+    assert.deepEqual(seqs[0], seqs[2], title + ": כתובת עם כרטיס שונה מכתובת בלי");
+    assert.deepEqual(seqs[1], seqs[2], title + ": כתובת עם חשבון שונה מכתובת בלי");
+  }
+  // ובסדרה הרגילה: 5 תשובות ok ואז rate לכולם
+  const env = oracleWorld(); assert.deepEqual(Array.from({ length: 7 }, () => regAns(env, "holder@example.com")).map(x => x.error || "ok"), ["ok", "ok", "ok", "ok", "ok", "rate", "rate"]);
+});
+
+test("הרשמה — כתובת נעולה (10 כשלונות קוד) אינה מובחנת מכתובת בלי כרטיס גם כש-Wix נופל או שמכסת Wix מלאה (n=1/13)", () => {
+  const { env } = calmWix(); addOrder(env, { email: "holder@example.com" });
+  const rk = email => vm.runInContext("regKey_(" + JSON.stringify(email) + ")", env.sandbox);
+  env.props[rk("holder@example.com")] = JSON.stringify({ f: 10, fx: env.now() + 3 * HOUR, exp: 0, tries: 0 });
+  const both = () => [regAns(env, "holder@example.com"), regAns(env, "nobody@example.com")];
+  let [a, b] = both(); assert.deepEqual(a, b); assert.deepEqual(a, { ok: true, sent: true });
+  env.fail.wix = 500; [a, b] = both(); assert.deepEqual(a, b); assert.equal(a.error, "wix_down", "הנעולה לא מדלגת על שאילתת Wix — אחרת כשל Wix היה מגלה אותה");
+  env.fail.wix = 0; setCfg(env, "REG_WIX_PER_HOUR", 0); [a, b] = both(); assert.deepEqual(a, b); assert.equal(a.error, "rate"); assert.equal(a.scope, "all");
+  assert.equal(env.mails.length, 0);
+});
+
+test("תקציב מיילי ההרשמה (n=1/2/14): נספר רק על מיילים שיצאו בפועל; חריגה שעתית ויומית = אותה תשובה לכולם; שעה/יום חדשים משחררים", () => {
+  const { env } = calmWix(); setCfg(env, "REG_MAILS_PER_HOUR", 3); setCfg(env, "REG_MAILS_PER_DAY", 5);
+  for (const n of "abcdef") addOrder(env, { email: n + "@example.com" });
+  for (let i = 0; i < 20; i++) regAns(env, "junk" + i + "@attacker.example");
+  env.fail.mail = true; regAns(env, "a@example.com"); regAns(env, "b@example.com"); env.fail.mail = false;     // כשלי שליחה אינם נספרים
+  assert.equal(env.props.REG_MAILS, undefined);
+  for (const n of "abc") assert.deepEqual(regAns(env, n + "@example.com"), { ok: true, sent: true });
+  assert.equal(env.mails.length, 3);
+  const busy = regAns(env, "d@example.com"), junk = regAns(env, "junk99@attacker.example");
+  assert.deepEqual(busy, junk, "תשובה אחידה לכתובת עם כרטיס ולכתובת בלי"); assert.deepEqual([busy.ok, busy.error, busy.scope], [false, "rate", "all"]);
+  assert.equal(env.mails.length, 3, "החריגה לא שלחה ולא כתבה קוד"); assert.ok(!env.props[vm.runInContext("regKey_('d@example.com')", env.sandbox)]);
+  env.advance(61 * 60000);                                                // שעה חדשה
+  assert.deepEqual(regAns(env, "d@example.com"), { ok: true, sent: true }); assert.deepEqual(regAns(env, "e@example.com"), { ok: true, sent: true });
+  assert.equal(env.mails.length, 5);
+  assert.equal(regAns(env, "f@example.com").error, "rate", "התקציב היומי (5) מלא גם בשעה חדשה"); assert.equal(regAns(env, "junk100@attacker.example").error, "rate");
+  env.advance(24 * HOUR);
+  assert.deepEqual(regAns(env, "f@example.com"), { ok: true, sent: true }); assert.equal(env.mails.length, 6);
+});
+
+test("שאילתות Wix (n=1/13): מכסה כללית בשעה — חריגה היא אותה תשובה לכולם, לא צורכת מכסת כתובת ולא שולחת מייל; שעה חדשה משחררת", () => {
+  const { env } = calmWix(); setCfg(env, "REG_WIX_PER_HOUR", 10); addOrder(env, { email: "holder@example.com" });
+  for (let i = 0; i < 10; i++) regAns(env, "junk" + i + "@attacker.example");
+  assert.equal(env.wix.calls.length, 10);
+  const h = regAns(env, "holder@example.com"), n = regAns(env, "nobody@example.com");
+  assert.deepEqual(h, n); assert.deepEqual([h.ok, h.error, h.scope], [false, "rate", "all"]); assert.match(h.message, /המגבלה אינה אישית/);
+  assert.equal(env.wix.calls.length, 10, "הבקשות שנדחו לא שאלו את Wix"); assert.equal(env.mails.length, 0);
+  env.advance(61 * 60000);
+  for (let i = 0; i < 5; i++) assert.ok(regAns(env, "holder@example.com").ok, "מכסת הכתובת לא נצרכה בבקשות שנדחו, i=" + i);
+  assert.equal(env.mails.length, 5);
+});
+
+test("'כבר קיים חשבון' (n=2/14): לכל היותר פעם ב-24 שעות לכתובת (חותמת ב-Properties) ולא מפריע לקודי חידוש — והתשובה תמיד זהה", () => {
+  const { env } = calmWix(); pilotUser(env, "acct@example.com", "acct.user");
+  const existsMails = () => env.mails.filter(m => /כבר קיים חשבון/.test(m.subject)).length, mk = vm.runInContext("mailRecKey_('acct@example.com')", env.sandbox);
+  for (let i = 0; i < 3; i++) assert.deepEqual(regAns(env, "acct@example.com"), { ok: true, sent: true });
+  assert.equal(existsMails(), 1, "שלוש בקשות באותה שעה — הודעה אחת");
+  assert.ok(JSON.parse(env.props[mk]).x > 0, "חותמת ב-Script Properties (המטמון מוגבל ל-6 שעות)");
+  env.advance(7 * HOUR); regAns(env, "acct@example.com"); assert.equal(existsMails(), 1, "גם אחרי 7 שעות (מעבר לחיי מטמון) — עדיין לא");
+  env.advance(18 * HOUR); assert.deepEqual(regAns(env, "acct@example.com"), { ok: true, sent: true }); assert.equal(existsMails(), 2, "אחרי 24 שעות — שוב");
+  // כרטיס חדש = חידוש: הקוד יוצא מיד, בלי קשר לחותמת
+  addOrder(env, { email: "acct@example.com" }); assert.ok(regAns(env, "acct@example.com").ok);
+  assert.match(env.mails[env.mails.length - 1].subject, /קוד לחידוש המנוי.*: \d{6}/); assert.equal(existsMails(), 2);
+});
+
+test("'כבר קיים חשבון' (n=2/14): הודעת נימוס בלבד — מתחת לרזרבת העותקים היא מדולגת בשקט (אותה תשובה כמו לכתובת בלי חשבון), וקודי הרשמה עדיין עוברים מעל רזרבת ההרשמה", () => {
+  const { env } = calmWix(); pilotUser(env, "acct@example.com", "acct.user"); addOrder(env, { email: "holder@example.com" });
+  const existsMails = () => env.mails.filter(m => /כבר קיים חשבון/.test(m.subject)).length;
+  env.mailQuota.left = 15;                                              // מעל רזרבת ההרשמה (8), מתחת לרזרבת העותקים (20)
+  assert.deepEqual(regAns(env, "acct@example.com"), regAns(env, "nobody@example.com")); assert.equal(existsMails(), 0, "לא נשלחה");
+  assert.deepEqual(regAns(env, "holder@example.com"), { ok: true, sent: true }); assert.match(env.mails[env.mails.length - 1].subject, /קוד הרשמה/, "קוד כן יצא");
+  env.mailQuota.left = 21;                                              // 1 + רזרבת העותקים
+  regAns(env, "acct@example.com"); assert.equal(existsMails(), 1, "מעל הרזרבה — נשלחה");
+  assert.equal(env.mailQuota.left, 20);
+});
+
+test("כשל שליחה ב-regStart (n=7): MailApp זורק בכל ענף — אותה תשובה לכולם, רשומת הקוד הקודמת (מוני כשלונות וקוד תקף) חוזרת במקום להימחק, והתקציב לא נצרך", () => {
+  const { env } = calmWix(); addOrder(env, { email: "holder@example.com" }); pilotUser(env, "acct@example.com", "acct.user");
+  const rk = vm.runInContext("regKey_('holder@example.com')", env.sandbox), mk = vm.runInContext("mailRecKey_('acct@example.com')", env.sandbox);
+  assert.ok(regAns(env, "holder@example.com").ok); const code1 = codeFrom(env);
+  for (let i = 0; i < 3; i++) assert.equal(env.call({ action: "regFinish", email: "holder@example.com", code: "000000", user: "h.user", pass: "holder-pass-1234" }).error, "bad_code");
+  const prevRaw = env.props[rk], budget = env.props.REG_MAILS, mBefore = env.props[mk]; assert.equal(JSON.parse(prevRaw).f, 3);
+  env.fail.mail = true;
+  const h = regAns(env, "holder@example.com"), a = regAns(env, "acct@example.com"), n = regAns(env, "nobody@example.com");
+  assert.deepEqual([h, a], [n, n]); assert.deepEqual(n, { ok: true, sent: true });
+  assert.equal(env.props[rk], prevRaw, "רשומת הקוד הקודמת (כולל מונה הכשלונות) חזרה כפי שהייתה");
+  assert.equal(env.props[mk], mBefore, "גם חותמת 'כבר קיים' לא נכתבה — אחרי שהמייל יעבוד ההודעה תצא"); assert.equal(env.props.REG_MAILS, budget, "התקציב לא נצרך");
+  env.fail.mail = false;
+  const fin = env.call({ action: "regFinish", email: "holder@example.com", code: code1, user: "h.user", pass: "holder-pass-1234" });
+  assert.ok(fin.ok, "הקוד הקודם עדיין תקף: " + JSON.stringify(fin));
+  // בלי רשומה קודמת: הכשל לא משאיר רשומת קוד
+  addOrder(env, { email: "second@example.com" }); env.fail.mail = true;
+  assert.deepEqual(regAns(env, "second@example.com"), n); assert.ok(!env.props[vm.runInContext("regKey_('second@example.com')", env.sandbox)]);
+  env.fail.mail = false; assert.ok(regAns(env, "second@example.com").ok); assert.match(env.mails[env.mails.length - 1].subject, /קוד הרשמה/);
+});
+
+test("כשל קריאת מכסה (n=7): מכסה שחוזרת null / ריקה / NaN / טקסט היא 'לא ידוע' ולא 0 — ההרשמה לא ננעלת; ו-MailApp שזורק כשהמכסה באמת נגמרה לא מבדיל כתובות", () => {
+  const { env } = calmWix(); addOrder(env, { email: "holder@example.com" });
+  for (const bad of [null, undefined, "", NaN, "5"]) {
+    env.sandbox.MailApp.getRemainingDailyQuota = () => bad;
+    assert.equal(env.run("showMailQuota"), null, "ערך לא מספרי = לא ידוע: " + String(bad));
+    assert.ok(regAns(env, "nobody" + String(bad) + "@example.com").ok);
+  }
+  env.sandbox.MailApp.getRemainingDailyQuota = () => null;
+  assert.deepEqual(regAns(env, "holder@example.com"), { ok: true, sent: true }); assert.equal(env.mails.length, 1, "קוד יצא למרות שהמכסה לא ידועה");
+  // הקריאה נכשלת והמכסה בפועל 0: MailApp זורק — אותה תשובה לכולם (ולא error:'server' רק לבעלי כרטיס)
+  const { env: e2 } = calmWix(); addOrder(e2, { email: "holder@example.com" }); e2.fail.quotaCall = true; e2.mailQuota.left = 0;
+  const h = regAns(e2, "holder@example.com"), n = regAns(e2, "nobody@example.com");
+  assert.deepEqual(h, n); assert.deepEqual(n, { ok: true, sent: true }); assert.equal(e2.mails.length, 0);
+});
+
+test("מכסת קודים יומית לכתובת (n=2/14): מעבר ל-REG_MAILS_PER_EMAIL_DAY קוד לא נשלח — בשקט ובאותה תשובה — כך שכתובת אחת לא צורכת את התקציב הכללי ולא מוצפת", () => {
+  const { env } = calmWix(); setCfg(env, "REG_MAILS_PER_EMAIL_DAY", 2); addOrder(env, { email: "victim@example.com" });
+  const sendAt = () => { const r = regAns(env, "victim@example.com"); env.advance(61 * 60000); return r; };
+  assert.deepEqual([sendAt(), sendAt(), sendAt(), sendAt()], Array(4).fill({ ok: true, sent: true }));
+  assert.equal(env.mails.length, 2, "שני קודים ביום, והשאר נדחו בשקט"); assert.equal(JSON.parse(env.props.REG_MAILS).n, 2, "רק מיילים שיצאו נספרים");
+  assert.deepEqual(regAns(env, "nobody@example.com"), { ok: true, sent: true });
+  env.advance(24 * HOUR); sendAt(); assert.equal(env.mails.length, 3, "יום חדש — שוב");
+});
+
+/* ===== שחזור גישת מנהל (n=3/6) ===== */
+test("שחזור מנהל (n=3): ניסיונות כניסה בשם 'Bootstrap'/'pw:...' וקודי הקמה שגויים לא נועלים את ההקמה ולא את החלפת הסיסמה", () => {
+  const { env, token } = bootstrapped();
+  assert.ok(env.call({ action: "addUser", token, newUser: "pilot.p1", newPass: "pilot-pass-12345" }).ok);
+  const p1 = env.call({ action: "login", user: "pilot.p1", pass: "pilot-pass-12345" });
+  delete env.props["U:itzik"];
+  const code = env.run("initialize"); assert.match(code, /^[0-9a-f]{32}$/, "קוד הקמה של 128 ביט");
+  for (const name of ["Bootstrap", "bootstrap", "BOOTSTRAP"]) for (let i = 0; i < 6; i++) env.call({ action: "login", user: name, pass: "x" + i });
+  for (let i = 0; i < 6; i++) env.call({ action: "login", user: "pw:pilot.p1", pass: "x" + i });
+  assert.equal(env.call({ action: "login", user: "Bootstrap", pass: "x" }).error, "locked", "נעילת הכניסה עצמה לא נפגעה (שם שהוקלד נעול)");
+  for (let i = 0; i < 40; i++) assert.equal(env.call({ action: "bootstrap", code: "wrong" + i, user: "itzik2", pass: PASS }).error, "bad_code");
+  assert.equal(env.doGet().needsBootstrap, true);
+  const cp = env.call({ action: "changePassword", token: p1.token, oldPass: "pilot-pass-12345", newPass: "pilot-pass-67890" });
+  assert.ok(cp.ok, "החלפת סיסמה של pilot.p1 לא ננעלה ע״י כניסות בשם pw:pilot.p1: " + JSON.stringify(cp));
+  const ok = env.call({ action: "bootstrap", code, user: "itzik2", pass: PASS });
+  assert.ok(ok.ok && ok.role === "admin", "הקוד הנכון עובד אחרי 40 ניסיונות שגויים: " + JSON.stringify(ok));
+});
+
+test("שחזור מנהל (n=6): מנהל חסום או שפג תוקפו אינו נספר כ'קיים' — initialize מנפיק קוד ומדפיס את כל המנהלים, ו-bootstrap יוצר מנהל חדש", () => {
+  const { env, token } = bootstrapped();
+  assert.ok(env.call({ action: "addUser", token, newUser: "volunteer", newPass: "volunteer-pass-1", role: "admin" }).ok);
+  assert.ok(env.call({ action: "addUser", token, newUser: "old.admin", newPass: "old-admin-pass-1", role: "admin", until: "2000-01-01" }).ok);
+  assert.ok(env.call({ action: "setBlocked", token, target: "volunteer", blocked: true }).ok);
+  delete env.props["U:itzik"];                                          // כפי שה-README מורה: מוחקים רק את מנהל המטיס/הבעלים
+  assert.equal(env.doGet().needsBootstrap, false, "בלי initialize אין הקמה (לא ניתן להפעיל מרחוק)");
+  assert.equal(env.call({ action: "bootstrap", code: "anything", user: "itzik2", pass: PASS }).error, "no_setup");
+  const code = env.run("initialize"); assert.match(code, /^[0-9a-f]{32}$/, "מונפק קוד גם שיש מנהל חסום ומנהל שפג תוקפו");
+  const log = env.logs.join("\n"); assert.match(log, /volunteer \(חסום\)/); assert.match(log, /old\.admin \(פג תוקף\)/);
+  assert.equal(env.doGet().needsBootstrap, true);
+  const ok = env.call({ action: "bootstrap", code, user: "itzik2", pass: PASS });
+  assert.ok(ok.ok && ok.role === "admin", JSON.stringify(ok));
+  assert.ok(JSON.parse(env.props["U:volunteer"]).blocked, "החסום נשאר חסום"); assert.equal(env.doGet().needsBootstrap, false);
+  // כשיש מנהל פעיל: initialize לא מנפיק, ומוחק קוד הקמה ישן שלא נוצל — כך שחסימת כל המנהלים בעתיד לא תפעיל אותו
+  env.props.SETUP_CODE = vm.runInContext("sha256Hex_('stale-code')", env.sandbox);
+  assert.equal(env.run("initialize"), null); assert.equal(env.props.SETUP_CODE, undefined);
+  const u = JSON.parse(env.props["U:itzik2"]); u.blocked = true; env.props["U:itzik2"] = JSON.stringify(u);
+  assert.equal(env.call({ action: "bootstrap", code: "stale-code", user: "itzik3", pass: PASS }).error, "no_setup", "לא ניתן להקים מנהל בלי initialize חדש");
+  assert.equal(env.doGet().needsBootstrap, false);
+});
+
+/* ===== מחיקת משתמש לא משאירה יומן שאפשר לרשת (n=4) ===== */
+test("מחיקת משתמש (n=4): ביומן שמו מוחלף בשם שאי אפשר להירשם בו — משתמש חדש באותו שם לא יורש יומן, לא רואה, לא עורך ולא שולח את הבקשות של הקודם", () => {
+  const { env, token } = withWix(); goLive(env, token);
+  const old = pilotUser(env, "old@example.com", "pilot.shared");
+  const NAME = "מקום סודי — 05.12.2026", ro = savedRequest(env, old.token, NAME);
+  assert.ok(sendTo(env, old.token, ro.folderId).ok);
+  assert.ok(env.call({ action: "deleteUser", token, target: "pilot.shared" }).ok);
+  const e0 = logOf(env).find(e => e.id === ro.folderId);
+  assert.match(e0.user, /^pilot\.shared:נמחק:[0-9a-f]{8}$/); assert.equal(e0.lastUser, e0.user); assert.equal(e0.sent[0].user, e0.user);
+  assert.equal(vm.runInContext("validName_(" + JSON.stringify(e0.user) + ")", env.sandbox), false, "אי אפשר להירשם בשם המוחלף");
+  assert.ok(!JSON.stringify(logOf(env)).includes('"user":"pilot.shared"'), "אין יותר רשומה על השם הפנוי");
+  // אדם אחר נרשם באותו שם, שומר את אותו מקום ותאריך ושולח: בלי 'כבר נשלח', בלי שעה של הקודם, בלי סיומת (2)
+  const fresh = pilotUser(env, "new@example.com", "pilot.shared");
+  const rn = savedRequest(env, fresh.token, NAME); assert.equal(rn.name, NAME);
+  const sent = sendTo(env, fresh.token, rn.folderId); assert.ok(sent.ok, JSON.stringify(sent));
+  // ואי אפשר לגעת בבקשה של הקודם
+  assert.equal(env.call({ action: "saveFile", token: fresh.token, folderId: ro.folderId, name: "x.png", mime: "image/png", b64: b64("x") }).error, "forbidden");
+  assert.equal(sendTo(env, fresh.token, ro.folderId).error, "forbidden");
+  assert.equal(env.call({ action: "saveBegin", token: fresh.token, folderName: NAME, rid: ro.rid }).error, "forbidden");
+  // המנהל רואה הכול, בשמות נפרדים; הסטטיסטיקה לא מערבבת שני אנשים
+  const rows = env.call({ action: "listRequests", token }).requests; assert.equal(rows.length, 2);
+  assert.ok(rows.some(r => r.user === e0.user && r.sentLive === 1) && rows.some(r => r.user === "pilot.shared" && r.sentLive === 1));
+  const st = env.call({ action: "listUsers", token }).users.find(u => u.user === "pilot.shared"); assert.deepEqual([st.requests, st.sent], [1, 1]);
+});
+
+test("מחיקת משתמש (n=4): נכשלת סגור כשהיומן פגום (החשבון נשאר, אפשר לחסום במקום), ומונים שעתיים לפי שם לא עוברים למי שיתפוס את השם", () => {
+  const { env, token } = calmWix();
+  assert.ok(env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-1234" }).ok);
+  const dave = env.call({ action: "login", user: "dave", pass: "dave-pass-1234" });
+  savedRequest(env, dave.token, "של דייב — 07.12.2026");
+  const f = env.folders.ROOT.files.find(x => x.name === "_יומן בקשות.json"), good = f.bytes;
+  f.bytes = Buffer.from("{not json");
+  const r = env.call({ action: "deleteUser", token, target: "dave" }); assert.deepEqual([r.ok, r.error], [false, "server"]);
+  assert.ok(env.props["U:dave"], "החשבון לא נמחק"); assert.ok(env.call({ action: "setBlocked", token, target: "dave", blocked: true }).ok, "חסימה עדיין אפשרית");
+  f.bytes = good;
+  // מונה תיקיות חדשות וניסיונות כניסה של דייב: אחרי מחיקה ויצירה מחדש — מכסה נקייה
+  setCfg(env, "MAX_NEW_FOLDERS_PER_HOUR", 2);
+  assert.ok(env.call({ action: "setBlocked", token, target: "dave", blocked: false }).ok);
+  const d2 = env.call({ action: "login", user: "dave", pass: "dave-pass-1234" });
+  assert.ok(env.call({ action: "saveBegin", token: d2.token, folderName: "ב", rid: newRid() }).ok);       // השני בשעה (הראשון היה קודם)
+  assert.equal(env.call({ action: "saveBegin", token: d2.token, folderName: "ג", rid: newRid() }).error, "rate");
+  assert.ok(env.call({ action: "deleteUser", token, target: "dave" }).ok);
+  assert.ok(env.call({ action: "addUser", token, newUser: "dave", newPass: "dave-pass-5678" }).ok);
+  const d3 = env.call({ action: "login", user: "dave", pass: "dave-pass-5678" });
+  assert.ok(env.call({ action: "saveBegin", token: d3.token, folderName: "חדש", rid: newRid() }).ok, "מכסת התיקיות של הקודם לא עברה");
+});
+
+/* ===== תקרות אחסון (n=5/16) וסוגי קבצים (n=8) ===== */
+const bytesB64 = n => Buffer.alloc(n, 7).toString("base64");
+const putFile = (env, tok, folderId, name, n = 3, mime = "application/octet-stream") => env.call({ action: "saveFile", token: tok, folderId, name, mime, b64: bytesB64(n) });
+const livesIn = (env, folderId) => env.folders[folderId].files.filter(f => !f.trashed);
+function daveUser(env, token, name = "dave") {
+  assert.ok(env.call({ action: "addUser", token, newUser: name, newPass: "dave-pass-1234" }).ok);
+  return env.call({ action: "login", user: name, pass: "dave-pass-1234" });
+}
+
+test("saveFile (n=8/16): רק סוגי קבצי הבקשה — אי אפשר לזייף או לדרוס את סימון 'נשלח — ....txt', וסיומות אחרות נדחות", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token, "סימון — 06.12.2026");
+  assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok);
+  const marker = () => livesIn(env, b.folderId).filter(f => f.name.startsWith("נשלח — "));
+  assert.equal(marker().length, 1); const name = marker()[0].name, content = marker()[0].bytes.toString();
+  for (const bad of [name, "נשלח — 2026-01-01 00-00.txt", "x.txt", "x.bin", "noext", "x.docx.exe", "x.html"]) {
+    const r = putFile(env, token, b.folderId, bad); assert.deepEqual([r.ok, r.error], [false, "bad_file"], bad);
+  }
+  assert.equal(marker().length, 1); assert.equal(marker()[0].name, name); assert.equal(marker()[0].bytes.toString(), content, "הסימון האמיתי לא נדרס ולא נשלח לאשפה");
+  assert.ok(putFile(env, token, b.folderId, "ח.PNG").ok, "סיומת באותיות גדולות מותרת (מנורמלת)"); assert.ok(livesIn(env, b.folderId).some(f => f.name === "ח.png"));
+  for (const okName of ["a.docx", "a.kml", "a.png", "a.jpg", "a.jpeg", "a.json"]) assert.ok(putFile(env, token, b.folderId, okName).ok, okName);
+  assert.equal(env.call({ action: "saveFile", token: "bad", folderId: b.folderId, name: "x.txt", b64: "AAAA" }).ok, false);
+});
+
+test("תקרת קבצים לתיקייה (n=5/16): 12 קבצי בקשה לכל היותר — סימוני שליחה לא נספרים, החלפה באותו שם מותרת, חריגה לא מוחקת דבר ולא מבטלת 'מוכנה'", () => {
+  const { env, token } = bootstrapped();
+  const b = savedRequest(env, token, "מלא — 08.12.2026");                                  // 5 קבצים, מוכנה
+  assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok); assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok);   // שני סימוני 'נשלח'
+  for (let i = 0; i < 7; i++) assert.ok(putFile(env, token, b.folderId, "נוסף" + i + ".png").ok, "קובץ " + i);
+  assert.equal(livesIn(env, b.folderId).filter(f => /\.(docx|kml|png|json)$/.test(f.name)).length, 12);
+  assert.ok(env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }).ready);
+  const before = livesIn(env, b.folderId).map(f => f.id).sort();
+  const r = putFile(env, token, b.folderId, "אחד-יותר-מדי.png"); assert.deepEqual([r.ok, r.error], [false, "folder_full"]); assert.match(r.message, /12/);
+  assert.deepEqual(livesIn(env, b.folderId).map(f => f.id).sort(), before, "לא נמחק ולא נוסף דבר");
+  assert.equal(logOf(env).find(e => e.id === b.folderId).ready, true, "החריגה לא ביטלה 'מוכנה'");
+  assert.ok(putFile(env, token, b.folderId, "נוסף3.png", 5).ok, "החלפה באותו שם מותרת גם כשהתיקייה מלאה");
+  assert.equal(livesIn(env, b.folderId).filter(f => /\.(docx|kml|png|json)$/.test(f.name)).length, 12);
+});
+
+test("תקרת נפח לתיקייה (n=5/16): קבצי הבקשה לא עוברים את MAX_FOLDER_BYTES (≤ תקרת המייל); החלפה מנכה את הקובץ שיוחלף; חריגה לא מוחקת דבר", () => {
+  const { env, token } = bootstrapped();
+  const cfg = vm.runInContext("CFG", env.sandbox); assert.ok(cfg.MAX_FOLDER_BYTES <= cfg.MAX_MAIL_BYTES, "לא מעל תקרת המייל");
+  setCfg(env, "MAX_FOLDER_BYTES", 1000);
+  const b = env.call({ action: "saveBegin", token, folderName: "נפח — 09.12.2026", rid: newRid() });
+  assert.ok(putFile(env, token, b.folderId, "א.png", 399).ok); assert.ok(putFile(env, token, b.folderId, "ב.png", 399).ok);
+  const r = putFile(env, token, b.folderId, "ג.png", 300); assert.deepEqual([r.ok, r.error], [false, "folder_full"]); assert.match(r.message, /MB/);
+  assert.equal(livesIn(env, b.folderId).length, 2);
+  assert.ok(putFile(env, token, b.folderId, "א.png", 501).ok, "החלפת א.png ב-501: 399+501=900"); assert.equal(livesIn(env, b.folderId).length, 2);
+  assert.equal(putFile(env, token, b.folderId, "א.png", 603).error, "folder_full", "399+603>1000");
+});
+
+test("תקרות העלאה למשתמש (n=5/16): נפח שעתי ויומי נמדדים בכתיבה (לא בנפח שנשמר), חריגה לא נספרת, מנהל פטור, ומונה של משתמש שנמחק לא עובר למחליפו", () => {
+  const { env, token } = calmWix(); setCfg(env, "MAX_UPLOAD_BYTES_PER_HOUR", 1000); setCfg(env, "MAX_UPLOAD_BYTES_PER_DAY", 1500);
+  const dave = daveUser(env, token), b = env.call({ action: "saveBegin", token: dave.token, folderName: "העלאות — 10.12.2026", rid: newRid() });
+  assert.ok(putFile(env, dave.token, b.folderId, "א.png", 399).ok); assert.ok(putFile(env, dave.token, b.folderId, "א.png", 399).ok);     // אותו שם: הישן באשפה, אבל נכתבו 798
+  const r = putFile(env, dave.token, b.folderId, "א.png", 399);
+  assert.deepEqual([r.ok, r.error, r.scope, r.kind], [false, "rate", "user", "upload"]); assert.match(r.message, /השעתית/);
+  assert.equal(livesIn(env, b.folderId).length, 1, "בתיקייה קובץ אחד, ובכל זאת הגרסאות החוזרות נספרו");
+  env.advance(61 * 60000);                                                                  // שעה חדשה: 798 היום, 399 → 1197 ≤ 1500
+  assert.ok(putFile(env, dave.token, b.folderId, "ב.png", 399).ok);
+  const r2 = putFile(env, dave.token, b.folderId, "ב.png", 399); assert.equal(r2.error, "rate", "1596 > 1500 ביום"); assert.match(r2.message, /היומית/);
+  for (let i = 0; i < 6; i++) assert.ok(putFile(env, token, savedRequest(env, token, "מנהל " + i + " — 10.12.2026").folderId, "ענק.png", 3000).ok, "מנהל פטור מהמכסות האישיות");
+  // מחיקה ויצירה מחדש: המכסה (שעתית ויומית) של הקודם לא עוברת
+  assert.ok(env.call({ action: "deleteUser", token, target: "dave" }).ok);
+  const d2 = daveUser(env, token), b2 = env.call({ action: "saveBegin", token: d2.token, folderName: "אחרי — 10.12.2026", rid: newRid() });
+  assert.ok(putFile(env, d2.token, b2.folderId, "ג.png", 399).ok); assert.ok(putFile(env, d2.token, b2.folderId, "ג.png", 399).ok);
+  env.advance(24 * HOUR);
+  const d3 = env.call({ action: "login", user: "dave", pass: "dave-pass-1234" }); assert.ok(d3.ok);
+  assert.ok(putFile(env, d3.token, b2.folderId, "ד.png", 399).ok, "יום חדש — המכסה היומית מתאפסת");
+});
+
+test("תקרת בקשות פתוחות (n=5): משתמש עם יותר מדי בקשות שלא נשלחו חי לא פותח תיקייה חדשה; שמירה חוזרת, שליחה חיה ובקשות ישנות משחררות; אחרים ומנהל לא נפגעים", () => {
+  const { env, token } = bootstrapped(); setCfg(env, "MAX_OPEN_REQUESTS_PER_USER", 3);
+  const dave = daveUser(env, token), eve = daveUser(env, token, "eve.pilot"), rids = [newRid(), newRid(), newRid()];
+  rids.forEach((rid, i) => assert.ok(env.call({ action: "saveBegin", token: dave.token, folderName: "פתוחה " + i, rid }).ok));
+  const full = env.call({ action: "saveBegin", token: dave.token, folderName: "פתוחה 3", rid: newRid() });
+  assert.deepEqual([full.ok, full.error], [false, "too_many_open"]); assert.match(full.message, /3/);
+  assert.ok(env.call({ action: "saveBegin", token: dave.token, folderName: "פתוחה 0", rid: rids[0] }).ok, "שמירה חוזרת של בקשה קיימת אינה בקשה חדשה");
+  const foldersBefore = Object.keys(env.folders).length;
+  assert.equal(env.call({ action: "saveBegin", token: dave.token, folderName: "ועוד", rid: newRid() }).error, "too_many_open"); assert.equal(Object.keys(env.folders).length, foldersBefore, "לא נוצרה תיקייה");
+  assert.ok(env.call({ action: "saveBegin", token: eve.token, folderName: "של חוה", rid: newRid() }).ok, "משתמש אחר לא נפגע");
+  assert.ok(env.call({ action: "saveBegin", token, folderName: "מנהל 1", rid: newRid() }).ok && env.call({ action: "saveBegin", token, folderName: "מנהל 2", rid: newRid() }).ok && env.call({ action: "saveBegin", token, folderName: "מנהל 3", rid: newRid() }).ok && env.call({ action: "saveBegin", token, folderName: "מנהל 4", rid: newRid() }).ok, "מנהל פטור");
+  // בקשה שנשלחה חי אינה 'פתוחה'
+  goLive(env, token);
+  const sent = savedRequest(env, eve.token, "של חוה לשליחה"); assert.ok(sendTo(env, eve.token, sent.folderId).ok);
+  const log = logOf(env), mine = log.find(e => e.rid === rids[1]); mine.sent = [{ sid: "s1", t: env.now(), user: "dave", mode: "live", target: "office", to: [], st: "sent" }];   // dave שלח חי בקשה אחת
+  env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes = Buffer.from(JSON.stringify(log));
+  assert.ok(env.call({ action: "saveBegin", token: dave.token, folderName: "אחרי שחרור", rid: newRid() }).ok, "שליחה חיה משחררת מקום");
+  assert.equal(env.call({ action: "saveBegin", token: dave.token, folderName: "מלא שוב", rid: newRid() }).error, "too_many_open");
+  // בקשות שלא נגעו בהן LOG_KEEP_DAYS ימים אינן פתוחות
+  const log2 = logOf(env); log2.filter(e => e.user === "dave" && !e.sent.length).forEach(e => { e.created = e.saved = env.now() - 40 * 86400000; });
+  env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes = Buffer.from(JSON.stringify(log2));
+  assert.ok(env.call({ action: "saveBegin", token: dave.token, folderName: "אחרי חודש", rid: newRid() }).ok);
+  assert.ok(logOf(env).some(e => e.user === "eve.pilot" && e.name === "של חוה"), "הבקשות של אחרים נשארו ביומן");
+});
+
+test("רשומות שליחה בבקשה אחת (n=5): MAX_SENT_PER_REQUEST — נמחקות הישנות ביותר שאינן שליחה חיה; שליחה חיה לעולם לא נמחקת וממשיכה לחסום כפילות", () => {
+  const { env, token } = bootstrapped(); goLive(env, token); setCfg(env, "MAX_SENT_PER_REQUEST", 4);
+  const b = savedRequest(env, token, "הרבה שליחות — 11.12.2026");
+  assert.ok(sendTo(env, token, b.folderId).ok);                                              // חיה
+  for (let i = 0; i < 7; i++) { assert.ok(sendTo(env, token, b.folderId, { target: "self" }).ok, "עותק " + i); }
+  const e = logOf(env).find(x => x.id === b.folderId);
+  assert.equal(e.sent.length, 4, "התקרה נאכפת"); assert.equal(e.sent[0].mode, "live", "השליחה החיה נשארה, הישנות מבין העותקים נמחקו");
+  assert.deepEqual(e.sent.slice(1).map(s => s.target), ["self", "self", "self"]);
+  assert.equal(sendTo(env, token, b.folderId).error, "already_sent");
+});
+
+test("תיקייה מנופחת (שלא נוצרה דרך saveFile) (n=16): saveEnd ו-sendRequest מסרבים (folder_full) בלי לקרוא את תכני הקבצים ובלי לשלוח", () => {
+  const { env, token } = bootstrapped(); goLive(env, token);
+  const b = savedRequest(env, token, "מנופחת — 12.12.2026"); let reads = 0;
+  for (let i = 0; i < 40; i++) env.folders[b.folderId].files.push({ id: "rogue" + i, name: "r" + i + ".docx", mime: "x", get bytes() { reads++; return Buffer.from("x"); }, trashed: false });
+  const end = env.call({ action: "saveEnd", token, folderId: b.folderId, ready: true }); assert.deepEqual([end.ok, end.error], [false, "folder_full"]);
+  assert.equal(sendTo(env, token, b.folderId).error, "folder_full"); assert.equal(env.mails.length, 0);
+  assert.ok(reads <= 2 * 12, "לא נקראו תכני 40 הקבצים תחת הנעילה (נקראו " + reads + ")");
+});
+
+test("ניקוי שמות (n=8): תווי כיווניות, NUL, NEL ומפרידי שורה מוסרים משמות תיקיות, קבצים ונושא מייל; שם שכולו תווים בלתי נראים נדחה", () => {
+  const { env, token } = bootstrapped();
+  const dirty = [0x2066, 0x2067, 0x2068, 0x2069, 0x61c, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x0, 0x85, 0x2028, 0x2029, 0x200b, 0xfeff].map(c => String.fromCharCode(c)).join("");
+  const hidden = new RegExp("[" + [[0, 0x1f], [0x7f, 0x9f], [0x61c, 0x61c], [0x200b, 0x200f], [0x2028, 0x202e], [0x2066, 0x2069], [0xfeff, 0xfeff]].map(([a, z]) => String.fromCharCode(a) + "-" + String.fromCharCode(z)).join("") + "]");
+  const b = env.call({ action: "saveBegin", token, folderName: "פי" + dirty + " גלילות — 01.01.2026", rid: newRid() });
+  assert.ok(b.ok); assert.equal(b.name, "פי גלילות — 01.01.2026");
+  assert.ok(!hidden.test(env.folders[b.folderId].name) && !hidden.test(logOf(env)[0].name) && !hidden.test(logOf(env)[0].base), "גם בדרייב וגם ביומן");
+  assert.ok(putFile(env, token, b.folderId, "a" + dirty + "b.png").ok);
+  assert.deepEqual(livesIn(env, b.folderId).map(f => f.name), ["a b.png"]);
+  assert.equal(env.call({ action: "saveBegin", token, folderName: dirty, rid: newRid() }).error, "bad_name");
+  const ready = savedRequest(env, token, "נושא — 02.01.2026");
+  assert.ok(sendTo(env, token, ready.folderId, { subject: "נושא" + dirty + "כלשהו", target: "self" }).ok);
+  const m = env.mails[env.mails.length - 1]; assert.ok(!hidden.test(m.subject), "הנושא נקי"); assert.match(m.subject, /נושא כלשהו$/);
+});
+
+/* ===== הבדיקה היומית לא מחזיקה את נעילת הסקריפט בזמן קריאות רשת (n=19) ===== */
+test("בדיקה יומית (n=19): נעילת הסקריפט לא מוחזקת בזמן Wix; doPost במקביל לא מקבל busy; חידוש, איפוס סיסמה ומחיקה שהגיעו באמצע לא נדרסים; תזכורת בנעילה קצרה", () => {
+  const { env, token } = withWix();
+  const a = pilotUser(env, "a@example.com", "pilot.a"), b = pilotUser(env, "b@example.com", "pilot.b"), c = pilotUser(env, "c@example.com", "pilot.c");
+  const orderOf = email => env.wix.orders.find(o => o.email === email);
+  orderOf("a@example.com").status = "CANCELED";
+  for (const n of ["pilot.b", "pilot.c"]) { const u = JSON.parse(env.props["U:" + n]); u.until = env.now() + 20 * DAY; env.props["U:" + n] = JSON.stringify(u); }     // תזכורת חודש מגיעה
+  env.mails.length = 0; env.lock.strict = true;
+  const hookResults = []; let fired = false;
+  env.hooks.beforeFetch = () => {                               // doPost מקביל בתוך שאילתת ה-Wix הראשונה
+    if (fired) return; fired = true;
+    hookResults.push(env.call({ action: "setExpiry", token, target: "pilot.b", until: "2100-01-01" }));          // חידוש (תוקף חדש, תזכורות מתאפסות)
+    hookResults.push(env.call({ action: "resetPassword", token, target: "pilot.a", newPass: "brand-new-pass-1" }));
+    hookResults.push(env.call({ action: "deleteUser", token, target: "pilot.c" }));                              // נמחק באמצע
+  };
+  const stat = env.run("dailyCheck");
+  assert.ok(hookResults.length === 3 && hookResults.every(r => r.ok), "doPost שהגיע באמצע לא קיבל busy: " + JSON.stringify(hookResults));
+  assert.equal(stat.blocked, 1, "pilot.a נחסם (הזמנה בוטלה)");
+  assert.equal(env.call({ action: "login", user: "pilot.a", pass: "brand-new-pass-1" }).error, "blocked", "איפוס הסיסמה שהגיע באמצע לא נדרס (אחרת bad_login)");
+  const ub = JSON.parse(env.props["U:pilot.b"]); assert.ok(ub.until > Date.parse("2099-12-31"), "החידוש לא נדרס"); assert.deepEqual(JSON.parse(JSON.stringify(ub.reminded)), {}, "ולא נשלחה תזכורת על תקופה שכבר חודשה");
+  assert.equal(env.props["U:pilot.c"], undefined, "משתמש שנמחק באמצע לא קם לתחייה");
+  assert.equal(env.mails.filter(m => /המנוי שלך/.test(m.subject)).length, 0, "אין תזכורות לאף אחד מהשלושה");
+  assert.ok(env.lock.holds.length >= 4 && env.lock.holds.every(h => h.fetches === 0), "אף קריאת Wix לא בוצעה כשהנעילה מוחזקת: " + JSON.stringify(env.lock.holds));
+  // ריצה רגילה: תזכורת אחת בנעילה קצרה (מייל אחד לכל היותר בכל החזקה)
+  env.hooks.beforeFetch = null; env.lock.holds.length = 0;
+  const u = JSON.parse(env.props["U:pilot.b"]); u.until = env.now() + 20 * DAY; env.props["U:pilot.b"] = JSON.stringify(u);
+  assert.equal(env.run("dailyCheck").reminded, 1); assert.equal(env.mails.filter(m => /המנוי שלך/.test(m.subject)).length, 1);
+  assert.ok(env.lock.holds.every(h => h.fetches === 0 && h.mails <= 1), JSON.stringify(env.lock.holds));
+});
+
+test("בדיקה יומית (n=19): מגבלת 200 השאילתות מסתובבת בין המשתמשים — אף משתמש לא נשאר בסוף הרשימה בלי בדיקה", () => {
+  const { env, token } = withWix();
+  for (const n of ["u1", "u2", "u3"]) {
+    assert.ok(env.call({ action: "addUser", token, newUser: "pilot." + n, newPass: "pilot-pass-12345", until: "2100-01-01" }).ok);
+    const rec = JSON.parse(env.props["U:pilot." + n]); rec.orders = [n.toUpperCase() + "-A", n.toUpperCase() + "-B"]; rec.email = n + "@example.com"; env.props["U:pilot." + n] = JSON.stringify(rec);
+    for (const s of ["A", "B"]) env.wix.orders.push({ orderNumber: n.toUpperCase() + "-" + s, status: "PAID", created: iso(env.now()), email: n + "@example.com", memberId: "m" });
+  }
+  vm.runInContext("DAILY_WIX_CALLS = 4", env.sandbox);
+  const checked = () => env.wix.calls.map(c => /orderNumber=([^&]+)/.exec(c.search)[1]);
+  env.run("dailyCheck"); assert.deepEqual(checked(), ["U1-A", "U1-B", "U2-A", "U2-B"], "ריצה ראשונה: שני משתמשים ראשונים");
+  env.wix.calls.length = 0; env.run("dailyCheck");
+  assert.deepEqual(checked().slice(0, 2), ["U3-A", "U3-B"], "ריצה שנייה מתחילה אחרי מי שנבדק");
+  env.wix.orders.find(o => o.orderNumber === "U3-B").status = "CANCELED"; env.wix.calls.length = 0;
+  env.run("dailyCheck"); env.run("dailyCheck");
+  assert.equal(JSON.parse(env.props["U:pilot.u3"]).blocked, true, "הזמנה שבוטלה אצל משתמש שבסוף הרשימה נתפסת");
+});
+
+
 test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקוד (מונע סטייה בין התיעוד למימוש), והמספרים שנקבעו מופיעים בו", () => {
   const readme = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "apps-script", "README.md"), "utf8");
   const { sandbox } = makeEnv();
   const cfg = vm.runInContext("CFG", sandbox);
-  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE"].includes(n));   // אלה Script Properties ולא CFG
+  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW|REG)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE", "REG_MAILS"].includes(n));   // אלה Script Properties ולא CFG
   assert.ok(named.length >= 10, "נמצאו קבועים: " + named.join(","));
   for (const n of named) assert.ok(n in cfg, "README מזכיר את " + n + " אבל אין אותו ב-CFG");
-  for (const [k, v] of [["MAX_OFFICE_PER_HOUR", 10], ["MAX_OFFICE_PER_HOUR_ALL", 60], ["MAX_COPIES_PER_HOUR", 10], ["MAX_COPIES_PER_HOUR_ALL", 120], ["MAX_SEND_ATTEMPTS_PER_HOUR", 40], ["MAIL_QUOTA_RESERVE", 20], ["LOG_MAX", 2000], ["LOG_KEEP_DAYS", 30], ["CODE_FAIL_MAX", 10], ["CODE_FAIL_HOURS", 6]])
+  for (const [k, v] of [["MAX_OFFICE_PER_HOUR", 10], ["MAX_OFFICE_PER_HOUR_ALL", 60], ["MAX_COPIES_PER_HOUR", 10], ["MAX_COPIES_PER_HOUR_ALL", 120], ["MAX_SEND_ATTEMPTS_PER_HOUR", 40], ["MAIL_QUOTA_RESERVE", 20], ["LOG_MAX", 2000], ["LOG_KEEP_DAYS", 30], ["CODE_FAIL_MAX", 10], ["CODE_FAIL_HOURS", 6],
+    ["MAIL_QUOTA_RESERVE_REG", 8], ["REG_PER_EMAIL_HOUR", 5], ["REG_WIX_PER_HOUR", 600], ["REG_MAILS_PER_HOUR", 150], ["REG_MAILS_PER_DAY", 400], ["REG_MAILS_PER_EMAIL_DAY", 10], ["REG_EXISTS_HOURS", 24],
+    ["MAX_FOLDER_FILES", 12], ["MAX_UPLOAD_BYTES_PER_HOUR", 200 * 1048576], ["MAX_UPLOAD_BYTES_PER_DAY", 500 * 1048576], ["MAX_OPEN_REQUESTS_PER_USER", 60], ["MAX_SENT_PER_REQUEST", 100]])
     assert.equal(cfg[k], v, k);
+  assert.ok(!("REG_PER_HOUR" in cfg), "המכסה הכללית הישנה (60 בשעה) בוטלה");
+  assert.ok(cfg.MAIL_QUOTA_RESERVE_REG < cfg.MAIL_QUOTA_RESERVE, "קודי הרשמה משאירים רזרבה קטנה מזו של עותקים: משרד נוטאם ← קודים ← עותקים");
+  assert.ok(cfg.MAX_FOLDER_BYTES <= cfg.MAX_MAIL_BYTES && cfg.REG_MAILS_PER_HOUR > 100, "תקרת תיקייה ≤ תקרת מייל; התקציב השעתי מכסה 100 נרשמים");
   assert.ok(cfg.MAX_COPIES_PER_HOUR_ALL >= 60, "תקרה כוללת לעותקים לא נמוכה מ-60");
   for (const fn of ["showMailQuota", "initialize", "installTrigger"]) assert.ok(readme.includes("`" + fn + "`"), "README מזכיר את " + fn);
 });

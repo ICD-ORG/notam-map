@@ -6,7 +6,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "apps-script", "Code.gs"), "utf8");
+// APPS_SCRIPT_SRC (אופציונלי): קובץ Code.gs חלופי — לאימות שבדיקת רגרסיה נכשלת על הקוד שלפני התיקון; ברירת המחדל היא הקובץ שבמאגר
+const SRC = fs.readFileSync(process.env.APPS_SCRIPT_SRC || path.join(ROOT, "apps-script", "Code.gs"), "utf8");
 export const ROOT_ID = "ROOT";
 
 export function makeEnv() {
@@ -14,6 +15,9 @@ export function makeEnv() {
   // השעון המדומה מתחיל בזמן אמיתי: הדפדפן בבדיקות e2e משווה אותו (פקיעת אסימון) לשעון שלו
   let clock = Date.now();
   const hooks = {}, fail = { drive: false, mail: false, lockBusy: false, wix: 0, logWrite: false, quotaCall: false };
+  // מודל נעילת הסקריפט: כבוי כברירת מחדל (tryLock תמיד מצליח). עם lock.strict = true הנעילה היא הדרה הדדית אמיתית — tryLock נכשל בזמן שמישהו מחזיק אותה (המדמה אינו ממתין) —
+  // וכל החזקה נרשמת ב-lock.holds עם מספר קריאות הרשת (fetches) והמיילים (mails) שבוצעו בזמן שהנעילה הייתה מוחזקת. hooks.beforeFetch / hooks.beforeMail מאפשרים לדמות doPost מקביל בתוך קריאת רשת.
+  const lock = { strict: false, held: false, cur: null, holds: [] };
   const mailQuota = { left: 100000, sentRcpts: 0 };   // נמענים שנותרו ביום / כמה נמענים נשלחו בפועל
   const rcptCount = m => ["to", "cc", "bcc"].reduce((n, k) => n + (m[k] ? String(m[k]).split(",").map(x => x.trim()).filter(Boolean).length : 0), 0);
   // Wix מדומה (Events orders): env.wix.orders = [{orderNumber,status,created,email,firstName,memberId,tickets,eventId}], נבדקים הכותרות והסינון כמו ב-API האמיתי
@@ -22,6 +26,8 @@ export function makeEnv() {
   const fetchApp = (url, opts) => {
     const u = new URL(url), q = u.searchParams, headers = (opts && opts.headers) || {};
     wix.calls.push({ path: u.pathname, search: u.search, headers });
+    if (lock.cur) lock.cur.fetches++;
+    if (hooks.beforeFetch) hooks.beforeFetch(u);
     const reply = (code, body) => ({ getResponseCode: () => code, getContentText: () => (typeof body === "string" ? body : JSON.stringify(body)) });
     if (fail.wix) return reply(fail.wix, "boom");
     if (u.host !== "www.wixapis.com" || u.pathname !== "/events/v1/orders") return reply(404, "nf");
@@ -70,6 +76,7 @@ export function makeEnv() {
     // להסרת הפונקציה (שרת/מדמה ישן): delete env.sandbox.MailApp.getRemainingDailyQuota. fail.quotaCall = true => הקריאה לבדיקת המכסה עצמה זורקת.
     MailApp: {
       sendEmail: m => {
+        if (lock.cur) lock.cur.mails++;
         if (hooks.beforeMail) hooks.beforeMail(m);
         if (fail.mail) throw new Error("mail down");
         const n = rcptCount(m);
@@ -81,7 +88,15 @@ export function makeEnv() {
     },
     Session: { getEffectiveUser: () => ({ getEmail: () => "owner@icd.test" }) },
     CacheService: { getScriptCache: () => ({ get: k => (cache[k] && cache[k].exp > clock ? cache[k].v : null), put: (k, v, s) => { cache[k] = { v, exp: clock + s * 1000 }; }, remove: k => { delete cache[k]; } }) },
-    LockService: { getScriptLock: () => ({ tryLock: () => !fail.lockBusy, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({
+      tryLock: () => {
+        if (fail.lockBusy) return false;
+        if (!lock.strict) return true;
+        if (lock.held) return false;
+        lock.held = true; lock.cur = { fetches: 0, mails: 0 }; lock.holds.push(lock.cur); return true;
+      },
+      releaseLock() { if (lock.strict) { lock.held = false; lock.cur = null; } },
+    }) },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
@@ -103,7 +118,7 @@ export function makeEnv() {
   vm.runInContext(SRC, sandbox, { filename: "Code.gs" });
   vm.runInContext("CFG.ROOT_FOLDER_ID = '" + ROOT_ID + "'", sandbox);   // בבדיקות התיקייה הראשית היא ההדמיה
   const call = (obj) => JSON.parse(vm.runInContext("doPost", sandbox)({ postData: { contents: JSON.stringify(obj) } }).text);
-  return { sandbox, call, props, logs, folders, mails, hooks, fail, wix, triggers, mailQuota, now: () => clock, advance: ms => { clock += ms; },
+  return { sandbox, call, props, logs, folders, mails, hooks, fail, wix, triggers, mailQuota, lock, now: () => clock, advance: ms => { clock += ms; },
     run: name => vm.runInContext(name + "()", sandbox), doGet: () => JSON.parse(vm.runInContext("doGet", sandbox)().text) };
 }
 

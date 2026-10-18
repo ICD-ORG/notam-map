@@ -1340,3 +1340,117 @@ test("ממצא 15: אזור בלי שם (LLR107/120/601 בנתונים) — הת
   const rn = C.analyzeZones(new C.Proj(c[0], c[1]), 100, { zones: [named], inpa: { sites: [] } }, 1000), hn = rn.inside.concat(rn.near).find(x => x.id === named.id);
   assert.equal(hn.label, named.id + " ״" + named.name + "״", "אזור עם שם — כמו תמיד");
 });
+
+/* ---------- סבב 4 (לקוח): התנתקות מאפסת ונועלת (n=9), ניווט היסטוריה (n=10), הודעות תחזוקה ותמיכה (n=11/12), בלי כלי טיס מסומן מראש (n=15), הרשמה (n=17/18) ---------- */
+// auth.js נטען ללא דפדפן: window / document מדומים (הקובץ נוגע ב-DOM רק בתוך פונקציות)
+const loadAuth = c => { const win = {}; new Function("window", "document", fs.readFileSync(path.join(ROOT, "members-k38p/requests/js/auth.js"), "utf8"))(win, {}); win.ReqAuth.setConfig(c); return win.ReqAuth; };
+const REQ_DIR = "members-k38p/requests/", readReq = f => fs.readFileSync(path.join(ROOT, REQ_DIR, f), "utf8");
+
+test("n=12: config.json מגדיר support_email תקין (כתובת מייל בלבד)", () => {
+  assert.equal(typeof cfg.support_email, "string");
+  assert.match(cfg.support_email, /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){1,5}$/);
+  assert.equal(cfg.support_email, "office@icd.org.il", "הכתובת שהוגדרה ממתינה לאישור המנהל");
+});
+
+test("n=12: כתובת התמיכה מצורפת להודעות הפניה (תמיכה / מנהל המערכת / משרד הארגון) בלבד, פעם אחת, ורק אם היא כתובת מייל תקינה", () => {
+  const A = loadAuth({ support_email: "office@icd.org.il" }), E = "office@icd.org.il";
+  assert.equal(A.supportEmail(), E);
+  assert.equal(A.withSupport("אם הבעיה חוזרת, פנו לתמיכה."), "אם הבעיה חוזרת, פנו לתמיכה: " + E + ".");
+  assert.equal(A.withSupport("יש לפנות למנהל המערכת."), "יש לפנות למנהל המערכת: " + E + ".");
+  assert.equal(A.withSupport("יש לפנות למשרד הארגון."), "יש לפנות למשרד הארגון: " + E + ".");
+  assert.equal(A.withSupport(A.withSupport("פנו לתמיכה.")), "פנו לתמיכה: " + E + ".", "לא מצורפת פעמיים");
+  assert.equal(A.withSupport("שם משתמש או סיסמה שגויים."), "שם משתמש או סיסמה שגויים.", "הודעה בלי הפניה — ללא שינוי");
+  // ההודעות עצמן, דרך msg: מטיס רגיל (role ריק) ומנהל
+  for (const code of ["blocked", "mail_quota", "not_configured", "not_ready", "missing_files", "no_owner"]) assert.ok(A.msg({ error: code }).includes(E), code + " כולל את כתובת התמיכה");
+  assert.ok(!A.msg({ error: "bad_login" }).includes(E), "שגיאה בלי הפניה לתמיכה — בלי כתובת");
+  assert.ok(/פנו לתמיכה: office@icd\.org\.il/.test(A.msg({ error: "no_owner" })), "נוסח המטיס ל-no_owner");
+});
+
+test("n=12: ערך support_email לא תקין (HTML, סכמה, רווחים, חסר) לא מוצג ולא משנה הודעות (נכשל סגור)", () => {
+  for (const bad of ["", "x", "a b@c.d", 'a@b.c"><img src=x onerror=alert(1)>', "javascript:alert(1)", "<x@y.z>", "a@b", "mailto:a@b.co", "a@b.co?subject=x", null, 42, undefined]) {
+    const A = loadAuth({ support_email: bad });
+    assert.equal(A.supportEmail(), "", JSON.stringify(bad));
+    assert.equal(A.withSupport("פנו לתמיכה."), "פנו לתמיכה.", JSON.stringify(bad));
+    assert.equal(A.msg({ error: "blocked" }), "המשתמש חסום מבקשות טיסה. יש לפנות למנהל המערכת.", JSON.stringify(bad));
+  }
+  assert.equal(loadAuth(null).supportEmail(), "", "בלי הגדרות");
+});
+
+test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
+  const SY = require(path.join(ROOT, REQ_DIR, "js/sync.js")), html = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8"), meta = J("members-k38p/pamat-meta.json");
+  const T = "2026-10-17T06:00:00Z", base = () => ({ html, meta: { ...meta }, zones, cfg, mapNotam: { fetched_iso: T }, notamAll: { fetched_iso: T } });
+  const ok = await SY.check(base());
+  assert.deepEqual(ok.items, []); assert.deepEqual(ok.problems, []);
+  const cases = [
+    ["אזורי המפה עודכנו", { ...base(), html: html.replace("const NM=1852;", "const NM=1853;") }, "maint"],
+    ["מהדורת פמ״ת חדשה", { ...base(), meta: { ...meta, pamat_update: "9/99", pamat_date: "01 JAN 2099" } }, "maint"],
+    ["חסרה מהדורה בהגדרות", { ...base(), cfg: { ...cfg, pmt_editions: {} } }, "maint"],
+    ["נוטמים מפגרים", { ...base(), mapNotam: { fetched_iso: "2026-10-17T07:00:00Z" } }, "maint"],
+    ["לא ניתן להשוות נוטמים", { ...base(), notamAll: {} }, "maint"],
+    ["מבנה המפה השתנה", { ...base(), html: "<html></html>" }, "maint"],
+    ["הדף ישן", { ...base(), loaded: { zonesHash: "x".repeat(64), notamIso: T } }, "user"],
+    ["הניתוח ישן", { ...base(), analysis: { zonesHash: "y".repeat(64), notamIso: T } }, "user"]
+  ];
+  for (const [name, inp, kind] of cases) {
+    const r = await SY.check(inp);
+    assert.ok(!r.ok && r.items.length === r.problems.length && r.items.every((it, i) => it.text === r.problems[i]), name);
+    assert.ok(r.items.some(it => it.kind === kind), name + ": " + JSON.stringify(r.items.map(i => i.kind)));
+  }
+  const mixed = await SY.check({ ...base(), html: html.replace("const NM=1852;", "const NM=1853;"), loaded: { zonesHash: "x".repeat(64), notamIso: T } });
+  assert.ok(mixed.items.some(i => i.kind === "maint") && mixed.items.some(i => i.kind === "user"), "תקלה מעורבת");
+  assert.ok(mixed.items.filter(i => i.kind === "user").every(i => /טוען אותם מחדש|להריץ את הבדיקות מחדש/.test(i.text)), "הודעות user ניתנות לביצוע על ידי מטיס");
+});
+
+test("n=10: כל שדה קלט, טקסט ובחירה ב-main של index.html (וגם השורות והכלים הדינמיים ב-ui.js) עם autocomplete=\"off\"; כפתורי ההפקה מושבתים כברירת מחדל", () => {
+  const html = readReq("index.html"), main = html.slice(html.indexOf("<main"), html.indexOf("</main>")), ui = readReq("js/ui.js");
+  const ctl = main.match(/<(input|textarea|select)\b[^>]*>/g) || [];
+  assert.ok(ctl.length >= 25, "נמצאו " + ctl.length + " שדות");
+  assert.deepEqual(ctl.filter(t => !/\bautocomplete="off"/.test(t)), [], "שדה בלי autocomplete=off");
+  const ra = ui.slice(ui.indexOf("function renderAircraft"), ui.indexOf("function addAircraft"));
+  assert.ok((ra.match(/<input autocomplete="off" type="checkbox"/g) || []).length === 2, "תיבות כלי הטיס הדינמיות");
+  assert.ok(/maxlength="' \+ max \+ '" autocomplete="off"/.test(ui), "שורות אנשי קשר ומשתתפים");
+  for (const id of ["btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"]) assert.match(html, new RegExp('<button[^>]*id="' + id + '"[^>]*disabled'), id + " מושבת בקובץ");
+  assert.match(html, /<a id="btnMail"[^>]*aria-disabled="true"[^>]*tabindex="-1"|<a id="btnMail"[^>]*tabindex="-1"[^>]*aria-disabled="true"/);
+  assert.ok(/id="auUser"[^>]*autocomplete="username"/.test(readReq("js/auth.js")) && /autocomplete="' \+ \(boot \? "new-password" : "current-password"\)/.test(readReq("js/auth.js")), "טופס הכניסה נשאר עם autocomplete של מנהל סיסמאות");
+});
+
+test("n=15: אף כלי טיס אינו מסומן מראש — renderAircraft מסמן רק לפי בחירה קיימת; רשימת config.json נשארת (הצעות, ו-selfTest נשען עליה)", () => {
+  const ui = readReq("js/ui.js"), ra = ui.slice(ui.indexOf("function renderAircraft"), ui.indexOf("function addAircraft"));
+  assert.ok(!/i === 0|dflt/.test(ra), "אין ברירת מחדל לפי אינדקס");
+  assert.ok(/const on = name => !!keep && keep\.has\(acKey\(name\)\)/.test(ra), "סימון רק מתוך keep");
+  assert.ok(Array.isArray(cfg.aircraft) && cfg.aircraft.length >= 2, "הרשימה נשארת כהצעות");
+  assert.ok(/aircraft: \[cfg\.aircraft\[0\]\]/.test(ui), "בדיקה עצמית נשענת על הרשימה");
+  assert.deepEqual(C.validateInput(Object.assign({}, baseInput, { aircraft: [] }), cfg).map(e => e.field), ["aircraft"], "בלי בחירה — שגיאת אימות שחוסמת הרצה");
+  assert.ok(C.validateInput(Object.assign({}, baseInput, { aircraft: [] }), cfg).some(e => e.msg === "יש לבחור כלי טיס"));
+  assert.ok(/אף כלי אינו מסומן מראש/.test(readReq("index.html")), "הסבר בטופס");
+});
+
+test("n=9: מבנה — ההתנתקות מאפסת וטוענת מחדש (req-logout → resetPage → location.reload), הנעילה אמיתית (inert), וכל הפקה בודקת התחברות", () => {
+  const auth = readReq("js/auth.js"), ui = readReq("js/ui.js");
+  const lo = auth.slice(auth.indexOf("function logout("), auth.indexOf("const NOTE_KEY"));
+  assert.ok(/setLocked\(true\)/.test(lo) && /new CustomEvent\("req-logout", \{ cancelable: true/.test(lo) && /showCover\(n\)/.test(lo), "logout נועל, מודיע ל-ui.js ורק אם לא טופל מציג כיסוי");
+  assert.ok(/setAttribute\("inert", ""\)/.test(auth.slice(auth.indexOf("function setLocked"), auth.indexOf("function setLocked") + 500)) && /aria-hidden/.test(auth.slice(auth.indexOf("function setLocked"), auth.indexOf("function setLocked") + 500)), "נעילה = inert + aria-hidden");
+  assert.ok(/if \(!on && document\.body\.classList\.contains\("authLocked"\)\) return;/.test(auth), "סגירת חלון מאוחרת לא משחררת את הנעילה");
+  assert.ok(!/classList\.(add|remove)\("authLocked"\)/.test(auth), "authLocked נקבע רק דרך setLocked");
+  assert.ok(/ubOut"\)\.onclick = \(\) => logout\(\)/.test(auth) && /A\.logout = \(\) => logout\(\)/.test(auth), "אירוע הלחיצה לא נשלח כהודעה");
+  assert.ok(/document\.addEventListener\("req-logout", ev => \{ ev\.preventDefault\(\); resetPage\(\); \}\)/.test(ui), "ui.js מטפל בהתנתקות");
+  const rp = ui.slice(ui.indexOf("function resetPage()"), ui.indexOf("function onPageShow"));
+  for (const frag of ["S.uk = \"\"", "S.res = null", "S.imgs = {}", "S.sent = null", "S.sendFolder = null", "S.rid = \"\"", "S.statuses.review", "S.statuses.input", "\"osm_near\"", "clearPersonFields", "resetFormFields", "closeModal", "S.resetting"]) assert.ok(rp.includes(frag), "resetPage: " + frag);
+  assert.ok(/\} finally \{[\s\S]{0,200}location\.reload\(\);/.test(rp), "הטעינה מחדש תמיד, גם אם שלב נכשל");
+  assert.ok(/window\.addEventListener\("pageshow", onPageShow\)/.test(ui) && /ev\.persisted/.test(ui), "pageshow (persisted)");
+  for (const fn of ["function download(", "async function downloadDocx(", "async function downloadImg(", "async function copyMail(", "function wipePerson("]) { const i = ui.indexOf(fn); assert.ok(i > 0 && /authed\(\)/.test(ui.slice(i, i + 160)), fn + " בודק התחברות"); }
+  assert.ok(/btnPrint"\)\.onclick = \(\) => \{ if \(authed\(\)/.test(ui) && /!S\.ready \|\| !authed\(\)/.test(ui), "הדפסה ו-mailto בודקים התחברות");
+});
+
+test("n=11/12/17/18: מבנה — הודעות הסנכרון לפי תפקיד, תמיכה במסכי הכניסה וההרשמה, Enter בהרשמה ותשובה זהה לכל כתובת", () => {
+  const ui = readReq("js/ui.js"), auth = readReq("js/auth.js");
+  assert.ok(/function pilotProblems\(res\)/.test(ui) && /function renderSyncBanner\(\)/.test(ui) && /const statusMsg = st =>/.test(ui), "ניסוח לפי תפקיד");
+  assert.ok(/renderSyncBanner\(\); refreshGate\(\);/.test(ui), "הבאנר והשער מתעדכנים אחרי ההתחברות (התפקיד ידוע רק אז)");
+  assert.ok(/הנתונים מתעדכנים כעת; נסו שוב בעוד מספר דקות, ואם זה נמשך פנו לתמיכה\./.test(ui), "הניסוח הניטרלי");
+  assert.ok((auth.match(/supportLine\(\)/g) || []).length >= 3, "שורת תמיכה בכניסה, בהרשמה ובמסך השרת");
+  assert.ok(/id="rgMember"[^]*האירוע לחברי האתר בלבד/.test(auth), "הסבר דרישת החברות בהרשמה");
+  assert.ok(/if \(\$\("rgStep2"\)\.style\.display === "none"\) \{ \$\("rgSend"\)\.click\(\); return; \}/.test(auth), "Enter בשדה המייל שולח קוד");
+  const rs = auth.slice(auth.indexOf('$("rgSend").onclick'), auth.indexOf('$("regForm").onsubmit'));
+  assert.ok(/אם נמצא כרטיס ששולם עבור הכתובת הזו/.test(rs) && !/r\.(sent|exists|member|registered|ticket|mode)/.test(rs), "הודעת regStart קבועה ואינה תלויה בתשובת השרת מעבר ל-ok");
+  for (const f of ["js/auth.js", "js/ui.js", "js/sync.js", "index.html", "config.json"]) assert.ok(!new RegExp(String.fromCharCode(92) + "u[0-9a-fA-F]{4}").test(readReq(f)), f + ": בלי רצפי unicode-escape");
+});
