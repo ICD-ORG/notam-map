@@ -554,7 +554,7 @@ test("מקור ישן מהשמור ← stale_notams / stale_osm (לא 'הוסר'
 test("בסיס חסר/פגום/לא נתמך ← no_baseline / bad_baseline / baseline_unsupported; נוכחי פגום ← bad_current", () => {
   const { prev, cur } = scenario(null);
   assert.equal(RC.diffSnapshots(null, cur).reason, "no_baseline"); assert.equal(RC.diffSnapshots(undefined, cur).reason, "no_baseline");
-  assert.equal(RC.diffSnapshots(mutSnap(prev, p => { p.v = 2; }), cur).reason, "baseline_unsupported");
+  assert.equal(RC.diffSnapshots(mutSnap(prev, p => { p.v = 3; }), cur).reason, "baseline_unsupported");   // גרסה 2 = תמונת מצב של נתיב (נתמכת); 3 — עתידית
   assert.equal(RC.diffSnapshots(mutSnap(prev, p => { delete p.v; }), cur).reason, "baseline_unsupported");
   for (const bad of ["x", 5, [], true, {}, { v: 1 }]) assert.equal(RC.diffSnapshots(bad, cur).comparable, false, JSON.stringify(bad));
   assert.equal(RC.diffSnapshots(mutSnap(prev, p => { p.items[0].d = "5"; }), cur).reason, "bad_baseline");
@@ -716,7 +716,7 @@ test("validateRecord: פריטים ידניים — תקינים נשמרים; �
 test("validateRecord: תמונת מצב פגומה/לא נתמכת בתוך רשומה תקינה ← הרשומה נקלטת בלי בסיס השוואה (סטטוס)", () => {
   const r = savedRecord(); r.snapshot.items[0].d = "x";
   const v = RC.validateRecord(r); assert.equal(v.ok, true); assert.equal(v.rec.snapshot, null); assert.equal(v.rec.snapshotStatus, "invalid");
-  const r2 = savedRecord(); r2.snapshot.v = 2;
+  const r2 = savedRecord(); r2.snapshot.v = 3;
   assert.equal(RC.validateRecord(r2).rec.snapshotStatus, "unsupported");
   const r3 = savedRecord(); r3.snapshot = "x";
   assert.equal(RC.validateRecord(r3).rec.snapshotStatus, "invalid");
@@ -988,4 +988,130 @@ test("טקסט המשתמש: תקצר ופשוט — אין פרטי נוהל, '
   assert.ok(!/נוטאם/.test(all.replace(/נוטמים|נוטם/g, ""))); assert.ok(RC.STR.banner.includes("מודיעין טיס"));
   assert.ok(RC.STR.resend.includes("מחליפה את הקודמת"));
   assert.ok(RC.updateBodyLine(now).includes("בקשה זו מחליפה את הבקשה שנשלחה ב-"));
+});
+
+/* ==================== נתיב (קו) כאזור הפעילות: רשומה שמורה, תמונת מצב v:2 והשוואה ==================== */
+// נתיב סביב נקודת הירקון (קו שבור של כ-520 מ׳). inp: area במקום radius, ו-lat/lon = העוגן (core.routeInfo). הרשומה השמורה (ui.js inputsForRecord): inputs.area בלבד — בלי lat/lon/radius
+const ROUTE_PTS = C.roundPts([[0, 0], [250, 80], [520, 60]].map(([x, y]) => proj.ll(x, y)));
+const routeInput = (W = 60, pts = ROUTE_PTS) => { const i = Object.assign({}, baseInput(200), { area: { kind: "route", pts, halfWidth: W } }); delete i.radius; const a = C.routeInfo(pts).anchor; i.lat = a[0]; i.lon = a[1]; return i; };
+const routeRes = (W = 60, d = baseData(), at = now, pts = ROUTE_PTS) => C.analyze(routeInput(W, pts), d, cfg, at);
+const savedRouteRecord = (W = 60) => {
+  const d = baseData(), res = routeRes(W, d), inp = {};
+  Object.keys(res.inp).forEach(k => { if (!/^(req|contact|requester|participant|callsign|registration)/i.test(k)) inp[k] = res.inp[k]; });
+  delete inp.lat; delete inp.lon; delete inp.radius;
+  return JSON.parse(JSON.stringify({ savedAt: now.toISOString(), site: "אתר", version: zones.mapVersion, edition: zones.edition, declaration: { version: "1", confirmedAt: now.toISOString() }, inputs: Object.assign(inp, { visitDate: "2026-10-10", visitNotes: "הערות", knownObstacles: "עגורן" }), zones: res.zones.near.concat(res.zones.inside).map(z => ({ id: z.id, d: Math.round(z.d) })), items: res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })), snapshot: RC.snapshotOf(res, d, cfg, now) }));
+};
+
+test("נתיב: תמונת מצב v:2 עם scan {k, pts, hw, ft, wf, wt} (בלי lat/lon/R); מעגל נשאר v:1 עם scan {lat, lon, R, ft, wf, wt} בדיוק כמו תמיד", () => {
+  const d = baseData(), res = routeRes(60, d), s = RC.snapshotOf(res, d, cfg, now);
+  assert.equal(RC.VERSION, 1); assert.equal(RC.VERSION_ROUTE, 2); assert.equal(s.v, 2);
+  assert.deepEqual(Object.keys(s.scan), ["k", "pts", "hw", "ft", "wf", "wt"]); assert.equal(s.scan.k, "route"); assert.equal(s.scan.hw, 60); assert.deepEqual(s.scan.pts, ROUTE_PTS);
+  assert.deepEqual(Object.keys(s).slice(0, 2), ["v", "scan"], "אותו סדר מפתחות בראש התמונה");
+  assert.ok(!("lat" in s.scan) && !("R" in s.scan));
+  const circle = RC.snapshotOf(analyze(d), d, cfg, now);
+  assert.equal(circle.v, 1); assert.deepEqual(Object.keys(circle.scan), ["lat", "lon", "R", "ft", "wf", "wt"]);
+  assert.equal(JSON.stringify(RC.snapshotOf(routeRes(60, d), d, cfg, now)), JSON.stringify(s), "דטרמיניסטי");
+  assert.ok(s.items.length > 0 && s.items.every(i => i.d >= 0), "המרחקים מציר הנתיב");
+  assert.ok(Buffer.byteLength(JSON.stringify(s)) <= RC.LIMITS.bytes);
+});
+
+test("נתיב: cleanSnapshot — v:2 תקין נקי ויציב; שילוב שגוי (v:2 עם scan של מעגל / v:1 עם scan של נתיב), נקודה מחוץ לתחום, פחות משתי נקודות, יותר מדי, רוחב שלילי ← malformed; v:3 ← version", () => {
+  const d = baseData(), s = RC.snapshotOf(routeRes(60, d), d, cfg, now), v = RC.cleanSnapshot(s);
+  assert.equal(v.ok, true); assert.equal(v.snapshot.v, 2); assert.deepEqual(v.snapshot.scan, s.scan); assert.deepEqual(RC.cleanSnapshot(v.snapshot).snapshot, v.snapshot, "אידמפוטנטי");
+  const bad = fn => { const c = mutSnap(s, fn), r = RC.cleanSnapshot(c); assert.equal(r.ok, false, JSON.stringify(c.scan)); assert.equal(r.reason, "malformed"); return r; };
+  bad(c => { c.scan = { lat: 32.1, lon: 34.8, R: 60, ft: 1, wf: 1, wt: 2 }; });   // v:2 עם scan של מעגל
+  bad(c => { c.scan.k = "circle"; }); bad(c => { delete c.scan.k; });
+  bad(c => { c.scan.pts = [c.scan.pts[0]]; }); bad(c => { c.scan.pts = []; }); bad(c => { c.scan.pts = "x"; });
+  bad(c => { c.scan.pts[1] = [50, 34.8]; }); bad(c => { c.scan.pts[1] = [32.1]; }); bad(c => { c.scan.pts[1] = [32.1, "34.8"]; }); bad(c => { c.scan.pts[1] = [32.1, NaN]; });
+  bad(c => { c.scan.pts = Array.from({ length: RC.LIMITS.routePts + 1 }, () => [32.1, 34.8]); });
+  bad(c => { c.scan.hw = -1; }); bad(c => { c.scan.hw = "60"; }); bad(c => { delete c.scan.hw; });
+  const asV1 = mutSnap(s, c => { c.v = 1; }); assert.equal(RC.cleanSnapshot(asV1).ok, false, "v:1 עם scan של נתיב"); assert.equal(RC.cleanSnapshot(asV1).reason, "malformed");
+  assert.equal(RC.cleanSnapshot(mutSnap(s, c => { c.v = 3; })).reason, "version");
+  assert.equal(RC.cleanSnapshot(mutSnap(snapOf(baseData()), c => { c.v = 2; })).reason, "malformed", "תמונת מעגל שסומנה v:2 — פגומה, לא נתמכת");
+});
+
+test("נתיב: diffSnapshots — אותה סריקה ניתנת להשוואה (diff.route); נקודה שזזה מעל מיקרון-מעלה / רוחב / מספר נקודות ← scan_mismatch עם השדה; מעגל מול נתיב ← area; עד מיקרון — עדיין זהה", () => {
+  const d1 = baseData(), d2 = fresher(baseData()), prev = RC.snapshotOf(routeRes(60, d1), d1, cfg, now), cur = RC.snapshotOf(routeRes(60, d2, t2), d2, cfg, t2);
+  const same = RC.diffSnapshots(prev, cur); assert.equal(same.comparable, true); assert.equal(same.route, true); assert.equal(same.anyChange, false, JSON.stringify(rowsOf(same).map(r => r.id)));
+  assert.ok(!("route" in RC.diffSnapshots(snapOf(d1), RC.snapshotOf(analyze(d2, 200, t2), d2, cfg, t2))), "מעגל: אין מפתח route באובייקט");
+  const mm = (fn, field) => { const r = RC.diffSnapshots(prev, mutSnap(cur, fn)); assert.equal(r.comparable, false, field); assert.equal(r.reason, "scan_mismatch"); assert.deepEqual(r.scanChanged, [field]); };
+  mm(c => { c.scan.pts[1][0] += 1e-5; }, "route"); mm(c => { c.scan.pts[2][1] -= 1e-5; }, "route"); mm(c => { c.scan.pts.pop(); }, "route"); mm(c => { c.scan.hw = 61; }, "width"); mm(c => { c.scan.ft += 1; }, "height"); mm(c => { c.scan.wf += 1; }, "window");
+  const near = RC.diffSnapshots(prev, mutSnap(cur, c => { c.scan.pts[1][0] += 5e-7; })); assert.equal(near.comparable, true, "עד מיקרון-מעלה — אותה נקודה");
+  const circ = RC.snapshotOf(analyze(d2, 200, t2), d2, cfg, t2);
+  assert.deepEqual(RC.diffSnapshots(prev, circ).scanChanged, ["area"]); assert.deepEqual(RC.diffSnapshots(snapOf(d1), cur).scanChanged, ["area"]);
+  assert.equal(RC.diffSnapshots(prev, circ).reason, "scan_mismatch");
+  // שינוי תוכן (מכשול חדש בתוך הרוחב) מתגלה כמו במעגל, והשורה והכותרת מנוסחות לנתיב
+  const d3 = withElements([tower(9500009, 100, 55), tower(9500010, 100, 120)])(fresher(baseData())), after = RC.snapshotOf(routeRes(60, d3, t2), d3, cfg, t2), df = RC.diffSnapshots(prev, after);
+  assert.equal(df.comparable, true); assert.ok(df.items.rows.some(r => r.status === "added"), JSON.stringify(df.counts));
+  const m = RC.sinceModel(df, { sentAt: "2026-10-18T11:05:00Z" }), html = RC.sinceHtml(m);
+  assert.equal(m.route, true); assert.ok(html.includes(">מרחק מהציר<") && !html.includes(">מרחק מהנקודה<"), "כותרת העמודה לנתיב");
+  const lines = m.sections.flatMap(sc => sc.rows.flatMap(r => r.lines));
+  assert.ok(lines.includes("בפס הכתום (עד פי 2 מהרוחב)") && lines.includes("בתוך הסגירה") && !lines.some(l => /טבעת/.test(l)), "ניסוח הפס הכתום לנתיב: " + lines.join(" | "));
+  const c = RC.sinceHtml(RC.sinceModel(RC.diffSnapshots(snapOf(d1), RC.snapshotOf(analyze(d3, 200, t2), d3, cfg, t2)), {}));
+  assert.ok(c.includes(">מרחק מהנקודה<") && !c.includes("מהציר"), "מעגל: הכותרת כמו תמיד");
+});
+
+test("נתיב: validateRecord / restoreInputs — הרשומה נושאת inputs.area בלבד; השחזור מחזיר area (בלי lat/lon/radius) ותאריכים רק עם keepDates; מפתחות קבועים", () => {
+  const rec = savedRouteRecord(), v = RC.validateRecord(rec, cfg);
+  assert.equal(v.ok, true, JSON.stringify(v)); assert.ok(!("lat" in rec.inputs) && !("lon" in rec.inputs) && !("radius" in rec.inputs) && rec.inputs.area.kind === "route");
+  assert.deepEqual(Object.keys(v.rec.inputs).sort(), ["aircraft", "area", "dateFrom", "dateTo", "heightM", "knownObstacles", "manualItems", "purpose", "siteName", "timeFrom", "timeTo", "visitDate", "visitNotes", "vlos"]);
+  assert.deepEqual(v.rec.inputs.area, { kind: "route", pts: ROUTE_PTS, halfWidth: 60 }); assert.equal(v.rec.snapshotStatus, "ok"); assert.equal(v.rec.snapshot.v, 2);
+  const a = RC.restoreInputs(rec, { cfg }), b = RC.restoreInputs(rec, { keepDates: true, cfg });
+  assert.deepEqual(Object.keys(a).sort(), ["aircraft", "area", "dateFrom", "dateTo", "heightM", "knownObstacles", "manualItems", "purpose", "siteName", "timeFrom", "timeTo", "visitDate", "visitNotes", "vlos"], "area במקום lat/lon/radius");
+  assert.deepEqual(a.area, { kind: "route", pts: ROUTE_PTS, halfWidth: 60 }); assert.deepEqual([a.dateFrom, a.timeFrom, a.visitDate], ["", "", ""]); assert.deepEqual([b.dateFrom, b.dateTo, b.timeFrom, b.timeTo], ["2026-10-20", "2026-10-23", "17:00", "20:00"]);
+  assert.notEqual(a.area, rec.inputs.area, "עותק נקי, לא הפניה לרשומה"); a.area.pts[0][0] = 0; assert.notEqual(rec.inputs.area.pts[0][0], 0);
+  // מעגל: אותו מבנה ואותם מפתחות כמו תמיד (אין area)
+  assert.ok(!("area" in RC.restoreInputs(savedRecord(), { cfg })) && "radius" in RC.restoreInputs(savedRecord(), { cfg }));
+});
+
+test("נתיב: נכשל סגור — area פגום (סוג, נקודות, תחום, מספר, רוחב) ← bad_record עם ״area״ ו-restoreInputs null; area סמכותי ואינו נופל למעגל גם כשיש lat/lon/radius; ובנוסף: רוחב נחתך בשחזור לטופס בלבד", () => {
+  const mod = fn => { const r = savedRouteRecord(); fn(r.inputs); return r; };
+  const cases = { "סוג": i => { i.area.kind = "circle"; }, "בלי סוג": i => { delete i.area.kind; }, "pts לא מערך": i => { i.area.pts = "x"; }, "נקודה אחת": i => { i.area.pts = [i.area.pts[0]]; }, "בלי נקודות": i => { i.area.pts = []; },
+    "21 נקודות": i => { i.area.pts = Array.from({ length: 21 }, (_, k) => [32.1 + k * 0.001, 34.8]); }, "נקודה מחוץ לתחום": i => { i.area.pts[1] = [50, 34.8]; }, "נקודה לא מספרית": i => { i.area.pts[1] = [32.1, "34.8"]; }, "NaN": i => { i.area.pts[1] = [32.1, null]; },
+    "נקודה בת 3 ערכים": i => { i.area.pts[1] = [32.1, 34.8, 5]; }, "נקודה לא מערך": i => { i.area.pts[1] = { lat: 32.1, lon: 34.8 }; }, "רוחב חסר": i => { delete i.area.halfWidth; }, "רוחב מחרוזת": i => { i.area.halfWidth = "60"; }, "רוחב קטן": i => { i.area.halfWidth = 5; }, "רוחב גדול": i => { i.area.halfWidth = 5000; },
+    "area null": i => { i.area = null; }, "area מחרוזת": i => { i.area = "route"; }, "area מערך": i => { i.area = []; }, "נקודות כפולות": i => { i.area.pts[1] = i.area.pts[0].slice(); }, "ארוך מדי": i => { i.area.pts = [[32.1, 34.8], [32.35, 34.8]]; }, "היפוך חד": i => { i.area.pts = C.roundPts([[0, 0], [500, 0], [20, 10]].map(([x, y]) => proj.ll(x, y))); } };
+  for (const [name, fn] of Object.entries(cases)) {
+    const r = mod(fn), v = RC.validateRecord(r, cfg); assert.equal(v.ok, false, name); assert.equal(v.reason, "bad_record", name); assert.ok(v.errors.includes("area"), name + ": " + v.errors);
+    const lenient = RC.restoreInputs(r, { cfg });
+    if (name === "רוחב קטן" || name === "רוחב גדול") assert.ok(lenient && lenient.area.halfWidth === (name === "רוחב קטן" ? 10 : 1000), name + ": נחתך כמו רדיוס");
+    else if (name === "נקודות כפולות" || name === "ארוך מדי" || name === "היפוך חד") assert.ok(lenient && lenient.area, name + ": שחזור לטופס מקבל (האימות המלא בהרצה)");
+    else assert.equal(lenient, null, name);
+  }
+  // area סמכותי: lat/lon/radius שבצדו נזרקים; area פגום עם lat/lon/radius תקינים ← שגיאה, לא מעגל
+  const both = savedRouteRecord(); Object.assign(both.inputs, { lat: 32.1, lon: 34.8, radius: 150 });
+  const vb = RC.validateRecord(both, cfg); assert.equal(vb.ok, true); assert.ok(!("lat" in vb.rec.inputs) && !("radius" in vb.rec.inputs) && vb.rec.inputs.area);
+  assert.ok(!("lat" in RC.restoreInputs(both, { cfg })) && RC.restoreInputs(both, { cfg }).area);
+  both.inputs.area.kind = "x"; assert.equal(RC.validateRecord(both, cfg).ok, false); assert.equal(RC.restoreInputs(both, { cfg }), null);
+  // מגבלות מההגדרות (route_max_points / טווח הרוחב) נאכפות; מפתח חסר — ברירות המחדל בקוד
+  const lim = { defaults: Object.assign({}, cfg.defaults, { route_max_points: 3, route_min_half_width_m: 20, route_max_half_width_m: 100 }) };
+  const four = savedRouteRecord(); four.inputs.area.pts.push(C.roundPts([proj.ll(780, 70)])[0]); assert.equal(RC.validateRecord(four, lim).ok, false); assert.equal(RC.validateRecord(four, cfg).ok, true);
+  assert.equal(RC.validateRecord(savedRouteRecord(), lim).ok, true); assert.equal(RC.validateRecord(savedRouteRecord(150), lim).ok, false); assert.equal(RC.restoreInputs(savedRouteRecord(150), { cfg: lim }).area.halfWidth, 100);
+  assert.equal(RC.validateRecord(savedRouteRecord(), { defaults: {} }).ok, true, "בלי מפתחות route_* בהגדרות");
+});
+
+test("נתיב: קלט עוין — area מורש מ-Object.prototype אינו נקרא ברשומת מעגל; area עם מפתחות מזוהמים נקי; גודל הרשומה נבדק כרגיל", () => {
+  const def = (k, v) => Object.defineProperty(Object.prototype, k, { value: v, configurable: true, writable: true, enumerable: false });
+  try {
+    def("area", { kind: "route", pts: ROUTE_PTS, halfWidth: 60 });
+    const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k), v = RC.validateRecord(savedRecord(), cfg); assert.equal(v.ok, true); assert.ok(!own(v.rec.inputs, "area") && own(v.rec.inputs, "radius"), "מורש לא הופך מעגל לנתיב");
+    assert.ok(!own(RC.restoreInputs(savedRecord(), { cfg }), "area"));
+    const rec = savedRouteRecord(); delete rec.inputs.area; assert.equal(RC.validateRecord(rec, cfg).ok, false, "בלי area ובלי lat/lon — לא משלימים מהאב-טיפוס");
+  } finally { delete Object.prototype.area; }
+  const r = savedRouteRecord(); r.inputs.area.__proto__ = { polluted: 1 }; r.inputs.area.extra = "x"; r.inputs.area.pts[0].extra = 1;
+  const v2 = RC.validateRecord(JSON.parse(JSON.stringify(r)), cfg); assert.equal(v2.ok, true); assert.deepEqual(Object.keys(v2.rec.inputs.area), ["kind", "pts", "halfWidth"]); assert.equal(({}).polluted, undefined);
+});
+
+test("נתיב: ״הצג בקשה״ — שורות נתיב (P1..PN), אורך ורוחב מכל צד של הציר; בלי נקודת מרכז ורדיוס; הטקסט מוגן", () => {
+  const m = RC.requestModel(savedRouteRecord(), { name: '<img src=x onerror=alert(1)>' }), get = l => (m.rows.find(r => r.label === l) || {}).value;
+  assert.equal(m.ok, true); assert.ok(!get("נקודת מרכז") && !get("רדיוס"));
+  assert.equal(get("נתיב"), ROUTE_PTS.map((q, k) => "P" + (k + 1) + ": " + q[0].toFixed(6) + ", " + q[1].toFixed(6)).join("\n"));
+  assert.ok(/^0\.\d\d ק״מ$/.test(get("אורך הנתיב")), get("אורך הנתיב")); assert.equal(get("רוחב מכל צד של הציר"), "60 מ׳");
+  const html = RC.requestHtml(m); assert.ok(html.includes("P1: ") && html.includes("white-space:pre-line") && !/<img/i.test(html));
+  assert.equal(RC.requestModel(savedRecord()).rows.find(r => r.label === "רדיוס").value, "200 מ׳", "מעגל כמו תמיד");
+});
+
+test("נתיב: withSnapshot (ReqMyReq) — רשומת נתיב נושאת תמונת מצב v:2, ומעגל v:1; הגודל נבדק כפי שנכתב", () => {
+  const MR = require(path.join(ROOT, "members-k38p/requests/js/myreq.js")), d = baseData(), rec = { savedAt: now.toISOString(), inputs: { area: { kind: "route", pts: ROUTE_PTS, halfWidth: 60 } } };
+  const out = MR.withSnapshot(rec, routeRes(60, d), d, cfg, now); assert.equal(out.snapshot.v, 2); assert.equal(out.snapshot.scan.k, "route"); assert.ok(!out.snapshotError);
+  assert.equal(MR.withSnapshot({ savedAt: "x", inputs: {} }, analyze(d), d, cfg, now).snapshot.v, 1);
 });

@@ -29,7 +29,12 @@
  "defaults": {
   "radius_m": 100,
   "min_radius_m": 10,
-  "max_radius_m": 5000
+  "max_radius_m": 5000,
+  "route_half_width_m": 50,
+  "route_min_half_width_m": 10,
+  "route_max_half_width_m": 1000,
+  "route_max_points": 20,
+  "route_max_length_m": 25000
  },
  "thresholds": {
   "near_zone_m": 1000,

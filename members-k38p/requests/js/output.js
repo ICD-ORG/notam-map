@@ -12,6 +12,39 @@
   const E = C.esc;
   const dLabel = d => (d < 1 ? "בתוך השטח" : C.fmtDist(d));
 
+  /* ---------- נתיב (res.area.kind === "route") במקום מעגל ---------- */
+  // נתיב: res.R = הרוחב מכל צד (W), המרחק d של כל פריט הוא מציר הנתיב, ו-res.inp.lat/lon הם רק נקודת עוגן לחישוב (לא "הנקודה"). מעגל: res.area חסר — כל הנוסחים כמו תמיד, בייט-בבייט (golden.test.mjs).
+  const isRoute = res => !!(res && res.area && res.area.kind === "route");
+  const FROM = res => (isRoute(res) ? "מהציר" : "מהנקודה");        // "במרחק D מהנקודה" -> "במרחק D מהציר"
+  const FROMTO = res => (isRoute(res) ? "מציר הנתיב" : "מהנקודה");  // "עד X מהנקודה" -> "עד X מציר הנתיב"
+  const RW = res => res.R + (isRoute(res) ? " מ׳ מכל צד של הציר" : " מ׳");        // "(R מ׳)" -> "(W מ׳ מכל צד של הציר)"
+  const RW2 = res => 2 * res.R + (isRoute(res) ? " מ׳ מציר הנתיב" : " מ׳");        // "עד 2R מ׳" -> "עד 2W מ׳ מציר הנתיב"
+  const dmsPair = q => "<span dir='ltr'>" + E(C.dmsLat(q[0])) + " &nbsp; " + E(C.dmsLon(q[1])) + "</span>";
+  const lbl = t => "<bdi dir='ltr'>" + t + ".</bdi>";   // "P1." / "V1." כיחידה שמאל-לימין (במסך): הנקודה נשארת אחרי המספר ולא מתהפכת בפסקה מימין לשמאל; ב-Word התגית מדולגת (docx.js htmlRuns)
+  const dmsText = q => C.dmsLat(q[0]) + " " + C.dmsLon(q[1]);
+  // פינות פוליגון הסגירה של נתיב (C.corridorRing(area, 1) בלי הנקודה החוזרת בסגירה): [[lat,lon],...] לפי סדר ההקפה; נתיב מנוון (פחות משתי נקודות שונות) — []
+  const routeCorners = res => { const r = C.corridorRing(res.area, 1).ring; return r.length > 1 ? r.slice(0, -1) : []; };
+  const CORNER_CAP = 60;   // תקרת שורות הפינות בשדה 8 (נתיב עד 20 נקודות נותן עד 58 פינות, ולכן התקרה אינה נחתכת בפועל); מעבר לה — הפניה ל-KML
+  const routeKm = res => (res.area.lengthM / 1000).toFixed(2);
+  // הערה ב-KML כשאי אפשר לצייר את טבעת ה-2W (הכתומה) כפוליגון תקין לצורת הנתיב הזו
+  const NOTE_NO_2W = "טבעת ה-2W (הכתומה) אינה מצוירת בקובץ זה: בצורת הנתיב הזו (פניות חדות או קטעים קצרים ביחס לרוחב) אי אפשר לבנות לה פוליגון תקין. הפריטים שברשימות נמדדים מהציר ולכן אינם מושפעים; הפוליגון הירוק (אזור הסגירה) מצויר במלואו.";
+  // שדה 8 בנתיב: הנקודות לפי הסדר (P1..PN), האורך והרוחב, פינות הפוליגון המודפס (V1..VM; DMS בלבד) והסבר קצר איך הוא נבנה. הפוליגון מכיל את כל אזור הסגירה (כל נקודה במרחק עד W מהציר)
+  function routeF8Head(res) {
+    const a = res.area, W = res.R, cs = routeCorners(res);
+    let h = "<b>נתיב</b> — " + a.pts.length + " נקודות, לפי סדר הטיסה:";
+    a.pts.forEach((q, i) => { h += "<br>" + lbl("P" + (i + 1)) + " " + dmsPair(q) + " <span class='muted'>(עשרוני: " + C.trimNum(q[0], 6) + ", " + C.trimNum(q[1], 6) + ")</span>"; });
+    h += "<br>אורך הנתיב: " + routeKm(res) + " ק״מ (" + C.fmtInt(Math.round(a.lengthM)) + " מ׳) · רוחב הסגירה מכל צד של הציר: " + W + " מ׳ (רוחב כולל " + 2 * W + " מ׳)";
+    if (cs.length) {
+      h += "<br><b>פינות פוליגון הסגירה (" + cs.length + " פינות, לפי סדר ההקפה):</b>";
+      cs.slice(0, CORNER_CAP).forEach((q, i) => { h += "<br>" + lbl("V" + (i + 1)) + " " + dmsPair(q); });
+      if (cs.length > CORNER_CAP) h += "<br>ועוד " + (cs.length - CORNER_CAP) + " פינות (הרשימה המלאה בקובץ ה-KML המצורף)";
+      // המשפט ״הפוליגון מכיל את כל אזור הסגירה״ נכון רק כשהטבעת תקינה (simple: פשוטה ומכילה את הקפסולה). validateRoute דוחה כל נתיב אחר כבר בקלט (ולכן ב-UI הוא לא מגיע לכאן); הגנה לעומק לנתיב שמגיע בלי אימות (בקשה שנשמרה בכללים ישנים, בדיקה חוזרת) — במקום הטענה, אזהרה
+      h += "<br><span class='muted'>הפוליגון נבנה במקביל לציר הנתיב במרחק " + W + " מ׳ מכל צד; בפנייה חדה הפינה החיצונית נחתכת במרחק " + 2 * W + " מ׳ מהקודקוד, וקצות הנתיב מורחבים ב-" + W + " מ׳. " +
+        (C.corridorRing(a, 1).simple ? "הפוליגון מכיל את כל אזור הסגירה (כל נקודה במרחק עד " + W + " מ׳ מהציר)." : "לצורת נתיב זו (חדה או צפופה ביחס לרוחב) הפוליגון אינו מכיל בהכרח את כל אזור הסגירה — יש להשתמש בציר הנתיב וברוחב שצוינו.") + "</span>";
+    }
+    return h;
+  }
+
   /* ---------- התאמת אתרי רט״ג ללא גבולות מול שמות מ-OSM ---------- */
   const norm = s => String(s || "").replace(/["'׳״`]/g, "").replace(/(שמורת טבע|שמורת|גן לאומי|פארק|אתר|רזרבת)/g, " ").replace(/[-–—_.,()]/g, " ").replace(/\s+/g, " ").trim();
   function matchUnmapped(unmapped, prot) {
@@ -41,12 +74,12 @@
   function airInfraLines(res, data, cfg) {
     const th = cfg.thresholds, lines = [], R = res.R;
     res.zones.inside.forEach(z => lines.push("חופף לאזור " + z.label + " — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
-    res.zones.near.forEach(z => lines.push("בקרבת האזור: " + z.label + " — במרחק " + C.fmtDist(z.d) + " מהנקודה (" + C.fmtDist(z.edge) + " מקצה הסגירה המבוקשת) — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
+    res.zones.near.forEach(z => lines.push("בקרבת האזור: " + z.label + " — במרחק " + C.fmtDist(z.d) + " " + FROM(res) + " (" + C.fmtDist(z.edge) + " מקצה הסגירה המבוקשת) — " + z.kind + ", " + zoneAlt(z) + approxMark(z) + "."));
     const have = new Set(); res.nearScan.items.forEach(i => i.ids.forEach(x => have.add(x)));
     res.airfields.filter(a => a.d - R <= th.airfield_near_m && !have.has(a.id)).forEach(a =>
-      lines.push("בקרבת האזור: " + (a.type === "aerodrome" ? "שדה תעופה" : "מנחת מסוקים") + (a.name ? " ״" + a.name + "״" : "") + (a.icao ? " (" + a.icao + ")" : "") + " — במרחק " + C.fmtDist(a.d) + " מהנקודה" + (a.inactive ? " (לא פעיל לפי OSM)" : "") + "."));
+      lines.push("בקרבת האזור: " + (a.type === "aerodrome" ? "שדה תעופה" : "מנחת מסוקים") + (a.name ? " ״" + a.name + "״" : "") + (a.icao ? " (" + a.icao + ")" : "") + " — במרחק " + C.fmtDist(a.d) + " " + FROM(res) + (a.inactive ? " (לא פעיל לפי OSM)" : "") + "."));
     res.agri.filter(a => a.d - R <= (th.agri_near_m || 3000)).forEach(a =>
-      lines.push("בקרבת האזור: מנחת חקלאי ״" + a.name + "״ (" + a.ops.join(" / ") + ") — במרחק " + C.fmtDist(a.d) + " מהנקודה."));
+      lines.push("בקרבת האזור: מנחת חקלאי ״" + a.name + "״ (" + a.ops.join(" / ") + ") — במרחק " + C.fmtDist(a.d) + " " + FROM(res) + "."));
     res.borders.filter(b => b.violates).forEach(b =>
       lines.push("קרבה לגבול " + b.name + ": הסגירה המבוקשת נמצאת " + C.fmtDist(Math.max(0, b.d - R)) + " מהגבול (פמ״ת א-17 סעיף 4: אין לטוס במרחק של פחות מ-" + b.km + " ק״מ מגבול " + b.name + ")."));
     return lines;
@@ -98,14 +131,16 @@
     const inp = res.inp, R = res.R;
     const air = airInfraLines(res, null, cfg);
     const ins = res.nearScan.inside, ring = res.nearScan.ring;
-    let f8 = "<b>מעגל</b> — נ.צ. מרכזי:<br><span dir='ltr'>" + E(C.dmsLat(inp.lat)) + " &nbsp; " + E(C.dmsLon(inp.lon)) + "</span> <span class='muted'>(עשרוני: " + inp.lat + ", " + inp.lon + ")</span>";
+    let f8;
+    if (isRoute(res)) f8 = routeF8Head(res);   // נתיב: הנקודות, האורך והרוחב ופינות הפוליגון (במקום מעגל ונ.צ. מרכזי)
+    else f8 = "<b>מעגל</b> — נ.צ. מרכזי:<br><span dir='ltr'>" + E(C.dmsLat(inp.lat)) + " &nbsp; " + E(C.dmsLon(inp.lon)) + "</span> <span class='muted'>(עשרוני: " + inp.lat + ", " + inp.lon + ")</span>";
     if (air.length) f8 += "<br>תשתית אווירית מושפעת: " + air.map(E).join(" ");
     if (res.b09Footnote) f8 += "<br><span class='muted'>" + E(footnoteText(res)) + "</span>";
     // מכשולים ותשתיות: כותרת מודגשת לכל קבוצה ואחריה פריט בשורה (מספר, שם, ומרחק בקצה השורה) — לא פסקה אחת רצופה
-    if (ins.length) f8 += "<br><b>מכשולים ותשתיות בתוך האזור (עד " + R + " מ׳):</b>" + listLines(ins, 25);
-    if (ring.length) f8 += "<br><b>בקרבת האזור (עד " + 2 * R + " מ׳):</b>" + listLines(ring, 25);
+    if (ins.length) f8 += "<br><b>מכשולים ותשתיות בתוך האזור (עד " + RW(res) + "):</b>" + listLines(ins, 25);
+    if (ring.length) f8 += "<br><b>בקרבת האזור (עד " + RW2(res) + "):</b>" + listLines(ring, 25);
     const sites = res.nearScan.near;
-    if (sites.length) f8 += "<br><b>אתרים ותשתיות נוספים בקרבת האזור (עד " + C.fmtDist(R + cfg.thresholds.site_near_m) + " מהנקודה):</b>" + listLines(sites, 25);
+    if (sites.length) f8 += "<br><b>אתרים ותשתיות נוספים בקרבת האזור (עד " + C.fmtDist(R + cfg.thresholds.site_near_m) + " " + FROMTO(res) + "):</b>" + listLines(sites, 25);
     const ko = knownObstaclesLines(inp);   // מכשולים שהמבקש מכיר — הטקסט כלשונו, שורה לכל פריט, בלי תוצאות הצלבה (ההצלבה בדף הבדיקות)
     if (ko.length) f8 += "<br><b>מכשולים שידועים למבקש:</b>" + ko.map(x => "<br>• " + E(x)).join("");
     const vl = inp.vlos ? "קיים קשר עין" : "ללא קשר עין";
@@ -114,6 +149,7 @@
     const parts = fullParticipants(inp);
     const participantsHtml = parts.length ? "<br><b>משתתפים נוספים בטיסה:</b>" + parts.map((p, i) => "<br>" + (i + 1) + ". " + E(p.name) + ", <span dir='ltr' class='ph'>" + E(p.phone) + "</span>").join("") : "";
     const contactsHtml = namedContacts(inp).map((c, i) => (i + 1) + ". " + E(c.name) + " — " + (c.phone ? "<span dir='ltr' class='ph'>" + E(c.phone) + "</span>" : "ללא טלפון")).join("<br>");
+    const radHtml = R + " מטר &nbsp;<span class='muted'>(= " + C.trimNum(R / 1000, 3) + " ק״מ = " + (R / C.NM).toFixed(3) + " מייל ימי)</span>";   // מטר / ק״מ / מייל ימי (שדה 9; בנתיב — הרוחב מכל צד)
     const rows = [
       ["מס׳ נוטאם", "(ימולא ע״י משרד נוטאם)", "<i class='muted'>(ריק – " + E(cfg.fixed.notam_notam_field) + ")</i>"],
       ["שם/גורם המבקש", "", E(orgName(inp))],
@@ -123,7 +159,7 @@
       ["מיקום קרקעי", "(שם ישוב או תשתית אווירית קרובה)", E(inp.siteName)],
       ["מועדי הפעילות", "(יום, תאריך, שעות בזמן מקומי)", datesText(res)],
       ["סגירה/הגבלה", "במקרה של פוליגון או מיקום נקודתי יש לציין תשתיות אוויריות מושפעות · נ״צ גאוגרפי דאטום WGS84 – מעלות/דקות/שניות (DMS)", f8],
-      ["רדיוס הסגירה (אם רלוונטי)", "רדיוס ביחידות מטר או ק״מ או מייל ימי (רדיוס בק״מ / 1.852 = רדיוס במייל)", R + " מטר &nbsp;<span class='muted'>(= " + C.trimNum(R / 1000, 3) + " ק״מ = " + (R / C.NM).toFixed(3) + " מייל ימי)</span>"],
+      ["רדיוס הסגירה (אם רלוונטי)", "רדיוס ביחידות מטר או ק״מ או מייל ימי (רדיוס בק״מ / 1.852 = רדיוס במייל)", isRoute(res) ? "לא רלוונטי — הסגירה היא פוליגון לאורך נתיב (פינותיו בשדה 8)<br>רוחב מכל צד של הציר: " + radHtml : radHtml],
       ["גבהי הטיסה או גובה המכשול", "מטרים או רגל (m/feet) · מעפ״ש או מעפ״י (AGL/AMSL) · (גובה במטר × 3.28084 = גובה ברגל)", "מגובה: קרקע (0) &nbsp; עד גובה: <b>" + res.ft.toFixed(1) + " רגל</b> (" + C.trimNum(inp.heightM, 2) + " מ׳ × 3.28084)<br>בסיס: מעפ״ש (AGL)"],
       ["מבקש הבקשה + מס׳ טלפון", "", E(inp.requesterName) + ", <span dir='ltr' class='ph'>" + E(inp.requesterPhone) + "</span>" + participantsHtml],
       ["אנשי קשר בשטח בעת הפעלת הסגירה", "2 אנשי קשר + טלפונים", contactsHtml],
@@ -173,15 +209,15 @@
     const zdata = data.zones || {}, gen = zdata.general && zdata.general.LLU;
     // שורת אזור: תג (חפיפה/קרבה), שם האזור, סוג וגובה, מרחק, ואחריו טקסט הפמ״ת של האזור בתוך ״…״. כשאין גובה מובנה והציטוט מוצג בשורה — לא חוזרים עליו
     const altChk = z => (z.alt || !z.pmt) ? zoneAlt(z) : "";
-    const zoneLine = (z, tag) => "<b>" + E(tag) + ":</b> " + E(z.label + " (" + [z.kind, altChk(z)].filter(Boolean).join("; ") + ") — " + C.fmtDist(z.d) + " מהנקודה" + approxMark(z)) + (z.pmt ? " — " + quote(z.pmt) : "");
-    const nearRange = "עד " + C.fmtDist(R + th.near_zone_m) + " מהנקודה; אזור שנשרטט בקירוב — עד " + C.fmtDist(R + th.near_zone_m + th.approx_margin_m);
+    const zoneLine = (z, tag) => "<b>" + E(tag) + ":</b> " + E(z.label + " (" + [z.kind, altChk(z)].filter(Boolean).join("; ") + ") — " + C.fmtDist(z.d) + " " + FROM(res) + approxMark(z)) + (z.pmt ? " — " + quote(z.pmt) : "");
+    const nearRange = "עד " + C.fmtDist(R + th.near_zone_m) + " " + FROMTO(res) + "; אזור שנשרטט בקירוב — עד " + C.fmtDist(R + th.near_zone_m + th.approx_margin_m);
     const a17edition = zdata.edition || "";
     // א-17
     const a_in = zin.filter(z17), a_near = znear.filter(z17), a_all = a_in.concat(a_near);
     const aLines = a_in.map(z => zoneLine(z, "חפיפה לסגירה המבוקשת")).concat(a_near.map(z => zoneLine(z, "בקרבת הסגירה")));
     const lluShown = !!gen && a_all.some(z => z.cat === "LLU");   // הגדרת LLU מהפמ״ת (סעיף 1א) מוצגת פעם אחת בלבד
-    if (!aLines.length) aLines.push("אין אזור א-17 בחפיפה לסגירה (" + R + " מ׳) או בקרבתה (" + E(nearRange) + ").");
-    else aLines.push(muted("טווח הבדיקה: חפיפה — בתוך הסגירה (" + R + " מ׳); בקרבה — " + E(nearRange) + "."));
+    if (!aLines.length) aLines.push("אין אזור א-17 בחפיפה לסגירה (" + RW(res) + ") או בקרבתה (" + E(nearRange) + ").");
+    else aLines.push(muted("טווח הבדיקה: חפיפה — בתוך הסגירה (" + RW(res) + "); בקרבה — " + E(nearRange) + "."));
     // ההגדרה במלואה, כלשונה (כולל סימוני […] של המקור, חובת יצירת הקשר עם שירות בתי הסוהר והאישור בכתב); רק מרכאות ה-ASCII העוטפות שבקובץ הנתונים מוסרות, כדי שלא יוכפלו
     if (lluShown) aLines.push("הגדרת LLU: " + quote(String(gen.text).trim().replace(/^"/, "").replace(/"$/, "")));
     rows.push(["אזורים אסורים, מוגבלים ומסוכנים (LLP, LLR, LLD, LLU) ובלונים מעוגנים", uniq([a17edition].concat(a_all.map(z => z.pmtRef), lluShown ? [gen.ref] : [])).join(" · "), numbered(aLines)]);
@@ -195,8 +231,8 @@
     {
       const b_in = zin.filter(isB09), b_near = znear.filter(isB09), ex09 = (res.zones.excluded || []), b_all = b_in.concat(b_near);
       const bLines = b_in.map(z => zoneLine(z, "הסגירה בתוך אזור טיסה לכטב״ם")).concat(b_near.map(z => zoneLine(z, "בקרבת הסגירה")));
-      if (!bLines.length) bLines.push("אין אזור טיסה לכטב״ם בחפיפה לסגירה (" + R + " מ׳) או בקרבתה (" + E(nearRange) + ").");
-      else bLines.push(muted("טווח הבדיקה: חפיפה — בתוך הסגירה (" + R + " מ׳); בקרבה — " + E(nearRange) + "."));
+      if (!bLines.length) bLines.push("אין אזור טיסה לכטב״ם בחפיפה לסגירה (" + RW(res) + ") או בקרבתה (" + E(nearRange) + ").");
+      else bLines.push(muted("טווח הבדיקה: חפיפה — בתוך הסגירה (" + RW(res) + "); בקרבה — " + E(nearRange) + "."));
       if (ex09.length) bLines.push(muted("נשללו לפי גובה (גובה מזערי מעפ״י גבוה מגובה הסגירה בכל קרקע בישראל): " + E(ex09.map(x => x.id).join(", ")) + "."));
       const ed09 = (zdata.rules09 && zdata.rules09.edition) || "פמ״ת פנים ארצי ב-09";
       rows.push(["אזורי טיסה לכטב״ם (פרק ב-09: נספחים ב׳-1, ב׳-2, ב׳-3 ומפת נספח א׳)", uniq([ed09].concat(b_all.map(z => z.pmtRef))).join(" · "), numbered(bLines)]);
@@ -212,13 +248,13 @@
     // כללי ב-09 החלים על כל הפעלה/סגירה — כל כלל בשורה נפרדת, בלי לחשב עבור המבקש אם נדרשת סגירה או אם חל פטור
     { const shown = RULE_ROWS.map(([id, title]) => ({ r: rule09(data, id), title })).filter(x => x.r);
       shown.forEach(x => rows.push([x.title, x.r.ref, quote(x.r.text)]));
-      if (shown.length) rows.push(["אחריות המבקש לגבי כללי פרק ב-09", "—", E("המערכת אינה מחשבת עבור המבקש אם נדרשת סגירה, אם חל פטור או אם הרדיוס והגובה שנבחרו עומדים בהפרדות — האחריות לכך על המבקש.")]); }
+      if (shown.length) rows.push(["אחריות המבקש לגבי כללי פרק ב-09", "—", E("המערכת אינה מחשבת עבור המבקש אם נדרשת סגירה, אם חל פטור או אם " + (isRoute(res) ? "הרוחב" : "הרדיוס") + " והגובה שנבחרו עומדים בהפרדות — האחריות לכך על המבקש.")]); }
     // רט״ג
     const n_in = zin.filter(z => z.src === "inpa"), n_near = znear.filter(z => z.src === "inpa");
     const matches = matchUnmapped(data.inpa && data.inpa.unmapped, res.osmProtected.filter(p => p.d <= R + th.near_zone_m));
     const nLines = n_in.map(z => zoneLine(z, "חפיפה")).concat(n_near.map(z => zoneLine(z, "בקרבת הסגירה")),
       matches.map(m => "<b>אתר בנספח ה׳ ללא גבולות בקובץ, שזוהה לפי שם ב-OpenStreetMap:</b> " + E(m.site.id + " ״" + m.site.name + "״ (" + m.osm.name + ", " + C.fmtDist(m.osm.d) + ")")));
-    rows.push(["שמורות טבע וגנים לאומיים", (data.inpa && data.inpa.edition) || "", numbered(nLines.length ? nLines : ["אין שמורת טבע או גן לאומי בחפיפה לסגירה או בטווח " + C.fmtDist(R + th.near_zone_m) + " מהנקודה."])]);
+    rows.push(["שמורות טבע וגנים לאומיים", (data.inpa && data.inpa.edition) || "", numbered(nLines.length ? nLines : ["אין שמורת טבע או גן לאומי בחפיפה לסגירה או בטווח " + C.fmtDist(R + th.near_zone_m) + " " + FROMTO(res) + "."])]);
     // מנחתים חקלאיים
     const ag = res.agri;
     rows.push(["מנחתים חקלאיים", (data.agri && data.agri.edition) || "",
@@ -229,11 +265,11 @@
     const group = (title, items, none) => items.length ? "<b>" + E(title) + "</b><br>" + items.map(i => E(itemText(i))).join("<br>") : "<b>" + E(title) + "</b> " + none;
     const balloons = res.nearScan.items.filter(i => /^בלון/.test(i.label));
     rows.push(["סריקת סביבה: מכשולים, תשתיות קרקעיות, שדות תעופה ומנחתים", "OpenStreetMap" + (osmBase ? ", נתונים מ-" + osmBase.slice(0, 16).replace("T", " ") + " UTC" : ""),
-      [group("בתוך " + R + " מ׳:", res.nearScan.inside, "אין."),
-        group("בקרבת האזור (עד " + 2 * R + " מ׳):", res.nearScan.ring, "אין."),
-        group("אתרים ותשתיות נוספים (עד " + C.fmtDist(siteR) + " מהנקודה):", res.nearScan.near, "אין."),
+      [group("בתוך " + RW(res) + ":", res.nearScan.inside, "אין."),
+        group("בקרבת האזור (עד " + RW2(res) + "):", res.nearScan.ring, "אין."),
+        group("אתרים ותשתיות נוספים (עד " + C.fmtDist(siteR) + " " + FROMTO(res) + "):", res.nearScan.near, "אין."),
         balloons.length ? "<b>בלון:</b> " + E(balloons.map(i => i.title + " — " + dLabel(i.d)).join("; ")) + ". גובה העלאה, שעות הפעלה ואופן העיגון אינם מופיעים ב-OpenStreetMap — יש לוודא מול מפעיל הבלון." : "",
-        muted("(מכשולים — עד " + C.fmtDist(2 * R) + " מהנקודה: מגדלים, תרנים, ארובות, עגורנים, קווי ועמודי חשמל, תחנות משנה, רכבלים, מבנים בגובה 20 מ׳ ומעלה או 6 קומות ומעלה. אתרים ותשתיות — עד " + C.fmtDist(siteR) + ": תשתיות שדה תעופה ומנחתים, אזורים צבאיים, כבישים מהירים/ראשיים, מסילות, בתי חולים, בתי סוהר, משטרה, אצטדיונים.)")].filter(Boolean).join("<br>")]);
+        muted("(מכשולים — עד " + C.fmtDist(2 * R) + " " + FROMTO(res) + ": מגדלים, תרנים, ארובות, עגורנים, קווי ועמודי חשמל, תחנות משנה, רכבלים, מבנים בגובה 20 מ׳ ומעלה או 6 קומות ומעלה. אתרים ותשתיות — עד " + C.fmtDist(siteR) + ": תשתיות שדה תעופה ומנחתים, אזורים צבאיים, כבישים מהירים/ראשיים, מסילות, בתי חולים, בתי סוהר, משטרה, אצטדיונים.)")].filter(Boolean).join("<br>")]);
     // מכשולים שידועים למבקש: הצלבה מול סריקת הסביבה לפי מילים בלבד (בלי מיקום) — פריט שלא נמצא מוצג למבקש כדי שיוסיף אותו ידנית
     { const KO_CAP = 5, list = (arr, f) => arr.slice(0, KO_CAP).map(f).join("; ") + (arr.length > KO_CAP ? "; ועוד " + (arr.length - KO_CAP) : "");
       const km = C.matchKnownObstacles(inp.knownObstacles, res.nearScan);
@@ -242,18 +278,18 @@
         // מספר הממצא (i+1) ומספרי הפריטים שבמפה הם שני רצפים שונים באותה שורה — התיוג מבהיר שהמספרים בתוך ההתאמות הם לפי המפה (itemText משותף, לא משתנה)
         if (k.found.length) return head + "התאמה אפשרית (מספרי הפריטים לפי המפה): " + E(list(k.found, itemText));
         if (k.census.length) return head + "נמצא בסריקה בקרבה (אינו ברשימת הטופס ואינו ממוספר במפה): " + E(list(k.census, c => c.title + " — " + dLabel(c.d)));
-        return head + "לא נמצא בסריקה (מכשולים נסרקים עד " + C.fmtDist(2 * R) + " מהנקודה ואתרים עד " + C.fmtDist(siteR) + "). ייתכן שאינו ממופה ב-OpenStreetMap או שהוא מחוץ לטווח; אם הוא בטווח, יש להוסיפו ידנית בסעיף ״סקירה אנושית ותוספות״.";
+        return head + "לא נמצא בסריקה (מכשולים נסרקים עד " + C.fmtDist(2 * R) + " " + FROMTO(res) + " ואתרים עד " + C.fmtDist(siteR) + "). ייתכן שאינו ממופה ב-OpenStreetMap או שהוא מחוץ לטווח; אם הוא בטווח, יש להוסיפו ידנית בסעיף ״סקירה אנושית ותוספות״.";
       });
       rows.push(["מכשולים שידועים למבקש", "הוזן ע״י המבקש; הצלבה מול סריקת הסביבה (לפי מילים בלבד)",
         km.length ? koLines.join("<br>") + "<br>" + muted("ההצלבה לפי מילים בלבד, בלי מיקום — אינה תחליף לסימון ידני.") : "המבקש לא הזין מכשולים נוספים."]); }
     // שדות תעופה — כל שדה/מנחת בשורה
     const af = res.airfields.filter(a => a.type === "aerodrome").slice(0, 3), hp = res.airfields.filter(a => a.type !== "aerodrome").slice(0, 2);
-    rows.push(["שדות תעופה ומנחתים בסביבה (עד " + C.fmtDist(th.airfield_scan_m) + ")", "OpenStreetMap",
+    rows.push(["שדות תעופה ומנחתים בסביבה (עד " + C.fmtDist(th.airfield_scan_m) + (isRoute(res) ? " מציר הנתיב" : "") + ")", "OpenStreetMap",
       numbered((af.length ? af.map(a => "<b>שדה תעופה:</b> " + E((a.name || "ללא שם") + (a.icao ? " (" + a.icao + ")" : "") + " — " + C.fmtDist(a.d))) : ["שדות תעופה: אין בטווח."])
         .concat(hp.map(a => "<b>מנחת מסוקים:</b> " + E((a.name || "ללא שם") + " — " + C.fmtDist(a.d)))))]);
     // גבולות
     rows.push(["קרבה לגבול מדינה (פמ״ת א-17 סעיף 4)", "OpenStreetMap",
-      res.borders.length ? numbered(res.borders.map(b => E("גבול " + b.name + ": " + C.fmtDist(b.d) + " מהנקודה (מגבלה: " + b.km + " ק״מ) — " + (b.violates ? "הסגירה נכנסת לרצועה" : "הסגירה מחוץ לרצועה") + "."))) : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(res.borderScanM || th.border_scan_m) + "."]);
+      res.borders.length ? numbered(res.borders.map(b => E("גבול " + b.name + ": " + C.fmtDist(b.d) + " " + FROM(res) + " (מגבלה: " + b.km + " ק״מ) — " + (b.violates ? "הסגירה נכנסת לרצועה" : "הסגירה מחוץ לרצועה") + "."))) : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(res.borderScanM || th.border_scan_m) + "."]);
     // נוטמים: סגירות אוויריות עד notam_near_m מקצה הסגירה; מכשולים שפורסמו בנוטם עד site_near_m — שורה לנוטם
     const fetched = data.notamFetchedIso ? data.notamFetchedIso.replace("T", " ").slice(0, 16) + " UTC" : "";
     const nh = res.notams.hits, nob = res.notams.obstacles || [], ex = res.notams.excluded || [];
@@ -289,7 +325,7 @@
       ["שמורות טבע וגנים לאומיים (רט״ג)", ((data.inpa && data.inpa.sites) ? data.inpa.sites.length : 0) + " אתרים עם גבולות נבדקו (+ " + ((data.inpa && data.inpa.unmapped) ? data.inpa.unmapped.length : 0) + " ללא גבולות — נבדקו לפי שם מול OpenStreetMap). בתוך הסגירה: " + z.inside.filter(x => x.src === "inpa").length + " · בקרבה: " + z.near.filter(x => x.src === "inpa").length],
       ["מנחתים חקלאיים", res.agri.length + " מנחתים נבדקו; הקרוב ביותר: " + (res.agri[0] ? res.agri[0].name + ", " + C.fmtDist(res.agri[0].d) : "—")],
       ["נוטמים", (nt.total || 0) + " נוטמים בקובץ · " + (nt.valid || 0) + " בתוקף בחלון הפעילות · " + nt.hits.length + " סגירות אוויריות בטווח " + C.fmtDist(th.notam_near_m) + " · " + (nt.obstacles ? nt.obstacles.length : 0) + " מכשולים שפורסמו בטווח " + C.fmtDist(th.site_near_m)],
-      ["OpenStreetMap — סביבה", osmN + " אלמנטים הוחזרו מהשרת. חיפוש מכשולים (מגדלים, חשמל, מבנים גבוהים...) עד " + C.fmtDist(2 * R) + " מהנקודה; חיפוש אתרים ותשתיות (אצטדיונים, כבישים, מסילות, מנחתים, בלונים, אתרי המונים...) עד " + C.fmtDist(siteR)],
+      ["OpenStreetMap — סביבה", osmN + " אלמנטים הוחזרו מהשרת. חיפוש מכשולים (מגדלים, חשמל, מבנים גבוהים...) עד " + C.fmtDist(2 * R) + " " + FROMTO(res) + "; חיפוש אתרים ותשתיות (אצטדיונים, כבישים, מסילות, מנחתים, בלונים, אתרי המונים...) עד " + C.fmtDist(siteR)],
       ["OpenStreetMap — שדות תעופה", res.airfields.length + " שדות תעופה/מנחתים בטווח " + C.fmtDist(th.airfield_scan_m)],
       ["גבולות מדינה (א-17 סעיף 4)", res.borders.length ? res.borders.map(b => b.name + " " + C.fmtDist(b.d)).join(" · ") : "אין גבול מצרים/סוריה/לבנון בטווח " + C.fmtDist(res.borderScanM || th.border_scan_m)],
       ["פריטים שהוזנו ידנית", String((res.inp.manualItems || []).filter(m => (m.name || "").trim()).length)]
@@ -366,7 +402,7 @@
       docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || orgName(inp),
       title: "פמ״ת פנים ארצי א-11 — נספח ג׳", subtitle: "טופס בקשה לסגירה אווירית",
       draftText: o.draft ? "טיוטה — לא מוכן לשליחה: " + o.draft : "",
-      rows: buildForm(res, cfg).map(r => ({ n: r.n, label: r.label, sub: r.sub, html: r.html })),
+      rows: buildForm(res, cfg).map(r => (isRoute(res) && r.n === 8 ? { n: r.n, label: r.label, sub: r.sub, html: r.html, split: true, cls: "f8route" } : { n: r.n, label: r.label, sub: r.sub, html: r.html })),   // נתיב: שורת שדה 8 ארוכה ולכן מותר לה להישבר בין עמודים (split: Word) ומקבלת class ‏f8route (מסך/הדפסה); במעגל השורה כמו תמיד
       attachLine: attachmentsLine(),
       mailLine: "*את הבקשה יש להגיש לכתובות המייל: " + cfg.mail.to.join(", "),
       formFooter: cfg.form + " · הופק " + now.toLocaleDateString("he-IL"),
@@ -374,7 +410,7 @@
       streetTitle: "הדמיה מצורפת — מפת רחובות תקריב" + prov("street", "OpenStreetMap"),
       overviewTitle: "הדמיה מצורפת — הדמיה וסימונים (מבט כללי, כל מה שמופיע בשדה 8)" + prov("overview", o.providerName),
       regionTitle: "הדמיה מצורפת — מפת אזור (מרוחק)" + prov("region", o.providerName),
-      mapNote: "ירוק: אזור הסגירה (" + res.R + " מ׳) · כתום: עד " + 2 * res.R + " מ׳ · אדום: אזור אסור/מוגבל (פמ״ת א-17) · כחול: אזור טיסה לכטב״ם (פרק ב-09) · צהוב: מכשול · תכלת: אתר/תשתית קרקעית · סגול: תשתית/מכשול אווירי · ירוק בהיר: אתר המונים/תשתית נוספת. הסימונים מופיעים בכל ארבע התמונות. המספרים תואמים לרשימה בשדה 8; בתקריב מופיעים רק הפריטים שבתוך התצוגה, והשאר במבט הכללי; במפת האזור המרוחקת הפריטים מסומנים בלי מספרים.",
+      mapNote: (isRoute(res) ? "ירוק: אזור הסגירה (נתיב, " + RW(res) + ") · כתום: עד " + 2 * res.R + " מ׳ מהציר · לבן: ציר הנתיב ונקודותיו P1–P" + res.area.pts.length + " (לפי הסדר)" : "ירוק: אזור הסגירה (" + res.R + " מ׳) · כתום: עד " + 2 * res.R + " מ׳") + " · אדום: אזור אסור/מוגבל (פמ״ת א-17) · כחול: אזור טיסה לכטב״ם (פרק ב-09) · צהוב: מכשול · תכלת: אתר/תשתית קרקעית · סגול: תשתית/מכשול אווירי · ירוק בהיר: אתר המונים/תשתית נוספת. הסימונים מופיעים בכל ארבע התמונות. המספרים תואמים לרשימה בשדה 8; בתקריב מופיעים רק הפריטים שבתוך התצוגה, והשאר במבט הכללי; במפת האזור המרוחקת הפריטים מסומנים בלי מספרים.",
       items: res.nearScan.items.map(i => ({ n: i.n, title: i.title + (i.height ? " · גובה " + C.trimNum(i.height, 0) + " מ׳" : ""), dist: dLabel(i.d), where: whereOf(i) })),
       images: o.images || {},
       includeChecks: !!o.includeChecks,
@@ -388,6 +424,13 @@
       review: o.review || "",
       footer: "הופק " + now.toLocaleString("he-IL")
     };
+    // נתיב: נקודת ההתחלה והסיום, האורך והרוחב במקום "נקודה + רדיוס" (דף הבדיקות), וכותרות שמחליפות את "הנקודה" / "מרחק מהנקודה" (docx.js: pointHeading, itemsDistHead). במעגל המפתחות האלה אינם במודל כלל
+    if (isRoute(res)) {
+      const a = res.area, last = a.pts[a.pts.length - 1];
+      // שלוש שורות (\n; docx.js מפצל לפסקאות): סיכום בעברית, ואז התחלה וסוף — כל אחת מסתיימת בגוש לטיני אחד (P1/P5 ונ.צ.) בלי סוגריים ובלי מפריד אחריו, כי ב-Word מפריד או סוגר שאחרי ריצה לטינית נכנס לתוכה והשורה מתהפכת
+      model.checkPoint = "נתיב: " + a.pts.length + " נקודות · אורך " + routeKm(res) + " ק״מ · ירוק: " + res.R + " מ׳ מכל צד של הציר · כתום: עד " + 2 * res.R + " מ׳ מהציר · גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)\nהתחלה: P1 " + dmsText(a.pts[0]) + "\nסוף: P" + a.pts.length + " " + dmsText(last);
+      model.pointHeading = "הנתיב"; model.itemsDistHead = "מרחק מהציר";
+    }
     // דיווח לגורמים נוספים (שלב ב׳, features.parties): o.parties = מערך השורות (גם ריק). דגל כבוי / מודול לא נטען / o.parties חסר ← אין מפתח parties בכלל, והמודל זהה לשלב א׳
     if (Array.isArray(o.parties)) { const pm = partiesPage(o.parties, cfg, { now, dropped: o.partiesDropped, failed: o.partiesFailed }); if (pm) model.parties = pm; }
     return model;
@@ -489,8 +532,17 @@
         return { title: sc.title + " (" + sc.total + ")", head: STR.cols || ["סטטוס", "פריט", "פירוט", "מרחק מהנקודה"], rows: shown.map(r => ({ status: r.statusLabel, sev: r.sevLabel, high: r.sev === "high", id: r.id, title: r.title, lines: r.lines || [], dist: r.dist })), more: hid > 0 ? "ועוד " + hid + " שורות אינן מוצגות בדוח זה" : "" }; }),
       limitation: since.limitation || ""
     };
-    return { recheck: rc, docTitle: "בדיקה חוזרת — " + name, creator: base.creator, includeChecks: o.includeChecks !== false, checksTitle: "דף הבדיקות העדכני — נכון למועד הבדיקה החוזרת",
+    const out = { recheck: rc, docTitle: "בדיקה חוזרת — " + name, creator: base.creator, includeChecks: o.includeChecks !== false, checksTitle: "דף הבדיקות העדכני — נכון למועד הבדיקה החוזרת",
       checkPoint: base.checkPoint, visitNote: base.visitNote, checks: base.checks, coverage: base.coverage, dayNightHead: base.dayNightHead, dayNight: base.dayNight, footer: base.footer };
+    // נתיב: שורות הזהות (נתיב; רוחב וגובה), כותרות ״הנתיב״ / ״מרחק מהציר״ בדף הבדיקות ובטבלאות השינויים. במעגל המודל כמות שהוא
+    if (isRoute(res)) {
+      const a = res.area;
+      rc.identity = [["הבקשה", name], ["נתיב", a.pts.length + " נקודות · אורך " + routeKm(res) + " ק״מ · P1 " + dmsText(a.pts[0]) + " · P" + a.pts.length + " " + dmsText(a.pts[a.pts.length - 1])],
+        ["רוחב מכל צד וגובה", res.R + " מ׳ מכל צד של הציר · גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)"]].concat((since.dates || []).map(d => [d.label, d.value]));
+      rc.sections.forEach(sc => { sc.head = sc.head.slice(0, 3).concat(["מרחק מהציר"]); });
+      out.pointHeading = base.pointHeading; out.itemsDistHead = base.itemsDistHead;
+    }
+    return out;
   }
 
   /* ---------- KML ---------- */
@@ -500,9 +552,13 @@
     const poly = (outer, inner) => "<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>" + coords(outer) + "</coordinates></LinearRing></outerBoundaryIs>" +
       (inner ? "<innerBoundaryIs><LinearRing><coordinates>" + coords(inner) + "</coordinates></LinearRing></innerBoundaryIs>" : "") + "</Polygon>";
     const circ = r => C.circlePoints(P, r, 96);
+    const axisPt = ll => { const q = P.xy(ll[0], ll[1]), n = C.routeNearest(P.route, q[0], q[1]); return P.ll(n.x, n.y); };   // נתיב: הנקודה הקרובה על הציר
     const out = [];
+    // נתיב: טבעת ה-2W (C.corridorRing(area, 2)) אינה תמיד תקינה גם כשטבעת ה-W תקינה (חיתוך עצמי / אינה מכילה את הקפסולה): אז פוליגון הכתום מושמט (גאומטריה לא תקינה ב-KML) ומצוינת הערה ב-Document וב-Placemark הירוק; רשימות הפריטים נמדדות מהציר ואינן מושפעות
+    const c2 = isRoute(res) ? C.corridorRing(res.area, 2) : null, ring2Ok = !!c2 && c2.ring.length > 0 && c2.simple, note2 = c2 && !ring2Ok && C.corridorRing(res.area, 1).ring.length ? X(NOTE_NO_2W) : "";
     out.push('<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>');
     out.push("<name>" + X("בקשת סגירה אווירית — " + inp.siteName + " — " + C.ddmmyyyy(C.parseDate(inp.dateFrom)) + (inp.dateFrom !== inp.dateTo ? "–" + C.ddmmyyyy(C.parseDate(inp.dateTo)) : "")) + "</name>");
+    if (note2) out.push("<description>" + note2 + "</description>");
     out.push('<Style id="green"><LineStyle><color>ff3e8e1e</color><width>3</width></LineStyle><PolyStyle><color>663e8e1e</color></PolyStyle></Style>');
     out.push('<Style id="orange"><LineStyle><color>ff007be0</color><width>3</width></LineStyle><PolyStyle><color>55007be0</color></PolyStyle></Style>');
     out.push('<Style id="red"><LineStyle><color>ff202dd9</color><width>3</width></LineStyle><PolyStyle><color>55202dd9</color></PolyStyle></Style>');
@@ -512,13 +568,25 @@
     out.push('<Style id="ground"><IconStyle><color>ffeed322</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_square.png</href></Icon></IconStyle><LineStyle><color>ffeed322</color><width>3</width></LineStyle><PolyStyle><color>55eed322</color></PolyStyle></Style>');
     out.push('<Style id="air"><IconStyle><color>fffb40e0</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/airports.png</href></Icon></IconStyle><LineStyle><color>fffb40e0</color><width>3</width></LineStyle><PolyStyle><color>55fb40e0</color></PolyStyle></Style>');
     out.push('<Style id="obst"><IconStyle><color>ff00d4ff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/caution.png</href></Icon></IconStyle><LineStyle><color>ff00d4ff</color><width>2</width></LineStyle><PolyStyle><color>5500d4ff</color></PolyStyle></Style>');
-    out.push("<Placemark><name>נקודת ההטסה (מרכז)</name><description>" + X(C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon) + " · גובה " + inp.heightM + " מ׳ (" + res.ft.toFixed(1) + " רגל)") + "</description><Point><coordinates>" + inp.lon + "," + inp.lat + ",0</coordinates></Point></Placemark>");
-    out.push("<Placemark><name>" + X("אזור ההטסה — רדיוס " + R + " מ׳") + '</name><styleUrl>#green</styleUrl>' + poly(circ(R)) + "</Placemark>");
-    out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳)") + '</name><styleUrl>#orange</styleUrl>' + poly(circ(2 * R), circ(R).slice().reverse()) + "</Placemark>");
+    const route = isRoute(res);
+    if (route) out.push('<Style id="route"><LineStyle><color>ffffffff</color><width>4</width></LineStyle></Style>');   // ציר הנתיב: קו לבן (כמו במפה)
+    if (route) {
+      // נתיב: פוליגון הסגירה (C.corridorRing(area, 1): אותם קודקודים כמו ב-V1..VM בשדה 8) בירוק, טבעת ה-2W בכתום (חור = הפוליגון הירוק, בכיוון הפוך), ציר הנתיב ונקודותיו P1..PN
+      const a = res.area, n = a.pts.length, g1 = C.corridorRing(a, 1).ring, g2 = c2.ring;
+      if (g1.length) out.push("<Placemark><name>" + X("אזור ההטסה — נתיב, " + R + " מ׳ מכל צד של הציר (אורך " + routeKm(res) + " ק״מ)") + '</name>' + (note2 ? "<description>" + note2 + "</description>" : "") + '<styleUrl>#green</styleUrl>' + poly(g1) + "</Placemark>");
+      if (g1.length && ring2Ok) out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳ מהציר)") + '</name><styleUrl>#orange</styleUrl>' + poly(g2, g1.slice().reverse()) + "</Placemark>");
+      out.push("<Placemark><name>" + X("ציר הנתיב — " + n + " נקודות · " + routeKm(res) + " ק״מ") + "</name><description>" + X("רוחב הסגירה " + R + " מ׳ מכל צד של הציר · גובה " + inp.heightM + " מ׳ (" + res.ft.toFixed(1) + " רגל)") + '</description><styleUrl>#route</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coords(a.pts) + "</coordinates></LineString></Placemark>");
+      a.pts.forEach((q, i) => out.push("<Placemark><name>P" + (i + 1) + "</name><description>" + X("נקודה " + (i + 1) + " מתוך " + n + (i === 0 ? " (התחלה)" : i === n - 1 ? " (סיום)" : "") + " · " + dmsText(q)) + "</description><Point><coordinates>" + q[1] + "," + q[0] + ",0</coordinates></Point></Placemark>"));
+    } else {
+      out.push("<Placemark><name>נקודת ההטסה (מרכז)</name><description>" + X(C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon) + " · גובה " + inp.heightM + " מ׳ (" + res.ft.toFixed(1) + " רגל)") + "</description><Point><coordinates>" + inp.lon + "," + inp.lat + ",0</coordinates></Point></Placemark>");
+      out.push("<Placemark><name>" + X("אזור ההטסה — רדיוס " + R + " מ׳") + '</name><styleUrl>#green</styleUrl>' + poly(circ(R)) + "</Placemark>");
+      out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳)") + '</name><styleUrl>#orange</styleUrl>' + poly(circ(2 * R), circ(R).slice().reverse()) + "</Placemark>");
+    }
     [...res.zones.inside, ...res.zones.near].forEach(z => {
       const rings = z.z.rings && z.z.rings.length ? z.z.rings : (z.z.c && z.z.r ? [C.circlePoints(new C.Proj(z.z.c[0], z.z.c[1]), z.z.r, 96)] : []);
-      rings.forEach(rg => out.push("<Placemark><name>" + X(z.label + " — " + z.kind + "; " + z.alt + (z.approx ? " (שרטוט בקירוב)" : "") + " (" + z.d.toFixed(0) + " מ׳ מהנקודה)") + '</name><styleUrl>#' + (z.src === "b09" ? "blue" : "red") + '</styleUrl>' + poly(rg) + "</Placemark>"));
-      if (z.d >= 1) out.push("<Placemark><name>" + X(Math.round(z.d) + " מ׳ עד " + z.id) + '</name><styleUrl>#dist</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + inp.lon + "," + inp.lat + ",0 " + z.ll[1] + "," + z.ll[0] + ",0</coordinates></LineString></Placemark>");
+      rings.forEach(rg => out.push("<Placemark><name>" + X(z.label + " — " + z.kind + "; " + z.alt + (z.approx ? " (שרטוט בקירוב)" : "") + " (" + z.d.toFixed(0) + " מ׳ " + FROM(res) + ")") + '</name><styleUrl>#' + (z.src === "b09" ? "blue" : "red") + '</styleUrl>' + poly(rg) + "</Placemark>"));
+      const o = route ? axisPt(z.ll) : [inp.lat, inp.lon];   // נתיב: הקו מהנקודה הקרובה על הציר (המרחק d הוא מהציר)
+      if (z.d >= 1) out.push("<Placemark><name>" + X(Math.round(z.d) + " מ׳ עד " + z.id) + '</name><styleUrl>#dist</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + o[1] + "," + o[0] + ",0 " + z.ll[1] + "," + z.ll[0] + ",0</coordinates></LineString></Placemark>");
     });
     if (res.nearScan.items.length) {
       out.push("<Folder><name>מכשולים, אתרים ותשתיות בתוך האזור ובקרבתו (OpenStreetMap)</name>");
@@ -555,7 +623,7 @@
       "• גורם מבקש: " + orgName(inp),
       "• מיקום: " + inp.siteName,
       "• מועד: " + dates + (inp.dateFrom === inp.dateTo ? "" : ", בכל יום") + " " + win + " (שעון מקומי)",
-      "• סגירה: מעגל ברדיוס " + res.R + " מטר · גובה " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)"].concat(partiesBullet ? ["• " + partiesBullet] : [], [""], [
+      "• סגירה: " + (isRoute(res) ? "נתיב באורך " + C.fmtDist(res.area.lengthM) + " (" + res.area.pts.length + " נקודות), רוחב " + res.R + " מטר מכל צד של הציר" : "מעגל ברדיוס " + res.R + " מטר") + " · גובה " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)"].concat(partiesBullet ? ["• " + partiesBullet] : [], [""], [
       "קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת.",
       "כל הפרטים — בטופס המצורף.", "",
       "בברכה,", inp.requesterName, orgName(inp)
@@ -573,6 +641,6 @@
     return u === m ? m : Object.assign({}, u, { subject: m.subject, subjectFull: u.subject });
   }
 
-  return { fileBase, safeName, submissionHtml, submissionSection, summaryModel, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel, DECLARATION, declarationRecord, reviewText,
+  return { isRoute, routeCorners, routeF8Head, fileBase, safeName, submissionHtml, submissionSection, summaryModel, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel, DECLARATION, declarationRecord, reviewText,
     partiesPage, partiesHtml, partiesMailLine, recheckDocxModel, mailUpdate };
 });

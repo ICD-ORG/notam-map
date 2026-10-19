@@ -105,7 +105,7 @@
     // o.strict (עמודי שלב ב׳): bidiVisual לפני tblW, כסדר הסכמה (CT_TblPr); בלי strict — הפלט כפי שהיה בשלב א׳ בדיוק
     return '<w:tbl><w:tblPr>' + (o.strict ? "<w:bidiVisual/>" : "") + '<w:tblW w:w="' + colWidths.reduce((a, c) => a + c, 0) + '" w:type="dxa"/>' + (o.strict ? "" : "<w:bidiVisual/>") + '<w:tblBorders>' + b + '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="25" w:type="dxa"/><w:left w:w="90" w:type="dxa"/><w:bottom w:w="25" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
       "<w:tblGrid>" + colWidths.map(w => '<w:gridCol w:w="' + w + '"/>').join("") + "</w:tblGrid>" +
-      rows.map(r => "<w:tr><w:trPr><w:cantSplit/>" + (r.header ? "<w:tblHeader/>" : "") + "</w:trPr>" + r.cells.join("") + "</w:tr>").join("") + "</w:tbl>";
+      rows.map(r => "<w:tr><w:trPr>" + (r.split ? "" : "<w:cantSplit/>") + (r.header ? "<w:tblHeader/>" : "") + "</w:trPr>" + r.cells.join("") + "</w:tr>").join("") + "</w:tbl>";   // r.split: שורה ארוכה שמותר לה להישבר בין עמודים (שדה 8 בנתיב); כל שאר השורות cantSplit
   };
 
   /* ---------- בנאים בסדר האלמנטים של הסכמה (ECMA-376) — לעמודי שלב ב׳ בלבד ---------- */
@@ -139,7 +139,7 @@
   const CM = 360000; // EMU לסנטימטר
 
   // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], attachLine, mailLine, formFooter, aerialTitle, streetTitle, overviewTitle, regionTitle, mapNote, items:[{n,title,dist,where}],
-  //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
+  //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, pointHeading (נתיב בלבד: "הנתיב" במקום "הנקודה" בדף הבדיקות), itemsDistHead (נתיב בלבד: "מרחק מהציר" במקום "מרחק מהנקודה" בטבלת הפריטים), visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
   //         submissionHead, submission (HTML; הנוסח המלא) או summary ([HTML] נקודות הסיכום), review, footer, includeChecks}
   async function build(m) {
     const body = [];
@@ -150,8 +150,8 @@
       cell(textPara(m.subtitle, { bold: true, size: 24, after: 0 }), CONTENT_W - (CONTENT_W * 0.55 | 0), { fill: "FFFFFF" })] }]));
     body.push(para("", { after: 80 }));
     const wl = (CONTENT_W * 0.40) | 0, wv = CONTENT_W - wl;
-    body.push(tableXml([wl, wv], m.rows.map(r => ({ cells: [
-      cell(para(runsOf(r.n + ". " + r.label, { bold: true, size: 19 }), { after: r.sub ? 20 : 0 }) + (r.sub ? textPara(r.sub, { size: 14, color: "444444", after: 0 }) : ""), wl, { fill: "EFEFEF" }),
+    body.push(tableXml([wl, wv], m.rows.map(r => ({ split: !!r.split, cells: [
+      cell(para(runsOf(r.n + ". " + r.label, { bold: true, size: 19 }), { after: r.sub ? 20 : 0 }) + (r.sub ? textPara(r.sub, { size: 14, color: "444444", after: 0 }) : ""), wl, r.split ? { fill: "EFEFEF", valign: "top" } : { fill: "EFEFEF" }),
       cell(htmlPara(r.html, { size: 19, after: 0, line: 245, tabEnd: /class=['"]fs['"]/.test(r.html) ? wv - 200 : 0 }), wv)] }))));   // שורות פריט בשדה 8: הטאב הימני בקצה התא (רוחב התא פחות שולי התא)
     body.push(htmlPara((m.attachLine || "<b>חובה לצרף מפה/תצ״א</b>") + "<br>" + esc(m.mailLine || ""), { size: 20, before: 100 }));
     body.push(textPara(m.formFooter || "", { size: 16, color: "555555" }));
@@ -176,7 +176,7 @@
       if (!im.overview) body.push(textPara(m.overviewTitle || "מבט כללי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
       body.push(heading("מכשולים, אתרים ותשתיות המסומנים במפה"));
       const w = [700, 4700, 1800, CONTENT_W - 7200];
-      body.push(tableXml(w, [{ header: true, cells: ["#", "מה", "מרחק מהנקודה", "איפה"].map((t, i) => cell(textPara(t, { bold: true, size: 20, after: 0 }), w[i], { fill: "EEEEEE" })) }]
+      body.push(tableXml(w, [{ header: true, cells: ["#", "מה", m.itemsDistHead || "מרחק מהנקודה", "איפה"].map((t, i) => cell(textPara(t, { bold: true, size: 20, after: 0 }), w[i], { fill: "EEEEEE" })) }]
         .concat(m.items.map(it => ({ cells: [String(it.n), it.title, it.dist, it.where].map((t, i) => cell(textPara(t, { size: 20, after: 0 }), w[i])) })))));
     }
     if (im.region) imagePage("region", m.regionTitle || "מפת אזור (מרוחק)");
@@ -196,8 +196,8 @@
     let sec = 0;
     const secHeading = t => hd(++sec + ". " + t);
     body.push(tp(m.checksTitle || "דף בדיקות — לא חלק מהטופס הרשמי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
-    body.push(secHeading("הנקודה"));
-    body.push(tp(m.checkPoint || "", { size: 20 }));
+    body.push(secHeading(m.pointHeading || "הנקודה"));
+    String(m.checkPoint || "").split("\n").forEach(ln => body.push(tp(ln, { size: 20 })));   // נתיב: checkPoint בכמה שורות (סיכום / התחלה / סוף), פסקה לכל שורה; במעגל שורה אחת — כמו תמיד
     if (m.visitNote) body.push(hp(m.visitNote, { size: 20 }));
     body.push(secHeading("הבדיקות שבוצעו"));
     // עמודה ראשונה צרה "#" = מספר השורה; שאר העמודות: בדיקה / מקור / תוצאה

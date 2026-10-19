@@ -240,6 +240,7 @@
   const RLM = String.fromCharCode(0x200F);   // אחרי מזהה לטיני (C0431/26, LLU20) שבא לפני " — " ומספר: בלי זה W7/N1 הופכים את הסדר ("3.6 — C0431/26 ק״מ…") ומנתקים את היחידה מהמספר
   // a: {lat, lon, coordInvalid, radius, heightM, dateFrom, dateTo, timeFrom, timeTo, zones, inpa, notams, notamFetchedIso, thresholds, now}
   // coordInvalid: בשדה הנ״צ הוקלד טקסט שאינו נ״צ — אין להציג סיכום של הנקודה הקודמת כאילו היא הנבחרת (ui.js)
+  // נתיב: a.area = {kind:"route", pts:[[lat,lon],...], halfWidth} (כמו inp.area ב-core.js; lat/lon/radius אינם נקראים) — המרחקים והאזורים נמדדים מהקו השבור, ו-halfWidth הוא ה-R
   // מחזיר {state: "need-point"|"bad-coord"|"ok", lines: [{k, label, text, cls}], win, zonesRes, notamsRes, selection}. השורה האחרונה היא תמיד הערת "תצוגה מקדימה בלבד".
   // הפונקציה לא זורקת: כשל בחישוב של חלק (נתונים פגומים) מוצג כשורת אזהרה באותו חלק, והחלקים האחרים ממשיכים
   function preview(a) {
@@ -249,11 +250,17 @@
     const last = () => add("last", "", LAST_LINE, "last");
     const num = v => typeof v === "number" && isFinite(v);
     if (a.coordInvalid) { add("hint", "", "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה", "warn"); last(); return { state: "bad-coord", lines }; }
+    const route = !!(a.area && a.area.kind === "route"), rpts = route && Array.isArray(a.area.pts) ? a.area.pts : [];
+    if (route) {   // נתיב: לפחות שתי נקודות תקינות בתחום; אחרת אין מה לחשב (הנקודה היחידה שנבחרה אינה אזור)
+      if (rpts.length < 2 || !rpts.every(q => Array.isArray(q) && num(q[0]) && num(q[1]))) { add("hint", "", "סמנו על המפה לפחות שתי נקודות לאורך הנתיב"); last(); return { state: "need-point", lines }; }
+      if (!rpts.every(q => q[0] >= 29 && q[0] <= 34 && q[1] >= 34 && q[1] <= 36.5)) { add("hint", "", "נקודה בנתיב מחוץ לתחום ישראל והסביבה — תקנו את הנתיב", "warn"); last(); return { state: "need-point", lines }; }
+    } else {
     if (!num(a.lat) || !num(a.lon)) { add("hint", "", "בחרו נקודה במפה"); last(); return { state: "need-point", lines }; }
     if (!(a.lat >= 29 && a.lat <= 34 && a.lon >= 34 && a.lon <= 36.5)) { add("hint", "", "הנקודה מחוץ לתחום ישראל והסביבה — בחרו נקודה במפה", "warn"); last(); return { state: "need-point", lines }; }
-    const P = new C.Proj(a.lat, a.lon), R = num(a.radius) && a.radius > 0 ? a.radius : 0, topFt = num(a.heightM) && a.heightM > 0 ? a.heightM * C.M2FT : null;
+    }
+    const P = route ? C.projFor({ area: a.area }) : new C.Proj(a.lat, a.lon), R = route ? (num(a.area.halfWidth) && a.area.halfWidth > 0 ? a.area.halfWidth : 0) : num(a.radius) && a.radius > 0 ? a.radius : 0, topFt = num(a.heightM) && a.heightM > 0 ? a.heightM * C.M2FT : null;
     const out = { state: "ok", lines, win: inputWindow(a, now) };
-    if (!R) add("radius", "", "לא הוזן רדיוס תקין — החישוב הוא לנקודה עצמה. הזינו רדיוס לחישוב מדויק.", "warn");
+    if (!R) add("radius", "", route ? "לא הוזן רוחב תקין — החישוב הוא לציר הנתיב עצמו. הזינו רוחב לחישוב מדויק." : "לא הוזן רדיוס תקין — החישוב הוא לנקודה עצמה. הזינו רדיוס לחישוב מדויק.", "warn");
 
     /* ---- אזורי איסור: אותו חישוב כמו בבדיקות המלאות, אך רק מול הגבולות שבקובץ ---- */
     if (!a.zones || !a.zones.zones || !a.inpa) add("zones", "אזורי איסור", "נתוני האזורים לא נטענו — אין תצוגה מקדימה של אזורי איסור.", "warn");
@@ -264,7 +271,7 @@
       if (z.inside.length) add("inside", "בתוך הסגירה", "חפיפה ל-" + capList(z.inside.map(txt), 4, "אזור אחד", "אזורים"), "hit");
       else add("inside", "בתוך הסגירה", "אין חפיפה לאזורי איסור שבקובץ", "ok");
       const nm = C.fmtInt(th.near_zone_m) + " מ׳";
-      if (z.near.length) add("near", "בקרבה (עד " + nm + " מקצה הסגירה)", capList(z.near.map(r => r.label + RLM + " — " + C.fmtDist(r.edge) + " מקצה הסגירה (" + C.fmtDist(r.d) + " מהנקודה)" + (r.approx ? ", שרטוט בקירוב" : "")), 5, "אזור אחד", "אזורים"), "near");
+      if (z.near.length) add("near", "בקרבה (עד " + nm + " מקצה הסגירה)", capList(z.near.map(r => r.label + RLM + " — " + C.fmtDist(r.edge) + " מקצה הסגירה (" + C.fmtDist(r.d) + (route ? " מהציר)" : " מהנקודה)") + (r.approx ? ", שרטוט בקירוב" : "")), 5, "אזור אחד", "אזורים"), "near");
       else add("near", "בקרבה (עד " + nm + " מקצה הסגירה)", "אין אזור איסור בקובץ", "ok");
       // אתרי רט״ג שאין להם גבול בקובץ (inpa.unmapped) אינם נבדקים כאן — הבדיקה המלאה מתאימה אותם לפי שם מול OpenStreetMap, ולכן ״אין״ למעלה אינו קביעה לגביהם. לא מנחשים התאמה מהשם
       const un = Array.isArray(a.inpa.unmapped) ? a.inpa.unmapped.length : 0;

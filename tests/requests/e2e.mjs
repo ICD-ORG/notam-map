@@ -4700,6 +4700,394 @@ try {
     }
   }
   /* PARTIES-END */
+  /* ROUTE-BEGIN */
+  /* ===== תרחיש ״נתיב (קו) כאזור פעילות״: סימון בלחיצות על המפה (הוספה, גרירה, עריכת שורה, מחיקה, הדבקה, תקרת 20 נקודות), הרצה, שדה 8, מפות, שמירה ברשומה בלי lat/lon/radius, ״הצג״ / ״כבסיס״ / בדיקה חוזרת, ומעבר בין מעגל לנתיב ===== */
+  if (!LIVE) {
+  {
+    const errs = [];
+    const { ctx, page } = await newPage(browser);
+    page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    const vis = sel => page.locator(sel).isVisible();
+    check("ברירת מחדל: מעגל — coordBox ו-radiusBox גלויים, hwBox/routeBox/routeBar מוסתרים", (await vis("#coordBox")) && (await vis("#radiusBox")) && !(await vis("#hwBox")) && !(await vis("#routeBox")) && !(await vis("#routeBar")) && (await page.evaluate(() => window.__REQ.S.areaKind)) === "circle");
+    check("circle readInputs: אין מפתח area ויש radius", await page.evaluate(() => { const i = window.__REQ.readInputs(); return !("area" in i) && "radius" in i && Object.keys(i)[0] === "lat"; }));
+    // מעבר לנתיב
+    await page.click("#akRoute");
+    check("נתיב: coordBox/radiusBox מוסתרים; hwBox/routeBox/routeBar גלויים", !(await vis("#coordBox")) && !(await vis("#radiusBox")) && (await vis("#hwBox")) && (await vis("#routeBox")) && (await vis("#routeBar")));
+    check("נתיב: כותרת המפה והמקרא הוחלפו", /נתיב/.test(await page.textContent("#mapTitle")) && /רוחב/.test(await page.textContent("#lgGreen")) && /פי 2 מהרוחב/.test(await page.textContent("#lgOrange")), await page.textContent("#mapTitle"));
+    check("halfWidth ברירת מחדל 50, min 10, max 1000", await page.evaluate(() => { const h = document.getElementById("halfWidth"); return h.value === "50" && h.min === "10" && h.max === "1000"; }));
+    await page.evaluate(() => { window.__REQ.S.lf.m.setView([32.0991, 34.8166], 16); });
+    await page.waitForTimeout(500);
+    const clickAt = async (lat, lon) => {
+      await page.locator("#map").scrollIntoViewIfNeeded();
+      const pt = await page.evaluate(([la, lo]) => { const m = window.__REQ.S.lf.m, p = m.latLngToContainerPoint([la, lo]), r = m.getContainer().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]);
+      await page.mouse.click(pt.x, pt.y);
+    };
+    await page.locator("#map").scrollIntoViewIfNeeded();
+    await clickAt(32.0991, 34.8160); await clickAt(32.0995, 34.8170); await clickAt(32.1002, 34.8178);
+    let st = await page.evaluate(() => ({ n: window.__REQ.S.route.pts.length, pts: window.__REQ.S.route.pts, marks: window.__REQ.S.lf.route.marks.length, corr: window.__REQ.S.lf.route.corr.getLatLngs()[0].length, outer: window.__REQ.S.lf.route.outer.getLatLngs()[0].length, onMap: ["casing", "line", "corr", "outer"].map(k => window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.route[k])), circ: [window.__REQ.S.lf.green, window.__REQ.S.lf.marker].map(x => !!x) }));
+    check("3 קליקים: 3 נקודות, 3 סמנים, פוליגונים ירוק/כתום נבנו ושכבות על המפה", st.n === 3 && st.marks === 3 && st.corr >= 6 && st.outer >= 6 && st.onMap.every(Boolean), JSON.stringify(st));
+    check("רשימת הנקודות: 3 שורות, מידע: 3 נקודות + אורך", (await page.locator("#routeList .rtRow").count()) === 3 && /3 נקודות/.test(await page.textContent("#rtInfo")) && /ק״מ/.test(await page.textContent("#rtInfo")), await page.textContent("#rtInfo"));
+    const inp = await page.evaluate(() => JSON.parse(JSON.stringify(window.__REQ.readInputs())));
+    check("readInputs בנתיב: area עם 3 נקודות ורוחב 50, lat/lon עוגן, בלי radius, area במקום radius", inp.area && inp.area.kind === "route" && inp.area.pts.length === 3 && inp.area.halfWidth === 50 && !("radius" in inp) && Object.keys(inp).slice(0, 3).join() === "lat,lon,area" && typeof inp.lat === "number", JSON.stringify(Object.keys(inp).slice(0, 5)) + " " + inp.lat);
+    // לחיצה כפולה לא מוסיפה שתי נקודות ולא מקרבת
+    const z0 = await page.evaluate(() => window.__REQ.S.lf.m.getZoom());
+    const pt = await page.evaluate(() => { const m = window.__REQ.S.lf.m, p = m.latLngToContainerPoint([32.1010, 34.8190]), r = m.getContainer().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; });
+    await page.mouse.dblclick(pt.x, pt.y); await page.waitForTimeout(400);
+    const after = await page.evaluate(() => ({ n: window.__REQ.S.route.pts.length, z: window.__REQ.S.lf.m.getZoom() }));
+    check("לחיצה כפולה: נוספת נקודה אחת בלבד ואין קירוב", after.n === 4 && after.z === z0, JSON.stringify(after));
+    // גרירת סמן
+    const before = await page.evaluate(() => window.__REQ.S.route.pts[1].slice());
+    const mp = await page.evaluate(() => { const mk = window.__REQ.S.lf.route.marks[1].getElement().getBoundingClientRect(); return { x: mk.left + mk.width / 2, y: mk.top + mk.height / 2 }; });
+    await page.mouse.move(mp.x, mp.y); await page.mouse.down(); await page.mouse.move(mp.x + 30, mp.y - 20, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(200);
+    const moved = await page.evaluate(() => window.__REQ.S.route.pts[1].slice());
+    check("גרירת P2: הנקודה זזה ומעוגלת ל-6 ספרות", (moved[0] !== before[0] || moved[1] !== before[1]) && moved.every(v => Math.abs(v * 1e6 - Math.round(v * 1e6)) < 1e-6), JSON.stringify([before, moved]));
+    check("שורת הרשימה התעדכנה אחרי גרירה", (await page.inputValue("#routeList .rtRow:nth-child(2) input")) === moved[0].toFixed(6) + ", " + moved[1].toFixed(6));
+    // עריכה ידנית של שורה
+    await page.fill("#routeList .rtRow:nth-child(3) input", "32.1100, 34.8300"); await page.dispatchEvent("#routeList .rtRow:nth-child(3) input", "change");
+    check("עריכת שורה: P3 עודכנה", JSON.stringify(await page.evaluate(() => window.__REQ.S.route.pts[2])) === "[32.11,34.83]");
+    await page.fill("#routeList .rtRow:nth-child(3) input", "זבל"); await page.dispatchEvent("#routeList .rtRow:nth-child(3) input", "change");
+    check("עריכת שורה לא תקינה: הודעה, bad, והנתיב לא השתנה", /אינו חוקי/.test(await page.textContent("#rtLocal")) && (await page.evaluate(() => document.querySelector("#routeList .rtRow:nth-child(3) input").classList.contains("bad"))) && (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 4);
+    // הסרת שורה ב-×
+    await page.click("#routeList .rtRow:nth-child(1) .xbtn");
+    check("× על שורה: נמחקה נקודה (3 נשארו) והסמנים נבנו מחדש", (await page.evaluate(() => [window.__REQ.S.route.pts.length, window.__REQ.S.lf.route.marks.length])).join() === "3,3" && (await page.locator("#routeList .rtRow").count()) === 3);
+    await page.click("#rtUndo");
+    check("מחק אחרונה: נשארו 2", (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 2);
+    await page.click("#rtClear");
+    check("נקה: 0 נקודות, אין פוליגונים על המפה, שורת מידע ריקה", (await page.evaluate(() => [window.__REQ.S.route.pts.length, ["casing", "line", "corr", "outer"].some(k => window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.route[k])), window.__REQ.S.lf.route.marks.length])).join() === "0,false,0" && /עדיין לא סומנו/.test(await page.textContent("#rtInfo")));
+    // הדבקה
+    await page.fill("#rtText", "32.0991, 34.8160\n\n32.0995, 34.8170\nבלה בלה");
+    await page.click("#rtApply");
+    check("הדבקה עם שורה פגומה: לא נטען דבר, הודעה עם מספר השורה (4)", (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 0 && /שורה 4/.test(await page.textContent("#rtLocal")), await page.textContent("#rtLocal"));
+    await page.fill("#rtText", "32.0991, 34.8160\n32.0995, 34.8170\n32.1002, 34.8178");
+    await page.click("#rtApply");
+    check("הדבקה תקינה: 3 נקודות, הטקסט נוקה, הודעה", (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 3 && (await page.inputValue("#rtText")) === "" && /נטענו 3/.test(await page.textContent("#rtLocal")));
+    await page.fill("#rtText", Array.from({ length: 21 }, (_, i) => (32.0 + i * 0.001).toFixed(6) + ", 34.8100").join("\n"));
+    await page.click("#rtApply");
+    check("הדבקה של 21 נקודות: נדחתה (עדיין 3)", (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 3 && /מוגבל ל-20/.test(await page.textContent("#rtLocal")), await page.textContent("#rtLocal"));
+    // 20 נקודות ואז ה-21 בלחיצה
+    await page.evaluate(() => { window.__REQ.setRoute(Array.from({ length: 20 }, (_, i) => [32.09 + i * 0.0005, 34.81 + i * 0.0006]), 30, true); });
+    await page.waitForTimeout(1500);
+    { const c = await page.evaluate(() => { const m = window.__REQ.S.lf.m, ll = m.containerPointToLatLng([400, 380]); return [ll.lat, ll.lng]; }); await clickAt(c[0], c[1]); }
+    check("21 בלחיצה: נדחתה עם הודעה גלויה; נשארו 20", (await page.evaluate(() => window.__REQ.S.route.pts.length)) === 20 && /20 נקודות/.test(await page.textContent("#rtMsg")), await page.textContent("#rtMsg"));
+    // מעבר חזרה למעגל ושוב
+    await page.click("#akCircle");
+    st = await page.evaluate(() => ({ kind: window.__REQ.S.areaKind, pts: window.__REQ.S.route.pts.length, routeOn: ["casing", "line", "corr", "outer"].some(k => window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.route[k])), marks: window.__REQ.S.lf.route.marks.length, dbl: window.__REQ.S.lf.m.doubleClickZoom.enabled(), cls: window.__REQ.S.lf.m.getContainer().classList.contains("routeMode") }));
+    check("חזרה למעגל: הנתיב לא מצויר, הנקודות נשמרות בזיכרון, zoom בלחיצה כפולה חזר", st.kind === "circle" && st.pts === 20 && !st.routeOn && st.marks === 0 && st.dbl && !st.cls, JSON.stringify(st));
+    await page.fill("#coord", "32.099128, 34.816617"); await page.dispatchEvent("#coord", "change");
+    check("מעגל: setCenter צייר את השכבות", await page.evaluate(() => !!window.__REQ.S.lf.green && window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.green) && window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.marker)));
+    await page.click("#akRoute");
+    st = await page.evaluate(() => ({ circ: [window.__REQ.S.lf.green, window.__REQ.S.lf.orange, window.__REQ.S.lf.marker].map(l => window.__REQ.S.lf.m.hasLayer(l)), route: ["corr", "outer"].map(k => window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.route[k])), marks: window.__REQ.S.lf.route.marks.length, dbl: window.__REQ.S.lf.m.doubleClickZoom.enabled() }));
+    check("שוב נתיב: המעגל מוסר מהמפה, הנתיב חוזר עם 20 סמנים", st.circ.every(x => !x) && st.route.every(Boolean) && st.marks === 20 && !st.dbl, JSON.stringify(st));
+    console.log("console errors:", errs.length ? errs.join(" | ") : "none");
+    await page.screenshot({ path: path.join(OUT, "route-1.png") });
+    await ctx.close();
+
+  }
+  {
+    const errs = [];
+    const REC_SUFFIX = " — נתוני הבקשה.json";
+    const { ctx, page } = await newPage(browser);
+    const env = page._env;
+    page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    await fillExample(page, {});
+    await page.click("#akRoute");
+    const PTS = [[32.0991, 34.8160], [32.0995, 34.8170], [32.1002, 34.8178]];
+    await page.evaluate(p => { window.__REQ.setRoute(p, 50, true); }, PTS);
+    await page.click("#runBtn");
+    await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    const st1 = await page.evaluate(() => { const r = window.__REQ.S.res; return r ? { R: r.R, area: r.area && r.area.kind, inpKeys: Object.keys(r.inp).slice(0, 4), hasRadius: "radius" in r.inp, items: r.nearScan.items.length, run: window.__REQ.S.running, err: document.getElementById("e_run").textContent, site: r.inp.siteName } : null; });
+    check("הרצת נתיב: S.res עם res.R = 50, res.area route, inp.area, בלי radius", st1 && st1.R === 50 && st1.area === "route" && !st1.hasRadius && st1.inpKeys.join() === "lat,lon,area,heightM", JSON.stringify(st1));
+    await page.check("#reviewOk");
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+    check("הבקשה מוכנה לשליחה (כל הבדיקות עברו בנתיב)", true);
+    const rep = await page.evaluate(() => document.getElementById("report").innerText);
+    check("הדוח במסך: כותרת ״הנתיב״ בדף הבדיקות והכותרת ״מרחק מהציר״, בלי ״הנקודה״ כסעיף", /\n?\d+\. הנתיב/.test(rep) && /מרחק מהציר/.test(rep) && !/\d\. הנקודה/.test(rep), rep.slice(rep.indexOf("דף בדיקות"), rep.indexOf("דף בדיקות") + 300).replace(/\n/g, " | "));
+    const gate = await page.evaluate(() => document.getElementById("gate").innerText);
+    const prog = await page.evaluate(() => document.getElementById("progress").innerText);
+    check("רשימת ההתקדמות: ״עד פי 2 מהרוחב״", /עד פי 2 מהרוחב/.test(prog) || /עד פי 2 מ/.test(prog), prog.replace(/\n/g, " | "));
+    console.log("PROGRESS:", prog.replace(/\n/g, " | "));
+    // staleness
+    await page.fill("#halfWidth", "60");
+    await page.waitForFunction(() => window.__REQ.S.stale === true, null, { timeout: 5000 });
+    check("שינוי הרוחב אחרי הרצה: הניתוח ישן והבקשה אינה מוכנה", await page.evaluate(() => window.__REQ.S.stale && !window.__REQ.S.ready));
+    await page.click("#runBtn");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.R === 60 && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    await page.check("#reviewOk");
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+    // הוספת נקודה → ישן
+    await page.evaluate(() => { window.__REQ.addRoutePoint(32.1010, 34.8185); });
+    check("הוספת נקודה אחרי הרצה: ישן", await page.evaluate(() => window.__REQ.S.stale && !window.__REQ.S.ready));
+    await page.click("#rtUndo");
+    // אחרי undo עדיין ישן (stale נשאר עד הרצה חוזרת)
+    await page.click("#runBtn");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.inp.area.pts.length === 3 && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    await page.check("#reviewOk");
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+    // שמירה בדרייב
+    await page.click("#btnDrive");
+    await page.waitForFunction(() => /נשמרו \d+ קבצים|נשמר/.test(document.getElementById("driveMsg").textContent) || /נכשלה/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+    const dm = await page.textContent("#driveMsg"); check("שמירה בדרייב הצליחה", /נשמרו/.test(dm), dm);
+    const fo = Object.values(env.folders).filter(f => f.id !== "ROOT" && !f.trashed && f.files && f.files.some(x => !x.trashed && x.name.endsWith(REC_SUFFIX)));
+    const rec = fo.length ? JSON.parse(fo[0].files.find(x => !x.trashed && x.name.endsWith(REC_SUFFIX)).bytes.toString("utf8")) : null;
+    check("קובץ נתוני הבקשה: inputs.area (3 נקודות, רוחב 60), בלי lat/lon/radius, תמונת מצב v:2 עם scan route", rec && rec.inputs.area && rec.inputs.area.pts.length === 3 && rec.inputs.area.halfWidth === 60 && !("lat" in rec.inputs) && !("lon" in rec.inputs) && !("radius" in rec.inputs) && rec.snapshot && rec.snapshot.v === 2 && rec.snapshot.scan.k === "route" && rec.snapshot.scan.hw === 60 && rec.snapshot.scan.pts.length === 3, rec ? JSON.stringify({ inputs: Object.keys(rec.inputs), snapV: rec.snapshot && rec.snapshot.v, snapErr: rec.snapshotError, scan: rec.snapshot && rec.snapshot.scan && Object.keys(rec.snapshot.scan) }) : "no rec");
+    console.log("REC inputs keys:", rec && Object.keys(rec.inputs).join());
+    // שליחה (מצב בדיקה) כדי שהבדיקה החוזרת תהיה זמינה
+    await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk"); await page.click("#sendGo");
+    await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה|נשלחה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 90000 });
+    const sp = await page.textContent("#sendProg"); check("שליחה (בדיקה) הצליחה", /נשלח/.test(sp), sp);
+    await page.keyboard.press("Escape");
+    // reload: דף נקי -> הבקשות שלי -> כבסיס
+    await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    const openDlg = async () => { await page.click("#ubMyReq"); await page.waitForSelector("#mrBody", { state: "attached" }); await page.waitForFunction(() => { const b = document.getElementById("mrBody"); return b && !b.hasAttribute("aria-busy") && document.getElementById("mrStatus").textContent.trim() !== ""; }, null, { timeout: 15000 }); };
+    await openDlg();
+    const rows = await page.evaluate(() => [...document.querySelectorAll("#mrBody .mrRow")].map(r => ({ id: r.dataset.id, name: r.querySelector(".mrName").textContent, state: r.querySelector(".mrChip").dataset.state })));
+    check("הבקשות שלי: שורה אחת (נשלחה לבדיקה)", rows.length === 1 && rows[0].state === "sent_test", JSON.stringify(rows));
+    // הצג
+    await page.click('#mrBody button[data-act="view"]'); await page.waitForSelector("#mrView", { timeout: 15000 });
+    const vw = await page.evaluate(() => document.getElementById("mrView").innerText);
+    check("״הצג״: נתיב — נקודות P1..P3, אורך ורוחב; בלי נקודת מרכז/רדיוס", /P1: 32\.099100/.test(vw) && /P3:/.test(vw) && /אורך הנתיב/.test(vw) && /60 מ׳/.test(vw) && !/נקודת מרכז/.test(vw), vw.replace(/\n/g, " | ").slice(0, 400));
+    await page.click('#mrView ~ .mrBtns button[data-act="base"]');
+    await page.waitForFunction(() => !document.getElementById("authModal") && document.getElementById("baseNote"), null, { timeout: 15000 });
+    const b1 = await page.evaluate(() => { const S = window.__REQ.S; return { kind: S.areaKind, pts: S.route.pts, hw: document.getElementById("halfWidth").value, radio: document.getElementById("akRoute").checked, routeBoxVisible: !document.getElementById("routeBox").hidden, coordHidden: document.getElementById("coordBox").hidden, mk: S.lf.route && S.lf.route.marks.length, manualKey: S.manualKey, radius: document.getElementById("radius").value, rows: document.querySelectorAll("#routeList .rtRow").length, note: document.getElementById("baseNote").innerText }; });
+    check("כבסיס: מצב נתיב, 3 נקודות, רוחב 60, מסומנות במפה, שדה הרדיוס של המעגל לא נדרס ב-undefined/NaN (נשאר מספר)", b1.kind === "route" && JSON.stringify(b1.pts) === JSON.stringify(PTS) && b1.hw === "60" && b1.radio && b1.routeBoxVisible && b1.coordHidden && b1.mk === 3 && b1.rows === 3 && /^\d+$/.test(b1.radius) && b1.manualKey === "route", JSON.stringify(b1));
+    // הרצה על הבסיס (תאריכים)
+    const ymd = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    await page.fill("#dateFrom", ymd(10)); await page.fill("#dateTo", ymd(12)); await page.fill("#timeFrom", "17:00"); await page.fill("#timeTo", "19:00");
+    // בדיקה חוזרת
+    await openDlg();
+    await page.click('#mrBody button[data-act="recheck"]');
+    await page.waitForSelector("#rcTitle", { timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById("rcRes") || (document.getElementById("rcMsg") && document.getElementById("rcMsg").textContent.trim()), null, { timeout: 150000 });
+    const rc = await page.evaluate(() => document.getElementById("authModal").innerText);
+    check("בדיקה חוזרת על נתיב: התוצאה הוצגה (לא ״פגום״), הקלט הנעול מציג נתיב ורוחב", !/פגום/.test(rc) && /נתיב — נקודות לפי הסדר/.test(rc) && /P1: 32\.099100/.test(rc) && /רוחב מכל צד של הציר/.test(rc), rc.replace(/\n/g, " | ").slice(0, 700));
+    check("בדיקה חוזרת על נתיב: ניתנת להשוואה (אותה סריקה) — ״לא נמצאו שינויים״ או סיכום שינויים, לא ״הסריקה שונה״", /לא נמצאו שינויים|נמצא שינוי|נמצאו \d+ שינויים/.test(rc) && !/שונים מאלה שבהגשה/.test(rc), rc.replace(/\n/g, " | ").slice(0, 400));
+    console.log("RC:", rc.replace(/\n/g, " | ").slice(0, 900));
+    await page.keyboard.press("Escape");
+    console.log("console errors:", errs.length ? errs.join(" | ") : "none");
+    await page.screenshot({ path: path.join(OUT, "route-2.png") });
+    await ctx.close();
+
+  }
+  {
+    const errs = [];
+    const { ctx, page } = await newPage(browser);
+    page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    await fillExample(page, {});
+    // circle run first
+    await page.click("#runBtn");
+    await page.waitForFunction(() => document.querySelector("#gate .banner") && window.__REQ.S.res && !window.__REQ.S.running, null, { timeout: 150000 });
+    await page.check("#reviewOk");
+    await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+    const circKey = await page.evaluate(() => JSON.stringify(Object.keys(window.__REQ.S.res.inp)));
+    check("מעגל: res.inp בלי area ובלי עיוות (lat,lon,radius,heightM…)", /^\["lat","lon","radius","heightM"/.test(circKey) && !/area/.test(circKey), circKey);
+    // switch to route => stale
+    await page.click("#akRoute");
+    check("מעבר לנתיב אחרי הרצת מעגל: הניתוח ישן, לא מוכן", await page.evaluate(() => window.__REQ.S.stale && !window.__REQ.S.ready));
+    // run with 0 points => errors
+    await page.click("#runBtn");
+    await page.waitForFunction(() => document.getElementById("e_run").textContent.trim() !== "", null, { timeout: 10000 });
+    let er = await page.evaluate(() => ({ run: document.getElementById("e_run").textContent, route: document.getElementById("e_route").textContent, bad: document.getElementById("routeBox").classList.contains("bad"), focus: document.activeElement && (document.activeElement.id || document.activeElement.tagName), hw: document.getElementById("e_halfWidth").textContent }));
+    check("0 נקודות: שגיאת נתיב ליד התיבה, מסגרת bad, ההודעה ליד הכפתור מציינת ״נקודות הנתיב״, מיקוד בתיבת הנתיב (rtText)", /לפחות שתי נקודות/.test(er.route) && er.bad && /נקודות הנתיב/.test(er.run) && er.focus === "rtText", JSON.stringify(er));
+    await page.evaluate(() => { window.__REQ.addRoutePoint(32.0991, 34.8160); });
+    await page.fill("#halfWidth", "5");
+    await page.click("#runBtn");
+    await page.waitForFunction(() => /נקודות הנתיב|רוחב/.test(document.getElementById("e_run").textContent), null, { timeout: 10000 });
+    er = await page.evaluate(() => ({ run: document.getElementById("e_run").textContent, route: document.getElementById("e_route").textContent, hw: document.getElementById("e_halfWidth").textContent, hwBad: document.getElementById("halfWidth").classList.contains("bad") }));
+    check("נקודה אחת ורוחב 5: שתי השגיאות (route, halfWidth) מוצגות; halfWidth מסומן bad", /לפחות שתי נקודות/.test(er.route) && /בין 10/.test(er.hw) && er.hwBad && /רוחב מכל צד/.test(er.run), JSON.stringify(er));
+    const info = await page.textContent("#rtInfo");
+    check("נקודה אחת: שורת מידע ללא אורך", /1 נקודה/.test(info) && !/אורך/.test(info), info);
+    await page.fill("#halfWidth", "50");
+    // search place in route mode: no point added
+    await page.fill("#q", "גבעת המופעים"); await page.click("#qBtn");
+    await page.waitForSelector("#places button", { timeout: 10000 }); await page.click("#places button");
+    await page.waitForTimeout(500);
+    check("חיפוש מקום בנתיב: המפה זזה, לא נוספה נקודה, #coord לא נכתב מחדש", await page.evaluate(() => { const m = window.__REQ.S.lf.m, c = m.getCenter(); return window.__REQ.S.route.pts.length === 1 && Math.abs(c.lat - 32.099128) < 0.01; }), "");
+    // sun times, etc: route with 2 points is valid -> run again OK and manual key
+    await page.evaluate(() => { window.__REQ.addRoutePoint(32.0995, 34.8170); });
+    await page.click("#runBtn");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.area && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    const ok2 = await page.evaluate(() => ({ kind: window.__REQ.S.res.area.kind, key: window.__REQ.S.manualKey, stale: window.__REQ.S.stale, site: document.getElementById("siteName").value }));
+    check("הרצה עם נתיב של שתי נקודות עברה; manualKey=route (קבוע — עריכת קודקודים אינה מאפסת תוספות ידניות); לא ישן", ok2.kind === "route" && ok2.key === "route" && !ok2.stale && ok2.site.length > 0, JSON.stringify(ok2));
+    // manual item added -> reanalyze keeps route
+    await page.check("#reviewOk");
+    await page.fill("#mName", "עגורן"); await page.fill("#mCoord", "32.0993, 34.8165"); await page.click("#mAdd");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.inp.manualItems && window.__REQ.S.res.inp.manualItems.length === 1 && window.__REQ.S.res.area, null, { timeout: 60000 });
+    check("תוספת ידנית בנתיב: reanalyze שומר area", await page.evaluate(() => window.__REQ.S.res.area.kind === "route" && window.__REQ.S.res.inp.area.pts.length === 2 && !("radius" in window.__REQ.S.res.inp)));
+    // mode switch back keeps the circle & manual key
+    await page.click("#akCircle");
+    check("חזרה למעגל: ישן, והשדות המקוריים (coord, radius) נשמרו", await page.evaluate(() => window.__REQ.S.stale && document.getElementById("coord").value === "32.099128, 34.816617" && document.getElementById("radius").value === "200"));
+    console.log("console errors:", errs.length ? errs.join(" | ") : "none");
+    await ctx.close();
+
+  }
+  /* UIFIX-BEGIN */
+  {
+    /* ===== ממשק הנתיב — תיקוני הסקירה (route): רמז הערות המבקש, לחיצה כפולה, שגיאה עם מספר נקודה + סימון שורה + קירוב, הודעות ליד הבקרים, חסימת הרצה על טקסט שלא נקלט, פס כתום שמושמט, תוספות ידניות בעריכת נתיב, נעילה בזמן הרצה, הדפסה ===== */
+    const errs = [];
+    const { ctx, page } = await newPage(browser);
+    page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    await fillExample(page, {});
+    const txt = sel => page.evaluate(s => { const e = document.querySelector(s); return e ? e.textContent : ""; }, sel);
+    const rowsBad = () => page.evaluate(() => [...document.querySelectorAll("#routeList .rtRow input")].map((e, i) => (e.classList.contains("bad") ? i + 1 : 0)).filter(Boolean));
+    const focusNow = () => page.evaluate(() => { const a = document.activeElement; if (a && a.closest && a.closest("#routeList")) return "row" + (1 + [...document.querySelectorAll("#routeList .rtRow input")].indexOf(a)); return (a && a.id) || ""; });
+    const runWait = async () => { await page.evaluate(() => { window.__r0 = window.__REQ.S.res; }); await page.click("#runBtn"); await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res !== window.__r0 && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 }); };   // res חדש (ולא הישן שעוד לא אופס: run מאפס אותו רק אחרי checkSync)
+    const px = async (lat, lon) => { await page.locator("#map").scrollIntoViewIfNeeded(); return page.evaluate(([la, lo]) => { const m = window.__REQ.S.lf.m, p = m.latLngToContainerPoint([la, lo]), r = m.getContainer().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]); };
+    const nPts = () => page.evaluate(() => window.__REQ.S.route.pts.length);
+
+    // [5] רמז הערות המבקש: שם הסעיף לפי סוג האזור (בדוח של נתיב אין סעיף ״הנקודה״)
+    check("רמז הערות המבקש: במעגל ״הנקודה״ (כמו תמיד)", (await page.textContent("#visitSec")) === '"הנקודה"' && /בסעיף "הנקודה"\)/.test(await page.evaluate(() => document.getElementById("visitSec").parentNode.textContent)));
+    await page.click("#akRoute");
+    const hintR = await page.evaluate(() => document.getElementById("visitSec").parentNode.textContent);
+    check("רמז הערות המבקש: בנתיב ״הנתיב״ ולא ״הנקודה״", /בסעיף "הנתיב"\)/.test(hintR) && !/הנקודה/.test(hintR), hintR);
+
+    // [8] לחיצה כפולה / הקשה כפולה: הלחיצה השנייה בתוך 350 מ״ש ו-10 פיקסלים מנקודה שנוספה מתעלמת (בכל זום); לחיצה איטית או רחוקה — נוספת
+    await page.evaluate(() => { window.__REQ.S.lf.m.setView([32.0991, 34.8166], 15); }); await page.waitForTimeout(500);
+    { const a = await px(32.0991, 34.8130); await page.mouse.click(a.x, a.y); await page.waitForTimeout(450); const b = await px(32.0995, 34.8170); await page.mouse.click(b.x, b.y); await page.waitForTimeout(450);
+      const c = await px(32.1002, 34.8205); await page.mouse.click(c.x, c.y); await page.mouse.click(c.x - 1, c.y + 2);
+      await page.waitForTimeout(150);
+      check("לחיצה כפולה עם סטייה של 1–2 פיקסלים (זום 15): נוספת נקודה אחת בלבד", (await nPts()) === 3, String(await nPts()));
+      const d = await px(32.1002, 34.8205); await page.mouse.click(d.x + 60, d.y);
+      check("לחיצה מהירה אבל רחוקה (60 פיקסלים): נוספת", (await nPts()) === 4, String(await nPts()));
+      await page.waitForTimeout(500); const e2 = await px(32.1002, 34.8205); await page.mouse.click(e2.x + 66, e2.y + 6);
+      check("לחיצה איטית (500 מ״ש) ליד הנקודה האחרונה: נוספת (כלל המטר הקיים בלבד)", (await nPts()) === 5, String(await nPts()));
+      const dt = await page.evaluate(() => ({ isDup: typeof window.__REQ.addRoutePoint, msg: document.getElementById("rtMsg").textContent }));
+      check("לחיצה כפולה מתעלמת בשקט (בלי הודעה)", dt.msg === "", dt.msg);
+    }
+
+    // [9][7] שגיאת אימות עם מספר הנקודה, סימון השורה והמיקוד בה; תיקון מהרשימה מקרב את המפה בחזרה
+    const P7 = [[32.0991, 34.8160], [32.0995, 34.8170], [32.1002, 34.8178], [32.1010, 34.8190], [32.1018, 34.8200], [32.1025, 34.8212], [32.1030, 34.8225]];
+    await page.evaluate(p => { window.__REQ.setRoute(p, 50, true); }, P7);
+    await page.waitForTimeout(600);
+    await page.fill("#routeList .rtRow:nth-child(6) input", "32.1020, 348210"); await page.dispatchEvent("#routeList .rtRow:nth-child(6) input", "change");
+    const info9 = await page.textContent("#rtInfo");
+    check("שורת המידע: ״מחוץ לתחום ישראל״ עם מספר הנקודה (P6)", /מחוץ לתחום ישראל/.test(info9) && /P6/.test(info9), info9);
+    await page.click("#runBtn");
+    await page.waitForFunction(() => document.getElementById("e_run").textContent.trim() !== "", null, { timeout: 10000 });
+    { const er = await page.evaluate(() => ({ route: document.getElementById("e_route").textContent, run: document.getElementById("e_run").textContent, res: !!window.__REQ.S.res }));
+      check("הרצה עם נקודה מחוץ לתחום: ההודעה ב-#e_route מציינת P6, ההרצה נעצרה", /P6/.test(er.route) && /מחוץ לתחום/.test(er.route) && /נקודות הנתיב/.test(er.run) && !er.res, JSON.stringify(er)); }
+    check("השורה הפגומה (P6) מסומנת bad — ורק היא", JSON.stringify(await rowsBad()) === "[6]", JSON.stringify(await rowsBad()));
+    check("המיקוד על שורה P6 (לא על P1)", (await focusNow()) === "row6", await focusNow());
+    const zBefore = await page.evaluate(() => window.__REQ.S.lf.m.getZoom());
+    await page.fill("#routeList .rtRow:nth-child(6) input", "32.1025, 34.8212"); await page.dispatchEvent("#routeList .rtRow:nth-child(6) input", "change");
+    { const f = await page.evaluate(() => { const m = window.__REQ.S.lf.m, b = m.getBounds(); return { z: m.getZoom(), inView: window.__REQ.S.route.pts.every(q => b.contains(q)), rowBad: document.querySelectorAll("#routeList .rtRow input.bad").length }; });
+      check("אחרי תיקון P6 ברשימה: המפה קורבה בחזרה לנתיב (כל הנקודות בתצוגה, זום גבוה מ-10), בלי סימון bad", f.inView && f.z >= 12 && f.rowBad === 0, JSON.stringify([zBefore, f])); }
+    // שתי נקודות עוקבות קרובות מדי: P5 ו-P6
+    await page.fill("#routeList .rtRow:nth-child(5) input", "32.1025, 34.8212"); await page.dispatchEvent("#routeList .rtRow:nth-child(5) input", "change");
+    { const i5 = await page.textContent("#rtInfo");
+      check("שתי נקודות זהות: ההודעה מציינת בין P5 ל-P6", /P5/.test(i5) && /P6/.test(i5) && /קרובות מדי/.test(i5), i5); }
+    await page.click("#runBtn");
+    await page.waitForFunction(() => /נקודות הנתיב/.test(document.getElementById("e_run").textContent), null, { timeout: 10000 });
+    check("הרצה עם P5=P6: שתי השורות מסומנות, המיקוד על P5", JSON.stringify(await rowsBad()) === "[5,6]" && (await focusNow()) === "row5", JSON.stringify([await rowsBad(), await focusNow()]));
+    await page.fill("#routeList .rtRow:nth-child(5) input", "32.1018, 34.8200"); await page.dispatchEvent("#routeList .rtRow:nth-child(5) input", "change");
+
+    // [7] הודעות ההדבקה ועריכת שורה מופיעות ממש מתחת לבקרים (#rtLocal), לא בפס שמעל המפה (#rtMsg)
+    await page.fill("#rtText", "32.0991, 34.8160\nzzz"); await page.locator("#rtApply").scrollIntoViewIfNeeded(); await page.click("#rtApply");
+    { const m = await page.evaluate(() => { const b = document.getElementById("rtApply").getBoundingClientRect(), l = document.getElementById("rtLocal").getBoundingClientRect(); return { text: document.getElementById("rtLocal").textContent, gap: l.top - b.bottom, inView: l.top >= 0 && l.bottom <= window.innerHeight, rtMsg: document.getElementById("rtMsg").textContent, vis: l.height > 0 }; });
+      check("הדבקה פגומה: ההודעה (שורה 2) ב-#rtLocal ממש מתחת לכפתור (עד 60px) ובתוך המסך, #rtMsg ריק", /שורה 2/.test(m.text) && m.vis && m.gap >= 0 && m.gap < 60 && m.inView && m.rtMsg === "", JSON.stringify(m)); }
+    await page.fill("#rtText", "");
+    await page.fill("#routeList .rtRow:nth-child(2) input", "abc"); await page.dispatchEvent("#routeList .rtRow:nth-child(2) input", "change");
+    { const m = await page.evaluate(() => ({ local: document.getElementById("rtLocal").textContent, rtMsg: document.getElementById("rtMsg").textContent, bad: document.querySelector("#routeList .rtRow:nth-child(2) input").classList.contains("bad") }));
+      check("עריכת שורה לא תקינה: ההודעה ב-#rtLocal (עם P2) והשורה bad; #rtMsg ריק", /P2/.test(m.local) && /אינו חוקי/.test(m.local) && m.bad && m.rtMsg === "", JSON.stringify(m)); }
+    // [6] הרצה נחסמת על שורה שהוקלדה ואינה נ״צ חוקי (לא רצה על הנקודה הקודמת); הסימון האדום נשאר
+    await page.click("#runBtn");
+    await page.waitForFunction(() => /נקודות הנתיב/.test(document.getElementById("e_run").textContent), null, { timeout: 10000 });
+    { const er = await page.evaluate(() => ({ route: document.getElementById("e_route").textContent, res: !!window.__REQ.S.res, val: document.querySelector("#routeList .rtRow:nth-child(2) input").value }));
+      check("הרצה עם שורה לא חוקית: נחסמה, ההודעה ב-#e_route מציינת P2, הטקסט נשאר בשורה, אין ניתוח", /P2/.test(er.route) && /אינו חוקי|שאינו חוקי/.test(er.route) && !er.res && er.val === "abc", JSON.stringify(er)); }
+    check("הסימון האדום נשאר על השורה והמיקוד עליה", JSON.stringify(await rowsBad()) === "[2]" && (await focusNow()) === "row2", JSON.stringify([await rowsBad(), await focusNow()]));
+    await page.fill("#routeList .rtRow:nth-child(2) input", "32.0995, 34.8170"); await page.dispatchEvent("#routeList .rtRow:nth-child(2) input", "change");
+    check("תיקון השורה מסיר את הסימון", (await rowsBad()).length === 0);
+    // [6] נקודות שהודבקו ולא נטענו
+    await page.fill("#rtText", "32.2000, 34.9000\n32.2100, 34.9100"); await page.click("#runBtn");
+    await page.waitForFunction(() => /נקודות הנתיב/.test(document.getElementById("e_run").textContent), null, { timeout: 10000 });
+    { const er = await page.evaluate(() => ({ route: document.getElementById("e_route").textContent, res: !!window.__REQ.S.res, bad: document.getElementById("rtText").classList.contains("bad"), n: window.__REQ.S.route.pts.length }));
+      check("הרצה עם נקודות שהודבקו ולא נטענו: נחסמה עם הנחיה ללחוץ ״טען״, התיבה מסומנת, הנתיב לא השתנה", /טענתם/.test(er.route) && /טען את הנקודות/.test(er.route) && er.bad && !er.res && er.n === 7, JSON.stringify(er)); }
+    check("המיקוד בתיבת ההדבקה", (await focusNow()) === "rtText", await focusNow());
+    await page.fill("#rtText", "");
+
+    // [1][4][12] פס כתום: טבעת הרוחב הכפול שאינה פשוטה אינה מצוירת, והשורה מסבירה; נתיב רגיל — הפס מצויר
+    await page.evaluate(() => { window.__REQ.setRoute([[32.1, 34.8], [32.097451, 34.802165], [32.09733, 34.802789], [32.097773, 34.806112]], 100, true); });
+    { const o = await page.evaluate(() => { const R = window.__REQ.S.lf.route, m = window.__REQ.S.lf.m; return { outer: m.hasLayer(R.outer), corr: m.hasLayer(R.corr), info: document.getElementById("rtInfo").textContent, err: window.__REQ.C.validateRoute({ area: { kind: "route", pts: window.__REQ.S.route.pts, halfWidth: 100 } }, window.__REQ.S.cfg).length }; });
+      check("נתיב תקין עם טבעת כפולה לא פשוטה: הכתום לא מצויר, הירוק כן, ובשורת המידע הערה", !o.outer && o.corr && o.err === 0 && /הפס הכתום/.test(o.info) && /אינו מצויר/.test(o.info), JSON.stringify(o)); }
+    await page.evaluate(p => { window.__REQ.setRoute(p, 50, true); }, [[32.0991, 34.8160], [32.0995, 34.8170], [32.1002, 34.8178]]);
+    { const o = await page.evaluate(() => ({ outer: window.__REQ.S.lf.m.hasLayer(window.__REQ.S.lf.route.outer), info: document.getElementById("rtInfo").textContent })); check("נתיב רגיל: הכתום מצויר ואין הערה", o.outer && !/הפס הכתום/.test(o.info), JSON.stringify(o)); }
+
+    // [3] תוספות ידניות: עריכת קודקודים (הוספה, גרירה, עריכת שורה, מחיקה) אינה מוחקת אותן, והרשימה שעל המסך תמיד כמו הניתוח; ״נקה נתיב״ היא התחלה מחדש
+    await runWait();
+    await page.fill("#mName", "עגורן"); await page.fill("#mCoord", "32.0993, 34.8165"); await page.click("#mAdd");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.inp.manualItems.length === 1, null, { timeout: 60000 });
+    await page.evaluate(() => { window.__REQ.addRoutePoint(32.1010, 34.8185); });
+    await page.fill("#routeList .rtRow:nth-child(2) input", "32.0995, 34.81705"); await page.dispatchEvent("#routeList .rtRow:nth-child(2) input", "change");
+    check("עריכת קודקוד ברשימה אחרי הרצה: הניתוח ישן, והתוספת הידנית עדיין ברשימה", await page.evaluate(() => window.__REQ.S.stale && window.__REQ.S.manual.length === 1 && /עגורן/.test(document.getElementById("manualList").textContent)));
+    await runWait();
+    { const m = await page.evaluate(() => ({ s: window.__REQ.S.manual.length, r: window.__REQ.S.res.inp.manualItems.length, li: [...document.querySelectorAll("#manualList li")].map(l => l.textContent), key: window.__REQ.S.manualKey, n: window.__REQ.S.res.inp.area.pts.length, rep: document.getElementById("report").innerText.includes("עגורן") }));
+      check("הוספה + עריכת קודקוד והרצה חוזרת: התוספת הידנית נשארת (בניתוח, ברשימה ובדוח) והרשימה והניתוח מסכימים", m.s === 1 && m.r === 1 && m.n === 4 && m.li.length === 1 && /עגורן/.test(m.li[0]) && m.rep && m.key === "route", JSON.stringify(m)); }
+    await page.click("#routeList .rtRow:nth-child(1) .xbtn");
+    await runWait();
+    check("מחיקת קודקוד והרצה חוזרת: התוספת נשארת", await page.evaluate(() => window.__REQ.S.manual.length === 1 && window.__REQ.S.res.inp.manualItems.length === 1 && window.__REQ.S.res.inp.area.pts.length === 3));
+    // הדפסה: שדה 8 של נתיב רשאי להישבר בין עמודים (מחלקת f8route מ-output.js, CSS ב-index.html); שאר השורות — לא
+    await page.emulateMedia({ media: "print" });
+    { const pr = await page.evaluate(() => { const f8 = document.querySelector("#report table.f tr.f8route"), others = [...document.querySelectorAll("#report table.f tr:not(.f8route)")]; const bi = e => getComputedStyle(e).breakInside; return { has: !!f8, f8: f8 ? bi(f8) : "", others: [...new Set(others.map(bi))], n: document.querySelectorAll("#report table.f tr.f8route").length, label: f8 ? f8.cells[0].textContent.slice(0, 3) : "" }; });
+      check("הדפסה: שורת שדה 8 של נתיב (f8route) break-inside:auto; שאר שורות הטופס avoid", pr.has && pr.n === 1 && /^8\./.test(pr.label) && pr.f8 === "auto" && pr.others.length === 1 && pr.others[0] === "avoid", JSON.stringify(pr)); }
+    await page.emulateMedia({ media: "screen" });
+    await page.click("#rtClear");
+    check("״נקה נתיב״: מפתח התוספות מתאפס (התחלה מחדש)", await page.evaluate(() => window.__REQ.S.manualKey === "" && window.__REQ.S.route.pts.length === 0));
+    await page.evaluate(p => { window.__REQ.setRoute(p, 50, true); }, [[32.0991, 34.8160], [32.0995, 34.8170], [32.1002, 34.8178]]);
+    await runWait();
+    check("הרצה אחרי ״נקה נתיב״: התוספות נמחקו והרשימה על המסך ריקה (אחרי המחיקה, לא ״עגורן״ ישן)", await page.evaluate(() => window.__REQ.S.manual.length === 0 && window.__REQ.S.res.inp.manualItems.length === 0 && /לא הוזנו תוספות/.test(document.getElementById("manualList").textContent) && !/עגורן/.test(document.getElementById("manualList").textContent)));
+
+    // [10] נעילה בזמן הרצה: סוג האזור, הרוחב, הרשימה והסמנים; לחיצה על המפה לא מוסיפה נקודה
+    let release; const gate10 = new Promise(r => { release = r; });
+    await page.route(/overpass/, async r => { await gate10; await r.fallback(); });
+    await page.click("#runBtn");
+    await page.waitForFunction(() => window.__REQ.S.running === true, null, { timeout: 10000 });
+    { const lk = await page.evaluate(() => { const g = id => document.getElementById(id).disabled; return { radios: g("akCircle") && g("akRoute"), hw: g("halfWidth"), btns: g("rtUndo") && g("rtClear") && g("rtApply") && g("rtText"), rows: [...document.querySelectorAll("#routeList input,#routeList button")].every(e => e.disabled), drag: window.__REQ.S.lf.route.marks.every(mk => !mk.dragging.enabled()) }; });
+      check("בזמן הרצה (נתיב): הרדיו, הרוחב, הכפתורים, שורות הרשימה וגרירת הסמנים נעולים", lk.radios && lk.hw && lk.btns && lk.rows && lk.drag, JSON.stringify(lk)); }
+    { const c = await px(32.1010, 34.8200); await page.mouse.click(c.x, c.y); await page.waitForTimeout(200);
+      check("בזמן הרצה: לחיצה על המפה אינה מוסיפה נקודה (הודעה בפס)", (await nPts()) === 3 && /רצות/.test(await txt("#rtMsg")), String(await nPts())); }
+    release();
+    await page.waitForFunction(() => window.__REQ.S.res && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 });
+    check("אחרי ההרצה: הכול משוחרר", await page.evaluate(() => ["akCircle", "akRoute", "halfWidth", "rtUndo", "rtClear", "rtApply", "rtText"].every(id => !document.getElementById(id).disabled) && [...document.querySelectorAll("#routeList input,#routeList button")].every(e => !e.disabled) && window.__REQ.S.lf.route.marks.every(mk => mk.dragging.enabled())));
+    console.log("console errors:", errs.length ? errs.join(" | ") : "none");
+    await ctx.close();
+  }
+  {
+    /* ===== מעגל: הרשימה על המסך מתעדכנת כשהתוספות נמחקות בהרצה (נקודה אחרת), ומעבר לנתיב באמצע הרצה אינו מזרים נתיב לניתוח המעגל ===== */
+    const errs = [];
+    const { ctx, page } = await newPage(browser);
+    page.on("console", m => { if (m.type() === "error") errs.push(m.text()); });
+    await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+    await fillExample(page, {});
+    const runWait = async () => { await page.evaluate(() => { window.__r0 = window.__REQ.S.res; }); await page.click("#runBtn"); await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res !== window.__r0 && !window.__REQ.S.running && document.querySelector("#gate .banner"), null, { timeout: 150000 }); };
+    await runWait();
+    await page.fill("#mName", "עגורן"); await page.fill("#mCoord", "32.0993, 34.8165"); await page.click("#mAdd");
+    await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.inp.manualItems.length === 1, null, { timeout: 60000 });
+    check("מעגל: הדפסה — שורות הטופס כולן avoid (אין f8route)", await (async () => { await page.emulateMedia({ media: "print" }); const r = await page.evaluate(() => ({ n: document.querySelectorAll("#report table.f tr.f8route").length, bi: [...new Set([...document.querySelectorAll("#report table.f tr")].map(e => getComputedStyle(e).breakInside))] })); await page.emulateMedia({ media: "screen" }); return r.n === 0 && r.bi.length === 1 && r.bi[0] === "avoid"; })());
+    await page.fill("#coord", "32.099228, 34.816717"); await page.dispatchEvent("#coord", "change");
+    await runWait();
+    check("מעגל, נקודה אחרת והרצה: התוספות נמחקות (כמו תמיד) והרשימה על המסך מתעדכנת איתן", await page.evaluate(() => window.__REQ.S.manual.length === 0 && window.__REQ.S.res.inp.manualItems.length === 0 && /לא הוזנו תוספות/.test(document.getElementById("manualList").textContent) && !/עגורן/.test(document.getElementById("manualList").textContent)));
+    // מעבר לנתיב באמצע הרצת מעגל
+    let release; const gate = new Promise(r => { release = r; });
+    await page.route(/overpass/, async r => { await gate; await r.fallback(); });
+    await page.click("#runBtn");
+    await page.waitForFunction(() => window.__REQ.S.running === true, null, { timeout: 10000 });
+    check("בזמן הרצת מעגל: רדיו סוג האזור נעול", await page.evaluate(() => document.getElementById("akRoute").disabled && document.getElementById("akCircle").disabled));
+    await page.evaluate(() => { document.getElementById("akRoute").click(); });
+    check("לחיצה על הרדיו הנעול אינה מחליפה סוג", await page.evaluate(() => window.__REQ.S.areaKind === "circle"));
+    await page.evaluate(() => { window.__REQ.setAreaKind("route"); });   // עקיפה תוכנתית: גם אז הניתוח של המעגל נשאר מעגל
+    release();
+    await page.waitForFunction(() => !window.__REQ.S.running, null, { timeout: 150000 });
+    { const r = await page.evaluate(() => ({ res: !!window.__REQ.S.res, area: window.__REQ.S.res && window.__REQ.S.res.area, hasArea: window.__REQ.S.res && "area" in window.__REQ.S.res.inp, radius: window.__REQ.S.res && window.__REQ.S.res.inp.radius, err: document.getElementById("e_run").textContent, stale: window.__REQ.S.stale }));
+      check("הרצת מעגל שהטופס הוחלף בה לנתיב באמצע: הניתוח מעגל (בלי area, radius 200), בלי שגיאה גולמית, והבקשה ישנה", r.res && !r.area && !r.hasArea && r.radius === 200 && r.err === "" && r.stale === true, JSON.stringify(r)); }
+    console.log("console errors:", errs.length ? errs.join(" | ") : "none");
+    await ctx.close();
+  }
+  /* UIFIX-END */
+  }
+  /* ROUTE-END */
   check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();
