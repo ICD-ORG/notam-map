@@ -264,8 +264,8 @@
   const DRAFT_HTML = '<div class="pty-draft" id="ptyDraft" role="group" aria-labelledby="ptyDraftT" hidden><b id="ptyDraftT">' + E(STR.draft) + '</b><div class="pty-draft-g">' +
     '<label class="pty-l"><span>' + E(STR.name) + '</span><input type="text" id="ptyDName" maxlength="80" autocomplete="off" aria-describedby="ptyDErr"></label>' +
     '<label class="pty-l"><span>' + E(STR.contact) + '</span><input type="text" id="ptyDContact" maxlength="120" autocomplete="off" aria-describedby="ptyDErr"></label>' +
-    '<label class="pty-l"><span>' + E(STR.type) + '</span><select id="ptyDType"></select></label>' +
-    '<label class="pty-l"><span>' + E(STR.status) + '</span><select id="ptyDStatus"></select></label>' +
+    '<label class="pty-l"><span>' + E(STR.type) + '</span><select id="ptyDType" autocomplete="off"></select></label>' +
+    '<label class="pty-l"><span>' + E(STR.status) + '</span><select id="ptyDStatus" autocomplete="off"></select></label>' +
     '<label class="pty-l pty-ln"><span>' + E(STR.note) + '</span><input type="text" id="ptyDNote" maxlength="300" autocomplete="off" aria-describedby="ptyDErr"></label></div>' +
     '<p class="err" id="ptyDErr"></p><div class="row"><button type="button" class="primary" data-act="draft-ok">' + E(STR.ok) + '</button><button type="button" data-act="draft-cancel">' + E(STR.cancel) + "</button></div></div>";
 
@@ -378,7 +378,7 @@
     sec.innerHTML = '<h3 id="ptyTitle"><span>' + E(P.TEXT.title) + "</span>" + (H && H.btn ? H.btn(HELP, P.TEXT.title) : "") + "</h3>" +
       '<p class="small">' + E(STR.lead + " " + P.TEXT.intro) + "</p>" +
       '<div class="pty-sum" id="ptySum" role="status" aria-live="polite"></div><p class="pty-msg" id="ptyMsg"></p>' +
-      '<div class="pty-tools" id="ptyTools" hidden><label><input type="checkbox" id="ptyOpen"> ' + E(STR.onlyOpen) + '</label><span id="ptyOpenN"></span></div>' +
+      '<div class="pty-tools" id="ptyTools" hidden><label><input type="checkbox" id="ptyOpen" autocomplete="off"> ' + E(STR.onlyOpen) + '</label><span id="ptyOpenN"></span></div>' +
       '<ol class="pty-list" id="ptyList"></ol>' +
       '<div class="pty-add"><button type="button" id="ptyAdd" data-act="add"><span aria-hidden="true">➕</span> ' + E(STR.add) + '</button><span class="small" id="ptyChipsL">' + E(STR.suggest) + '</span><span class="pty-chips" id="ptyChips" role="group" aria-labelledby="ptyChipsL"></span></div>' +
       DRAFT_HTML + '<div class="vh" id="ptyLive" role="status" aria-live="polite"></div>';
