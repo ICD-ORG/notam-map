@@ -38,6 +38,7 @@ input[type=text],input[type=password],input[type=number],input[type=date],input[
 textarea{min-height:76px;resize:vertical;line-height:1.6}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--cyan);outline-offset:1px}
 input.bad,select.bad,textarea.bad{border-color:var(--red)}
+#routeBox.bad{border:1px solid var(--red);border-radius:10px;padding:8px}
 .hint{color:var(--muted);font-size:12px;line-height:1.6}
 .checks{display:flex;flex-wrap:wrap;gap:8px 14px}
 .checks label{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--ink)}
@@ -122,6 +123,17 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
   /* איש קשר: השם ברוחב מלא (אחרת מתכווץ לכמה תווים בטלפון צר), הטלפון ו-× מתחתיו */
   .prow.cont{flex-wrap:wrap}.prow.cont input.pn{flex:1 1 100%}.prow.cont input.pp{flex:1 1 0}
 }
+/* ===== נתיב (קו) כאזור הפעילות: סמני הקודקודים הממוספרים על המפה, רשימת הנקודות, שורת המידע והסמן בזמן סימון (ui.js) ===== */
+.rtPt{display:flex;align-items:center;justify-content:center;background:#fff;color:#0b1220;border:2px solid #22c55e;border-radius:50%;font-weight:900;font-size:11px;line-height:1;box-shadow:0 1px 5px rgba(0,0,0,.65);cursor:grab}
+.leaflet-container.routeMode{cursor:crosshair !important}
+#routeList{max-height:16.5rem;overflow-y:auto;padding:2px}
+.rtRow{align-items:center}
+.rtN{flex:none;min-width:30px;text-align:center;font-weight:900;color:var(--green)}
+#routeBar{margin-bottom:8px}
+#rtInfo{margin-top:6px}
+.warnTxt{color:#ffd27a}
+#rtMsg{color:#ffd27a;font-size:12.5px;line-height:1.6;margin-top:2px}
+#rtMsg:empty{display:none}
 .st-list{list-style:none;display:grid;gap:3px;margin-top:6px;font-size:13px}
 .st-list .ok{color:var(--green)}.st-list .no{color:var(--red)}
 #places{display:flex;flex-direction:column;gap:4px;margin-top:6px}
@@ -237,7 +249,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
   <div class="wrap">
     <a class="back" href="../">← חזרה למפה</a>
     <h1>בקשות טיסה — <span>סגירה אווירית</span> · נספח ג׳ לפמ״ת א-11</h1>
-    <div class="sub">כל שדות הטופס חובה (פרט לאות קריאה ולמס׳ רישום כלי הטיס). אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושולחת אותה במייל בלחיצה (למשרד נוטאם, או רק אליכם).</div>
+    <div class="sub">כל שדות הטופס חובה (פרט לאות קריאה ולמס׳ רישום כלי הטיס). אחרי המילוי המערכת מריצה את כל הבדיקות (א-17, שמורות וגנים, מנחתים חקלאיים, נוטמים, סריקת מכשולים ותשתיות סביב הנקודה) ומכינה את הבקשה לשליחה — Word, KML וארבע תמונות מפה (תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת) — ושולחת אותה במייל בלחיצה (למשרד נוטאם, או רק אליכם). אזור הפעילות: נקודה ורדיוס, או נתיב לאורך כביש.</div>
   </div>
 </header>
 
@@ -249,17 +261,35 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <section class="card" id="inputs">
   <h2>1 · מה מבקשים</h2>
   <div class="grid">
-    <label class="f"><b>נקודת מרכז (קו רוחב, קו אורך)</b>
+    <div class="fld" id="areaKindBox" style="grid-column:1/-1">
+      <span class="flh"><b id="akTitle">סוג אזור הפעילות</b></span>
+      <div class="checks" role="radiogroup" aria-labelledby="akTitle">
+        <label><input autocomplete="off" type="radio" name="areaKind" id="akCircle" value="circle" checked> נקודה ורדיוס</label>
+        <label><input autocomplete="off" type="radio" name="areaKind" id="akRoute" value="route"> נתיב (קו לאורך כביש או דרך)</label>
+      </div>
+    </div>
+    <label class="f" id="coordBox"><b>נקודת מרכז (קו רוחב, קו אורך)</b>
       <input type="text" id="coord" inputmode="decimal" placeholder="32.099128, 34.816617" autocomplete="off" dir="ltr">
       <span class="hint">אפשר להקליד, להדביק מ-Google Maps, או ללחוץ על המפה.</span>
       <span class="err" id="e_coord"></span></label>
     <label class="f"><b>חיפוש מקום (אופציונלי)</b>
       <span class="row" style="flex-wrap:nowrap"><input type="text" id="q" placeholder="למשל: גבעת המופעים" autocomplete="off"><button type="button" id="qBtn">חפש</button></span>
       <span class="hint" id="qMsg"></span></label>
-    <label class="f"><b>רדיוס (מטר)</b>
+    <label class="f" id="radiusBox"><b>רדיוס (מטר)</b>
       <input autocomplete="off" type="number" id="radius" min="10" max="5000" step="10" value="100">
       <span class="hint">ירוק = הרדיוס · כתום = אותו מרחק שוב (עד פי 2) · אדום = אזורי איסור (א-17)</span>
       <span class="err" id="e_radius"></span></label>
+    <label class="f" id="hwBox" hidden><b>מרחק מהקו לכל צד (מטר)</b>
+      <input autocomplete="off" type="number" id="halfWidth" min="10" max="1000" step="10" value="50">
+      <span class="hint">ירוק = עד מרחק זה משני צדי הקו · כתום = אותו מרחק שוב (עד פי 2) · אדום = אזורי איסור (א-17)</span>
+      <span class="err" id="e_halfWidth"></span></label>
+    <div class="fld" id="routeBox" hidden style="grid-column:1/-1">
+      <span class="flh"><b>נקודות הנתיב</b><span class="hint">לפי הסדר, לאורך הכביש — לחיצה על המפה מוסיפה נקודה; אפשר לגרור נקודה, ולערוך כאן כל שורה (קו רוחב, קו אורך)</span></span>
+      <div class="plist" id="routeList"></div>
+      <textarea autocomplete="off" id="rtText" rows="3" dir="ltr" aria-label="הדבקת רשימת נקודות לנתיב" placeholder="הדבקת נקודות — נקודה בכל שורה:&#10;32.099128, 34.816617&#10;32.101340, 34.821002"></textarea>
+      <div class="row"><button type="button" id="rtApply">טען את הנקודות שהודבקו</button></div>
+      <span class="err" id="e_route"></span>
+    </div>
     <label class="f"><b>גובה טיסה מרבי (מטר, מעל הקרקע)</b>
       <input autocomplete="off" type="number" id="height" min="1" max="20000" step="1" placeholder="למשל 80">
       <span class="hint" id="ftHint"></span>
@@ -311,7 +341,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 </section>
 
 <section class="card">
-  <h2>2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
+  <h2 id="mapTitle">2 · מפה — לחצו כדי לסמן את מרכז הסגירה</h2>
   <div class="lyrbar nonprint" id="layerBar">
     <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrZones" checked> איסורים (פמ״ת)</label><span class="lyrnote" id="lyrZonesNote"></span></span>
     <span class="lyrit"><label class="lyrchk"><input autocomplete="off" type="checkbox" id="lyrNotams" checked> נוטמים</label><span class="lyrnote" id="lyrNotamsNote"></span></span>
@@ -320,9 +350,14 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <span data-lyr="notams"><i style="background:#ffd400"></i>נוטמים</span>
     </div>
   </div>
+  <div id="routeBar" class="nonprint" hidden>
+    <div class="row"><button type="button" id="rtUndo">מחק נקודה אחרונה</button><button type="button" id="rtClear">נקה נתיב</button></div>
+    <div class="hint" id="rtInfo" role="status" aria-live="polite"></div>
+    <div id="rtMsg" role="status"></div>
+  </div>
   <div id="map"></div>
   <div id="pointSummary" class="psum nonprint" role="status" aria-live="polite" aria-label="סיכום מקדים לנקודה שנבחרה"></div>
-  <div class="legend"><span><i style="background:#22c55e"></i>רדיוס הסגירה</span><span><i style="background:#ff9500"></i>עד פי 2 מהרדיוס</span>
+  <div class="legend"><span><i style="background:#22c55e"></i><span id="lgGreen">רדיוס הסגירה</span></span><span><i style="background:#ff9500"></i><span id="lgOrange">עד פי 2 מהרדיוס</span></span>
     <span class="row" style="gap:6px"><button type="button" id="baseSat" style="min-height:30px;padding:3px 10px;font-size:12px">צילום אוויר</button><button type="button" id="baseOsm" style="min-height:30px;padding:3px 10px;font-size:12px">מפת רחובות</button></span></div>
   <div id="places"></div>
 </section>
@@ -416,16 +451,16 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="js/help.js?v=2"></script>
 <script src="js/auth.js?v=11"></script>
 <script src="js/sync.js?v=2"></script>
-<script src="js/core.js?v=7"></script>
-<script src="js/maplayers.js?v=1"></script>
-<script src="js/output.js?v=10"></script>
-<script src="js/docx.js?v=5"></script>
-<script src="js/mapimg.js?v=4"></script>
-<script src="js/recheck.js?v=2"></script>
-<script src="js/myreq.js?v=1"></script>
-<script src="js/recheckui.js?v=2"></script>
-<script src="js/parties.js?v=2"></script>
+<script src="js/core.js?v=8"></script>
+<script src="js/maplayers.js?v=2"></script>
+<script src="js/output.js?v=11"></script>
+<script src="js/docx.js?v=6"></script>
+<script src="js/mapimg.js?v=5"></script>
+<script src="js/recheck.js?v=3"></script>
+<script src="js/myreq.js?v=2"></script>
+<script src="js/recheckui.js?v=3"></script>
+<script src="js/parties.js?v=3"></script>
 <script src="js/partiesui.js?v=2"></script>
-<script src="js/ui.js?v=16"></script>
+<script src="js/ui.js?v=17"></script>
 </body>
 </html>

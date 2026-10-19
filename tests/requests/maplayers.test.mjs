@@ -415,7 +415,7 @@ test("מבנה: המתגים והפס ב-index.html נמצאים לפני ובמ
   const iBar = html.indexOf('id="layerBar"'), iSum = html.indexOf('id="pointSummary"'), iRes = html.indexOf('id="resultsSec"'), iHost = html.indexOf('id="reportHost"');
   assert.ok(iBar > 0 && iSum > iBar && iRes > iSum && iHost > iRes, "המתגים והפס לפני #resultsSec ו-#report");
   assert.match(html, /id="layerBar"[^>]*>|class="lyrbar nonprint" id="layerBar"/); assert.ok(/class="[^"]*nonprint[^"]*" id="layerBar"/.test(html) && /id="pointSummary"[^>]*aria-live="polite"/.test(html) && /class="psum nonprint"/.test(html));
-  const iCore = html.indexOf("js/core.js"), iLay = html.indexOf("js/maplayers.js?v=1"), iUi = html.indexOf("js/ui.js");
+  const iCore = html.indexOf("js/core.js"), iLay = html.indexOf("js/maplayers.js?v="), iUi = html.indexOf("js/ui.js");
   assert.ok(iCore > 0 && iLay > iCore && iUi > iLay);
   assert.ok(/id="lyrZones" checked/.test(html) && /id="lyrNotams" checked/.test(html), "שני המתגים דולקים כברירת מחדל");
 });

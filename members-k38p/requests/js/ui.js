@@ -2,9 +2,10 @@
 (function () {
   "use strict";
   const C = window.ReqCore, O = window.ReqOut, M = window.ReqMap, H = window.ReqHelp, $ = id => document.getElementById(id);
+  // areaKind: סוג אזור הפעילות — "circle" (נקודה ורדיוס; ברירת המחדל) או "route" (נתיב); route.pts: נקודות הנתיב [[lat,lon],...] בסימון על המפה (המצב בזיכרון בלבד; הרוחב מכל צד ב-#halfWidth)
   // rev: מונה גרסת הבקשה (מתקדם בכל שינוי בה, ב-clearOutcome); buildSeq/building: בניית ההדמיות ("האחרון מנצח"); pending: הדמיות ממתינות לעדכון (נגזר מטיימר עריכה ממתין או מבנייה רצה);
   // driveTry: הגרסה האחרונה (S.rev) שנוסתה לשמור בדרייב (אוטומטית, ידנית או בשליחה) — השמירה האוטומטית לא חוזרת עליה, גם אחרי כשל; saved: {rev, folder} של שמירה מוצלחת בדרייב לגרסה הנוכחית (נמחק בכל שינוי)
-  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false, uk: "", lastUser: "", driveTry: -1, saved: null };
+  const S = { cfg: null, data: {}, res: null, statuses: {}, imgs: {}, imgSite: null, manual: [], manualKey: "", reviewAt: null, pick: false, scanKey: null, stale: false, running: false, center: null, autoSite: "", lf: {}, report: null, sending: false, rid: "", rev: 0, buildSeq: 0, building: false, pending: false, uk: "", lastUser: "", driveTry: -1, saved: null, areaKind: "circle", route: { pts: [] } };
   let rebuildTimer = null;   // טיימר העריכה הרכה (null = אין עדכון ממתין)
   let autoTimer = null, autoFor = -1;   // טיימר השמירה האוטומטית בדרייב (null = אין) והגרסה (S.rev) שהוא מתוזמן אליה
   // מפתחות הבסיס של הנתונים השמורים בדפדפן. כולם שייכים למשתמש: הנשמר בפועל הוא <בסיס>:<גיבוב שם המשתמש> (ukey), כך שמשתמש אחר באותו דפדפן לא רואה ולא יורש אותם. מתגי השכבות (icd_req_layers_v1) נשארים גלובליים — אינם נתוני משתמש
@@ -150,17 +151,17 @@
 
   /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהכפתור עושה בפועל בקוד ---------- */
   const HELP = {
-    qBtn: "מחפש את המקום שהקלדתם בשדה החיפוש באתר Nominatim של OpenStreetMap (ישראל והשטחים) ומציג עד 6 תוצאות לבחירה. בחירת תוצאה קובעת אותה כמרכז הסגירה ומזיזה אליה את המפה; ואם כבר הורצו בדיקות, יש להריץ אותן שוב. החיפוש עצמו אינו מריץ בדיקות.",
+    qBtn: "מחפש את המקום שהקלדתם בשדה החיפוש באתר Nominatim של OpenStreetMap (ישראל והשטחים) ומציג עד 6 תוצאות לבחירה. בחירת תוצאה קובעת אותה כמרכז הסגירה ומזיזה אליה את המפה; ואם כבר הורצו בדיקות, יש להריץ אותן שוב. בנתיב, בחירת תוצאה רק מזיזה את המפה — בלי להוסיף נקודה לנתיב. החיפוש עצמו אינו מריץ בדיקות.",
     baseSat: "מחליף את רקע מפת העבודה שלמעלה לצילום אוויר (Esri). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
     baseOsm: "מחליף את רקע מפת העבודה שלמעלה למפת רחובות (OpenStreetMap). זה משפיע רק על התצוגה כאן — לא על ארבע התמונות שנוצרות לבקשה.",
-    runBtn: "מריץ את כל הבדיקות לנקודה, לרדיוס, לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את ההצהרה בסעיף 4.",
-    mPick: "אחרי הלחיצה, לחיצה אחת על המפה שמעל מכניסה את הנ״צ שנלחץ לשדה ״נ״צ״ של התוספת הידנית. הלחיצה הזו אינה משנה את מרכז הסגירה.",
+    runBtn: "מריץ את כל הבדיקות לנקודה ולרדיוס (או לנתיב ולרוחב מכל צד), לגובה ולמועדים שהוזנו: אזורי פמ״ת א-17 ופרק ב-09, שמורות וגנים, מנחתים חקלאיים, נוטמים, וסריקת מכשולים ותשתיות ב-OpenStreetMap. בסיום הוא מכין את הטופס ואת ארבע תמונות המפה. הבקשה תסומן ״מוכנה לשליחה״ רק אחרי שכל הבדיקות הצליחו ואישרתם את ההצהרה בסעיף 4.",
+    mPick: "אחרי הלחיצה, לחיצה אחת על המפה שמעל מכניסה את הנ״צ שנלחץ לשדה ״נ״צ״ של התוספת הידנית. הלחיצה הזו אינה משנה את מרכז הסגירה (ובנתיב — אינה מוסיפה נקודה לנתיב).",
     mAdd: "מוסיף את המכשול או התשתית שהזנתם (שם, נ״צ וגובה אופציונלי) לבקשה: הם נכנסים לשדה 8 בטופס, לתמונות המפה ול-KML. ההוספה מריצה מחדש את הניתוח ומבטלת את אישור ההצהרה — יש לאשר אותה שוב.",
     btnZip: "שומר במחשב שלכם קובץ ZIP אחד עם כל קבצי הבקשה: טופס Word (כולל דף הבדיקות אם ״כולל דף בדיקות״ מסומן), קובץ KML וארבע תמונות המפה. אפשר לשמור אותו כארכיון אישי. אין בכך צורך כדי לשלוח את הבקשה.",
     btnPrint: "פותח את חלון ההדפסה של הדפדפן, ומשם אפשר להדפיס או לשמור כ-PDF. מודפס הדוח בלבד: הטופס, ארבע התמונות, וכן דף הבדיקות אם ״כולל דף בדיקות״ מסומן.",
     btnDocx: "מוריד קובץ Word לעריכה: טופס נספח ג׳, ארבע התמונות וטבלת המכשולים והתשתיות. דף הבדיקות נכלל רק אם ״כולל דף בדיקות״ מסומן.",
     incChecks: "קובע אם דף הבדיקות נכלל בקובץ ה-Word, בהדפסה ובקבצים שנשמרים בדרייב ונשלחים במייל. שינוי הסימון מוחק את ההודעות ״נשמר״ ו״נשלח״, והבקשה תישמר מחדש בדרייב (אוטומטית).",
-    btnKml: "מוריד קובץ KML לפתיחה ב-Google Earth, עם מעגלי הסגירה, אזורי האיסור והמכשולים והתשתיות שנמצאו.",
+    btnKml: "מוריד קובץ KML לפתיחה ב-Google Earth, עם מעגלי הסגירה (בנתיב: פוליגון הסגירה וציר הנתיב), אזורי האיסור והמכשולים והתשתיות שנמצאו.",
     btnAerial: "מוריד את תמונת התצ״א בתקריב (PNG), עם כל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnStreet: "מוריד את מפת הרחובות (OpenStreetMap) בתקריב (PNG), עם שמות הרחובות וכל הסימונים — כפי שהיא מצורפת לבקשה.",
     btnOverview: "מוריד את ההדמיה במבט כללי (PNG): כל האזורים, המכשולים והתשתיות שמופיעים בשדה 8, ממוספרים לפי הרשימה.",
@@ -175,6 +176,10 @@
     addContact: "מוסיף שורה לאיש קשר נוסף בשטח (שם וטלפון), עד 20. נדרשים לפחות שני אנשי קשר עם שם, ולפחות טלפון תקין אחד (נספח ג׳ שדה 12). אנשי הקשר נשמרים בדפדפן הזה בלבד, ורק עבור החשבון שלכם.",
     addPart: "מוסיף שורה למשתתף נוסף בטיסה (שם פרטי, שם משפחה וטלפון), עד 20. הרשימה אופציונלית, ואין חובה לטוס יחד. משתתפים מלאים נכנסים לשדה 11 בטופס ולקובץ ה-Word (לא לגוף המייל הקצר); שורה שמולאה חלקית חוסמת את ההרצה. המשתתפים אינם נשמרים בדפדפן.",
     wipePerson: "מוחק מהדפדפן הזה את הפרטים השמורים של החשבון המחובר: שם וטלפון המבקש, שם הגורם המבקש, אות הקריאה ומס׳ הרישום ואת אנשי הקשר השמורים, מנקה את השדות ומחזיר שתי שורות ריקות לאנשי הקשר; גם רשימת המשתתפים מתרוקנת. קבצים שכבר נשמרו בדרייב אינם משתנים.",
+    akTitle: "בוחרים את סוג אזור הפעילות. ״נקודה ורדיוס״: מעגל סביב נקודת מרכז אחת. ״נתיב״: קו שבור שמסמנים על המפה לאורך כביש או דרך (2 עד 20 נקודות, לפי הסדר) ורוחב מכל צד — אזור הסגירה הוא כל מקום שעד הרוחב הזה מהקו, והפוליגון שמודפס בטופס מכיל אותו. המעבר בין הסוגים אינו מוחק את מה שסומן בכל אחד; אם כבר הורצו בדיקות, יש להריץ אותן שוב.",
+    rtUndo: "מוחק את הנקודה האחרונה בנתיב (אפשר ללחוץ שוב כדי להמשיך אחורה). אם כבר הורצו בדיקות, יש להריץ אותן שוב.",
+    rtClear: "מוחק את כל נקודות הנתיב כדי להתחיל מחדש. הרוחב שנבחר נשאר, ואין דרך לשחזר את הנקודות שנמחקו.",
+    rtApply: "טוען את הנקודות שהודבקו בתיבה — נקודה בכל שורה, ״קו רוחב, קו אורך״, לפי סדר הנתיב — במקום הנתיב הנוכחי, ומקרב אליו את המפה. אם שורה אינה נ״צ תקין, או שיש יותר מדי נקודות, לא נטען דבר. מתאים להדבקה מ-Google Maps או מקובץ.",
     stRun: "מריץ מחדש את הבדיקה העצמית: מחשב את נקודת הירקון מנתוני אמת שנשמרו מראש ומשווה לתוצאות שחושבו בנפרד. הבדיקה רצה גם אוטומטית בכל טעינת דף; אם נכשלה — הבקשה אינה מסומנת כמוכנה לשליחה."
   };
   // הסבר ״שלח״ לחשבון ארגוני (מוחלף ב-data-help אחרי ההתחברות, ב-applyRole): שליחה בשם הארגון, עותק ותשובות אל הארגון
@@ -185,7 +190,7 @@
   const HELP_NAME = {
     qBtn: "חיפוש מקום", baseSat: "רקע צילום אוויר", baseOsm: "רקע מפת רחובות", runBtn: "הרצת הבדיקות", mPick: "בחירת מיקום מהמפה", mAdd: "הוספה לבקשה", btnZip: "שמירת כל הקבצים במחשב", btnPrint: "הדפסה או PDF", btnDocx: "הורדת Word",
     incChecks: "כולל דף בדיקות", btnKml: "הורדת KML", btnAerial: "הורדת תצ״א תקריב", btnStreet: "הורדת מפת רחובות תקריב", btnOverview: "הורדת הדמיה במבט כללי", btnRegion: "הורדת מפת אזור", btnCopy: "העתקת טקסט מייל",
-    btnMore: "אפשרויות נוספות", btnDrive: "שמירה בדרייב", btnSend: "שליחה למשרד נוטאם", btnMail: "פתיחת מייל", acAdd: "הוספת כלי טיס", puAdd: "הוספת מהות פעילות", addContact: "הוספת איש קשר", addPart: "הוספת משתתף", wipePerson: "מחיקת פרטים מהמכשיר", stRun: "בדיקה עצמית",
+    btnMore: "אפשרויות נוספות", akTitle: "סוג אזור הפעילות", rtUndo: "מחיקת נקודה אחרונה בנתיב", rtClear: "ניקוי הנתיב", rtApply: "טעינת נקודות נתיב מטקסט", btnDrive: "שמירה בדרייב", btnSend: "שליחה למשרד נוטאם", btnMail: "פתיחת מייל", acAdd: "הוספת כלי טיס", puAdd: "הוספת מהות פעילות", addContact: "הוספת איש קשר", addPart: "הוספת משתתף", wipePerson: "מחיקת פרטים מהמכשיר", stRun: "בדיקה עצמית",
     knownObs: "מכשולים שידועים למבקש", visitNotes: "הערות המבקש"
   };
   const HELP_FIELD = {
@@ -352,6 +357,7 @@
     extraPu = loadExtraPurposes(); renderPurposes("");
     S.extraAc = loadExtraAircraft(); renderAircraft(null);
     $("radius").value = S.cfg.defaults.radius_m; $("radius").min = S.cfg.defaults.min_radius_m; $("radius").max = S.cfg.defaults.max_radius_m;
+    { const rl = C.routeLim(S.cfg); $("halfWidth").value = S.cfg.defaults.route_half_width_m || 50; $("halfWidth").min = rl.minW; $("halfWidth").max = rl.maxW; }   // נתיב: הרוחב מכל צד (ברירות המחדל והטווח מ-config.json; מפתח חסר — ברירות מחדל בקוד)
     $("mailTo").textContent = S.cfg.mail.to.join(", ");
     loadPerson();
   }
@@ -399,9 +405,9 @@
   // בקשה בעבודה = יש ניתוח, או שהוזן משהו בשדות הבקשה (נקודה, מועד, אתר, מכשולים, הערות, תוספת ידנית). פרטי המבקש ואנשי הקשר אינם נחשבים: הם שמורים במכשיר ואינם נמחקים.
   // הרצה / שמירה / שליחה בעיצומן חוסמות את הטעינה (לא מחליפים בקשה מתחת לידיים)
   const MYREQ_FIELDS = ["coord", "dateFrom", "dateTo", "siteName", "knownObs", "visitNotes", "mName", "mCoord"];
-  const myreqInProgress = () => !!S.res || S.manual.length > 0 || MYREQ_FIELDS.some(id => { const e = $(id); return !!(e && e.value.trim()); });
+  const myreqInProgress = () => !!S.res || S.manual.length > 0 || S.route.pts.length > 0 || MYREQ_FIELDS.some(id => { const e = $(id); return !!(e && e.value.trim()); });
   const myreqBusy = () => !!(S.resetting || S.running || S.sending || S.opening || S.zipping || $("sendProg"));
-  // inp = ReqRecheck.restoreInputs: נקודה, רדיוס, גובה, מהות, כלי טיס, קשר עין, שם האתר, מכשולים שידועים, הערות סיור ותוספות ידניות — כבר מאומתים (טיפוסים, תחומים, תקרות); תאריכים ושעות ריקים.
+  // inp = ReqRecheck.restoreInputs: נקודה ורדיוס (או inp.area לנתיב: נקודות ורוחב, בלי lat/lon/radius), גובה, מהות, כלי טיס, קשר עין, שם האתר, מכשולים שידועים, הערות סיור ותוספות ידניות — כבר מאומתים (טיפוסים, תחומים, תקרות); תאריכים ושעות ריקים.
   // מוחק את מצב הבקשה והתוצאות כמו תחילת הרצה חדשה (run): ניתוח, דוח, תמונות, הצהרה, שמירה ושליחה — הבדיקות חייבות לרוץ מחדש וההצהרה תאושר שוב; מזהה בקשה חדש (אחרת השמירה הייתה דורסת את הבקשה המקורית בדרייב).
   // לא נוגע בפרטי המבקש, באנשי הקשר ובמשתתפים (פרטי המבקש ואנשי הקשר נטענים מהמכשיר כרגיל; המשתתפים אינם נשמרים בקובץ ולכן נשארים כפי שהוקלדו). מחזיר {ok, notes: מה לא נטען} או {ok:false, error:"busy"}
   function myreqLoadBase(inp) {
@@ -422,7 +428,8 @@
     $("resultsSec").style.display = "none"; $("btnMail").href = "#"; $("mPick").textContent = "בחר מיקום מהמפה";
     ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
     ["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate", "mName", "mCoord", "mHeight"].forEach(id => { $(id).value = ""; });
-    $("radius").value = inp.radius; $("height").value = inp.heightM; $("vlos").value = inp.vlos ? "yes" : "no";
+    setAreaKind(inp.area ? "route" : "circle", true);   // סוג האזור קודם לכול (הטופס יכול להיות במצב השני); quiet: בלי סימון ״ישן״ — הבקשה כבר אופסה כאן
+    if (!inp.area) $("radius").value = inp.radius; $("height").value = inp.heightM; $("vlos").value = inp.vlos ? "yes" : "no";
     $("siteName").value = inp.siteName; $("knownObs").value = inp.knownObstacles; $("visitNotes").value = inp.visitNotes;
     // מהות וכלי טיס שאינם ברשימות (למשל נמחקו מהרשימה השמורה): נוספים לרשימה השמורה כמו בהוספה ידנית, בתקרות הרגילות; מה שלא נכנס — לא נבחר ומדווח
     if (inp.purpose) {
@@ -440,9 +447,11 @@
     });
     saveExtraAircraft(); renderAircraft(keep);
     if (lost.length) notes.push("כלי טיס: " + lost.slice(0, 3).join(", ") + (lost.length > 3 ? " ועוד " + (lost.length - 3) : ""));
-    $("coord").value = inp.lat + ", " + inp.lon; setCenter(inp.lat, inp.lon, true);   // הערכים המדויקים שנשמרו (לא toFixed(6)): אותה נקודה בדיוק בכל בקשה בסדרה. אחרי הרדיוס והגובה: העיגולים ורמז הרגל נגזרים מהם
+    if (inp.area) setRoute(inp.area.pts, inp.area.halfWidth, true);   // נתיב: הנקודות והרוחב כפי שנשמרו (restoreInputs אימת: 2 עד המקסימום, בתחום, רוחב בטווח); #coord והמעגל נשארים כפי שהיו
+    else { dropRoute(); $("coord").value = inp.lat + ", " + inp.lon; setCenter(inp.lat, inp.lon, true); }   // הערכים המדויקים שנשמרו (לא toFixed(6)): אותה נקודה בדיוק בכל בקשה בסדרה. אחרי הרדיוס והגובה: העיגולים ורמז הרגל נגזרים מהם
     S.manual = inp.manualItems.map(m => ({ name: m.name, lat: m.lat, lon: m.lon, heightM: m.heightM })); renderManual();
     const c = readInputs(); S.manualKey = c.lat + "," + c.lon;   // כמו ב-run: הנקודה שנקראת מהשדה (6 ספרות), אחרת ההרצה הייתה מוחקת את התוספות הידניות
+    if (c.area) S.manualKey = areaKey(c);   // נתיב: מפתח הנקודות (כמו ב-run)
     refreshGate(); scheduleLayerUpdate();
     return { ok: true, notes };
   }
@@ -459,7 +468,7 @@
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso };
     const nf = data.notamFetchedIso ? Date.parse(data.notamFetchedIso) : NaN, age = isFinite(nf) ? (Date.now() - nf) / 3600000 : null;   // נוטמים ישנים מדי — כמו ב-run, לא משווים (ובלי למשוך לחינם נתוני OSM)
     if (age == null || age > S.cfg.thresholds.notam_max_age_h) return { ok: false, message: age == null ? "לא ידוע מתי נמשכו הנוטמים, ולכן אי אפשר לבדוק מחדש." : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + "), ולכן אי אפשר לבדוק מחדש. " + sup("נסו שוב מאוחר יותר, ואם הבעיה נמשכת פנו לתמיכה.") };
-    const q = C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg), fetchOpts = { log: () => {}, maxAgeH: S.cfg.thresholds.osm_max_age_h };
+    const q = inp.area ? C.buildQueries(inp.lat, inp.lon, inp.area.halfWidth, S.cfg, inp.area) : C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg), fetchOpts = { log: () => {}, maxAgeH: S.cfg.thresholds.osm_max_age_h };
     say("בודק מחדש מול אזורי האיסור, הנוטמים ו-OpenStreetMap…");
     const results = await Promise.allSettled(["near", "far", "ext"].map((k, i) => (async () => { await wait(i * 1500); const r = await C.overpass(q[k], fetchOpts); data[k] = r.data; })()));   // מושכים תמיד מחדש (אין שימוש בנתוני OSM של הבקשה שבטופס) ומשאירים ב-data המקומי בלבד
     const failed = results.find(r => r.status === "rejected");
@@ -499,7 +508,7 @@
     });
   }
   // ניקוי כל השדות החופשיים של הטופס והבקשה (לא פרטי המבקש השמורים — אלה נטענים/נמחקים ב-loadPerson / clearPersonFields): מה שהדפדפן שחזר מהיסטוריה (גם אם התעלם מ-autocomplete="off") או מה שנשאר ממשתמש קודם
-  const FREE_FIELDS = ["coord", "height", "dateFrom", "dateTo", "timeFrom", "timeTo", "siteName", "knownObs", "visitDate", "visitNotes", "mName", "mCoord", "mHeight", "puNew", "acNew", "q"];
+  const FREE_FIELDS = ["coord", "rtText", "height", "dateFrom", "dateTo", "timeFrom", "timeTo", "siteName", "knownObs", "visitDate", "visitNotes", "mName", "mCoord", "mHeight", "puNew", "acNew", "q"];
   function resetFormFields() {
     FREE_FIELDS.forEach(id => { const e = $(id); if (e) e.value = ""; });
     $("reviewOk").checked = false;
@@ -510,6 +519,7 @@
     S.uk = C.userHash(u);
     partiesReset();   // ״דיווח לגורמים נוספים״: לא נשאר מצב ממשתמש קודם
     resetFormFields();
+    resetRoute();   // נתיב: מצב ברירת המחדל (נקודה ורדיוס) וללא נקודות — לא נשאר נתיב ממשתמש קודם
     adoptLegacyStorage();
     extraPu = loadExtraPurposes(); renderPurposes("");
     S.extraAc = loadExtraAircraft(); renderAircraft(null);
@@ -541,6 +551,7 @@
       step(resetFormFields);
       step(() => { extraPu = []; renderPurposes(""); S.extraAc = []; renderAircraft(null); });
       step(() => { S.lf.marker && S.lf.m.removeLayer(S.lf.marker); S.lf.green && S.lf.m.removeLayer(S.lf.green); S.lf.orange && S.lf.m.removeLayer(S.lf.orange); S.lf.marker = S.lf.green = S.lf.orange = null; closeCard(); });
+      step(resetRoute);   // הנתיב והשכבות שלו על המפה
       step(() => {
         document.body.classList.remove("pendDraft");
         ["report", "gate", "staleBox", "progress", "limits", "manualList", "mailInfo", "places", "qMsg", "ftHint", "acMsg", "puMsg", "e_manual", "pointSummary"].forEach(id => { const e = $(id); if (e) { e.innerHTML = ""; e._html = undefined; e._k = ""; } });
@@ -567,7 +578,7 @@
   }
   function readInputs() {
     const c = C.parseCoordInput($("coord").value) || S.center || {};
-    return {
+    const inp = {
       lat: c.lat, lon: c.lon, radius: parseFloat($("radius").value), heightM: parseFloat($("height").value),
       dateFrom: $("dateFrom").value, dateTo: $("dateTo").value || $("dateFrom").value, timeFrom: $("timeFrom").value, timeTo: $("timeTo").value,
       purpose: $("purpose").value, aircraft: [...document.querySelectorAll('input[name="ac"]:checked')].map(i => i.value),
@@ -577,8 +588,15 @@
       contacts: readRows("contacts"), participants: readRows("participants"),
       knownObstacles: $("knownObs").value, visitDate: $("visitDate").value || "", visitNotes: $("visitNotes").value
     };
+    return routeMode() ? routeShape(inp) : inp;   // מעגל: האובייקט כמות שהוא (בלי מפתח area, אפילו לא undefined)
   }
-  const scanKeyOf = i => JSON.stringify([i.lat, i.lon, i.radius, i.heightM, i.dateFrom, i.dateTo, i.timeFrom, i.timeTo]);
+  // נתיב: inp.area במקום inp.radius (באותו מקום במפתחות) ו-lat/lon = העוגן שעל הקו (אמצע האורך) — לשעות זריחה ושקיעה, לשם המקום ולפס; לא נקודה שנבחרה. אין radius: קורא שמניח מעגל נכשל בקול רם ולא מצייר מעגל בשקט
+  function routeShape(inp) {
+    const area = readArea(), an = area.pts.length ? C.routeInfo(area.pts).anchor : [undefined, undefined], o = {};
+    Object.keys(inp).forEach(k => { if (k === "radius") o.area = area; else if (k === "lat") o.lat = an[0]; else if (k === "lon") o.lon = an[1]; else o[k] = inp[k]; });
+    return o;
+  }
+  const scanKeyOf = i => (i.area ? JSON.stringify(["route", i.area.pts, i.area.halfWidth, i.heightM, i.dateFrom, i.dateTo, i.timeFrom, i.timeTo]) : JSON.stringify([i.lat, i.lon, i.radius, i.heightM, i.dateFrom, i.dateTo, i.timeFrom, i.timeTo]));
   const scanKey = () => scanKeyOf(readInputs());
   // מסמן ב-bad את השורות והשדות שגורמים לשגיאת אנשי הקשר / המשתתפים (אותם כללים כמו ב-C.validateInput)
   function markPeople(errs) {
@@ -598,9 +616,11 @@
   function showErrors(errs) {
     document.querySelectorAll(".err[id^=e_]").forEach(e => { if (e.id !== "e_run") e.textContent = ""; });
     document.querySelectorAll("input.bad,select.bad,textarea.bad").forEach(e => e.classList.remove("bad"));
-    const idMap = { coord: "coord", radius: "radius", height: "height", dateFrom: "dateFrom", dateTo: "dateTo", timeFrom: "timeFrom", timeTo: "timeTo", purpose: "purpose", aircraft: null, siteName: "siteName", knownObstacles: "knownObs", visitNotes: "visitNotes", requesterOrg: "reqOrg", callsign: "reqCallsign", registration: "reqReg" };
+    if ($("routeBox")) $("routeBox").classList.remove("bad");
+    const idMap = { coord: "coord", radius: "radius", halfWidth: "halfWidth", route: null, height: "height", dateFrom: "dateFrom", dateTo: "dateTo", timeFrom: "timeFrom", timeTo: "timeTo", purpose: "purpose", aircraft: null, siteName: "siteName", knownObstacles: "knownObs", visitNotes: "visitNotes", requesterOrg: "reqOrg", callsign: "reqCallsign", registration: "reqReg" };
     errs.forEach(e => {
       const el = $("e_" + e.field); if (el) el.textContent = e.msg;
+      if (e.field === "route" && $("routeBox")) $("routeBox").classList.add("bad");   // אין שדה בודד לסמן: מסגרת סביב נקודות הנתיב
       const dateErr = e.field === "visitNotes" && /תאריך/.test(e.msg);   // שגיאת תאריך הסיור מדווחת תחת הערות המבקש
       const inp = !dateErr && idMap[e.field] && $(idMap[e.field]); if (inp) inp.classList.add("bad");
       if (dateErr) $("visitDate").classList.add("bad");
@@ -622,6 +642,7 @@
     $("baseOsm").onclick = () => { m.removeLayer(sat); osm.addTo(m); };
     m.on("click", e => {
       if (S.pick) { S.pick = false; $("mCoord").value = e.latlng.lat.toFixed(6) + ", " + e.latlng.lng.toFixed(6); $("mPick").textContent = "בחר מיקום מהמפה"; $("mCoord").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      if (routeMode()) { const w = e.latlng.wrap(); addRoutePoint(w.lat, w.lng); return; }   // נתיב: לחיצה מוסיפה נקודה (גם כרטיס הלחיצה אינו נפתח — הפס מתחת למפה מדווח על הנתיב); בחירת מיקום לתוספת ידנית (S.pick) קודמת
       const moved = setCenter(e.latlng.lat, e.latlng.lng, false);
       showHitsAt(e.latlng, moved);   // הנקודה נבחרת תמיד; במקביל נפתח כרטיס עם האזורים והנוטמים שמתחתיה (אם יש)
     });
@@ -629,7 +650,7 @@
     try { initLayers(m); } catch (e) { S.lf.lay = null; LAY.initFailed = true; try { console.error("[layers] initLayers", e); } catch (e2) { /* ignore */ } }   // כשל בהקמת השכבות לעולם לא עוצר את המפה, את הטופס או את ההרצה
   }
   function drawCircles() {
-    if (!S.lf.m || !S.center) return;
+    if (routeMode() || !S.lf.m || !S.center) return;   // נתיב: המעגל אינו מצויר (השכבות שלו מוסרות מהמפה ב-setAreaKind וחוזרות במעבר חזרה)
     const R = parseFloat($("radius").value) || 0, ll = [S.center.lat, S.center.lon];
     if (!S.lf.marker) {
       S.lf.marker = L.marker(ll, { draggable: true }).addTo(S.lf.m);
@@ -660,6 +681,139 @@
     return moved;
   }
 
+  /* ---------- נתיב (קו) כאזור הפעילות: סימון נקודות על המפה, רשימה, הדבקה ושרטוט ----------
+     "circle" (ברירת המחדל) — כל הקוד שמעל כמו תמיד. "route": המשתמש לוחץ 2 עד 20 נקודות לאורך כביש (S.route.pts, 6 ספרות עשרוניות כמו שדה הנ״צ) ומגדיר מרחק מהקו לכל צד (#halfWidth).
+     אזור הסגירה = כל נקודה במרחק עד הרוחב מהקו; מה שמצויר (ירוק; כתום = פי 2) והמודפס בשדה 8, ב-KML ובתמונות הוא אותו פוליגון (C.corridorRing). S.center, #coord ו-S.route.pts בלתי תלויים: מעבר בין הסוגים אינו מאבד דבר.
+     כל שינוי בנתיב עובר routeChanged: ציור, רשימה ושורת מידע, סימון הניתוח כ״ישן״ (onScanInputChange) ועדכון הפס (scheduleLayerUpdate). הכול בזיכרון בלבד — לא נשמר בדפדפן. */
+  const routeMode = () => S.areaKind === "route";
+  const routeLim = () => C.routeLim(S.cfg);
+  const fmtPt = q => q[0].toFixed(6) + ", " + q[1].toFixed(6);
+  const round6 = v => Math.round(v * 1e6) / 1e6;
+  const widthVal = () => { const v = parseFloat($("halfWidth").value); return isFinite(v) ? v : NaN; };
+  // האזור כפי שבטופס (העתק): ממנו נבנים inp.area, מפתח הסריקה ותצוגת הפס
+  const readArea = () => ({ kind: "route", pts: S.route.pts.map(q => [q[0], q[1]]), halfWidth: parseFloat($("halfWidth").value) });
+  // מפתח "אותה בקשה" לתוספות הידניות: מעגל — הנקודה (כמו תמיד); נתיב — הנקודות (הרוחב אינו חלק מהמפתח, כמו הרדיוס במעגל)
+  const areaKey = i => (i.area ? "route:" + JSON.stringify(i.area.pts) : i.lat + "," + i.lon);
+  const routeMsg = t => { const e = $("rtMsg"); if (e) e.textContent = t || ""; };
+  const coarsePointer = () => !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  const mkRtIcon = i => L.divIcon({ className: "rtPt", html: '<span dir="ltr">P' + (i + 1) + "</span>", iconSize: [28, 28], iconAnchor: [14, 14] });
+  // שכבות הנתיב נוצרות פעם אחת (ונשארות באובייקט): ציר (קו לבן עם מסגרת כהה), פוליגון ירוק (הרוחב), פוליגון כתום (פי 2), ועיגול ירוק לנקודה בודדת. interactive:false — הלחיצה מגיעה למפה
+  function routeLayers() {
+    if (S.lf.route) return S.lf.route;
+    const poly = (c, op) => L.polygon([], { color: c, weight: 3, fillColor: c, fillOpacity: op, interactive: false });
+    return (S.lf.route = { casing: L.polyline([], { color: "#000", weight: 6, opacity: 0.5, interactive: false }), line: L.polyline([], { color: "#ffffff", weight: 3, opacity: 1, interactive: false }), outer: poly("#ff9500", 0.12), corr: poly("#22c55e", 0.22), dot: null, marks: [] });
+  }
+  // live: גרירת קודקוד בעיצומה — הקו והפוליגונים מתעדכנים והסמנים נשארים (הסמן הנגרר הוא המקור). מעגלי הרוחב מוגבלים לטווח (חריגה מדווחת באימות, לא מצוירת ענקית). לא זורקת לעולם
+  function drawRoute(live) {
+    const m = S.lf.m;
+    if (!m || typeof L === "undefined" || (!S.lf.route && !routeMode())) return;
+    try {
+      const R = routeLayers(), pts = S.route.pts, on = routeMode(), W = widthVal(), ok2 = on && pts.length > 1, w = isFinite(W) && W > 0 ? Math.min(W, routeLim().maxW) : 0;
+      const put = (l, yes) => { if (yes && !m.hasLayer(l)) l.addTo(m); else if (!yes && m.hasLayer(l)) m.removeLayer(l); };
+      let g1 = null, g2 = null;
+      if (ok2 && w) { const a = { kind: "route", pts, halfWidth: w }; g1 = C.corridorRing(a, 1).ring; g2 = C.corridorRing(a, 2).ring; }
+      put(R.outer, !!(g2 && g2.length)); put(R.corr, !!(g1 && g1.length)); put(R.casing, ok2); put(R.line, ok2);
+      if (g2 && g2.length) R.outer.setLatLngs(g2.slice(0, -1));
+      if (g1 && g1.length) R.corr.setLatLngs(g1.slice(0, -1));
+      if (ok2) { R.casing.setLatLngs(pts); R.line.setLatLngs(pts); }
+      if (on && pts.length === 1 && w) { if (!R.dot) R.dot = L.circle(pts[0], { radius: w, color: "#22c55e", weight: 3, fillColor: "#22c55e", fillOpacity: 0.22, interactive: false }); else R.dot.setLatLng(pts[0]).setRadius(w); put(R.dot, true); } else if (R.dot) put(R.dot, false);
+      if (live) return;
+      const want = on ? pts : [];   // הסמנים: מספר שונה ← בונים מחדש את כולם (המספור משתנה); אחרת רק מיקום
+      if (R.marks.length !== want.length) {
+        R.marks.forEach(mk => m.removeLayer(mk));
+        R.marks = want.map((q, i) => {
+          const mk = L.marker(q, { draggable: true, keyboard: false, title: "P" + (i + 1), icon: mkRtIcon(i) }).addTo(m);
+          mk.on("drag", () => { const p = mk.getLatLng(); S.route.pts[i] = [p.lat, p.lng]; drawRoute(true); });
+          mk.on("dragend", () => { const p = mk.getLatLng().wrap(); movePoint(i, p.lat, p.lng); });
+          mk.on("contextmenu", ev => { if (ev.originalEvent && ev.originalEvent.preventDefault) ev.originalEvent.preventDefault(); if (!coarsePointer()) removeRoutePoint(i); });   // לחיצה ימנית על קודקוד מוחקת אותו (לא לחיצה כפולה: לחיצה כפולה על המפה נוחתת על הסמן שזה עתה נוסף ומחקה אותו); במגע (לחיצה ארוכה לפני גרירה) לא מוחקים — שם × בשורה, ״מחק נקודה אחרונה״ ו״נקה נתיב״
+          return mk;
+        });
+      } else R.marks.forEach((mk, i) => mk.setLatLng(want[i]));
+    } catch (e) { try { console.error("[route] drawRoute", e); } catch (e2) { /* ignore */ } }
+  }
+  // הרשימה נבנית מ-S.route.pts: מספר שורות זהה ← מעדכנים ערכים במקום (בלי להחליף DOM — קליק על × אחרי עריכה לא הולך לאיבוד); אחרת בונים מחדש
+  function renderRouteList() {
+    const box = $("routeList"); if (!box) return;
+    const pts = S.route.pts, rows = [...box.querySelectorAll("[data-rt]")];
+    if (rows.length === pts.length) { rows.forEach((r, i) => { const f = r.querySelector("input"); if (f !== document.activeElement) { f.value = fmtPt(pts[i]); f.classList.remove("bad"); } }); return; }
+    box.innerHTML = pts.map((q, i) => '<div class="prow rtRow" data-rt="' + i + '"><span class="rtN" dir="ltr">P' + (i + 1) + '</span><input type="text" dir="ltr" inputmode="decimal" data-f="rtpt" value="' + esc(fmtPt(q)) + '" aria-label="' + esc("נקודה P" + (i + 1) + " בנתיב — קו רוחב, קו אורך") + '" autocomplete="off">' +
+      '<button type="button" class="xbtn" data-rtrm="' + i + '" title="הסר נקודה" aria-label="' + esc("הסר את P" + (i + 1) + " מהנתיב") + '">×</button></div>').join("");
+  }
+  // שורת המידע: מספר הנקודות, האורך והרוחב; ואם הנתיב אינו תקין (אותו אימות כמו בהרצה) — הסיבה הראשונה
+  function routeInfoLine() {
+    const e = $("rtInfo"); if (!e) return;
+    const pts = S.route.pts, lim = routeLim(), W = widthVal();
+    if (!pts.length) { e.textContent = "עדיין לא סומנו נקודות — לחצו על המפה לאורך הכביש (2 עד " + lim.maxPts + " נקודות)."; e.classList.remove("warnTxt"); return; }
+    let t = pts.length + (pts.length === 1 ? " נקודה" : " נקודות") + " מתוך " + lim.maxPts;
+    if (pts.length > 1) t += " · אורך " + (C.routeInfo(pts).lengthM / 1000).toFixed(2) + " ק״מ";
+    if (isFinite(W)) t += " · רוחב כולל " + C.fmtInt(2 * W) + " מ׳ (" + C.fmtInt(W) + " מ׳ מכל צד)";
+    const errs = pts.length > 1 ? C.validateRoute({ area: readArea() }, S.cfg) : [];
+    e.textContent = t + (errs.length ? " — " + errs[0].msg : ""); e.classList.toggle("warnTxt", errs.length > 0);
+  }
+  function fitRoute() { const m = S.lf.m; if (m && S.route.pts.length && typeof L !== "undefined") { try { m.fitBounds(L.latLngBounds(S.route.pts), { padding: [30, 30], maxZoom: 17 }); } catch (e) { /* תצוגה בלבד */ } } }
+  function routeChanged(fit) {
+    closeCard();
+    drawRoute(); renderRouteList(); routeInfoLine();
+    if (fit) fitRoute();
+    onScanInputChange(); scheduleLayerUpdate();
+  }
+  function addRoutePoint(lat, lon) {
+    const lim = routeLim(), pts = S.route.pts, q = [round6(lat), round6(lon)];
+    if (pts.length >= lim.maxPts) { routeMsg("הנתיב מוגבל ל-" + lim.maxPts + " נקודות — מחקו נקודה כדי להוסיף."); return false; }
+    if (pts.length && C.routeInfo([pts[pts.length - 1], q]).lengthM < 1) { routeMsg("הנקודה קרובה פחות ממטר לנקודה הקודמת — לא נוספה."); return false; }   // לחיצה כפולה לא מוסיפה שתי נקודות
+    pts.push(q); routeMsg(""); routeChanged(); return true;
+  }
+  function movePoint(i, lat, lon) {
+    if (!S.route.pts[i]) return;
+    S.route.pts[i] = [round6(lat), round6(lon)]; routeMsg(""); routeChanged();
+  }
+  function removeRoutePoint(i) { if (!S.route.pts[i]) return; S.route.pts.splice(i, 1); routeMsg(""); routeChanged(); }
+  const undoRoutePoint = () => { if (S.route.pts.length) removeRoutePoint(S.route.pts.length - 1); };
+  function clearRoute() { if (!S.route.pts.length) return; S.route.pts = []; routeMsg(""); routeChanged(); }
+  // נתיב שלם (טעינת בסיס, הדבקה): pts מעוגלים ל-6 ספרות; hw — הרוחב (null = כפי שהוא); fit — קירוב המפה לנתיב
+  function setRoute(pts, hw, fit) {
+    S.route.pts = C.roundPts(pts);
+    if (hw != null) $("halfWidth").value = hw;
+    routeMsg(""); routeChanged(!!fit);
+  }
+  // מוחק את נקודות הנתיב בלי לשנות את הסוג ובלי לסמן ״ישן״ (טעינת בסיס של מעגל; איפוס)
+  function dropRoute() { S.route.pts = []; if ($("rtText")) $("rtText").value = ""; routeMsg(""); drawRoute(); renderRouteList(); routeInfoLine(); }
+  function editRoutePoint(i, el) {
+    const c = C.parseCoordInput(el.value);
+    if (!c) { el.classList.add("bad"); routeMsg("P" + (i + 1) + ": הנ״צ אינו חוקי — הקלידו ״קו רוחב, קו אורך״ (למשל 32.099128, 34.816617)."); return; }
+    movePoint(i, c.lat, c.lon);
+  }
+  // הדבקת רשימה: הכול או כלום — שורה לא תקינה או חריגה מהתקרה ← לא נטען דבר (ללא חיתוך שקט); תקין ← מחליף את הנתיב ומקרב אליו
+  function applyRouteText() {
+    const t = $("rtText").value, lim = routeLim();
+    if (!t.trim()) { routeMsg("הדביקו נקודות — נקודה בכל שורה, ״קו רוחב, קו אורך״."); return; }
+    const r = C.parseCoordList(t);
+    if (r.bad.length) { routeMsg((r.bad.length === 1 ? "שורה " : "שורות ") + r.bad.join(", ") + " אינה נ״צ תקין — לא נטען דבר. הפורמט: ״קו רוחב, קו אורך״ בכל שורה."); return; }
+    if (r.pts.length > lim.maxPts) { routeMsg("הודבקו " + r.pts.length + " נקודות — הנתיב מוגבל ל-" + lim.maxPts + ". לא נטען דבר."); return; }
+    if (r.pts.length < 2) { routeMsg("יש להדביק לפחות שתי נקודות."); return; }
+    setRoute(r.pts, null, true); $("rtText").value = ""; routeMsg("נטענו " + r.pts.length + " נקודות.");
+  }
+  // quiet: בלי סימון הניתוח כ״ישן״ ובלי עדכון הפס (אתחול, איפוס, טעינת בסיס — המתקשר אחראי)
+  function setAreaKind(k, quiet) {
+    const route = k === "route", m = S.lf.m;
+    S.areaKind = route ? "route" : "circle";
+    if ($("akRoute")) { $("akRoute").checked = route; $("akCircle").checked = !route; }
+    ["coordBox", "radiusBox"].forEach(id => { $(id).hidden = route; });
+    ["hwBox", "routeBox", "routeBar"].forEach(id => { $(id).hidden = !route; });
+    $("mapTitle").textContent = route ? "2 · מפה — לחצו כדי להוסיף נקודות לנתיב (עד " + routeLim().maxPts + ")" : "2 · מפה — לחצו כדי לסמן את מרכז הסגירה";
+    $("lgGreen").textContent = route ? "רוחב הנתיב מכל צד" : "רדיוס הסגירה"; $("lgOrange").textContent = route ? "עד פי 2 מהרוחב" : "עד פי 2 מהרדיוס";
+    if (m) {
+      m.getContainer().classList.toggle("routeMode", route);
+      if (route) m.doubleClickZoom.disable(); else m.doubleClickZoom.enable();   // לחיצה כפולה לא תקרב ולא תוסיף שתי נקודות
+      [S.lf.orange, S.lf.green, S.lf.marker].forEach(l => { if (!l) return; if (route) { if (m.hasLayer(l)) m.removeLayer(l); } else if (!m.hasLayer(l)) l.addTo(m); });
+      if (!route) drawCircles();
+    }
+    drawRoute(); renderRouteList(); routeInfoLine();
+    if (!quiet) { closeCard(); onScanInputChange(); scheduleLayerUpdate(); }
+  }
+  // החזרה למצב ההתחלתי (כניסת משתמש, איפוס): מעגל, בלי נקודות, בלי טקסט מודבק
+  function resetRoute() { S.route.pts = []; if ($("rtText")) $("rtText").value = ""; routeMsg(""); setAreaKind("circle", true); }
+
   /* ---------- שכבות איסורים (פמ״ת) ונוטמים על המפה + פס סיכום לנקודה (js/maplayers.js) ----------
      תצוגה מקדימה ומידעית בלבד: הקוד כאן אינו קורא ל-setStatus/refreshGate ואינו נוגע ב-S.res / S.statuses / S.stale / S.ready — שער "מוכן לשליחה" (C.gate) נקבע אך ורק בהרצת הבדיקות המלאות.
      החלטות: (1) האזורים והנוטמים אינם אינטראקטיביים ב-Leaflet (interactive:false) ולכן אינם "בולעים" לחיצה: לחיצה על המפה תמיד בוחרת נקודה (ה-click ב-initMap),
@@ -677,6 +831,7 @@
   }
   // שדות הטופס שמשפיעים על התצוגה (נקודה, רדיוס, גובה, תאריכים ושעות) — נקראים ישירות, בלי readInputs
   function layerInputs() {
+    if (routeMode()) return { area: readArea(), coordInvalid: false, heightM: numVal("height"), dateFrom: $("dateFrom").value, dateTo: $("dateTo").value || $("dateFrom").value, timeFrom: $("timeFrom").value, timeTo: $("timeTo").value };   // נתיב: האזור במקום נקודה ורדיוס (maplayers.preview מודד מהקו השבור); אין lat/lon/radius ואין עיגול
     const pt = layerPoint(), c = pt.c || {};
     return { lat: c.lat, lon: c.lon, coordInvalid: !!pt.invalid, radius: numVal("radius"), heightM: numVal("height"), dateFrom: $("dateFrom").value, dateTo: $("dateTo").value || $("dateFrom").value, timeFrom: $("timeFrom").value, timeTo: $("timeTo").value };
   }
@@ -795,7 +950,7 @@
     if (box._k === k && box.firstChild) return;
     box._k = k;
     box.textContent = "";
-    const ttl = document.createElement("div"); ttl.className = "pst"; ttl.textContent = "סיכום מקדים לנקודה שנבחרה"; box.appendChild(ttl);
+    const ttl = document.createElement("div"); ttl.className = "pst"; ttl.textContent = routeMode() ? "סיכום מקדים לנתיב שנבחר" : "סיכום מקדים לנקודה שנבחרה"; box.appendChild(ttl);
     r.lines.forEach(l => {
       const d = document.createElement("div"); d.className = "psl" + (l.cls ? " " + l.cls : ""); d.dataset.k = l.k;
       if (l.label) { const b = document.createElement("b"); b.textContent = l.label + ": "; d.appendChild(b); }
@@ -838,6 +993,7 @@
       wrapHelp(cb.closest("label"), LY.HELP[k], LY.HELP_NAME[k]);
     });
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => ["input", "change"].forEach(ev => $(id).addEventListener(ev, scheduleLayerUpdate)));
+    ["input", "change"].forEach(ev => $("halfWidth").addEventListener(ev, scheduleLayerUpdate));   // נתיב: הרוחב משנה את הפס
     onLayerData();
   }
 
@@ -849,7 +1005,7 @@
       const j = await r.json();
       $("qMsg").textContent = j.length ? "בחרו תוצאה:" : "לא נמצאו תוצאות.";
       $("places").innerHTML = j.map((x, i) => '<button type="button" data-i="' + i + '">' + esc(x.display_name) + "</button>").join("");
-      $("places").querySelectorAll("button").forEach(b => b.onclick = () => { const x = j[+b.dataset.i]; setCenter(+x.lat, +x.lon, false); $("places").innerHTML = ""; $("qMsg").textContent = ""; });
+      $("places").querySelectorAll("button").forEach(b => b.onclick = () => { const x = j[+b.dataset.i]; if (routeMode()) { if (S.lf.m) S.lf.m.setView([+x.lat, +x.lon], Math.max(S.lf.m.getZoom(), 16)); } else setCenter(+x.lat, +x.lon, false); $("places").innerHTML = ""; $("qMsg").textContent = ""; });
     } catch (e) { $("qMsg").textContent = "החיפוש נכשל (" + e.message + "). אפשר להקליד קואורדינטות."; }
   }
 
@@ -915,7 +1071,7 @@
       if (cen.length) out.push("<b>נמצא בסריקה בקרבה אך אינו ברשימת הטופס:</b> " + cen.map(k => q(k.text) + " (" + k.census.slice(0, 3).map(c => esc(c.title + " — " + O.dLabel(c.d))).join("; ") + (k.census.length > 3 ? "; ועוד " + (k.census.length - 3) : "") + ")").join(", ") + "."); }
     if (a17in.length) out.push("<b>הסגירה המבוקשת חופפת לאזור איסור/הגבלה:</b> " + esc(a17in.map(z => z.label).join("; ")) + ". בקשה לחריגה: א-11 סעיף 3(ג) וא-17 סעיף 5 — <span dir='ltr'>caai-charigot@mot.gov.il</span> (הלשון המלאה בדף הבדיקות).");
     if (b09in.length) out.push("<b>הסגירה המבוקשת חופפת (חלקית או כולה) לאזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09in.map(z => z.label + " (" + z.alt + ")").join("; ")) + ". יש לעיין בהערות האזור ובתיאום הנדרש (דף הבדיקות).");
-    if (b09near.length) out.push("<b>בקרבת אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09near.map(z => z.label + " — " + C.fmtDist(z.edge) + " מקצה הסגירה (" + C.fmtDist(z.d) + " מהנקודה)").join("; ")) + ". סעיף 7(ג): מרחק של לפחות 500 מ׳ מגבול אזור הפעילות שאושר (דף הבדיקות).");
+    if (b09near.length) out.push("<b>בקרבת אזור טיסה לכטב״ם (פרק ב-09):</b> " + esc(b09near.map(z => z.label + " — " + C.fmtDist(z.edge) + " מקצה הסגירה (" + C.fmtDist(z.d) + (r.area ? " מהציר)" : " מהנקודה)")).join("; ")) + ". סעיף 7(ג): מרחק של לפחות 500 מ׳ מגבול אזור הפעילות שאושר (דף הבדיקות).");
     const bv = r.borders.filter(b => b.violates); if (bv.length) out.push("<b>הסגירה נכנסת לרצועת הגבול:</b> " + esc(bv.map(b => b.name + " (" + b.km + " ק״מ)").join("; ")) + ".");
     if (r.workingDays != null && r.workingDays < th.min_working_days) out.push("הבקשה מוגשת " + r.workingDays + " ימים (א׳–ה׳) לפני מועד הפעילות; הנוהל (א-11 סעיף 6.ב) דורש לפחות " + th.min_working_days + " ימי עבודה. המערכת אינה מנכה חגים — אם יש חג בטווח, ייתכן שמספר ימי העבודה בפועל נמוך יותר.");
     if (r.notamAgeH != null && r.notamAgeH > th.notam_warn_age_h) out.push("נתוני הנוטמים נמשכו לפני " + Math.round(r.notamAgeH) + " שעות.");
@@ -927,7 +1083,7 @@
     $("progress").innerHTML = items.map(i => '<li><span class="s ' + i.s + '">' + ({ ok: "✔", no: "✖", wait: "…" }[i.s]) + "</span><span>" + esc(i.t) + (i.m ? ' <span class="hint">' + esc(i.m) + "</span>" : "") + "</span></li>").join("");
   }
   // שם השדה בהודעה ליד כפתור ההרצה (לפי שדה השגיאה של C.validateInput)
-  const FIELD_LABEL = { coord: "נקודת מרכז", radius: "רדיוס", height: "גובה", dateFrom: "מתאריך", dateTo: "עד תאריך", timeFrom: "משעה", timeTo: "עד שעה", purpose: "מהות הפעילות", aircraft: "כלי טיס", siteName: "ישוב / אתר",
+  const FIELD_LABEL = { coord: "נקודת מרכז", radius: "רדיוס", route: "נקודות הנתיב", halfWidth: "רוחב מכל צד", height: "גובה", dateFrom: "מתאריך", dateTo: "עד תאריך", timeFrom: "משעה", timeTo: "עד שעה", purpose: "מהות הפעילות", aircraft: "כלי טיס", siteName: "ישוב / אתר",
     requester: "שם וטלפון המבקש", requesterOrg: "שם הגורם המבקש", callsign: "אות קריאה", registration: "מס׳ רישום כלי הטיס", contacts: "אנשי קשר בשטח", participants: "משתתפים", knownObstacles: "מכשולים שידועים", visitNotes: "הערות המבקש / תאריך סיור" };
   // הראשון בסדר המסמך מבין השדות המסומנים (bad) והודעות השגיאה שליד שדות (גם כשאין שדה מסומן, כמו כלי טיס): גולל אליו למרכז המסך (showErrors כבר פתחה את תיבת פרטי המבקש) וממקד אותו; ב-prefers-reduced-motion — בלי אנימציה
   function focusFirstError() {
@@ -956,7 +1112,7 @@
       case "calc":
         if (x.s !== "ok") return [{ s: x.s, t: x.s === "wait" ? "בודקים אזורי איסור, שמורות טבע, מנחתים ונוטמים…" : "בדיקת אזורי איסור, שמורות טבע, מנחתים ונוטמים", m: x.m }];
         return ["נבדקו אזורי איסור והגבלה באזור ההטסה", "נבדקו שמורות טבע וגנים לאומיים", "נבדקו מנחתים חקלאיים", "נבדקו נוטמים (סגירות מרחב אוויר ומכשולים שפורסמו)"].map(t => ({ s: "ok", t, m: "" }))
-          .concat([{ s: "ok", t: "נמצאו " + x.v.obst + " מכשולים ותשתיות עד פי 2 מהרדיוס · " + x.v.zones + " אזורי איסור בקרבה", m: "" }]);
+          .concat([{ s: "ok", t: "נמצאו " + x.v.obst + " מכשולים ותשתיות עד פי 2 מ" + (x.v.route ? "הרוחב" : "הרדיוס") + " · " + x.v.zones + " אזורי איסור בקרבה", m: "" }]);
       case "map": return one("יוצרים ארבע תמונות מפה…", "נוצרו ארבע תמונות מפה", "תמונות המפה");
       default: return [{ s: x.s, t: x.t, m: x.m }];
     }
@@ -967,7 +1123,7 @@
     $("e_run").textContent = ""; lastFail = null;
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
-    { const raw = $("coord").value.trim(); if (raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
+    { const raw = $("coord").value.trim(); if (!inp0.area && raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
     if (inp0.dateFrom && inp0.dateFrom < C.ilToday(new Date())) errs.push({ field: "dateFrom", msg: "תאריך ההתחלה כבר עבר" });
     showErrors(errs);
     if (errs.length) {
@@ -995,11 +1151,11 @@
     // ניתוח חדש בדרך: בנייה שרצה על הניתוח הקודם הופכת למיושנת (buildSeq), ועריכה רכה שממתינה לא תפעל על תוצאה שנמחקת (clearTimeout) — ואז אין טיימר שיזרוק על S.res=null
     S.buildSeq++; S.building = false; clearTimeout(rebuildTimer); rebuildTimer = null; S.pending = false;
     S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.imgs = {}; S.imgSite = null; clearOutcome();
-    { const ck = inp0.lat + "," + inp0.lon; if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
+    { const ck = areaKey(inp0); if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: O.DECLARATION.gate };
     ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso };
-    const q = C.buildQueries(inp0.lat, inp0.lon, inp0.radius, S.cfg);
+    const q = inp0.area ? C.buildQueries(inp0.lat, inp0.lon, inp0.area.halfWidth, S.cfg, inp0.area) : C.buildQueries(inp0.lat, inp0.lon, inp0.radius, S.cfg);   // נתיב: around על הקו השבור כולו (lat/lon = העוגן, לשם המקום)
     const fetchOpts = { log: () => {}, maxAgeH: S.cfg.thresholds.osm_max_age_h };
     try {
       // שלוש השאילתות במקביל (מסונכרנות בהפרש קטן כדי לא להציף שרת אחד); כשל באחת מהן עוצר את ההכנה
@@ -1021,6 +1177,7 @@
       } catch (e) { data.reverse = null; st("reverse", "ok", "לא התקבל שם מ-Nominatim — השם נגזר משכבות OpenStreetMap או מהקלדה"); }
       // שדות הסריקה (נקודה, רדיוס, גובה, מועדים) נלקחים מרגע הלחיצה — עליהם נשלפו נתוני OSM; שדות "רכים" (שם, מטרה, אנשי קשר, משתתפים, הערות) עשויים להשתנות בזמן ההרצה
       const inp = Object.assign(readInputs(), { lat: inp0.lat, lon: inp0.lon, radius: inp0.radius, heightM: inp0.heightM, dateFrom: inp0.dateFrom, dateTo: inp0.dateTo, timeFrom: inp0.timeFrom, timeTo: inp0.timeTo, manualItems: S.manual });
+      if (inp0.area) { inp.area = inp0.area; delete inp.radius; }   // נתיב: האזור שנשלפו עליו נתוני OSM (לא מה שנקרא מחדש אחרי ההמתנות); אין radius
       const res = C.analyze(inp, data, S.cfg, new Date());
       S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };   // לפי הנתונים שהניתוח השתמש בהם, לא לפי מה שנטען בינתיים
       const prevAuto = S.autoSite;
@@ -1035,7 +1192,7 @@
       S.res = res; S.scanKey = scanKeyOf(inp0);
       if (scanKey() !== S.scanKey) { S.stale = true; S.staleWhy = ""; }   // הטופס שונה בזמן ההרצה — הבקשה לא תסומן מוכנה
       partiesRebuild(data);   // ״דיווח לגורמים נוספים״: הרשימה מהניתוח הזה, ממוזגת עם הסימונים הקודמים של אותה בקשה (לא חוסמת דבר)
-      st("calc", "ok", "נמצאו " + res.nearScan.items.length + " מכשולים/תשתיות עד פי 2 מהרדיוס · " + (res.zones.inside.length + res.zones.near.length) + " אזורי איסור בקרבה", { obst: res.nearScan.items.length, zones: res.zones.inside.length + res.zones.near.length });
+      st("calc", "ok", "נמצאו " + res.nearScan.items.length + " מכשולים/תשתיות עד פי 2 מ" + (res.area ? "הרוחב" : "הרדיוס") + " · " + (res.zones.inside.length + res.zones.near.length) + " אזורי איסור בקרבה", { obst: res.nearScan.items.length, zones: res.zones.inside.length + res.zones.near.length, route: !!res.area });
       await buildMapImage(steps, st);
       S.report = true;
       renderAll();
@@ -1149,7 +1306,7 @@
     // ארבעה עמודי תמונה: תצ״א, מפת רחובות, מבט כללי (+ טבלת הפריטים) ומפת אזור. מקרא הצבעים מתחת לתצ״א הראשונה
     const imgOf = (m, alt) => m && m.dataUrl ? "<img class='mapimg' alt='" + alt + "' src='" + (m.jpegUrl || m.dataUrl) + "'>" : "<div class='draft'>התמונה לא נוצרה.</div>";
     const imgPage = (title, inner) => "<div class='paper'>" + draftBanner + "<div class='hdr'><span>" + esc(title) + "</span></div>" + inner + "</div>";
-    const items = mdl.items.length ? "<h2>מכשולים, אתרים ותשתיות המסומנים במפה</h2><table class='t'><tr><th>#</th><th>מה</th><th>מרחק מהנקודה</th><th>איפה</th></tr>" +
+    const items = mdl.items.length ? "<h2>מכשולים, אתרים ותשתיות המסומנים במפה</h2><table class='t'><tr><th>#</th><th>מה</th><th>" + esc(mdl.itemsDistHead || "מרחק מהנקודה") + "</th><th>איפה</th></tr>" +
       mdl.items.map(i => "<tr><td>" + esc(i.n) + "</td><td>" + esc(i.title) + "</td><td>" + esc(i.dist) + "</td><td>" + esc(i.where) + "</td></tr>").join("") + "</table>" : "";
     const pImgs = imgPage(mdl.aerialTitle, imgOf(S.imgs.aerial, "תצ״א תקריב") + "<p class='muted' style='margin-top:6px'>" + esc(mdl.mapNote) + "</p>") +
       imgPage(mdl.streetTitle, imgOf(S.imgs.street, "מפת רחובות תקריב")) +
@@ -1168,7 +1325,7 @@
     const dn = mdl.dayNight.map(r => "<tr>" + r.map(c => "<td>" + esc(c) + "</td>").join("") + "</tr>").join("");
     const rv = reviewText(), visitNote = O.visitNoteHtml(res);   // הערות המבקש / ממצאי סיור: HTML מוכן (escaped) או ""
     const p3 = "<div class='paper checks'><div class='hdr'><span>דף בדיקות</span><span>לא חלק מהטופס הרשמי</span></div>" +
-      secH("הנקודה") + "<p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>" +
+      secH(mdl.pointHeading || "הנקודה") + (res.area ? "<p>" + esc(mdl.checkPoint) + "</p>" : "<p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>") +
       (visitNote ? "<p>" + visitNote + "</p>" : "") +
       secH("הבדיקות שבוצעו") + "<table class='t ck'><tr><th>#</th><th>בדיקה</th><th>מקור</th><th>תוצאה</th></tr>" + chk + "</table>" + covHtml() +
       (dn ? secH("יום ולילה בחלון הפעילות") + "<table class='t'><tr>" + mdl.dayNightHead.map(h => "<th>" + esc(h) + "</th>").join("") + "</tr>" + dn + "</table>" : "") +
@@ -1253,6 +1410,7 @@
   // הנתונים שהוזנו (בלי שמות וטלפונים) — מאפשרים להריץ את הבדיקות שוב על אותה בקשה
   function inputsForRecord() {
     const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester|participant|callsign|registration)/i.test(k)) o[k] = S.res.inp[k]; });
+    if (o.area) { delete o.lat; delete o.lon; delete o.radius; }   // נתיב: הרשומה נושאת רק את area (נקודות ורוחב) — בלי lat/lon/radius, כדי שלקוח ישן (מטמון) ייכשל סגור ולא ינתח אותה כמעגל; העוגן והפוליגון נגזרים מחדש
     // declaration: הצהרת המבקש (גרסת הנוסח, מועד האישור והטקסט) — ללא שם או טלפון; בקשה שנשמרת מוכנה תמיד נושאת אותה (השער S.ready דורש את הסימון), null רק כרשת ביטחון
     const rec = { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", declaration: O.declarationRecord(S.reviewAt), inputs: o,
       zones: [...S.res.zones.inside, ...S.res.zones.near].map(z => ({ id: z.id, d: Math.round(z.d) })), items: S.res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })) };
@@ -1304,7 +1462,7 @@
     const rev0 = S.rev;   // גרסת הבקשה שממנה נבנים הקבצים; עריכה בזמן השמירה מקדמת אותה (clearOutcome) והקבצים בדרייב כבר אינם מעודכנים
     S.driveTry = rev0;    // הגרסה הזו נוסתה: השמירה האוטומטית לא תחזור עליה (גם אם הניסיון נכשל)
     S.saved = null;       // שמירה חדשה מתחילה: הקבצים הקודמים בדרייב עומדים להיות מוחלפים, ולכן ״נשמר לגרסה הזו״ אינו נכון עד שהיא מצליחה (אחרת שליחה אחרי כשל תדלג על השמירה)
-    const A = window.ReqAuth, i0 = S.res.inp, key = JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo]);
+    const A = window.ReqAuth, i0 = S.res.inp, key = i0.area ? JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo, i0.area.pts]) : JSON.stringify([i0.lat, i0.lon, i0.dateFrom, i0.dateTo]);   // נתיב: הנקודות במפתח (אחרת נתיב אחר באותו עוגן ותאריך היה דורס את התיקייה)
     if (!S.rid || (S.ridKey && S.ridKey !== key)) S.rid = newRid();
     S.ridKey = key;
     let begin = await A.call("saveBegin", { folderName: baseName(), rid: S.rid });
@@ -1671,6 +1829,7 @@
     if (H) { H.wire(); attachHelp(); }   // לחצני ״!״ ליד כפתורי הדף (ההסברים ב-HELP)
     applyRole();   // עד שהתחברות מזוהה — המייל הידני (#manualMail) מוסתר (נכשל סגור); המנהל מקבל אותו ב-req-auth
     initMap();
+    setAreaKind("circle", true);   // סוג האזור תמיד מתחיל בנקודה ורדיוס (גם אם הדפדפן שחזר את בחירת הרדיו מההיסטוריה — הממשק והמצב לא יסתדרו אחרת)
     try { initLayerUi(); } catch (e) { logLayerErr("initLayerUi", e); }   // מתגי האיסורים והנוטמים + פס הסיכום (גם כשהמפה לא נטענה: המתגים מושבתים עם הסבר); כשל בהם לעולם לא עוצר את האתחול
     const okCfg = await loadStatic();
     // התנתקות מכל סיבה (auth.js): איפוס מלא וטעינה מחדש; preventDefault = ui.js מטפל (auth.js לא מציג כיסוי בדף הישן — הכיסוי יוצג בדף הנקי, עם ההודעה)
@@ -1698,6 +1857,12 @@
     try { const U = PUI(); if (U && okCfg) { U.hook({ changed: () => { S.autoSlowUntil = Date.now() + AUTO_SLOW_MS + 5000; onSoftInputChange(); }, store: { get: () => lsGet(PARTIES_KEY), set: v => lsSet(PARTIES_KEY, v), del: () => lsDel(PARTIES_KEY) }, now: () => new Date() }); U.mount(S.cfg); } } catch (e) { /* תוספת: כשל בחיבור לא עוצר את האתחול */ }
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
+    // נתיב: סוג האזור, הרוחב, כפתורי ״מחק אחרונה״ ו״נקה״, הדבקת רשימה, ועריכה / הסרה של נקודה בשורה (ייצוג אחד, delegation); עריכת שורה ב-change (לא input) — הקלדה חלקית לא מזיזה את הנתיב
+    ["akCircle", "akRoute"].forEach(id => $(id).addEventListener("change", () => { if ($(id).checked) setAreaKind(id === "akRoute" ? "route" : "circle"); }));
+    $("halfWidth").addEventListener("input", () => { drawRoute(); routeInfoLine(); onScanInputChange(); });
+    $("rtUndo").onclick = undoRoutePoint; $("rtClear").onclick = clearRoute; $("rtApply").onclick = applyRouteText;
+    $("routeList").addEventListener("change", ev => { const row = ev.target.closest && ev.target.closest("[data-rt]"); if (row) editRoutePoint(+row.dataset.rt, ev.target); });
+    $("routeList").addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-rtrm]"); if (b) removeRoutePoint(+b.dataset.rtrm); });
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); else scheduleLayerUpdate(); });   // טקסט שאינו נ״צ: הפס מתעדכן להנחיה (layerPoint), ולא ממשיך להציג את הנקודה הקודמת
     ["siteName", "purpose", "vlos", "reqName", "reqPhone", "reqOrg", "reqCallsign", "reqReg", "knownObs", "visitDate", "visitNotes"].forEach(id => (id === "visitDate" ? ["input", "change"] : ["input"]).forEach(ev => $(id).addEventListener(ev, () => { if (id.startsWith("req")) savePerson(); onSoftInputChange(); })));
     // אנשי קשר ומשתתפים: מאזין אחד (delegation) לכל השורות; הוספה והסרה של שורות ב-click
@@ -1730,7 +1895,7 @@
     renderManual();
     setStatus("selftest", false, "טרם הורצה");
     if (okCfg) await selfTest();
-    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs, userKey: ukey, autoPending: () => autoTimer !== null };   // autoPending: לבדיקות — האם שמירה אוטומטית ממתינה
+    window.__REQ = { S, C, O, M, run, selfTest, setCenter, readInputs, userKey: ukey, autoPending: () => autoTimer !== null, setAreaKind, addRoutePoint, removeRoutePoint, undoRoutePoint, clearRoute, setRoute };   // autoPending: לבדיקות — האם שמירה אוטומטית ממתינה
     window.__REQ_READY = true;
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();

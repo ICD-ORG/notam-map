@@ -1626,7 +1626,7 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=16/);
+  assert.match(html, /js\/ui\.js\?v=17/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
@@ -2484,7 +2484,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const html = src("index.html"), ui = src("js/ui.js"), auth = src("js/auth.js"), my = src("js/myreq.js");
     const at = f => html.indexOf('<script src="js/' + f + '?v=');
     assert.ok(at("core.js") > 0 && at("core.js") < at("recheck.js") && at("recheck.js") < at("myreq.js") && at("myreq.js") < at("ui.js"), "סדר הטעינה");
-    assert.ok(html.includes('<script src="js/myreq.js?v=1"></script>'));
+    assert.ok(html.includes('<script src="js/myreq.js?v=2"></script>'));
     const rec = /function inputsForRecord\(\) \{[^]*?\n  \}\n/.exec(ui);
     assert.ok(rec && /return myreqSnapRecord\(rec\);/.test(rec[0]), "inputsForRecord מעביר את הרשומה דרך myreqSnapRecord");
     const sn = /function myreqSnapRecord\(rec\) \{[^]*?\n  \}\n/.exec(ui);
@@ -2753,7 +2753,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const html = src("index.html"), ui = src("js/ui.js"), ru = src("js/recheckui.js");
     const at = f => html.indexOf('<script src="js/' + f + '?v=');
     assert.ok(at("recheck.js") > 0 && at("recheck.js") < at("recheckui.js") && at("myreq.js") < at("recheckui.js") && at("recheckui.js") < at("ui.js"), "סדר הטעינה");
-    assert.ok(html.includes('<script src="js/recheckui.js?v=2"></script>'));
+    assert.ok(html.includes('<script src="js/recheckui.js?v=3"></script>'));
     const an = /async function recheckAnalyze\(inp, step\) \{[^]*?\n  \}\n/.exec(ui);
     assert.ok(an, "recheckAnalyze");
     for (const must of ["S.running || S.resetting", "await checkSync();", '["a17", "sync", "agri", "notam"]', "C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg)", "C.overpass(q[k], fetchOpts)", "C.analyze(inp, data, S.cfg, now)", "age > S.cfg.thresholds.notam_max_age_h) return { ok: false", "Date.parse(data.notamFetchedIso)"]) assert.ok(an[0].includes(must), "recheckAnalyze: " + must);
@@ -3048,7 +3048,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const html = rdq("index.html"), ui = rdq("js/ui.js"), pui = rdq("js/partiesui.js");
     const at = f => html.indexOf('<script src="js/' + f + '?v=');
     assert.ok(at("output.js") > 0 && at("parties.js") > at("output.js") && at("partiesui.js") > at("parties.js") && at("ui.js") > at("partiesui.js"), "סדר הטעינה");
-    assert.ok(html.includes('<script src="js/parties.js?v=2"></script>') && html.includes('<script src="js/partiesui.js?v=2"></script>'));
+    assert.ok(html.includes('<script src="js/parties.js?v=3"></script>') && html.includes('<script src="js/partiesui.js?v=2"></script>'));
     assert.ok(!/id="partiesBox"|ptyList|partiesStyle/.test(html), "אין DOM של העורך ב-index.html (נוצר רק כשהדגל פעיל)");
     assert.ok(/function partiesRebuild\(data\) \{ try \{ const U = PUI\(\); if \(U && S\.res\) U\.rebuild\(S\.res, data, S\.cfg\); \} catch \(e\)/.test(ui), "partiesRebuild: try/catch, רק עם ניתוח");
     const run = /async function run\(\) \{[^]*?\n  \}\n/.exec(ui)[0], rea = /async function reanalyze\(\) \{[^]*?\n  \}\n/.exec(ui)[0];

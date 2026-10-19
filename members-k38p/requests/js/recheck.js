@@ -5,7 +5,7 @@
    (4) כל מחרוזת בפלט המודלים היא טקסט רגיל; *Html מחזירים HTML שכל ערך דינמי בו עבר esc. אין כאן הכרעה אם הטיסה מותרת — עובדות בלבד.
 
    ===== API =====
-   VERSION                                 1 (גרסת תמונת המצב)
+   VERSION                                 1 (גרסת תמונת המצב של מעגל; נתיב: VERSION_ROUTE = 2, עם scan {k:"route", pts, hw, ft, wf, wt} במקום {lat, lon, R, ft, wf, wt})
    LIMITS / STR                            תקרות ומחרוזות עברית (STR.banner = "דוח זה לא צורף לבקשה שנשלחה למודיעין טיס")
    enabled(cfg)                            true אלא אם config.features.recheck === false (מפתח חסר = פעיל)
    optsFromCfg(cfg)                        => opts ל-diffSnapshots מ-cfg.recheck (dist_eps_m, dist_eps_pct, rows_screen, rows_word); חסר => ברירות מחדל
@@ -24,6 +24,7 @@
        status: new entered added cancelled replaced withdrawn expired gone out changed closer farther left excluded
 
    --- בקשה שמורה ---
+   נתיב: inputs.area = {kind:"route", pts:[[lat,lon],...], halfWidth} (בלי lat/lon/radius — קורא שמניח מעגל נכשל סגור); area נוכח = סמכותי ואם אינו תקין הרשומה נדחית (לעולם לא נפילה למעגל)
    validateRecord(rec, cfg?)               => {ok:true, rec:{savedAt, site, version, edition, declaration, inputs, zones, items, snapshot, snapshotStatus, trimmed[]}} | {ok:false, reason:'bad_record'|'too_big', errors[]}
    restoreInputs(rec, {keepDates?, cfg?})  => אובייקט קלט לטופס ("השתמש כבסיס") או null כשהרשומה לא שמישה. תאריכים/שעות (וגם תאריך סיור) ריקים אלא אם keepDates
 
@@ -43,8 +44,8 @@
 })(typeof self !== "undefined" ? self : this, function (C) {
   "use strict";
 
-  const VERSION = 1;
-  const LIMITS = { items: 400, known: 3000, hits: 300, zones: 300, rc: 600, air: 40, agri: 20, borders: 10, bytes: 400000, record: 600000, manual: 50, aircraft: 20, aircraftLen: 60, name: 120, obstacles: 1000, notes: 3000, listZones: 500, listItems: 1000, rowsScreen: 15, rowsWord: 100, excessive: 200 };
+  const VERSION = 1, VERSION_ROUTE = 2;
+  const LIMITS = { routePts: 50, hitsRoute: 600, zonesRoute: 600, items: 400, known: 3000, hits: 300, zones: 300, rc: 600, air: 40, agri: 20, borders: 10, bytes: 400000, record: 600000, manual: 50, aircraft: 20, aircraftLen: 60, name: 120, obstacles: 1000, notes: 3000, listZones: 500, listItems: 1000, rowsScreen: 15, rowsWord: 100, excessive: 200 };
   // הגדרות שמשפיעות על תוצאות הסריקה (ולכן נשמרות בתמונת המצב ונבדקות בהשוואה). ברירות המחדל זהות ל-fallback שבקוד הליבה
   const SCAN_TH = ["near_zone_m", "approx_margin_m", "site_near_m", "airfield_scan_m", "airfield_near_m", "border_scan_m", "notam_near_m", "agri_near_m"];
   const DEF_TH = { site_near_m: 1000, airfield_scan_m: 15000, airfield_near_m: 1000, border_scan_m: 7000, notam_near_m: 10000, agri_near_m: 3000 };
@@ -67,12 +68,12 @@
     badBase: "תמונת המצב שנשמרה בהגשה פגומה, ולכן אי אפשר לדעת מה השתנה. מוצגים הממצאים הנוכחיים בלבד.",
     oldBase: "תמונת המצב שנשמרה בהגשה היא מגרסה שאינה נתמכת, ולכן אי אפשר לדעת מה השתנה. מוצגים הממצאים הנוכחיים בלבד.",
     badCur: "תמונת המצב הנוכחית אינה תקינה, ולכן אי אפשר להשוות.",
-    scan: "פרטי הסריקה (נקודה, רדיוס, גובה או מועדי הפעילות) שונים מאלה שבהגשה, ולכן אין השוואה. שינוי כזה הוא בקשה חדשה ולא בדיקה חוזרת.",
+    scan: "פרטי הסריקה (נקודה או נתיב, רדיוס או רוחב, גובה או מועדי הפעילות) שונים מאלה שבהגשה, ולכן אין השוואה. שינוי כזה הוא בקשה חדשה ולא בדיקה חוזרת.",
     noTime: "חסר מועד של מקור נתונים (נוטמים או OpenStreetMap), ולכן אי אפשר להשוות באופן אמין.",
     submitted: "הוגשה", checked: "נבדקה מחדש", activity: "מועד הפעילות",
     cat: { notams: "נוטמים", zones: "אזורי איסור והגבלה", items: "מכשולים ותשתיות", other: "גבולות, שדות תעופה ומנחתים" },
     catShort: { notams: "נוטמים", zones: "אזורי איסור/הגבלה", items: "מכשולים ותשתיות", other: "אחר" },
-    cols: ["סטטוס", "פריט", "פירוט", "מרחק מהנקודה"],
+    cols: ["סטטוס", "פריט", "פירוט", "מרחק מהנקודה"], colRoute: "מרחק מהציר",
     sev: { high: "חומרה גבוהה", mid: "חומרה בינונית", low: "" },
     sources: "מקורות הנתונים", srcCols: ["מקור", "בהגשה", "כעת"],
     srcLabel: { ni: "נוטמים נמשכו", ob: "OpenStreetMap", of: "OpenStreetMap (שדות תעופה)", ox: "OpenStreetMap (גבולות)", mv: "גרסת מפה", ed: "מהדורת הפמ״ת בנתוני המערכת", zh: "נתוני האזורים", cv: "הגדרות המערכת" },
@@ -86,7 +87,8 @@
     },
     field: { text: "נוסח", window: "תוקף", geometry: "גבול/גיאומטריה", height: "גבהים", kind: "סוג", inside: "מיקום ביחס לסגירה", distance: "מרחק", tags: "תכונות", title: "שם", zone: "קרבה לסגירה", violates: "חדירה לרצועת הגבול" },
     before: "לפני", after: "אחרי", by: "ע״י", replaces: "מחליף את", cancelBy: "בוטל ע״י הנוטם", replacedBy: "הוחלף בנוטם", notCounted: "(אינו נספר כסגירה בטווח)",
-    inZone: "בתוך הסגירה", ringZone: "בטבעת (עד פי 2 מהרדיוס)", nearZone: "בקרבת הסגירה",
+    inZone: "בתוך הסגירה", ringZone: "בטבעת (עד פי 2 מהרדיוס)", ringZoneRoute: "בפס הכתום (עד פי 2 מהרוחב)", nearZone: "בקרבת הסגירה",
+    route: "נתיב", routeLen: "אורך הנתיב", routeW: "רוחב מכל צד של הציר",
     perm: "קבוע", noGeo: "ללא מיקום בנוטם", inside: "בתוך השטח", feet: "רגל"
   };
   // סיבות שבהן אין השוואה → ניסוח
@@ -150,6 +152,7 @@
   function snapshotOf(res, data, cfg, now) {
     if (!res || !res.inp || !res.notams || !res.zones || !res.nearScan || !Array.isArray(res.nearScan.items)) throw new Error("snapshotOf: הניתוח חסר או לא שלם");
     data = data || {}; cfg = cfg || {};
+    const route = C.isRoute(res.inp);   // נתיב: res.R = הרוחב מכל צד, והמרחק d של כל פריט הוא מציר הנתיב — כל החישובים כאן (d - R) נשארים כמו במעגל
     const R = res.R, th = thresholdsOf(cfg), nowMs = toMs(now), zd = data.zones || {}, pm = zd.pamat || {};
     const osmBase = x => (x && x.osm3s && typeof x.osm3s.timestamp_osm_base === "string") ? clean(x.osm3s.timestamp_osm_base, 40) : "";
     const capped = { items: 0, known: 0 };
@@ -165,7 +168,7 @@
     (res.notams.hits || []).forEach(x => { if (!seen.has(x.id)) { seen.add(x.id); hits.push(nrec(x, "c")); } });
     (res.notams.obstacles || []).forEach(x => { if (!seen.has(x.id)) { seen.add(x.id); hits.push(nrec(x, "o")); } });
     hits.sort((a, b) => (a.d - b.d) || cmp(a.id, b.id));
-    if (hits.length > LIMITS.hits) throw new Error("snapshotOf: יותר מדי נוטמים בטווח (" + hits.length + ")");
+    if (hits.length > (route ? LIMITS.hitsRoute : LIMITS.hits)) throw new Error("snapshotOf: יותר מדי נוטמים בטווח (" + hits.length + ")");
     const feed = (data.notams || []).filter(n => n && typeof n.id === "string" && n.id && n.id.length <= 80);
     let known = Array.from(new Set(feed.map(n => clean(n.id, 80)))).filter(Boolean).sort(cmp);
     if (known.length > LIMITS.known) { capped.known = known.length - LIMITS.known; known = known.slice(0, LIMITS.known); }
@@ -187,7 +190,7 @@
     (res.zones.inside || []).forEach(z => zones.push(zrec(z, true)));
     (res.zones.near || []).forEach(z => zones.push(zrec(z, false)));
     zones.sort((a, b) => (a.d - b.d) || cmp(a.s + a.id, b.s + b.id));
-    if (zones.length > LIMITS.zones) throw new Error("snapshotOf: יותר מדי אזורים בטווח (" + zones.length + ")");
+    if (zones.length > (route ? LIMITS.zonesRoute : LIMITS.zones)) throw new Error("snapshotOf: יותר מדי אזורים בטווח (" + zones.length + ")");
     const zex = Array.from(new Set((res.zones.excluded || []).map(x => clean(x.id, 80)))).filter(Boolean).sort(cmp);
 
     // פריטי OSM מקובצים (בלי פריטים שהוזנו ידנית: הם קלט המבקש, ונשמרים ב-manualItems)
@@ -224,6 +227,8 @@
       notams: { total: res.notams.total || 0, valid: res.notams.valid || 0, known, hits, rc },
       zones, zex, items, oth, capped
     };
+    // נתיב: גרסה 2 עם scan {k, pts, hw, ft, wf, wt} (נקודות הקו ורוחב מכל צד) במקום נקודה ורדיוס; מעגל נשאר גרסה 1 כפי שהיה, בייט-בבייט. לקוח ישן רואה גרסה 2 כ״לא נתמכת״ ולא מנסה להשוות
+    if (route) { snap.v = VERSION_ROUTE; snap.scan = { k: "route", pts: res.inp.area.pts.map(q => [q[0], q[1]]), hw: R, ft: snap.scan.ft, wf: snap.scan.wf, wt: snap.scan.wt }; }
     if (isFinite(nowMs)) snap.at = new Date(nowMs).toISOString();
     // תקרת גודל כוללת: קודם נחתכים פריטי OSM הרחוקים (הם מסומנים ב-capped וההשוואה שלהם חלקית), ואז רשימת המזהים המוכרים
     while (byteLen(JSON.stringify(snap)) > LIMITS.bytes && snap.items.length > 0) {
@@ -254,12 +259,18 @@
 
   function cleanSnapshot(s) {
     if (!isObj(s)) return { ok: false, reason: "not_object" };
-    if (own(s, "v") !== VERSION) return { ok: false, reason: "version" };
+    const ver = own(s, "v");
+    if (ver !== VERSION && ver !== VERSION_ROUTE) return { ok: false, reason: "version" };
+    const route = ver === VERSION_ROUTE;   // גרסה 2 = נתיב (scan עם pts ו-hw); גרסה 1 = מעגל (scan עם lat, lon, R) — כל אחת נבדקת רק מול הצורה שלה
     try {
       const g = k => own(s, k), sc = objN(g("scan"), "scan"), sr = objN(g("src"), "src"), th0 = objN(g("th"), "th"), nt = objN(g("notams"), "notams"), oh = objN(g("oth"), "oth"), cp = objN(g("capped"), "capped");
-      const out = { v: VERSION };
+      const out = { v: ver };
       if (g("at") !== undefined) { const t = Date.parse(strN(g("at"), 40, "at")); need(isFinite(t), "at"); out.at = new Date(t).toISOString(); }
-      out.scan = { lat: finN(own(sc, "lat"), "scan.lat"), lon: finN(own(sc, "lon"), "scan.lon"), R: finN(own(sc, "R"), "scan.R", 0), ft: finN(own(sc, "ft"), "scan.ft"), wf: finN(own(sc, "wf"), "scan.wf"), wt: finN(own(sc, "wt"), "scan.wt") };
+      if (route) {
+        oneN(own(sc, "k"), ["route"], "scan.k");
+        const pts = arrN(own(sc, "pts"), LIMITS.routePts, "scan.pts"); need(pts.length >= 2, "scan.pts");
+        out.scan = { k: "route", pts: pts.map(q => { need(Array.isArray(q) && q.length === 2 && inBox(q[0], q[1]), "scan.pts"); return [q[0], q[1]]; }), hw: finN(own(sc, "hw"), "scan.hw", 0), ft: finN(own(sc, "ft"), "scan.ft"), wf: finN(own(sc, "wf"), "scan.wf"), wt: finN(own(sc, "wt"), "scan.wt") };
+      } else out.scan = { lat: finN(own(sc, "lat"), "scan.lat"), lon: finN(own(sc, "lon"), "scan.lon"), R: finN(own(sc, "R"), "scan.R", 0), ft: finN(own(sc, "ft"), "scan.ft"), wf: finN(own(sc, "wf"), "scan.wf"), wt: finN(own(sc, "wt"), "scan.wt") };
       out.src = {}; SRC_KEYS.forEach(k => { const v = own(sr, k); out.src[k] = v === undefined ? "" : strN(v, 200, "src." + k); });
       out.th = {}; Object.keys(th0).sort().forEach(k => { if (SCAN_TH.indexOf(k) >= 0 || TH_BD.test(k)) out.th[k] = finN(own(th0, k), "th." + k); });
       const nrec = n => {
@@ -271,14 +282,14 @@
       const known = arrN(own(nt, "known"), LIMITS.known, "known").map(x => idN(x, "known.id"));
       out.notams = {
         total: finN(own(nt, "total"), "notams.total", 0), valid: finN(own(nt, "valid"), "notams.valid", 0), known: uniqN(known, x => x, "known"),
-        hits: uniqN(arrN(own(nt, "hits"), LIMITS.hits, "hits").map(nrec), x => x.id, "hits"),
+        hits: uniqN(arrN(own(nt, "hits"), route ? LIMITS.hitsRoute : LIMITS.hits, "hits").map(nrec), x => x.id, "hits"),
         rc: arrN(own(nt, "rc"), LIMITS.rc, "rc").map(x => { need(Array.isArray(x) && x.length === 3, "rc"); return [idN(x[0], "rc.id"), oneN(x[1], ["R", "C"], "rc.t"), idN(x[2], "rc.ref")]; })
       };
-      out.zones = uniqN(arrN(g("zones"), LIMITS.zones, "zones").map(z => {
+      out.zones = uniqN(arrN(g("zones"), route ? LIMITS.zonesRoute : LIMITS.zones, "zones").map(z => {
         need(isObj(z), "zone");
         return { id: idN(own(z, "id"), "zone.id"), s: oneN(own(z, "s"), ["a17", "b09", "inpa"], "zone.s"), c: strN(own(z, "c"), 12, "zone.c"), n: strN(own(z, "n"), 60, "zone.n"), d: finN(own(z, "d"), "zone.d", 0), e: finN(own(z, "e"), "zone.e", 0), in: oneN(own(z, "in"), [0, 1], "zone.in"), a: strN(own(z, "a"), 100, "zone.a"), g: hexN(own(z, "g"), "zone.g"), h: hexN(own(z, "h"), "zone.h") };
       }), z => z.s + ":" + z.id, "zones");
-      out.zex = arrN(g("zex"), LIMITS.zones, "zex").map(x => idN(x, "zex.id"));
+      out.zex = arrN(g("zex"), route ? LIMITS.zonesRoute : LIMITS.zones, "zex").map(x => idN(x, "zex.id"));
       out.items = uniqN(arrN(g("items"), LIMITS.items, "items").map(i => {
         need(isObj(i), "item");
         const n = finN(own(i, "n"), "item.n", 1); need(Number.isInteger(n), "item.n");
@@ -300,7 +311,18 @@
   /* ================= השוואה ================= */
   const SEV_RANK = { high: 0, mid: 1, low: 2 };
   const rowSort = (a, b) => (SEV_RANK[a.sev] - SEV_RANK[b.sev]) || ((a.d == null || a.d < 0 ? Infinity : a.d) - (b.d == null || b.d < 0 ? Infinity : b.d)) || cmp(a.id, b.id);
+  // נתיב: סוג שונה = "area"; אותו סוג — מספר הנקודות ולכל נקודה עד מיקרון-מעלה ("route"), הרוחב ("width"), הגובה והחלון
+  const routeScanFields = (p, c) => {
+    if (p.k !== c.k) return ["area"];
+    const f = [];
+    if (p.pts.length !== c.pts.length || p.pts.some((q, i) => Math.abs(q[0] - c.pts[i][0]) > 1e-6 || Math.abs(q[1] - c.pts[i][1]) > 1e-6)) f.push("route");
+    if (Math.abs(p.hw - c.hw) > 1e-6) f.push("width");
+    if (Math.abs(p.ft - c.ft) > 0.01) f.push("height");
+    if (p.wf !== c.wf || p.wt !== c.wt) f.push("window");
+    return f;
+  };
   const scanFields = (p, c) => {
+    if (p.k === "route" || c.k === "route") return routeScanFields(p, c);
     const f = [];
     if (Math.abs(p.lat - c.lat) > 1e-6 || Math.abs(p.lon - c.lon) > 1e-6) f.push("point");
     if (Math.abs(p.R - c.R) > 1e-6) f.push("radius");
@@ -477,12 +499,14 @@
       const fmt = (k === "ni" || k === "ob" || k === "of" || k === "ox") ? (v => (v ? fmtDateTime(v) : "")) : (v => v);
       return { key: k, label: STR.srcLabel[k], before: fmt(a), after: fmt(b), changed: a !== b };
     }).filter(Boolean);
-    return {
+    const out = {
       comparable: true, dates, sources: srcRows,
       notams: Object.assign({ rows: rows.notams }, stat.notams), zones: Object.assign({ rows: rows.zones }, stat.zones), items: Object.assign({ rows: rows.items }, stat.items), other: Object.assign({ rows: rows.other }, stat.other),
       counts, anyChange: counts.total > 0, excessive: counts.total > exLimit,
       reliability: { items: stat.items.reliability, notams: P.capped.known || K.capped.known ? "capped" : "ok" }
     };
+    if (P.scan.k === "route") out.route = true;   // נתיב בלבד: ניסוח המרחק והטבעת (מהציר, הפס הכתום); במעגל המפתח חסר והאובייקט כמו תמיד
+    return out;
   }
 
   /* ================= בקשה שמורה: אימות ושחזור ================= */
@@ -491,6 +515,21 @@
   const okTime = s => { const m = typeof s === "string" ? /^(\d{1,2}):(\d{2})$/.exec(s) : null; return m && +m[1] < 24 && +m[2] < 60 ? String(+m[1]).padStart(2, "0") + ":" + m[2] : null; };
   const dayNum = d => Date.UTC(d.y, d.m - 1, d.d) / 86400000;
 
+  // אזור נתיב ברשומה: {kind:"route", pts:[[lat,lon],...2..מקסימום], halfWidth}. כל חריגה (סוג, מספר נקודות, נקודה מחוץ לתחום או לא מספרית, רוחב) ← שגיאה "area" — בלי חיתוך שקט של הנקודות ובלי נפילה למעגל.
+  // lenient (שחזור לטופס): רוחב מחוץ לטווח נחתך כמו רדיוס; אימות מלא (validateRecord, בדיקה חוזרת): אותו אימות כמו בהזנה (C.validateRoute — אורך, נקודות כפולות, טבעת פשוטה, רוחב בטווח). המפתחות של האובייקט הנקי קבועים (בלי מפתחות לא מוכרים)
+  function cleanArea(a, lenient, lim, cfg) {
+    if (!isObj(a) || own(a, "kind") !== "route") return null;
+    const maxN = num(lim.route_max_points) && lim.route_max_points >= 2 ? Math.min(LIMITS.routePts, Math.floor(lim.route_max_points)) : 20, wmin = num(lim.route_min_half_width_m) ? lim.route_min_half_width_m : 10, wmax = num(lim.route_max_half_width_m) ? lim.route_max_half_width_m : 1000;
+    const pts = own(a, "pts"), w = own(a, "halfWidth");
+    if (!Array.isArray(pts) || pts.length < 2 || pts.length > maxN || !num(w)) return null;
+    const out = [];
+    for (const q of pts) { if (!Array.isArray(q) || q.length !== 2 || !inBox(q[0], q[1])) return null; out.push([q[0], q[1]]); }
+    let hw = w;
+    if (!(w >= wmin && w <= wmax)) { if (!lenient) return null; hw = Math.min(wmax, Math.max(wmin, Math.round(w))); }
+    const area = { kind: "route", pts: out, halfWidth: hw };
+    if (!lenient && C.validateRoute({ area }, cfg).length) return null;
+    return area;
+  }
   // lenient: ערכים מספריים מחוץ לטווח נחתכים (שחזור לטופס); אחרת הם שגיאה (אימות). needDates: תאריכים ושעות הכרחיים
   function cleanInputs(raw, lenient, needDates, cfg) {
     const errors = [], trimmed = [], bad = f => errors.push(f);
@@ -498,8 +537,12 @@
     const g = k => own(raw, k), lim = (cfg && cfg.defaults) || {};
     const rmin = num(lim.min_radius_m) ? lim.min_radius_m : 10, rmax = num(lim.max_radius_m) ? lim.max_radius_m : 5000;
     const o = {};
+    if (own(raw, "area") !== undefined) {   // נתיב: area סמכותי (גם אם יש lat/lon/radius — הם מתעלמים); לא תקין ← שגיאה, לעולם לא מעגל
+      const ar = cleanArea(g("area"), lenient, lim, cfg); if (ar) o.area = ar; else bad("area");
+    } else {
     if (inBox(g("lat"), g("lon"))) { o.lat = g("lat"); o.lon = g("lon"); } else bad("coord");
     { const v = g("radius"); if (!num(v)) bad("radius"); else if (v >= rmin && v <= rmax) o.radius = v; else if (lenient) o.radius = Math.min(rmax, Math.max(rmin, Math.round(v))); else bad("radius"); }
+    }
     { const v = g("heightM"); if (!num(v) || v <= 0) bad("heightM"); else if (v <= 20000) o.heightM = v; else if (lenient) o.heightM = 20000; else bad("heightM"); }
     const df = okDate(g("dateFrom")), dt = okDate(g("dateTo")), tf = okTime(g("timeFrom")), tt = okTime(g("timeTo"));
     if (needDates) {
@@ -557,12 +600,14 @@
     const r = cleanInputs(isObj(rec) ? own(rec, "inputs") : null, true, keep, opts.cfg);
     if (!r.inputs || r.errors.length) return null;
     const o = r.inputs;
-    return {
+    const out = {
       lat: o.lat, lon: o.lon, radius: o.radius, heightM: o.heightM,
       dateFrom: keep ? o.dateFrom : "", dateTo: keep ? o.dateTo : "", timeFrom: keep ? o.timeFrom : "", timeTo: keep ? o.timeTo : "",
       purpose: o.purpose, aircraft: o.aircraft, vlos: o.vlos, siteName: o.siteName, knownObstacles: o.knownObstacles,
       visitDate: keep ? o.visitDate : "", visitNotes: o.visitNotes, manualItems: o.manualItems
     };
+    if (own(o, "area")) { delete out.lat; delete out.lon; delete out.radius; out.area = o.area; }   // נתיב: בלי lat/lon/radius — הטופס והבדיקה החוזרת מחשבים את העוגן מהנקודות; קורא שמניח מעגל נכשל בקול רם
+    return out;
   }
 
   /* ================= מודל הסעיף ================= */
@@ -570,11 +615,11 @@
   const distText = d => (d == null || d < 0 ? STR.noGeo : d < 1 ? STR.inside : C.fmtDist(d));
   const winText = n => fmtZ(n.f) + " – " + (n.t === 0 ? STR.perm : fmtZ(n.t));
   const hgtText = n => (n.lo == null && n.up == null) ? "" : C.fmtInt(n.lo == null ? 0 : n.lo) + "–" + C.fmtInt(n.up == null ? 0 : n.up) + " " + STR.feet;
-  const ZONE3 = { i: STR.inZone, r: STR.ringZone, n: STR.nearZone };
+  const ZONE3 = { i: STR.inZone, r: STR.ringZone, n: STR.nearZone }, ZONE3_ROUTE = { i: STR.inZone, r: STR.ringZoneRoute, n: STR.nearZone };
   const ba = (label, b, a) => label + " — " + STR.before + ": " + (b === "" ? "—" : b) + " · " + STR.after + ": " + (a === "" ? "—" : a);
 
-  function rowLines(r) {
-    const L = [], p = r.before, c = r.after;
+  function rowLines(r, route) {
+    const L = [], p = r.before, c = r.after, Z3 = route ? ZONE3_ROUTE : ZONE3;
     if (r.cat === "notams") {
       if (r.status === "cancelled") L.push(STR.cancelBy + " " + r.by);
       else if (r.status === "replaced" && r.cls === "removed") L.push(STR.replacedBy + " " + r.by + (r.counted ? "" : " " + STR.notCounted));
@@ -600,14 +645,14 @@
       });
       if (p && !c && sh(p)) L.push("גובה: " + sh(p));
     } else if (r.cat === "items") {
-      if (c && !p) L.push(ZONE3[c.z]);
+      if (c && !p) L.push(Z3[c.z]);
       if (r.cls === "changed") (r.fields || []).forEach(f => {
         if (f === "title") L.push(ba(STR.field.title, p.t, c.t));
         else if (f === "tags") L.push("תכונות הפריט ב-OpenStreetMap שונו");
-        else if (f === "zone") L.push(ba(STR.field.zone, ZONE3[p.z], ZONE3[c.z]));
+        else if (f === "zone") L.push(ba(STR.field.zone, Z3[p.z], Z3[c.z]));
         else if (f === "distance") L.push(ba(STR.field.distance, distText(p.d), distText(c.d)));
       });
-      if (p && !c) L.push(ZONE3[p.z]);
+      if (p && !c) L.push(Z3[p.z]);
     } else {
       if (r.cls === "changed") (r.fields || []).forEach(f => {
         if (f === "violates") L.push(ba(STR.field.violates, p.v ? "כן" : "לא", c.v ? "כן" : "לא"));
@@ -621,9 +666,9 @@
     const grp = r.cat === "notams" ? "notam" : r.cat === "zones" ? "zone" : r.cat === "items" ? "item" : "other";
     return (STR.status[grp][r.status] || r.status);
   };
-  const rowModel = r => ({
+  const rowModel = (r, route) => ({
     status: r.status, cls: r.cls, sev: r.sev, statusLabel: statusLabel(r), sevLabel: STR.sev[r.sev] || "", id: r.cat === "items" ? "" : r.id, title: r.title || (r.cat === "items" ? r.id : ""),
-    lines: rowLines(r), dist: distText(r.d)
+    lines: rowLines(r, route), dist: distText(r.d)
   });
 
   // "נבדקו — נוטמים: 14 · אזורים: 3 · פריטים: 20. לא השתנו — …": ספירות ולא "אין שינוי" סתמי (וגם בלי הטיות מספר)
@@ -655,6 +700,7 @@
     }
     const c = diff.counts;
     m.counts = c;
+    if (diff.route === true) m.route = true;   // נתיב בלבד: כותרת העמודה ״מרחק מהציר״ ב-HTML
     const cats = ["notams", "zones", "items", "other"];
     if (!c.total) {
       m.kind = "none"; m.summary = STR.none;
@@ -672,7 +718,7 @@
     if (diff.items.rows.length) m.notes.push(STR.osm);
     m.sources = diff.sources.map(s => ({ label: s.label, before: s.before, after: s.after, changed: s.changed }));
     cats.forEach(k => {
-      const rs = diff[k].rows.map(rowModel);
+      const rs = diff[k].rows.map(r => rowModel(r, diff.route === true));
       if (!rs.length) return;
       m.sections.push({ key: k, title: STR.cat[k], total: rs.length, rows: rs.slice(0, maxRows), rest: rs.slice(maxRows), hidden: Math.max(0, rs.length - maxRows) });
     });
@@ -685,8 +731,8 @@
   const bannerBox = (text, sub, resend) => '<div class="rc-banner" role="note" style="' + S_BANNER + '">' + E(text == null ? STR.banner : text) + (sub ? " " + E(sub) : "") + (resend ? '<div style="font-weight:400;margin-top:4px">' + E(resend) + "</div>" : "") + "</div>";
   const bannerHtml = (sentAt, opts) => bannerBox(bannerText(sentAt), STR.bannerSub, opts && opts.resendNote === false ? "" : STR.resend);
   const L = v => (Array.isArray(v) ? v : []);   // המודל נבנה כאן, אך ה-HTML לא נסמך עליו: חסר/שגוי ← ריק, לא חריגה
-  function rowsHtml(rows) {
-    return '<table class="rc-table" style="' + S_TBL + '"><thead><tr>' + STR.cols.map(h => '<th scope="col" style="' + S_CELL + ';background:#eee;color:#222">' + E(h) + "</th>").join("") + "</tr></thead><tbody>" +
+  function rowsHtml(rows, route) {
+    return '<table class="rc-table" style="' + S_TBL + '"><thead><tr>' + STR.cols.map((h, i) => '<th scope="col" style="' + S_CELL + ';background:#eee;color:#222">' + E(route && i === 3 ? STR.colRoute : h) + "</th>").join("") + "</tr></thead><tbody>" +
       L(rows).map(r => {
         r = r || {};
         return '<tr data-sev="' + E(r.sev) + '"><td style="' + S_CELL + (r.sev === "high" ? ";font-weight:700;color:#b00020" : "") + '">' + E(r.statusLabel) + (r.sevLabel ? '<br><span style="font-weight:700">' + E(r.sevLabel) + "</span>" : "") + "</td>" +
@@ -710,8 +756,8 @@
     }
     L(m.sections).forEach(s => {
       s = s || {};
-      h += '<h4 style="margin:10px 0 2px">' + E(s.title) + " (" + E(s.total) + ")</h4>" + rowsHtml(s.rows);
-      if (L(s.rest).length) h += '<details class="rc-more"><summary>' + E(STR.more) + " (" + L(s.rest).length + ")</summary>" + rowsHtml(s.rest) + "</details>";
+      h += '<h4 style="margin:10px 0 2px">' + E(s.title) + " (" + E(s.total) + ")</h4>" + rowsHtml(s.rows, m.route === true);
+      if (L(s.rest).length) h += '<details class="rc-more"><summary>' + E(STR.more) + " (" + L(s.rest).length + ")</summary>" + rowsHtml(s.rest, m.route === true) + "</details>";
     });
     h += '<p class="rc-limit" style="margin:8px 0;font-size:90%">' + E(m.limitation == null ? STR.limit : m.limitation) + "</p></section>";
     return h;
@@ -728,8 +774,14 @@
     add("שם האתר", i.siteName || r.site);
     const a = ymd(i.dateFrom), b = ymd(i.dateTo);
     add("מועד", (a === b ? a : a + " עד " + b) + " · " + i.timeFrom + "–" + i.timeTo + " (שעון מקומי)");
+    if (own(i, "area")) {   // נתיב: הנקודות לפי הסדר, אורך ורוחב מכל צד של הציר
+      add(STR.route, i.area.pts.map((q, k) => "P" + (k + 1) + ": " + q[0].toFixed(6) + ", " + q[1].toFixed(6)).join("\n"));
+      add(STR.routeLen, (C.routeInfo(i.area.pts).lengthM / 1000).toFixed(2) + " ק״מ");
+      add(STR.routeW, C.fmtInt(Math.round(i.area.halfWidth)) + " מ׳");
+    } else {
     add("נקודת מרכז", i.lat.toFixed(6) + ", " + i.lon.toFixed(6));
     add("רדיוס", C.fmtInt(Math.round(i.radius)) + " מ׳");
+    }
     add("גובה", C.trimNum(i.heightM, 2) + " מ׳ (" + (i.heightM * C.M2FT).toFixed(1) + " רגל) מעפ״ש");
     add("מהות הפעילות", i.purpose);
     add("כלי טיס", i.aircraft.join(", "));
@@ -779,7 +831,7 @@
   }
 
   return {
-    VERSION, LIMITS, STR, SCAN_TH, enabled, optsFromCfg, snapshotOf, capture, cleanSnapshot, diffSnapshots, validateRecord, restoreInputs,
+    VERSION, VERSION_ROUTE, LIMITS, STR, SCAN_TH, enabled, optsFromCfg, snapshotOf, capture, cleanSnapshot, diffSnapshots, validateRecord, restoreInputs,
     sinceModel, sinceHtml, bannerText, bannerHtml, requestModel, requestHtml, updateSubjectPrefix, updateBodyLine, updateMail, fmtDate, fmtDateTime, clean
   };
 });

@@ -200,6 +200,15 @@
     }
     return true;
   }
+  // פנייה של כמעט 180° (מעל 170°) בין שני קטעים עוקבים: הנתיב חוזר על עצמו והטבעת שסביבו חופפת את עצמה
+  function routeReverses(pts) {
+    const P = new Proj(pts[0][0], pts[0][1]), xy = pts.map(q => P.xy(q[0], q[1]));
+    for (let i = 1; i < xy.length - 1; i++) {
+      const ax = xy[i][0] - xy[i - 1][0], ay = xy[i][1] - xy[i - 1][1], bx = xy[i + 1][0] - xy[i][0], by = xy[i + 1][1] - xy[i][1], la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+      if (la > 0 && lb > 0 && (ax * bx + ay * by) / (la * lb) < -0.9848) return true;
+    }
+    return false;
+  }
   // אימות נתיב: 2..maxPts נקודות בתחום ישראל, בלי נקודות עוקבות קרובות מדי, אורך עד maxLen, רוחב בטווח, והטבעת פשוטה. מחזיר [{field, msg}] (field: route / halfWidth)
   function validateRoute(inp, cfg) {
     const a = inp.area, lim = routeLim(cfg), errs = [], pts = Array.isArray(a.pts) ? a.pts : [];
@@ -211,6 +220,7 @@
     else {
       const info = routeInfo(pts);
       if (info.segs.some(l => l < 1)) push("route", "שתי נקודות עוקבות בנתיב זהות או קרובות מדי (פחות ממטר) — יש למחוק אחת מהן");
+      else if (routeReverses(pts)) push("route", "הנתיב חוזר על עצמו בפנייה של כמעט 180° — יש לפצל לשני נתיבים או להחליק את הפנייה");
       else if (info.lengthM > lim.maxLen) push("route", "אורך הנתיב " + fmtInt(Math.round(info.lengthM)) + " מ׳ — מעל המותר (עד " + fmtInt(lim.maxLen) + " מ׳)");
     }
     if (!(a.halfWidth >= lim.minW && a.halfWidth <= lim.maxW)) push("halfWidth", "מרחק מהקו לכל צד בין " + lim.minW + " ל-" + fmtInt(lim.maxW) + " מטר");

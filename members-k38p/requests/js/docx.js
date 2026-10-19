@@ -139,7 +139,7 @@
   const CM = 360000; // EMU לסנטימטר
 
   // model: {title, subtitle, draftText, rows:[{n,label,sub,html}], attachLine, mailLine, formFooter, aerialTitle, streetTitle, overviewTitle, regionTitle, mapNote, items:[{n,title,dist,where}],
-  //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
+  //         images:{aerial,street,overview,region} (כל אחד {bytes,w,h}), checkPoint, pointHeading (נתיב בלבד: "הנתיב" במקום "הנקודה" בדף הבדיקות), itemsDistHead (נתיב בלבד: "מרחק מהציר" במקום "מרחק מהנקודה" בטבלת הפריטים), visitNote (HTML), checks:[[name,source,html]], coverage:{groups,censusOnly,censusMore}, dayNight:[[...]], dayNightHead,
   //         submissionHead, submission (HTML; הנוסח המלא) או summary ([HTML] נקודות הסיכום), review, footer, includeChecks}
   async function build(m) {
     const body = [];
@@ -176,7 +176,7 @@
       if (!im.overview) body.push(textPara(m.overviewTitle || "מבט כללי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
       body.push(heading("מכשולים, אתרים ותשתיות המסומנים במפה"));
       const w = [700, 4700, 1800, CONTENT_W - 7200];
-      body.push(tableXml(w, [{ header: true, cells: ["#", "מה", "מרחק מהנקודה", "איפה"].map((t, i) => cell(textPara(t, { bold: true, size: 20, after: 0 }), w[i], { fill: "EEEEEE" })) }]
+      body.push(tableXml(w, [{ header: true, cells: ["#", "מה", m.itemsDistHead || "מרחק מהנקודה", "איפה"].map((t, i) => cell(textPara(t, { bold: true, size: 20, after: 0 }), w[i], { fill: "EEEEEE" })) }]
         .concat(m.items.map(it => ({ cells: [String(it.n), it.title, it.dist, it.where].map((t, i) => cell(textPara(t, { size: 20, after: 0 }), w[i])) })))));
     }
     if (im.region) imagePage("region", m.regionTitle || "מפת אזור (מרוחק)");
@@ -196,7 +196,7 @@
     let sec = 0;
     const secHeading = t => hd(++sec + ". " + t);
     body.push(tp(m.checksTitle || "דף בדיקות — לא חלק מהטופס הרשמי", { bold: true, size: 26, pageBreakBefore: true, after: 80 }));
-    body.push(secHeading("הנקודה"));
+    body.push(secHeading(m.pointHeading || "הנקודה"));
     body.push(tp(m.checkPoint || "", { size: 20 }));
     if (m.visitNote) body.push(hp(m.visitNote, { size: 20 }));
     body.push(secHeading("הבדיקות שבוצעו"));

@@ -15,7 +15,7 @@
    lockedModel(inp, name) / lockedHtml(m)  קלט הסריקה הנעול, לתצוגה
    resultHtml(view)                        הסעיף "שינויים מאז ההגשה" + ממצאים + קלט נעול (HTML מוגן)
    wordBytes(deps, view)                   => Promise<Uint8Array>: דוח ה-Word (O.recheckDocxModel + D.buildRecheck); זורק כשהדגל כבוי
-   scanOf(inp) / sameScan(a, b)            מפתח הסריקה של בקשה, והשוואתו (בקשה מעודכנת "מחליפה" רק כשהסריקה זהה)
+   scanOf(inp) / sameScan(a, b)            מפתח הסריקה של בקשה, והשוואתו (בקשה מעודכנת "מחליפה" רק כשהסריקה זהה). נתיב: scanOf מחזיר {area:{kind,pts,halfWidth}, heightM, תאריכים} (בלי lat/lon/radius) ו-sameScan משווה נקודות (עד מיקרון-מעלה) ורוחב
    updateLine(sentAt) / updateBanner(sentAt, live) / updateNote(name, sentAt)   טקסטי "בקשה מעודכנת"
    errText(res, A)                         הודעת שגיאה מתשובת שרת
    transient(res)                        true כשניסיון חוזר יכול לעזור (רשת, קצב, שרת עסוק); false כשהרשומה חסרה / פגומה / גדולה מדי / אין הרשאה
@@ -38,7 +38,7 @@
     past: "שימו לב: מועד הפעילות שנבדק כבר עבר.", testOnly: "הבקשה הזו נשלחה במצב בדיקה בלבד (לא נשלחה למודיעין טיס).", noUpdate: "אי אפשר להכין בקשה מעודכנת, כי מועד הפעילות כבר החל.",
     lockedTitle: "מה נבדק", lockedNote: "נלקח מהבקשה השמורה ואי אפשר לשנותו.",
     resultsLabel: "תוצאות הבדיקה החוזרת", findingsTitle: "הממצאים הנוכחיים", findingsNone: "לא נמצאו.", more: "ועוד",
-    request: "הבקשה", point: "נקודת מרכז", radius: "רדיוס", height: "גובה", when: "מועד",
+    request: "הבקשה", point: "נקודת מרכז", radius: "רדיוס", route: "נתיב — נקודות לפי הסדר", routeLen: "אורך הנתיב", routeW: "רוחב מכל צד של הציר", height: "גובה", when: "מועד",
     save: "שמור דוח בדרייב", saving: "שומר…", saved: "הדוח נשמר ✔", download: "הורד", update: "הכן בקשה מעודכנת", back: "חזרה לרשימה", yes: "כן, החלף", no: "ביטול", retry: "נסו שוב", close: "סגור",
     saveOk: n => "הדוח נשמר בדרייב" + (n > 0 ? " (בדיקה חוזרת מס׳ " + n + " לבקשה זו)" : "") + ". הוא לא צורף לבקשה שנשלחה.",
     wordFail: "לא ניתן היה להכין את קובץ ה-Word. נסו שוב.",
@@ -47,18 +47,18 @@
     badRecord: "קובץ הנתונים של הבקשה הזו פגום או חסר פרטים, ולכן אי אפשר לבדוק אותה מחדש.",
     tooBig: "קובץ הנתונים של הבקשה הזו גדול מדי.", forbidden: "אין הרשאה לבקשה הזו.", offline: "אין חיבור לשרת. נסו שוב.", badResp: "התשובה מהשרת אינה תקינה. נסו שוב.",
     busy: "הרצה, שמירה או שליחה בעיצומה. נסו שוב בעוד רגע.", notReady: "הדף עדיין נטען. נסו שוב בעוד רגע.", failed: "הפעולה נכשלה. רעננו את הדף ונסו שוב.", running: "בדיקה חוזרת קודמת עדיין רצה. נסו שוב בעוד רגע.",
-    unusable: "אי אפשר להכין בקשה מעודכנת מהבקשה הזו: הנקודה, הרדיוס, הגובה או המועדים שנשמרו חסרים או לא תקינים.",
+    unusable: "אי אפשר להכין בקשה מעודכנת מהבקשה הזו: הנקודה או הנתיב, הרדיוס או הרוחב, הגובה או המועדים שנשמרו חסרים או לא תקינים.",
     notAvailable: "הבדיקה החוזרת אינה זמינה בחשבון הזה.",
-    updateLoaded: (name, sentAt) => "נטענה בקשה מעודכנת על בסיס ״" + clean(name, 120) + "״. המקום, הרדיוס, הגובה, התאריכים והשעות נשמרו. יש להריץ את הבדיקות מחדש ולאשר שוב את ההצהרה." +
+    updateLoaded: (name, sentAt) => "נטענה בקשה מעודכנת על בסיס ״" + clean(name, 120) + "״. המקום (נקודה ורדיוס, או נתיב ורוחב), הגובה, התאריכים והשעות נשמרו. יש להריץ את הבדיקות מחדש ולאשר שוב את ההצהרה." +
       (fmtDate(sentAt) ? " השליחה תחליף את הבקשה שנשלחה ב-" + fmtDate(sentAt) + "." : " השליחה תחליף את הבקשה שנשלחה."),
     notes: "לא נטענו"
   };
   // הסברי ה-״!״ (מתארים מה הפעולה עושה בפועל בקוד)
   const HELP = {
-    list: "בודק מחדש את הבקשה ששמורה ונשלחה: מריץ אותה שוב מול הנתונים העדכניים (אזורי איסור, נוטמים, OpenStreetMap) ומראה מה השתנה מאז ההגשה. המקום, הרדיוס, הגובה והמועדים נלקחים מהבקשה ואי אפשר לשנותם. הדוח לא מצורף ולא נשלח למודיעין טיס, והבקשה שנשלחה לא משתנה. אפשר לשמור את הדוח בדרייב, להוריד אותו כקובץ Word, ואם יש שינויים — להכין בקשה מעודכנת. הכפתור מוצג בתצוגה מתקדמת בלבד.",
+    list: "בודק מחדש את הבקשה ששמורה ונשלחה: מריץ אותה שוב מול הנתונים העדכניים (אזורי איסור, נוטמים, OpenStreetMap) ומראה מה השתנה מאז ההגשה. המקום (נקודה ורדיוס, או נתיב ורוחב), הגובה והמועדים נלקחים מהבקשה ואי אפשר לשנותם. הדוח לא מצורף ולא נשלח למודיעין טיס, והבקשה שנשלחה לא משתנה. אפשר לשמור את הדוח בדרייב, להוריד אותו כקובץ Word, ואם יש שינויים — להכין בקשה מעודכנת. הכפתור מוצג בתצוגה מתקדמת בלבד.",
     save: "שומר את דוח הבדיקה החוזרת (קובץ Word עם השינויים ודף הבדיקות העדכני) בתת-תיקייה נפרדת בתוך תיקיית הבקשה בדרייב. הדוח לא מצורף למייל של הבקשה ולא נשלח למודיעין טיס, והקבצים שנשלחו לא משתנים. אין שמירה אוטומטית — רק בלחיצה.",
     download: "מוריד את דוח הבדיקה החוזרת כקובץ Word למכשיר שלכם, בלי לשמור בדרייב ובלי לשלוח.",
-    update: "טוען את נתוני הבקשה לטופס כבסיס לבקשה מעודכנת, עם אותו מקום, רדיוס, גובה, תאריכים ושעות. יש להריץ את הבדיקות מחדש ולאשר שוב את ההצהרה. כששולחים, הבקשה החדשה מחליפה את הבקשה שנשלחה, והנושא והמייל מציינים זאת. הבקשה שנשלחה לא משתנה, ושום דבר לא נשלח עד שתלחצו על ״שלח״. אם הבקשה כבר אושרה — אין צורך לשלוח שוב."
+    update: "טוען את נתוני הבקשה לטופס כבסיס לבקשה מעודכנת, עם אותו מקום (נקודה ורדיוס, או נתיב ורוחב), גובה, תאריכים ושעות. יש להריץ את הבדיקות מחדש ולאשר שוב את ההצהרה. כששולחים, הבקשה החדשה מחליפה את הבקשה שנשלחה, והנושא והמייל מציינים זאת. הבקשה שנשלחה לא משתנה, ושום דבר לא נשלח עד שתלחצו על ״שלח״. אם הבקשה כבר אושרה — אין צורך לשלוח שוב."
   };
 
   /* ================= עזרים טהורים ================= */
@@ -77,10 +77,18 @@
     const f = s => { const d = C.parseDate(s); return d ? C.ddmmyyyy(d) : ""; }, x = f(a), y = f(b);
     return (x && y && x !== y ? x + " עד " + y : x) + (tf && tt ? " · " + tf + "–" + tt + " (שעון מקומי)" : "");
   };
-  const scanOf = inp => ({ lat: inp.lat, lon: inp.lon, radius: inp.radius, heightM: inp.heightM, dateFrom: inp.dateFrom, dateTo: inp.dateTo, timeFrom: inp.timeFrom, timeTo: inp.timeTo });
+  const routeScanOf = inp => ({ area: { kind: inp.area.kind, pts: Array.isArray(inp.area.pts) ? inp.area.pts.map(q => (Array.isArray(q) ? [q[0], q[1]] : q)) : inp.area.pts, halfWidth: inp.area.halfWidth }, heightM: inp.heightM, dateFrom: inp.dateFrom, dateTo: inp.dateTo, timeFrom: inp.timeFrom, timeTo: inp.timeTo });   // נתיב: בלי lat/lon/radius (הם אינם חלק מהסריקה)
+  const scanOf = inp => (inp && isObj(inp.area) ? routeScanOf(inp) : { lat: inp.lat, lon: inp.lon, radius: inp.radius, heightM: inp.heightM, dateFrom: inp.dateFrom, dateTo: inp.dateTo, timeFrom: inp.timeFrom, timeTo: inp.timeTo });
+  // סריקת נתיב זהה: אותו מספר נקודות ולכל נקודה עד מיקרון-מעלה, אותו רוחב, גובה, תאריכים ושעות. אחד מהצדדים נתיב והשני מעגל ← false
+  function sameRouteScan(a, b) {
+    const ok = x => isObj(x.area) && x.area.kind === "route" && Array.isArray(x.area.pts) && x.area.pts.length >= 2 && x.area.pts.every(q => Array.isArray(q) && q.length === 2 && num(q[0]) && num(q[1])) && num(x.area.halfWidth) && num(x.heightM);
+    if (!ok(a) || !ok(b) || a.area.pts.length !== b.area.pts.length || a.area.halfWidth !== b.area.halfWidth || a.heightM !== b.heightM) return false;
+    return a.area.pts.every((q, i) => Math.abs(q[0] - b.area.pts[i][0]) <= 1e-6 && Math.abs(q[1] - b.area.pts[i][1]) <= 1e-6) && ["dateFrom", "dateTo", "timeFrom", "timeTo"].every(k => typeof a[k] === "string" && a[k] !== "" && a[k] === b[k]);
+  }
   // סריקה זהה: אותה נקודה (עד מיקרון-מעלה), רדיוס, גובה, תאריכים ושעות. כל קלט לא תקין ← false (נכשל סגור)
   function sameScan(a, b) {
     if (!isObj(a) || !isObj(b)) return false;
+    if (a.area !== undefined || b.area !== undefined) return sameRouteScan(a, b);
     if (![a.lat, a.lon, b.lat, b.lon, a.radius, b.radius, a.heightM, b.heightM].every(num)) return false;
     return Math.abs(a.lat - b.lat) <= 1e-6 && Math.abs(a.lon - b.lon) <= 1e-6 && a.radius === b.radius && a.heightM === b.heightM &&
       ["dateFrom", "dateTo", "timeFrom", "timeTo"].every(k => typeof a[k] === "string" && a[k] !== "" && a[k] === b[k]);
@@ -99,6 +107,11 @@
       purpose: i.purpose, aircraft: i.aircraft.slice(), vlos: i.vlos, siteName: site, requesterName: "", requesterPhone: "", requesterOrg: "", callsign: "", registration: "", contacts: [], participants: [],
       knownObstacles: i.knownObstacles, visitDate: i.visitDate, visitNotes: i.visitNotes, manualItems: i.manualItems.map(m => ({ name: m.name, lat: m.lat, lon: m.lon, heightM: m.heightM }))
     };
+    if (own(i, "area")) {   // נתיב: lat/lon = העוגן שעל הקו (לשם המקום ולשאילתות), והאזור עצמו ב-area; בלי radius
+      const an = C.routeInfo(i.area.pts).anchor;
+      inp.lat = an[0]; inp.lon = an[1]; delete inp.radius;
+      inp.area = { kind: "route", pts: i.area.pts.map(q => [q[0], q[1]]), halfWidth: i.area.halfWidth };
+    }
     return { ok: true, inp, rec: r, raw: rec };
   }
 
@@ -127,10 +140,11 @@
 
   /* ----- הממצאים הנוכחיים (כשאין עם מה להשוות) ----- */
   // נגזר מתמונת המצב הנוכחית אחרי R.cleanSnapshot (טקסטים מנוקים ומוגבלים), לא מהנתונים הגולמיים
+  const isRouteSnap = sn => !!(sn && sn.scan && sn.scan.k === "route");
   function findingsModel(snap) {
     const s = R ? R.cleanSnapshot(snap) : { ok: false };
     if (!s.ok) return null;
-    const S = s.snapshot, ZONE = { i: "בתוך הסגירה", r: "בטבעת (עד פי 2 מהרדיוס)", n: "בקרבת הסגירה" };
+    const S = s.snapshot, ZONE = { i: "בתוך הסגירה", r: isRouteSnap(s.snapshot) ? "בפס הכתום (עד פי 2 מהרוחב)" : "בטבעת (עד פי 2 מהרדיוס)", n: "בקרבת הסגירה" };
     const cap = a => ({ rows: a.slice(0, LIST.n), more: Math.max(0, a.length - LIST.n) });
     return {
       notams: cap(S.notams.hits.map(n => ({ id: n.id, text: n.x, dist: distText(n.d), note: n.r === "o" ? "חופף לסגירה" : n.r === "n" ? "בקרבת הסגירה" : "" }))),
@@ -160,8 +174,14 @@
   function lockedModel(inp, name) {
     const rows = [];
     if (name) rows.push([STR.request, clean(name, 120)]);
+    if (inp.area) {   // נתיב: הנקודות לפי הסדר (P1..PN), האורך והרוחב מכל צד של הציר
+      rows.push([STR.route, inp.area.pts.map((q, k) => "P" + (k + 1) + ": " + q[0].toFixed(6) + ", " + q[1].toFixed(6)).join("\n")]);
+      rows.push([STR.routeLen, (C.routeInfo(inp.area.pts).lengthM / 1000).toFixed(2) + " ק״מ"]);
+      rows.push([STR.routeW, C.fmtInt(Math.round(inp.area.halfWidth)) + " מ׳"]);
+    } else {
     rows.push([STR.point, C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon) + " (" + inp.lat.toFixed(6) + ", " + inp.lon.toFixed(6) + ")"]);
     rows.push([STR.radius, C.fmtInt(Math.round(inp.radius)) + " מ׳"]);
+    }
     rows.push([STR.height, C.trimNum(inp.heightM, 2) + " מ׳ (" + (inp.heightM * C.M2FT).toFixed(1) + " רגל) מעפ״ש"]);
     rows.push([STR.when, dateText(inp.dateFrom, inp.dateTo, inp.timeFrom, inp.timeTo)]);
     return rows;
@@ -231,7 +251,7 @@
     ".rc .rc-sources th:nth-child(1){width:34%}.rc .rc-sources th:nth-child(2),.rc .rc-sources th:nth-child(3){width:33%}" +
     ".rc .rcPast{border:1px solid var(--amber,#ffb84d);border-radius:10px;padding:8px 12px;margin:8px 0;background:rgba(255,184,77,.10);line-height:1.7}" +
     ".rc .rcH4{font-size:15px;margin:12px 0 4px;color:var(--amber,#ffb84d)}.rc .rcH5{font-size:13.5px;margin:8px 0 2px}.rc .rcList{margin:0 18px;padding:0;line-height:1.7;overflow-wrap:anywhere}" +
-    ".rc .rcLock dl{display:grid;grid-template-columns:minmax(80px,max-content) 1fr;gap:4px 12px;margin:6px 0}.rc .rcLock dt{color:var(--muted,#8fa0ba);font-size:13px}.rc .rcLock dd{margin:0;overflow-wrap:anywhere}" +
+    ".rc .rcLock dl{display:grid;grid-template-columns:minmax(80px,max-content) 1fr;gap:4px 12px;margin:6px 0}.rc .rcLock dt{color:var(--muted,#8fa0ba);font-size:13px}.rc .rcLock dd{margin:0;overflow-wrap:anywhere;white-space:pre-line}" +
     ".rc .rcBtns{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.rc .rcBtns .hw{flex:1 1 150px}.rc .rcBtns .hw button:not(.hbtn),.rc .rcBtns>button{flex:1 1 auto;min-height:44px}" +
     ".rc button[aria-disabled=true]{opacity:.55;cursor:progress}.authBox.rc #mdClose{min-height:44px;min-width:44px}.rc .rcOk{color:var(--green,#4ade80)}" +
     ".rc .rcConfirm{border:1px solid var(--amber,#ffb84d);border-radius:10px;padding:12px;background:rgba(255,184,77,.10);line-height:1.7}" +

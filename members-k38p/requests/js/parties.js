@@ -528,7 +528,7 @@
       const oc = osmContact([].concat.apply([], its.map(tagsOf)), blk), phones = oc.phones.slice(0, 3), emails = oc.emails.slice(0, 2), urls = oc.urls.slice(0, 2);
       const c = Object.assign(blankContacts(), { phones: phones.map(phoneOut), emails, urls });
       const k = txt(key, 100);
-      return mkRow({ key: k, src: "osm", title, tag: fmtDist(Math.min.apply(null, its.map(i => i.d))) + " מהנקודה", party: oc.who.join(" / "), contacts: c, dtype: "update", count: its.reduce((a, i) => a + (i.count || 1), 0),
+      return mkRow({ key: k, src: "osm", title, tag: fmtDist(Math.min.apply(null, its.map(i => i.d))) + (res.area && res.area.kind === "route" ? " מהציר" : " מהנקודה"), party: oc.who.join(" / "), contacts: c, dtype: "update", count: its.reduce((a, i) => a + (i.count || 1), 0),
         contactSrc: phones.length || emails.length || urls.length ? "OpenStreetMap (" + oc.tags.join(", ") + ") — לא מאומת" : "" });
     };
     const items = (res.nearScan && res.nearScan.items) || [], titleOf = i => i.title || i.label || "פריט";

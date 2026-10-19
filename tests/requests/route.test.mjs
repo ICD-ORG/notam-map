@@ -115,7 +115,8 @@ test("נתיב: אימות — מעט נקודות, יותר מדי, מחוץ ל
   assert.match(v([ok[0], ok[0]], 50)[0], /^route:שתי נקודות עוקבות/);
   assert.match(v(C.roundPts([ll(0, 0), ll(26000, 0)]), 50)[0], /^route:אורך הנתיב/);
   assert.match(v(ok, 5)[0], /^halfWidth:/); assert.match(v(ok, 5000)[0], /^halfWidth:/);
-  assert.match(v(C.roundPts([ll(0, 0), ll(500, 0), ll(20, 10)]), 50)[0], /^route:הנתיב חד/, "היפוך חד");
+  assert.match(v(C.roundPts([ll(0, 0), ll(500, 0), ll(20, 10)]), 50)[0], /^route:הנתיב חד|^route:הנתיב חוזר/, "היפוך חד");
+  assert.match(v(C.roundPts([ll(0, 0), ll(500, 0), ll(0, 0.0)]).slice(0, 3).map((q, i) => i === 2 ? ll(100, 0) : q), 50)[0], /^route:הנתיב חוזר על עצמו/, "הליכה קדימה וחזרה על אותו קו (180° בדיוק)");
   // validateInput: בנתיב אין שגיאת נקודת מרכז/רדיוס
   const errs = C.validateInput({ area: { kind: "route", pts: ok, halfWidth: 50 }, heightM: 30, dateFrom: "2030-01-10", dateTo: "2030-01-10", timeFrom: "10:00", timeTo: "11:00" }, cfg);
   assert.ok(!errs.some(e => e.field === "coord" || e.field === "radius"), JSON.stringify(errs.map(e => e.field)));
