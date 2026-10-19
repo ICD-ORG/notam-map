@@ -404,7 +404,7 @@
         ev.preventDefault(); $("wxOut").textContent = "בודק…";
         const rr = await call("wixCheck", { email: $("wxE").value.trim() });
         if (!rr.ok) { $("wxOut").textContent = msg(rr); return; }
-        $("wxOut").textContent = rr.orders.length ? rr.orders.map(o => "הזמנה " + o.orderNumber + " · " + fmtD(o.created) + " · " + (o.member ? "חבר רשום" : "לא חבר רשום באתר") + " · " + (o.used ? "נוצלה ע״י " + o.by : o.eligible ? "זכאית להרשמה" : "לא זכאית")).join(" | ") + (rr.account ? " · חשבון קיים: " + rr.account : "") : "לא נמצאה הזמנה ששולמה למייל הזה באירוע.";
+        $("wxOut").textContent = rr.orders.length ? rr.orders.map(o => "הזמנה " + o.orderNumber + " · " + fmtD(o.created) + " · " + (o.member ? "חבר רשום" : "לא חבר רשום באתר") + (o.coupon ? " · הזמנה חינם בקופון" : "") + " · " + (o.used ? "נוצלה ע״י " + o.by : o.eligible ? "זכאית להרשמה" : "לא זכאית")).join(" | ") + (rr.account ? " · חשבון קיים: " + rr.account : "") : "לא נמצאה הזמנה ששולמה למייל הזה באירוע.";
       };
       $("rstForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("resetPassword", { target: $("rsU").value.trim(), newPass: $("rsP").value }); if (rr.ok) { draw(); } else fail(rr); };
     };

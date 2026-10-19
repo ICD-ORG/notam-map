@@ -370,21 +370,31 @@ function wixFetch_(path) {
   if (code !== 200) throw new Error('wix_http_' + code);
   try { return JSON.parse(res.getContentText()); } catch (e) { throw new Error('wix_bad_json'); }
 }
-// כל ההזמנות ששולמו באירוע, עבור כתובת מייל. אימות סגור: רק status=PAID בפועל (לא FREE ולא OFFLINE_PENDING), והמייל חייב להיות זהה (לא חיפוש חלקי).
-// מחזיר [{orderNumber, created(ms), email, name, member(bool), status}]
+// הזמנה שהקופון הפך לחינם: status=FREE, ובחשבונית (fieldset=INVOICE) הנחה של קופון בסכום חיובי. כרטיס שמלכתחילה חינם (בלי קופון) אינו כזה — ואינו מתקבל
+function couponFree_(o) {
+  if (!o || o.status !== 'FREE') return false;
+  var d = o.invoice && o.invoice.discount;
+  if (!d) return false;
+  var amt = parseFloat(String(d.amount && (d.amount.value || d.amount.amount) || '0'));
+  var coupon = !!(d.code || d.couponId || (d.discounts || []).some(function (x) { return x && x.coupon; }));
+  return amt > 0 && coupon;
+}
+// כל ההזמנות שזכאיות באירוע, עבור כתובת מייל. אימות סגור: רק status=PAID בפועל, או FREE שהקופון הפך לחינם (couponFree_) — לא FREE בלי קופון ולא OFFLINE_PENDING;
+// הסינון לפי סטטוס נעשה כאן ולא בשאילתה (מסנן status חוזר ב-Wix אינו מובטח), והמייל חייב להיות זהה (לא חיפוש חלקי).
+// מחזיר [{orderNumber, created(ms), email, name, member(bool), status, coupon(bool)}]
 function wixPaidOrders_(email) {
   var out = [], offset = 0;
   for (var page = 0; page < CFG.WIX_MAX_PAGES; page++) {
-    var r = wixFetch_('/events/v1/orders?eventId=' + encodeURIComponent(CFG.WIX_EVENT_ID) + '&status=PAID&fieldset=DETAILS&fieldset=TICKETS&searchPhrase=' + encodeURIComponent(email) + '&limit=100&offset=' + offset);
+    var r = wixFetch_('/events/v1/orders?eventId=' + encodeURIComponent(CFG.WIX_EVENT_ID) + '&fieldset=DETAILS&fieldset=TICKETS&fieldset=INVOICE&searchPhrase=' + encodeURIComponent(email) + '&limit=100&offset=' + offset);
     var list = (r && r.orders) || [];
     list.forEach(function (o) {
-      if (!o || o.status !== 'PAID' || !o.orderNumber) return;
+      if (!o || !o.orderNumber || !(o.status === 'PAID' || couponFree_(o))) return;
       var mails = [o.email];
       (o.tickets || []).forEach(function (t) { mails.push(t && t.guestDetails && t.guestDetails.email); });
       if (!mails.some(function (m) { return normEmail_(m) === email; })) return;
       var created = new Date(o.created).getTime();
       if (!(created > 0)) return;
-      out.push({ orderNumber: String(o.orderNumber), created: created, email: email, name: String(o.firstName || '').slice(0, 40), member: !!o.memberId, status: o.status });
+      out.push({ orderNumber: String(o.orderNumber), created: created, email: email, name: String(o.firstName || '').slice(0, 40), member: !!o.memberId, status: o.status, coupon: o.status === 'FREE' });
     });
     if (list.length < 100) break;
     offset += 100;
@@ -978,7 +988,7 @@ var ACTIONS = {
     var orders;
     try { orders = wixPaidOrders_(email); } catch (e) { return { ok: false, error: wixErr_(e) }; }
     return { ok: true, requireMember: CFG.REQUIRE_MEMBER, orders: orders.map(function (o) {
-      return { orderNumber: o.orderNumber, created: o.created, member: o.member, used: !!orderHolder_(o.orderNumber), by: orderHolder_(o.orderNumber), eligible: (!CFG.REQUIRE_MEMBER || o.member) && !orderHolder_(o.orderNumber) };
+      return { orderNumber: o.orderNumber, created: o.created, member: o.member, coupon: !!o.coupon, used: !!orderHolder_(o.orderNumber), by: orderHolder_(o.orderNumber), eligible: (!CFG.REQUIRE_MEMBER || o.member) && !orderHolder_(o.orderNumber) };
     }), account: (emailUser_(email) || {}).name || '' };
   },
 

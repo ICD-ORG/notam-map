@@ -645,15 +645,15 @@ test("הרשמה: כרטיס ששולם → קוד למייל → שם משתמ�
   assert.equal(env.call({ action: "listUsers", token: r.token }).error, "forbidden");
   const row = env.call({ action: "listUsers", token }).users.find(x => x.user === "dana.pilot");
   assert.equal(row.email, "pilot@example.com"); assert.equal(row.until, r.until); assert.equal(row.source, "ticket");
-  // בקריאות ל-Wix נשלחים מפתח וזיהוי אתר, ורק status=PAID של האירוע הנכון
+  // בקריאות ל-Wix נשלחים מפתח וזיהוי אתר, ורק האירוע הנכון; החשבונית נשלפת (לזיהוי קופון) והסינון לפי סטטוס נעשה בקוד, לא בשאילתה
   const c = env.wix.calls[0]; assert.equal(c.headers.Authorization, "test-key"); assert.equal(c.headers["wix-site-id"], "29dca6d8-08d4-4679-a6e5-c5f4f3317d90");
-  assert.match(c.search, /eventId=fbcb2cc1-4dc7-4545-b9d5-08febf9f8153/); assert.match(c.search, /status=PAID/);
+  assert.match(c.search, /eventId=fbcb2cc1-4dc7-4545-b9d5-08febf9f8153/); assert.match(c.search, /fieldset=INVOICE/); assert.doesNotMatch(c.search, /status=/);
 });
 
 test("הרשמה: בלי כרטיס ששולם בפועל — לא נשלח קוד, והתשובה זהה (אי אפשר לברר מי רכש)", () => {
   const { env } = withWix();
   const base = env.call({ action: "regStart", email: "nobody@example.com" });   // אין הזמנות כלל
-  addOrder(env, { email: "free@example.com", status: "FREE" });
+  addOrder(env, { email: "free@example.com", status: "FREE" });   // חינם בלי קופון (כרטיס חינם מלכתחילה)
   addOrder(env, { email: "offline@example.com", status: "OFFLINE_PENDING" });
   addOrder(env, { email: "canceled@example.com", status: "CANCELED" });
   addOrder(env, { email: "pending@example.com", status: "PENDING" });
@@ -664,6 +664,49 @@ test("הרשמה: בלי כרטיס ששולם בפועל — לא נשלח קו
   for (const a of answers) assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(base)));
   assert.equal(nonNotice(env).length, 0, "לא נשלח אף קוד (ולא 'כבר קיים חשבון')");
   assert.equal(notices(env).length, 8, "כל כתובת בלי כרטיס זכאי קיבלה רק את הודעת 'לא נמצא כרטיס' — אל הכתובת שהוקלדה בלבד");
+});
+
+// הזמנה שקופון הפך לחינם, בצורה שבה Wix מחזיר אותה (נבדק מול האירוע האמיתי): status=FREE, מחיר הכרטיס 0, ובחשבונית הנחת קופון בסכום מלא
+const couponInvoice = (over) => ({ discount: { amount: { amount: "650.00", currency: "ILS", value: "650.00" }, afterDiscount: { amount: "0.00", currency: "ILS", value: "0.00" }, code: "TESTCODE", name: "TESTCODE", couponId: "c-1", discounts: [{ amount: { amount: "650.00", currency: "ILS", value: "650.00" }, coupon: { name: "TESTCODE", code: "TESTCODE", couponId: "c-1" } }], ...(over || {}) }, grandTotal: { amount: "0.00" } });
+
+test("הרשמה: הזמנה שקופון הפך לחינם (status=FREE עם הנחת קופון) מתקבלת — נשלח קוד, נוצר חשבון, והכרטיס נרשם על החשבון", () => {
+  const { env, token } = withWix();
+  const o = addOrder(env, { status: "FREE", invoice: couponInvoice() });
+  assert.ok(env.call({ action: "regStart", email: "pilot@example.com" }).ok);
+  assert.equal(nonNotice(env).length, 1, "נשלח קוד הרשמה");
+  const r = env.call({ action: "regFinish", email: "pilot@example.com", code: codeFrom(env), user: "dana.pilot", pass: "dana-pass-1234" });
+  assert.ok(r.ok, JSON.stringify(r)); assert.equal(r.org, false);
+  const u = JSON.parse(env.props["U:dana.pilot"]); assert.deepEqual(Array.from(u.orders), [o.orderNumber]); assert.equal(u.source, "ticket");
+  assert.ok(env.call({ action: "login", user: "dana.pilot", pass: "dana-pass-1234" }).ok);
+  // המנהל רואה אותו ברשימה, והאבחון מסמן שההזמנה חינם בקופון
+  assert.ok(env.call({ action: "listUsers", token }).users.some(x => x.user === "dana.pilot"));
+  const chk = env.call({ action: "wixCheck", token, email: "pilot@example.com" });
+  assert.equal(chk.orders.length, 1); assert.equal(chk.orders[0].coupon, true); assert.equal(chk.orders[0].used, true);
+});
+
+test("הרשמה: הזמנה חינם נדחית כשאין הנחת קופון אמיתית (בלי חשבונית, הנחה אפס, הנחה בלי קופון), כשהרוכש אינו חבר, או כשההזמנה מבוטלת — והתשובה זהה לבלי כרטיס", () => {
+  const { env } = withWix();
+  const base = env.call({ action: "regStart", email: "nobody@example.com" });
+  const zero = couponInvoice(); zero.discount.amount = { amount: "0.00", value: "0.00" };
+  const noCoupon = couponInvoice(); delete noCoupon.discount.code; delete noCoupon.discount.couponId; noCoupon.discount.discounts = [];
+  addOrder(env, { email: "nofree1@example.com", status: "FREE" });                                      // בלי חשבונית
+  addOrder(env, { email: "nofree2@example.com", status: "FREE", invoice: { discount: null } });           // בלי הנחה
+  addOrder(env, { email: "nofree3@example.com", status: "FREE", invoice: zero });                         // הנחה בסכום אפס
+  addOrder(env, { email: "nofree4@example.com", status: "FREE", invoice: noCoupon });                     // הנחה שאינה קופון
+  addOrder(env, { email: "nofree5@example.com", status: "FREE", invoice: couponInvoice(), memberId: "" }); // הרוכש אינו חבר רשום
+  addOrder(env, { email: "nofree6@example.com", status: "CANCELED", invoice: couponInvoice() });          // קופון על הזמנה מבוטלת
+  addOrder(env, { email: "nofree7@example.com", status: "PENDING", invoice: couponInvoice() });
+  for (const n of ["nofree1", "nofree2", "nofree3", "nofree4", "nofree5", "nofree6", "nofree7"]) assert.deepEqual(JSON.parse(JSON.stringify(env.call({ action: "regStart", email: n + "@example.com" }))), JSON.parse(JSON.stringify(base)), n);
+  assert.equal(nonNotice(env).length, 0, "לא נשלח אף קוד");
+});
+
+test("הזמנה חינם בקופון: חידוש שנה הבאה באותו כרטיס-קופון חדש עובד, וביטול ההזמנה חוסם בבדיקה היומית", () => {
+  const { env } = withWix();
+  const o = addOrder(env, { status: "FREE", invoice: couponInvoice(), created: iso(env.now() - 2 * DAY) });
+  assert.ok(regOk(env).ok);
+  const u0 = JSON.parse(env.props["U:dana.pilot"]); assert.equal(u0.blocked, false);
+  o.status = "CANCELED"; env.run("dailyCheck");
+  const u1 = JSON.parse(env.props["U:dana.pilot"]); assert.equal(u1.blocked, true); assert.equal(u1.blockedWhy, "order_CANCELED");
 });
 
 test("הרשמה: הזמנה שנרשמה בשם מייל אחר/בכרטיס של משתתף אחר — מתאימים לפי המייל שבהזמנה או שבכרטיס, בשוויון מלא", () => {
