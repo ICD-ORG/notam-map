@@ -1458,7 +1458,7 @@ test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך ה
   assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
   assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
   assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
-  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=9"><\/script>/, "גרסת המטמון של auth.js");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=10"><\/script>/, "גרסת המטמון של auth.js");
 });
 
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
@@ -1626,14 +1626,14 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=15/);
+  assert.match(html, /js\/ui\.js\?v=16/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
   const au = readReq("js/auth.js"), html = readReq("index.html");
   assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
   assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
-  assert.match(html, /js\/auth\.js\?v=9/);
+  assert.match(html, /js\/auth\.js\?v=10/);
 });
 
 /* ===== תצוגה מתקדמת (A2): סעיף 5 "הגשה" המלא רק למי שיש לו תצוגה מתקדמת; כל השאר מקבלים "סיכום והגשה" קצר בלי הפניות לפמ״ת ובלי הנחיות למודיעין טיס (החלטת בעל המערכת) ===== */
@@ -1715,7 +1715,7 @@ test("Word / מודל: למבקש בלי תצוגה מתקדמת סעיף 5 הו
 test("תצוגה מתקדמת בלקוח: auth.js חושף isAdv (מנהל תמיד; adv מהשרת; שרת ישן — לפי הסוג; מנותק — לא) ושגיאות setAdv; ui.js מסתיר את הכלים הפנימיים ב-hidden ומעביר adv לדוח ולקובץ ה-Word; index.html מסתיר אותם כברירת מחדל", () => {
   const au = readReq("js/auth.js"), ui = readReq("js/ui.js"), html = readReq("index.html");
   // auth.js
-  assert.match(au, /const isAdv = \(\) => A\.loggedIn\(\) && \(A\.role === "admin" \|\| \(A\.advKnown \? A\.adv : isOrg\(\)\)\);/);
+  assert.match(au, /const isAdv = \(\) => A\.loggedIn\(\) && !preview && \(A\.role === "admin" \|\| \(A\.advKnown \? A\.adv : isOrg\(\)\)\);/);
   assert.match(au, /A\.isAdv = isAdv;/);
   assert.match(au, /if \(r\.adv === true \|\| r\.adv === false\) \{ A\.adv = r\.adv; A\.advKnown = true; \}/);
   assert.match(au, /bad_adv: "[^"]+"/); assert.match(au, /is_admin_adv: "[^"]+"/);
@@ -3140,5 +3140,21 @@ test("סעיף 3 (רשימת ההתקדמות): מבקש רגיל מקבל ני�
   assert.match(ui, /const MAP_FAIL = \{ maint: true, adv: true, user: NOT_LOADED \};/);
   assert.ok(ui.includes('setStatus("map", false, why, MAP_FAIL)') && ui.includes('setStatus("map", false, e.message, MAP_FAIL)'));
   // שינוי תצוגה מתקדמת אחרי הרצה (req-adv): הרשימה וההודעה ליד הכפתור מצוירות מחדש לפי התפקיד
-  assert.match(ui, /document\.addEventListener\("req-adv", \(\) => \{\s*applyRole\(\);\s*if \(lastSteps && !S\.running\) progress\(planned\(lastSteps\)\);[^\n]*\n\s*if \(lastFail && !S\.running && \$\("e_run"\)\.textContent\) \$\("e_run"\)\.textContent = runFailText\(lastFail\);/);
+  assert.match(ui, /document\.addEventListener\("req-adv", \(\) => \{\s*applyRole\(\); renderSyncBanner\(\);[^\n]*\n\s*if \(lastSteps && !S\.running\) progress\(planned\(lastSteps\)\);[^\n]*\n\s*if \(lastFail && !S\.running && \$\("e_run"\)\.textContent\) \$\("e_run"\)\.textContent = runFailText\(lastFail\);/);
+});
+
+test("הצג כנרשם רגיל (מנהל): auth.js — מצב בזיכרון בלבד, isAdv כבוי ו-getRole ״user״ בתצוגה, כפתור והסבר רק למנהל, ואיפוס בהתנתקות", () => {
+  const au = readReq("js/auth.js"), ui = readReq("js/ui.js"), html = readReq("index.html");
+  assert.match(au, /let preview = false;/);
+  assert.match(au, /A\.getRole = \(\) => \(preview \? "user" : A\.role\);/);
+  assert.match(au, /function togglePreview\(\) \{\s*if \(!A\.loggedIn\(\) \|\| A\.role !== "admin"\) return false;\s*const was = isAdv\(\); preview = !preview; renderBar\(\); notifyAdv\(was\);/);
+  assert.match(au, /A\.adv = false; A\.advKnown = false; preview = false;/, "התנתקות מאפסת");
+  assert.ok(!/sessionStorage\.setItem\([^)]*preview/.test(au), "המצב אינו נשמר בין טעינות");
+  // הכפתור והתג רק בשורה של מנהל, עם ״!״ ושם נגיש
+  assert.match(au, /\(A\.role === "admin" \? " " \+ withHelp\('<button type="button" id="ubPrev"'[^\n]*HELP\.prev, "הצג כנרשם רגיל"\)/);
+  assert.match(au, /if \(A\.role === "admin"\) \{ \$\("ubAdmin"\)\.onclick = openAdmin; \$\("ubPrev"\)\.onclick = \(\) => \{ togglePreview\(\); \}; \}/);
+  assert.match(au, /A\.togglePreview = togglePreview;/);
+  assert.match(html, /\.userBar \.prevTag \{/);
+  // ui.js מצייר מחדש בשינוי תצוגה (req-adv) — גם הודעת הסנכרון, שנבחרת לפי תפקיד
+  assert.match(ui, /document\.addEventListener\("req-adv", \(\) => \{\s*applyRole\(\); renderSyncBanner\(\);/);
 });

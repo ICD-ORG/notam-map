@@ -1687,7 +1687,7 @@
     });
     // התצוגה המתקדמת של המשתמש המחובר השתנתה (המנהל החליף אותה; נקלטה ברענון me): הכלים הפנימיים מוצגים / מוסתרים, ואם יש בקשה — סעיף ההגשה בדף ובקובץ ה-Word משתנה איתה, ולכן התוצאות שנשמרו או נשלחו אינן הגרסה הנוכחית (clearOutcome; נשמרת שוב אוטומטית)
     document.addEventListener("req-adv", () => {
-      applyRole();
+      applyRole(); renderSyncBanner();   // הודעת הסנכרון נבחרת לפי תפקיד (מנהל מקבל פירוט) — מצוירת מחדש גם במעבר לתצוגת נרשם רגיל ובחזרה
       if (lastSteps && !S.running) progress(planned(lastSteps));   // סעיף 3 לפי התפקיד החדש (נשלל — בלי הפירוט הטכני שנשאר מהרצה קודמת)
       if (lastFail && !S.running && $("e_run").textContent) $("e_run").textContent = runFailText(lastFail);
       if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
