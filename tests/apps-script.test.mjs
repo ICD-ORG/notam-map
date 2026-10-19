@@ -976,7 +976,7 @@ function pilotUser(env, email = "pilot@example.com", user = "dana.pilot") {
 const sendTo = (env, token, folderId, extra) => env.call({ action: "sendRequest", expectMode: modeOf(env), token, folderId, subject: "בקשה — נושא", body: "גוף", ...extra });
 const rcpts = v => (v === undefined || v === "" ? [] : String(v).split(","));   // רשימת נמענים כפי שנמסרה ל-MailApp
 const SELF_PREFIX = "[עותק לעצמי — לא נשלח למשרד נוטאם] ", TEST_PREFIX = "[בדיקה — לא נשלח למשרד נוטאם] ";
-const SENDER_SUFFIX = " — דרך מערכת בקשות הטיסה", ORG_NAME = "הארגון הישראלי לרב להב", FEATURES = ["sendTarget", "orgSplit", "advView"];
+const SENDER_SUFFIX = " — דרך מערכת בקשות הטיסה", ORG_NAME = "הארגון הישראלי לרב להב", FEATURES = ["sendTarget", "orgSplit", "advView", "myRequests", "recheck"];
 
 for (const [mode, target, want] of [
   ["test", "office", { to: ["pilot@example.com"], cc: [], prefix: TEST_PREFIX }],
@@ -2868,7 +2868,7 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
   const readme = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "apps-script", "README.md"), "utf8");
   const { sandbox } = makeEnv();
   const cfg = vm.runInContext("CFG", sandbox);
-  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW|REG|ADMIN|ORG|PILOTS)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE", "REG_MAILS", "REG_NOTICKET"].includes(n));   // אלה Script Properties ולא CFG
+  const named = [...new Set([...readme.matchAll(/`([A-Z][A-Z0-9_]{3,})`/g)].map(m => m[1]))].filter(n => /^(MAX|LOG|CODE|MAIL|REQUIRE|VALID|REMIND|ROOT|WIX|SENDER|RENEW|REG|ADMIN|ORG|PILOTS|RECHECK)_/.test(n) && !["WIX_API_KEY", "MAIL_MODE", "REG_MAILS", "REG_NOTICKET"].includes(n));   // אלה Script Properties ולא CFG
   assert.ok(named.length >= 10, "נמצאו קבועים: " + named.join(","));
   for (const n of named) assert.ok(n in cfg, "README מזכיר את " + n + " אבל אין אותו ב-CFG");
   for (const [k, v] of [["MAX_OFFICE_PER_HOUR", 10], ["MAX_OFFICE_PER_HOUR_ALL", 60], ["MAX_COPIES_PER_HOUR", 10], ["MAX_COPIES_PER_HOUR_ALL", 120], ["MAX_SEND_ATTEMPTS_PER_HOUR", 40], ["MAIL_QUOTA_RESERVE", 20], ["LOG_MAX", 2000], ["LOG_KEEP_DAYS", 30], ["CODE_FAIL_MAX", 10], ["CODE_FAIL_HOURS", 6],
@@ -2887,7 +2887,7 @@ test("README של השרת: כל קבוע CFG שמוזכר בו קיים בקו�
     assert.equal(cfg[k], v, k);
     assert.ok(readme.includes("`" + k + "`"), "README מזכיר את " + k);
   }
-  assert.deepEqual(Array.from(cfg.FEATURES), ["sendTarget", "orgSplit", "advView"]);
+  assert.deepEqual(Array.from(cfg.FEATURES), ["sendTarget", "orgSplit", "advView", "myRequests", "recheck"]);
   for (const w of ["setAdv", "advView", "bad_adv", "advExplicit", "setOrg", "fromName", "orgSplit", "totals", "kind", "copyToIsOwner", "is_admin", "bad_org", "no_owner", "הארגון/", "מטיסים/<", "htmlBody"]) assert.ok(readme.includes(w), "README מזכיר את " + w);
 });
 
@@ -3077,6 +3077,781 @@ test("העלאה אוטומטית ביום עבודה של עובד ארגון: 
   assert.equal(logOf(env).filter(e => e.user === "org.worker").length, 10, "עשר בקשות, לא תיקייה למחזור");
 });
 
+
+/* ===== שלב ב׳: "הבקשות שלי" (myRequests), טעינת בקשה (getRequest) ובדיקה חוזרת (saveRecheck) ===== */
+// שלוש פעולות חדשות בלבד: אין שינוי בשמירה ובשליחה (saveBegin / saveFile / saveEnd / sendRequest) — בדיקות "הרגרסיה" למטה מוכיחות שהן לא נפגעות
+const REC_SUFFIX = " — נתוני הבקשה.json", SUBNAME = "בדיקות חוזרות";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", BOM = String.fromCharCode(0xfeff);   // BOM בלי תו בלתי נראה בקוד
+const zipB64 = (n = 64, fill = 1) => Buffer.concat([Buffer.from([0x50, 0x4b, 3, 4]), Buffer.alloc(n, fill)]).toString("base64");   // מתחיל ב-"UEsD" (חתימת ZIP)
+const entryOf = (env, folderId) => logOf(env).find(e => e.id === folderId);
+const subOf = (env, folderId) => Object.values(env.folders).find(f => f.parent === folderId && f.name === SUBNAME && !f.trashed);
+const subFiles = (env, folderId) => { const s = subOf(env, folderId); return s ? s.files.filter(f => !f.trashed) : []; };
+const reqNames = (env, folderId) => env.folders[folderId].files.filter(f => !f.trashed).map(f => f.name).sort();
+const anySub = env => Object.values(env.folders).some(f => f.name === SUBNAME);
+const seedLog = (env, entries) => vm.runInContext("(function (a) { writeLog_(readLog_().concat(a), ''); })", env.sandbox)(entries);
+// בקשה שמורה כמו בדפדפן, כולל קובץ נתוני הבקשה בשם שהדף כותב (rec = אובייקט, או מחרוזת גולמית)
+function recReq(env, tok, base = "פי גלילות — 22.10.2026", rec = { site: "פי גלילות", inputs: { lat: 32.1, lon: 34.8 }, zones: [], items: [] }, rid = newRid()) {
+  const b = env.call({ action: "saveBegin", token: tok, folderName: base, rid }); assert.ok(b.ok, JSON.stringify(b));
+  for (const [n, c] of [[base + " — בקשה.docx", "W"], [base + " — מפה.png", "P"], [base + REC_SUFFIX, typeof rec === "string" ? rec : JSON.stringify(rec)]])
+    assert.ok(env.call({ action: "saveFile", token: tok, folderId: b.folderId, name: n, mime: "application/octet-stream", b64: b64(c) }).ok, n);
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: tok, folderId: b.folderId, ready: true }).ready, true);
+  return Object.assign(b, { rid, base });
+}
+// מנהל (itzik), עובד ארגון (adv כברירת מחדל), ושני מטיסים עצמאיים בלי כתובת (בלי adv כברירת מחדל)
+function recWorld() {
+  const { env, token } = bootstrapped();
+  return { env, admin: token, org: daveUser(env, token, "org.worker").token, pilot: manualPilot(env, token, "pilot.one").token, pilot2: manualPilot(env, token, "pilot.two").token };
+}
+const recheck = (env, tok, folderId, extra) => env.call({ action: "saveRecheck", token: tok, folderId, b64: zipB64(), sum: { a: 1, r: 2, c: 3 }, ...extra });
+const myReqs = (env, tok, extra) => env.call({ action: "myRequests", token: tok, ...extra });
+const getReq = (env, tok, folderId) => env.call({ action: "getRequest", token: tok, folderId });
+function envAt(isoTime) {    // סביבה עם שעון מדומה במועד מוחלט (אחרי ההקמה השעון נייח, עד advance)
+  const env = makeEnv(); env.advance(Date.parse(isoTime) - env.now());
+  const r = env.call({ action: "bootstrap", code: env.run("initialize"), user: "itzik", pass: PASS }); assert.ok(r.ok, JSON.stringify(r));
+  return { env, token: r.token };
+}
+const FULL_ENTRY = (over) => ({ id: "S" + Math.random().toString(36).slice(2), rid: newRid(), name: "אתר", user: "pilot.one", kind: "pilot", created: 1000, saved: 2000, ready: true, sent: [], ...over });
+
+test("CFG ו-features של שלב ב׳: ערכי ברירת המחדל שנקבעו, ושני ה-features מדווחים בכל תשובה שנושאת features (כניסה, me) לכל סוג משתמש", () => {
+  const { env, admin, org, pilot } = recWorld();
+  const cfg = vm.runInContext("CFG", env.sandbox);
+  for (const [k, v] of [["MAX_MYREQ_ROWS", 50], ["MAX_MYREQ_ROWS_ADMIN", 100], ["MAX_MYREQ_PER_HOUR", 60], ["MAX_RECORD_BYTES", 600000], ["MAX_RECORD_SCAN_FILES", 80], ["MAX_RECORD_READS_PER_HOUR", 30],
+    ["RECHECK_FOLDER_NAME", SUBNAME], ["MAX_RECHECK_B64", 3 * 1048576], ["MAX_RECHECKS_PER_REQUEST", 20], ["MAX_RECHECK_FOLDER_BYTES", 16 * 1048576], ["MAX_RECHECK_SAVES_PER_HOUR", 10]])
+    assert.equal(cfg[k], v, k);
+  for (const tok of [admin, org, pilot]) { const m = env.call({ action: "me", token: tok }); assert.ok(m.features.includes("myRequests") && m.features.includes("recheck"), JSON.stringify(m.features)); assert.deepEqual(m.features.slice(0, 3), ["sendTarget", "orgSplit", "advView"]); }
+});
+
+/* ---- myRequests ---- */
+test("myRequests: כל משתמש מחובר רואה רק את בקשותיו (e.user), מהחדשה לישנה, עם השדות שנקבעו; מטיס לא מקבל קישור דרייב, שם בעלים או כתובת הארגון", () => {
+  const { env, admin, pilot, pilot2 } = recWorld();
+  const a = recReq(env, pilot, "אתר א — 01.01.2027"); env.advance(1000);
+  const b = recReq(env, pilot, "אתר ב — 02.01.2027"); env.advance(1000);
+  const other = recReq(env, pilot2, "של אחר — 03.01.2027"); env.advance(1000);
+  const adm = recReq(env, admin, "של מנהל — 04.01.2027");
+  const r = myReqs(env, pilot);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.requests.map(x => x.id), [b.folderId, a.folderId], "החדשה (לפי saved) ראשונה, ורק של המטיס");
+  assert.equal(r.total, 2);
+  const row = r.requests[0];
+  assert.deepEqual(Object.keys(row).sort(), ["created", "id", "kind", "name", "ready", "rechecks", "saved", "sentAt", "sentLive", "sentMode", "sentTest", "state"].sort());
+  assert.deepEqual([row.name, row.kind, row.ready, row.state, row.sentAt, row.sentMode, row.sentLive, row.sentTest, row.rechecks], ["אתר ב — 02.01.2027", "pilot", true, "draft", 0, "", 0, 0, 0]);
+  assert.equal(row.saved, entryOf(env, b.folderId).saved); assert.equal(row.created, entryOf(env, b.folderId).created);
+  const text = JSON.stringify(r);
+  for (const bad of [ORG, OWNER, "drive.google.com", other.folderId, adm.folderId, "pilot.two", "itzik"]) assert.ok(!text.includes(bad), "לא נחשף: " + bad);
+  assert.deepEqual(myReqs(env, pilot2).requests.map(x => x.id), [other.folderId]);
+  assert.deepEqual(myReqs(env, admin).requests.map(x => x.id), [adm.folderId], "גם מנהל, בלי פרמטרים: רק שלו");
+  assert.equal(myReqs(env, admin).requests[0].kind, "org");
+});
+
+test("myRequests: state / sentAt / sentMode / sentLive / sentTest — טיוטה, נשלחה בבדיקה, נשלחה חי; חי עדיף על בדיקה מאוחרת; 'לעצמו' וכשל אינם שליחה; שליחה שלא ידוע אם הסתיימה נחשבת שליחה", () => {
+  const { env, admin, pilot } = recWorld();
+  const T = 5_000_000;
+  const sends = {
+    draft: [], onlySelf: [{ sid: "s1", t: T, user: "pilot.one", mode: "self", target: "self", st: "sent" }],
+    onlyFailed: [{ sid: "s2", t: T, user: "pilot.one", mode: "live", target: "office", st: "failed" }],
+    test: [{ sid: "s3", t: T + 10, user: "pilot.one", mode: "test", target: "office", st: "sent" }, { sid: "s4", t: T + 30, user: "pilot.one", mode: "test", target: "office", st: "sent" }, { sid: "s5", t: T + 50, user: "pilot.one", mode: "self", target: "self", st: "sent" }],
+    live: [{ sid: "s6", t: T + 20, user: "pilot.one", mode: "live", target: "office", st: "sent" }],
+    liveThenTest: [{ sid: "s7", t: T + 20, user: "pilot.one", mode: "live", target: "office", st: "sent" }, { sid: "s8", t: T + 90, user: "pilot.one", mode: "test", target: "office", st: "sent" }, { sid: "s9", t: T + 95, user: "pilot.one", mode: "live", target: "office", st: "failed" }],
+    sending: [{ sid: "s10", t: T + 40, user: "pilot.one", mode: "live", target: "office", st: "sending" }],
+    legacy: [{ sid: "s11", t: T + 60, user: "pilot.one", mode: "live", st: "sent" }, { sid: "s12", t: T + 70, user: "pilot.one", mode: "test", st: "sent" }],   // רשומות ישנות בלי target
+  };
+  const ids = {};
+  Object.entries(sends).forEach(([k, sent], i) => { ids[k] = "ID" + k; seedLog(env, [FULL_ENTRY({ id: ids[k], name: k, saved: T + i, sent, rc: k === "live" ? [[1, 0, 0, 0], [2, 1, 1, 1]] : undefined })]); });
+  const by = Object.fromEntries(myReqs(env, pilot).requests.map(x => [x.name, x]));
+  const pick = k => [by[k].state, by[k].sentAt, by[k].sentMode, by[k].sentLive, by[k].sentTest, by[k].rechecks];
+  assert.deepEqual(pick("draft"), ["draft", 0, "", 0, 0, 0]);
+  assert.deepEqual(pick("onlySelf"), ["draft", 0, "", 0, 0, 0], "'לעצמו' אינה שליחה למשרד");
+  assert.deepEqual(pick("onlyFailed"), ["draft", 0, "", 0, 0, 0], "שליחה שנכשלה אינה שליחה");
+  assert.deepEqual(pick("test"), ["sent_test", T + 30, "test", 0, 2, 0], "האחרונה מבין שליחות הבדיקה; 'לעצמו' מאוחרת יותר לא נספרת");
+  assert.deepEqual(pick("live"), ["sent_live", T + 20, "live", 1, 0, 2]);
+  assert.deepEqual(pick("liveThenTest"), ["sent_live", T + 20, "live", 1, 1, 0], "שליחה חיה עדיפה על בדיקה מאוחרת; חיה שנכשלה אינה נספרת");
+  assert.deepEqual(pick("sending"), ["sent_live", T + 40, "live", 1, 0, 0], "כמו liveSentAt_: שליחה שלא ידוע אם הסתיימה נחשבת שליחה");
+  assert.deepEqual(pick("legacy"), ["sent_live", T + 60, "live", 1, 1, 0], "רשומה ישנה בלי target = שליחה למשרד לפי mode");
+  assert.deepEqual(myReqs(env, admin, { all: true }).requests.map(x => x.name).sort(), Object.keys(sends).sort());
+});
+
+test("myRequests: רק e.user — 'lastUser' (מנהל ששמר בבקשה של מטיס) לא מכניס את הבקשה לרשימת המנהל, והמטיס ממשיך לראות אותה", () => {
+  const { env, admin, pilot } = recWorld();
+  const b = recReq(env, pilot, "תמיכה — 05.01.2027");
+  assert.ok(env.call({ action: "saveBegin", token: admin, folderName: b.base, rid: b.rid }).ok, "מנהל (תמיכה) פותח מחדש את הבקשה של המטיס");
+  assert.equal(entryOf(env, b.folderId).lastUser, "itzik", "המנהל הוא lastUser"); assert.equal(entryOf(env, b.folderId).user, "pilot.one");
+  assert.deepEqual(myReqs(env, admin).requests.map(x => x.id), []);
+  assert.deepEqual(myReqs(env, pilot).requests.map(x => x.id), [b.folderId]);
+  const sup = myReqs(env, admin, { all: true });
+  assert.deepEqual(sup.requests.map(x => [x.id, x.user]), [[b.folderId, "pilot.one"]]);
+});
+
+test("myRequests: all / user — רק מנהל; מטיס ועובד ארגון שמעבירים אותם מקבלים forbidden (גם user ריק-לכאורה אחר); מנהל עם user רואה רק את בקשות אותו משתמש, עם folderUrl ו-user", () => {
+  const { env, admin, org, pilot, pilot2 } = recWorld();
+  const a = recReq(env, pilot, "א — 01.02.2027"), b = recReq(env, pilot2, "ב — 02.02.2027"), c = recReq(env, org, "ג — 03.02.2027");
+  for (const tok of [pilot, org]) for (const extra of [{ all: true }, { user: "pilot.two" }, { user: "pilot.one", all: true }, { user: 5 }, { user: {} }, { user: ["x"] }, { all: true, user: "" }])
+    assert.equal(myReqs(env, tok, extra).error, "forbidden", JSON.stringify(extra));
+  for (const extra of [{ all: false }, { all: "true" }, { all: 1 }, { user: "" }, { user: null }, { all: false, user: null }]) {
+    const r = myReqs(env, pilot, extra); assert.ok(r.ok, JSON.stringify(extra)); assert.deepEqual(r.requests.map(x => x.id), [a.folderId], "ערכים שאינם all:true / user מחרוזת אינם מרחיבים: " + JSON.stringify(extra));
+  }
+  const all = myReqs(env, admin, { all: true });
+  assert.deepEqual(all.requests.map(x => x.id).sort(), [a.folderId, b.folderId, c.folderId].sort());
+  assert.ok(all.requests.every(x => x.folderUrl === "https://drive.google.com/drive/folders/" + x.id && typeof x.user === "string"));
+  const only = myReqs(env, admin, { user: "pilot.two" });
+  assert.deepEqual(only.requests.map(x => [x.id, x.user]), [[b.folderId, "pilot.two"]]);
+  assert.deepEqual(myReqs(env, admin, { user: "nobody" }).requests, []);
+  assert.equal(myReqs(env, admin, { user: 7 }).error, "bad_user");
+  assert.equal(myReqs(env, admin, { user: { a: 1 } }).error, "bad_user");
+});
+
+test("myRequests: תקרת שורות — 50 למשתמש רגיל, 100 למנהל; total הוא הכמות המלאה; הכי חדשות נשארות", () => {
+  const { env, admin, pilot } = recWorld();
+  seedLog(env, Array.from({ length: 130 }, (_, i) => FULL_ENTRY({ id: "P" + i, user: i < 70 ? "pilot.one" : "other.user", saved: 10_000 + i, name: "n" + i })));
+  const p = myReqs(env, pilot);
+  assert.equal(p.requests.length, 50); assert.equal(p.total, 70);
+  assert.deepEqual(p.requests.map(x => x.name).slice(0, 2), ["n69", "n68"]); assert.equal(p.requests[49].name, "n20");
+  const a = myReqs(env, admin, { all: true });
+  assert.equal(a.requests.length, 100); assert.equal(a.total, 130); assert.equal(a.requests[0].name, "n129");
+  assert.equal(myReqs(env, admin, { user: "pilot.one" }).requests.length, 70);
+});
+
+test("myRequests: נבנית מהיומן בלבד — קריאת דרייב אחת (קריאת היומן) בלי קשר למספר השורות, בלי כתיבה ובלי פתיחת תיקיות", () => {
+  const { env, admin, pilot } = recWorld();
+  seedLog(env, Array.from({ length: 120 }, (_, i) => FULL_ENTRY({ id: "Q" + i, user: i % 2 ? "pilot.one" : "x", saved: i, sent: [{ sid: "s" + i, t: i + 5, user: "pilot.one", mode: "live", target: "office", st: "sent" }] })));
+  for (const [tok, extra, n] of [[pilot, {}, 50], [admin, { all: true }, 100]]) {
+    env.driveCalls.reset();
+    const r = myReqs(env, tok, extra); assert.ok(r.ok && r.requests.length === n, r.requests && r.requests.length);
+    assert.deepEqual(env.driveCalls.by, { getFolderById: 1, getFilesByName: 1, getBlob: 1 }, "רק קריאת היומן: " + JSON.stringify(env.driveCalls.by));
+  }
+});
+
+test("myRequests: הגבלת קצב — MAX_MYREQ_PER_HOUR לכל משתמש בשעה (גם מנהל), משתמש אחר לא מושפע, ובשעה הבאה מתחילים מחדש; קריאה שנדחתה לא נספרת", () => {
+  const { env, admin, pilot, pilot2 } = recWorld();
+  for (let i = 0; i < 60; i++) assert.ok(myReqs(env, pilot).ok, "קריאה " + i);
+  const r = myReqs(env, pilot);
+  assert.deepEqual([r.ok, r.error, r.scope, r.kind], [false, "rate", "user", "read"]); assert.ok(r.message && !r.message.includes("@"));
+  assert.ok(myReqs(env, pilot2).ok, "משתמש אחר");
+  for (let i = 0; i < 60; i++) assert.ok(myReqs(env, admin, { all: true }).ok);
+  assert.equal(myReqs(env, admin).error, "rate", "מנהל לא פטור מהגבלת myRequests");
+  env.advance(HOUR);
+  assert.ok(myReqs(env, pilot).ok && myReqs(env, admin).ok);
+  vm.runInContext("CFG.MAX_MYREQ_PER_HOUR = 2", env.sandbox);
+  env.advance(HOUR);
+  assert.ok(myReqs(env, pilot2).ok && myReqs(env, pilot2).ok); assert.equal(myReqs(env, pilot2).error, "rate", "התקרה נקראת מ-CFG בכל קריאה");
+  assert.equal(myReqs(env, pilot2).error, "rate", "קריאה שנדחתה לא מגדילה את המונה (נשארת נדחית, ולא מתאפסת)");
+});
+
+test("myRequests: אימות — בלי אסימון / אסימון מזויף / משתמש חסום / פג תוקף / מנוי שפג נדחים באותן שגיאות כמו שאר הפעולות, ובלי נתונים", () => {
+  const { env, admin, pilot } = recWorld();
+  recReq(env, pilot, "אתר — 06.02.2027");
+  assert.equal(env.call({ action: "myRequests" }).error, "auth");
+  assert.equal(myReqs(env, pilot + "x").error, "auth");
+  assert.equal(myReqs(env, "garbage").error, "auth");
+  assert.ok(env.call({ action: "setBlocked", token: admin, target: "pilot.one", blocked: true }).ok);
+  const r = myReqs(env, pilot); assert.deepEqual([r.ok, r.error, r.requests], [false, "blocked", undefined]);
+  env.advance(9 * 3600 * 1000);
+  assert.equal(myReqs(env, admin).error, "expired");
+});
+
+test("myRequests: משתמש שנמחק — הבקשות נשארות על השם המוחלף; מי שנרשם אחריו באותו שם לא רואה אותן, והמנהל כן", () => {
+  const { env, admin, pilot } = recWorld();
+  const b = recReq(env, pilot, "ישן — 07.02.2027");
+  assert.ok(env.call({ action: "deleteUser", token: admin, target: "pilot.one" }).ok);
+  const again = manualPilot(env, admin, "pilot.one");
+  assert.deepEqual(myReqs(env, again.token).requests, [], "בלי הבקשות של הקודם");
+  assert.equal(myReqs(env, again.token).total, 0);
+  const row = myReqs(env, admin, { all: true }).requests.find(x => x.id === b.folderId);
+  assert.ok(row && row.user.startsWith("pilot.one:נמחק:"), JSON.stringify(row));
+  assert.equal(getReq(env, again.token, b.folderId).error, "forbidden");
+  assert.equal(recheck(env, again.token, b.folderId).error, "recheck_off");
+});
+
+test("myRequests: יומן פגום או דרייב לא זמין = שגיאה (נכשל סגור), לא רשימה ריקה; רשומות ישנות בלי שדות לא שוברות את הרשימה", () => {
+  const { env, pilot } = recWorld();
+  seedLog(env, [{ id: "OLD1", name: "ישנה", user: "pilot.one" }, { id: "OLD2", user: "pilot.one", saved: "x", sent: null }, null]);
+  const ok = myReqs(env, pilot); assert.ok(ok.ok, JSON.stringify(ok));
+  const o = ok.requests.find(x => x.id === "OLD1"); assert.deepEqual([o.kind, o.created, o.saved, o.ready, o.state, o.rechecks], ["org", 0, 0, false, "draft", 0]);
+  env.fail.drive = true;
+  const r = myReqs(env, pilot); assert.equal(r.ok, false); assert.equal(r.error, "server"); assert.equal(r.requests, undefined);
+  env.fail.drive = false;
+  env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes = Buffer.from("{ not json");
+  const bad = myReqs(env, pilot); assert.equal(bad.ok, false); assert.equal(bad.error, "server"); assert.ok(/פגום/.test(bad.message));
+});
+
+/* ---- getRequest ---- */
+test("getRequest: בעלים מקבל meta + rec כמו ששמר (גם תוכן עוין מוחזר כנתונים בלבד); מנהל מקבל גם user ו-folderUrl; מטיס בלי תצוגה מתקדמת רשאי לקרוא את שלו", () => {
+  const { env, admin, org, pilot } = recWorld();
+  const rec = { site: "<script>alert(1)</script> & \"x\"", inputs: { lat: 32.1, siteName: "</td><img src=x onerror=1>" }, zones: [{ id: "A-17", d: 3 }], items: [], extra: { nested: [1, 2, { a: null }] } };
+  const b = recReq(env, pilot, "אתר — 08.02.2027", rec);
+  const r = getReq(env, pilot, b.folderId);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.deepEqual(r.rec, rec);
+  const e = entryOf(env, b.folderId);
+  assert.deepEqual(r.meta, { id: b.folderId, name: e.name, kind: "pilot", created: e.created, saved: e.saved, ready: true, state: "draft", sentAt: 0, sentMode: "", sentLive: 0, sentTest: 0, rechecks: 0 });
+  assert.ok(!JSON.stringify(r).includes(ORG) && !JSON.stringify(r).includes("drive.google.com"));
+  const adm = getReq(env, admin, b.folderId);
+  assert.ok(adm.ok); assert.deepEqual(adm.rec, rec); assert.equal(adm.meta.user, "pilot.one"); assert.equal(adm.meta.folderUrl, "https://drive.google.com/drive/folders/" + b.folderId);
+  const ob = recReq(env, org, "ארגוני — 09.02.2027", { site: "ארגון" });
+  assert.deepEqual(getReq(env, org, ob.folderId).rec, { site: "ארגון" });
+  assert.equal(getReq(env, org, ob.folderId).meta.kind, "org");
+});
+
+test("getRequest: משתמש אחר — forbidden (גם עובד ארגון עם תצוגה מתקדמת, גם מטיס אחר), בלי לקרוא את הקובץ; משתמש חסום / בלי אסימון נדחה", () => {
+  const { env, admin, org, pilot, pilot2 } = recWorld();
+  const b = recReq(env, pilot, "פרטי — 10.02.2027", { secret: "לא לאחרים" });
+  env.driveCalls.reset();
+  for (const tok of [pilot2, org]) { const r = getReq(env, tok, b.folderId); assert.deepEqual([r.ok, r.error, r.rec, r.meta], [false, "forbidden", undefined, undefined]); }
+  assert.equal(env.driveCalls.by.getBlob || 0, 2, "נקרא רק היומן (פעם לכל קריאה), לא קובץ הנתונים");
+  assert.equal(env.call({ action: "getRequest", folderId: b.folderId }).error, "auth");
+  assert.equal(env.call({ action: "getRequest", token: pilot + "x", folderId: b.folderId }).error, "auth");
+  assert.ok(env.call({ action: "setBlocked", token: admin, target: "pilot.one", blocked: true }).ok);
+  assert.equal(getReq(env, pilot, b.folderId).error, "blocked");
+});
+
+test("getRequest: bad_folder — מזהה חסר / לא מחרוזת / לא קיים / התיקייה הראשית / מחוץ לעץ / תיקייה בעץ שאינה ביומן (כולל תת-תיקיית בדיקות חוזרות) / תיקייה בפח", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "תקינה — 11.02.2027");
+  for (const bad of [undefined, null, "", 0, 7, {}, [], [b.folderId], { id: b.folderId }, "nope", "ROOT", "F999"]) {
+    const r = env.call({ action: "getRequest", token: org, folderId: bad }); assert.deepEqual([r.ok, r.error], [false, "bad_folder"], JSON.stringify(bad));
+  }
+  env.folders.STRAY = { id: "STRAY", name: "מחוץ לעץ", parent: null, files: [] };
+  assert.equal(getReq(env, admin, "STRAY").error, "bad_folder");
+  const orphan = env.folders.ROOT && vm.runInContext("DriveApp", env.sandbox).getFolderById("ROOT").createFolder("תיקייה שלא ביומן");
+  assert.equal(getReq(env, admin, orphan.getId()).error, "bad_folder", "בתוך העץ אבל בלי רשומה ביומן");
+  assert.ok(recheck(env, admin, b.folderId).error === "not_sent");
+  assert.ok(sendTo(env, org, b.folderId).ok);
+  assert.ok(recheck(env, admin, b.folderId).ok);
+  const sub = subOf(env, b.folderId); assert.ok(sub);
+  assert.equal(getReq(env, admin, sub.id).error, "bad_folder", "תת-תיקיית הבדיקות החוזרות אינה בקשה");
+  env.folders[b.folderId].trashed = true;
+  const t = getReq(env, org, b.folderId); assert.deepEqual([t.ok, t.error], [false, "bad_folder"], "תיקייה בפח");
+  assert.equal(getReq(env, admin, b.folderId).error, "bad_folder", "גם למנהל");
+});
+
+test("getRequest: no_record — אין קובץ נתונים / שם אחר / שני קבצים מתאימים / הקובץ בפח / קובץ נתונים שהוא תת-תיקייה; הסריקה חסומה ב-MAX_RECORD_SCAN_FILES (גבול מדויק)", () => {
+  const { env, org } = recWorld();
+  const noJson = savedRequest(env, org, "בלי נתונים — 12.02.2027", [["בקשה.docx", "x"], ["הדמיה.png", "x"], ["נתונים.json", "{}"]]);   // JSON בשם אחר
+  const r0 = getReq(env, org, noJson.folderId); assert.deepEqual([r0.ok, r0.error], [false, "no_record"]); assert.ok(r0.message && /נתוני הבקשה/.test(r0.message));
+  const two = recReq(env, org, "שניים — 13.02.2027", { a: 1 });
+  assert.ok(env.call({ action: "saveFile", token: org, folderId: two.folderId, name: "אחר" + REC_SUFFIX, mime: "application/json", b64: b64("{\"b\":2}") }).ok);
+  assert.equal(getReq(env, org, two.folderId).error, "no_record", "שני קבצים מתאימים = לא ברור איזה (נכשל סגור)");
+  const gone = recReq(env, org, "בפח — 14.02.2027", { a: 1 });
+  env.folders[gone.folderId].files.find(f => f.name.endsWith(REC_SUFFIX)).trashed = true;
+  assert.equal(getReq(env, org, gone.folderId).error, "no_record");
+  const lim = recReq(env, org, "גבול — 15.02.2027", { at: "limit" }), files = env.folders[lim.folderId].files;
+  const rec = files.splice(files.findIndex(f => f.name.endsWith(REC_SUFFIX)), 1)[0];
+  const fill = n => { for (let i = 0; i < n; i++) files.push({ id: "FILL" + lim.folderId + files.length, name: "נשלח — מילוי " + files.length + ".txt", mime: "text/plain", bytes: Buffer.from("x"), trashed: false }); };
+  files.length = 0; fill(79); files.push(rec);
+  assert.equal(files.length, 80); assert.deepEqual(getReq(env, org, lim.folderId).rec, { at: "limit" }, "הקובץ ה-80 עדיין נסרק");
+  files.length = 0; fill(80); files.push(rec);
+  assert.equal(getReq(env, org, lim.folderId).error, "no_record", "הקובץ ה-81 כבר לא נסרק (תיקייה מנופחת לא נסרקת תחת הנעילה)");
+  vm.runInContext("CFG.MAX_RECORD_SCAN_FILES = 100", env.sandbox);
+  assert.deepEqual(getReq(env, org, lim.folderId).rec, { at: "limit" }, "הסריקה נקראת מ-CFG");
+});
+
+test("getRequest: too_big — מעל MAX_RECORD_BYTES לא נקרא כלל (גבול מדויק), ו-bad_record — JSON פגום / ריק / לא אובייקט (מערך, מחרוזת, מספר, null) / קטוע; BOM בתחילת הקובץ נסבל", () => {
+  const { env, org } = recWorld();
+  const mk = (n, raw) => recReq(env, org, "מקרה " + n + " — 16.02.2027", raw);
+  const rec = JSON.stringify({ k: "v".repeat(40) }), size = Buffer.byteLength(rec);
+  const exact = mk(1, rec);
+  vm.runInContext("CFG.MAX_RECORD_BYTES = " + size, env.sandbox);
+  assert.ok(getReq(env, org, exact.folderId).ok, "בדיוק בגודל התקרה");
+  vm.runInContext("CFG.MAX_RECORD_BYTES = " + (size - 1), env.sandbox);
+  env.driveCalls.reset();
+  const big = getReq(env, org, exact.folderId); assert.deepEqual([big.ok, big.error, big.rec], [false, "too_big", undefined]); assert.ok(big.message);
+  assert.equal(env.driveCalls.by.getBlob, 1, "הקובץ עצמו לא נקרא (רק היומן)");
+  vm.runInContext("CFG.MAX_RECORD_BYTES = 600000", env.sandbox);
+  const huge = mk(2, JSON.stringify({ pad: "x".repeat(600000) }));
+  assert.equal(getReq(env, org, huge.folderId).error, "too_big", "ברירת המחדל 600KB");
+  const bads = ["", "   ", "{ not json", "{\"a\":", "[1,2,3]", "\"str\"", "42", "null", "true", "{}x", "<html>"];
+  bads.forEach((raw, i) => {
+    const q = mk(10 + i, raw || "{}");
+    if (!raw) env.folders[q.folderId].files.find(f => f.name.endsWith(REC_SUFFIX)).bytes = Buffer.alloc(0);   // saveFile לא מקבלת קובץ ריק; מדמים קובץ ריק בדרייב
+    const r = getReq(env, org, q.folderId); assert.deepEqual([r.ok, r.error], [false, "bad_record"], JSON.stringify(raw)); assert.equal(r.rec, undefined); });
+  const bom = mk(30, BOM + JSON.stringify({ with: "bom" }));
+  assert.deepEqual(getReq(env, org, bom.folderId).rec, { with: "bom" });
+  const empty = mk(31, "{}"); assert.deepEqual(getReq(env, org, empty.folderId).rec, {});
+});
+
+test("getRequest: הגבלת קצב — MAX_RECORD_READS_PER_HOUR למשתמש (נספרות גם קריאות שנכשלו); מנהל פטור; הספירה נפרדת מ-myRequests; מתאפסת בשעה הבאה", () => {
+  const { env, admin, org, pilot } = recWorld();
+  const b = recReq(env, pilot, "קצב — 17.02.2027"), c = recReq(env, org, "קצב ארגוני — 17.02.2027");
+  for (let i = 0; i < 30; i++) assert.ok(getReq(env, pilot, b.folderId).ok, "קריאה " + i);
+  const r = getReq(env, pilot, b.folderId); assert.deepEqual([r.ok, r.error, r.scope, r.kind], [false, "rate", "user", "read"]);
+  assert.equal(getReq(env, pilot, "nope").error, "rate", "הגבלה לפני כל עבודת דרייב");
+  assert.ok(getReq(env, org, c.folderId).ok, "משתמש אחר");
+  assert.ok(myReqs(env, pilot).ok, "myRequests נספרת בנפרד");
+  for (let i = 0; i < 35; i++) assert.ok(getReq(env, admin, b.folderId).ok, "מנהל פטור");
+  env.advance(HOUR);
+  assert.ok(getReq(env, pilot, b.folderId).ok);
+  const e = recWorld(); const q = recReq(e.env, e.org, "כשלים — 18.02.2027");
+  for (let i = 0; i < 30; i++) assert.equal(getReq(e.env, e.org, "bad-" + i).error, "bad_folder");
+  assert.equal(getReq(e.env, e.org, q.folderId).error, "rate", "גם קריאות שנכשלו נספרות (מונע הצפה בפעולות דרייב)");
+});
+
+test("getRequest: יומן פגום / דרייב לא זמין = שגיאה (נכשל סגור); בקשה של Phase A בלי נתונים נשארת ללא שינוי", () => {
+  const { env, org } = recWorld();
+  const b = recReq(env, org, "כשל — 19.02.2027");
+  env.fail.drive = true;
+  const r = getReq(env, org, b.folderId); assert.deepEqual([r.ok, r.error], [false, "bad_folder"], "requestFolder_ מחזירה null כשהדרייב נופל — אותה שגיאה קיימת");
+  env.fail.drive = false;
+  env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes = Buffer.from("garbage");
+  const bad = getReq(env, org, b.folderId); assert.equal(bad.ok, false); assert.equal(bad.error, "server"); assert.equal(bad.rec, undefined);
+});
+
+/* ---- saveRecheck ---- */
+test("saveRecheck: דוח נשמר בתת-תיקייה 'בדיקות חוזרות' של תיקיית הבקשה בשם שנבנה בשרת (שעון ישראל), סימון .txt בתיקיית הבקשה, ורישום [t,a,r,c] ב-rc; תשובה {ok,name,rechecks}, url רק למנהל", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "שמירה — 20.02.2027");
+  assert.ok(sendTo(env, org, b.folderId).ok);     // מצב בדיקה (ברירת מחדל)
+  const body = zipB64(500, 9), t0 = env.now();
+  const r = env.call({ action: "saveRecheck", token: org, folderId: b.folderId, b64: body, sum: { a: 4, r: 5, c: 6 } });
+  const stamp = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t0).replace(" ", " ").replace(":", "-");
+  assert.deepEqual(r, { ok: true, name: "בדיקה חוזרת — " + stamp + ".docx", rechecks: 1 });
+  assert.ok(/^בדיקה חוזרת — \d{4}-\d{2}-\d{2} \d{2}-\d{2}\.docx$/.test(r.name));
+  const sub = subOf(env, b.folderId), files = subFiles(env, b.folderId);
+  assert.ok(sub); assert.equal(sub.parent, b.folderId); assert.equal(files.length, 1);
+  assert.equal(files[0].name, r.name); assert.equal(files[0].mime, DOCX_MIME); assert.ok(files[0].bytes.equals(Buffer.from(body, "base64")));
+  const marker = env.folders[b.folderId].files.find(f => f.name === "בדיקה חוזרת — " + stamp + ".txt");
+  assert.ok(marker, reqNames(env, b.folderId).join(" | "));
+  const lines = marker.bytes.toString().split("\n");
+  assert.ok(lines.includes("נשמרה ע\"י: org.worker") && lines.includes("ממצאים: חדשים 4 · הוסרו 5 · שונו 6") && lines.includes("קובץ הדוח: בדיקות חוזרות/" + r.name), marker.bytes.toString());
+  assert.ok(lines.includes("דוח זה לא צורף לבקשה שנשלחה ב-" + new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric" }).format(t0).replace(/\//g, ".")));
+  assert.ok(lines.includes("סוג השליחה: בדיקה — למבקש בלבד, לא נשלח למודיעין טיס"));
+  assert.deepEqual(entryOf(env, b.folderId).rc, [[t0, 4, 5, 6]]);
+  const ra = recheck(env, admin, b.folderId, { b64: zipB64(10) });
+  assert.ok(ra.ok && /^https:\/\/drive\/file\//.test(ra.url), JSON.stringify(ra)); assert.equal(ra.rechecks, 2);
+  assert.equal(r.url, undefined, "קישור לדרייב — למנהל בלבד");
+  assert.equal(Object.values(env.folders).filter(f => f.name === SUBNAME).length, 1, "תת-תיקייה אחת, לא כפילות");
+});
+
+test("saveRecheck: שם הקובץ והסימון לפי שעון ישראל (חורף ו-DST, חצות), ו-(2)/(3) באותה דקה — בדוח ובסימון יחד; דקה אחרת = שם רגיל", () => {
+  for (const [utc, ymd, hm, dmy, label] of [["2026-12-31T22:30:00Z", "2027-01-01", "00-30", "01.01.2027 00:30", "חורף: UTC+2, מעבר יום"], ["2026-07-15T21:30:00Z", "2026-07-16", "00-30", "16.07.2026 00:30", "קיץ: UTC+3, מעבר יום"]]) {
+    const { env, token } = envAt(utc);
+    const b = recReq(env, token, "אזור זמן — 21.02.2027"); assert.ok(sendTo(env, token, b.folderId).ok);
+    const r1 = recheck(env, token, b.folderId), r2 = recheck(env, token, b.folderId), r3 = recheck(env, token, b.folderId);
+    const base = "בדיקה חוזרת — " + ymd + " " + hm;
+    assert.deepEqual([r1.name, r2.name, r3.name], [base + ".docx", base + " (2).docx", base + " (3).docx"], label);
+    assert.deepEqual(subFiles(env, b.folderId).map(f => f.name).sort(), [base + ".docx", base + " (2).docx", base + " (3).docx"].sort());
+    const markers = reqNames(env, b.folderId).filter(n => n.startsWith("בדיקה חוזרת"));
+    assert.deepEqual(markers, [base + ".txt", base + " (2).txt", base + " (3).txt"].sort(), label);
+    assert.ok(env.folders[b.folderId].files.find(f => f.name === base + ".txt").bytes.toString().includes("מתי: " + dmy), label);
+    env.advance(60000);
+    assert.equal(recheck(env, token, b.folderId).name, "בדיקה חוזרת — " + ymd + " " + hm.replace("30", "31") + ".docx");
+    assert.equal(entryOf(env, b.folderId).rc.length, 4);
+  }
+});
+
+test("saveRecheck: הרשאות — recheck_off למי שאין לו תצוגה מתקדמת (נבדק בכל קריאה, לפני כל עבודת דרייב); עובד ארגון ומנהל כברירת מחדל; מטיס שהמנהל נתן לו adv רשאי", () => {
+  const { env, admin, org, pilot } = recWorld();
+  const pb = recReq(env, pilot, "מטיס — 22.02.2027"); assert.ok(sendTo(env, pilot, pb.folderId).ok);
+  env.driveCalls.reset();
+  const off = recheck(env, pilot, pb.folderId); assert.deepEqual([off.ok, off.error], [false, "recheck_off"]); assert.ok(off.message);
+  assert.deepEqual(env.driveCalls.by, {}, "אפס קריאות דרייב");
+  assert.equal(recheck(env, pilot, "whatever").error, "recheck_off");
+  assert.equal(subOf(env, pb.folderId), undefined); assert.equal(entryOf(env, pb.folderId).rc, undefined);
+  assert.ok(env.call({ action: "setAdv", token: admin, target: "pilot.one", adv: true }).ok);
+  assert.ok(recheck(env, pilot, pb.folderId).ok, "adv הוענק — נקרא מהרשומה בלי כניסה מחדש");
+  assert.ok(env.call({ action: "setAdv", token: admin, target: "pilot.one", adv: false }).ok);
+  assert.equal(recheck(env, pilot, pb.folderId).error, "recheck_off", "adv נשלל — מיד");
+  const ob = recReq(env, org, "ארגוני — 23.02.2027"); assert.ok(sendTo(env, org, ob.folderId).ok);
+  assert.ok(recheck(env, org, ob.folderId).ok, "עובד ארגון: adv כברירת מחדל");
+  assert.ok(env.call({ action: "setAdv", token: admin, target: "org.worker", adv: false }).ok);
+  assert.equal(recheck(env, org, ob.folderId).error, "recheck_off");
+  assert.ok(recheck(env, admin, pb.folderId).ok && recheck(env, admin, ob.folderId).ok, "מנהל תמיד");
+  assert.equal(env.call({ action: "saveRecheck", folderId: ob.folderId, b64: zipB64() }).error, "auth");
+  assert.equal(env.call({ action: "saveRecheck", token: "x.y", folderId: ob.folderId, b64: zipB64() }).error, "auth");
+});
+
+test("saveRecheck: בעלות — משתמש אחר (גם עם adv) forbidden ולא נוצר דבר; מנהל רשאי לבקשת מטיס; בקשה של משתמש שנמחק — רק מנהל", () => {
+  const { env, admin, org, pilot, pilot2 } = recWorld();
+  assert.ok(env.call({ action: "setAdv", token: admin, target: "pilot.two", adv: true }).ok);
+  const b = recReq(env, pilot, "בעלות — 24.02.2027"); assert.ok(sendTo(env, pilot, b.folderId, { target: "office" }).ok);
+  assert.ok(env.call({ action: "setAdv", token: admin, target: "pilot.one", adv: true }).ok);
+  for (const tok of [pilot2, org]) { const r = recheck(env, tok, b.folderId); assert.deepEqual([r.ok, r.error], [false, "forbidden"]); }
+  assert.equal(subOf(env, b.folderId), undefined); assert.equal(entryOf(env, b.folderId).rc, undefined);
+  assert.ok(recheck(env, admin, b.folderId).ok, "תמיכה");
+  assert.ok(recheck(env, pilot, b.folderId).ok, "הבעלים");
+  assert.ok(env.call({ action: "deleteUser", token: admin, target: "pilot.one" }).ok);
+  const again = manualPilot(env, admin, "pilot.one"); assert.ok(env.call({ action: "setAdv", token: admin, target: "pilot.one", adv: true }).ok);
+  assert.equal(recheck(env, again.token, b.folderId).error, "forbidden", "שם מחדש אינו יורש בקשות");
+  assert.ok(recheck(env, admin, b.folderId).ok);
+});
+
+test("saveRecheck: not_sent — טיוטה / 'לעצמו' בלבד / שליחה שנכשלה; נשלחה בבדיקה או חי — מותר; שום דבר לא נוצר בדחייה", () => {
+  const { env, admin, org } = recWorld();
+  const draft = recReq(env, org, "טיוטה — 25.02.2027");
+  const self = recReq(env, org, "לעצמו — 25.02.2027"); assert.ok(sendTo(env, org, self.folderId, { target: "self" }).ok);
+  const failed = recReq(env, org, "נכשלה — 25.02.2027"); env.fail.mail = true; assert.equal(sendTo(env, org, failed.folderId).error, "server"); env.fail.mail = false;
+  assert.equal(entryOf(env, failed.folderId).sent[0].st, "failed");
+  for (const x of [draft, self, failed]) { const r = recheck(env, org, x.folderId); assert.deepEqual([r.ok, r.error], [false, "not_sent"], x.base); assert.ok(r.message); }
+  assert.ok(!anySub(env), "לא נוצרה תת-תיקייה בדחייה");
+  assert.deepEqual(reqNames(env, draft.folderId).filter(n => n.startsWith("בדיקה חוזרת")), []);
+  const test1 = recReq(env, org, "בדיקה — 25.02.2027"); assert.ok(sendTo(env, org, test1.folderId).ok);
+  assert.ok(recheck(env, org, test1.folderId).ok);
+  assert.ok(env.call({ action: "setMailMode", token: admin, mode: "live" }).ok);
+  const live = recReq(env, org, "חי — 25.02.2027"); assert.ok(sendTo(env, org, live.folderId).ok);
+  assert.ok(recheck(env, org, live.folderId).ok);
+  assert.ok(recheck(env, org, self.folderId).error === "not_sent");
+});
+
+test("saveRecheck: bad_folder — מזהה לא תקף / לא מחרוזת / מחוץ לעץ / לא ביומן / תת-תיקיית הבדיקות עצמה / בפח; ו-bad_file — מזהה תקין עם קובץ שאינו Word/ZIP", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "תיקייה — 26.02.2027"); assert.ok(sendTo(env, org, b.folderId).ok); assert.ok(recheck(env, org, b.folderId).ok);
+  for (const bad of [undefined, null, "", 7, {}, [b.folderId], "nope", "ROOT", "F999"]) { const r = recheck(env, org, bad); assert.deepEqual([r.ok, r.error], [false, "bad_folder"], JSON.stringify(bad)); }
+  env.folders.STRAY = { id: "STRAY", name: "מחוץ לעץ", parent: null, files: [] };
+  assert.equal(recheck(env, admin, "STRAY").error, "bad_folder");
+  const orphan = vm.runInContext("DriveApp", env.sandbox).getFolderById("ROOT").createFolder("לא ביומן");
+  assert.equal(recheck(env, admin, orphan.getId()).error, "bad_folder");
+  const sub = subOf(env, b.folderId);
+  assert.equal(recheck(env, admin, sub.id).error, "bad_folder", "אי אפשר לכתוב בתת-התיקייה כאילו הייתה בקשה");
+  assert.equal(Object.values(env.folders).filter(f => f.parent === sub.id).length, 0, "ובלי תת-תיקייה בתוכה");
+  const before = subFiles(env, b.folderId).length;
+  env.folders[b.folderId].trashed = true;
+  assert.equal(recheck(env, org, b.folderId).error, "bad_folder"); assert.equal(recheck(env, admin, b.folderId).error, "bad_folder");
+  assert.equal(subFiles(env, b.folderId).length, before);
+});
+
+test("saveRecheck: bad_file — רק base64 של ZIP (מתחיל UEsD) עד MAX_RECHECK_B64; טקסט, חתימות אחרות, תווים לא חוקיים, רווחים, ריק, לא מחרוזת — נדחים בלי תת-תיקייה ובלי רישום", () => {
+  const { env, org } = recWorld();
+  const b = recReq(env, org, "קובץ — 27.02.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  const good = zipB64(30);
+  const bads = [undefined, null, "", 0, 12345, {}, [good], true, "hello world", b64("PK\x03\x04abc") + "!", b64("plain text, not zip"), b64("\x50\x4b\x01\x02xxxx"), "PK\x03\x04", good.slice(1), " " + good, good + "\n", good.slice(0, 20) + " " + good.slice(20), good.replace(/.$/, "*"), "UEsD====", good + "=x", "UEsD" + "_-".repeat(10), "UEsD*", BOM + good];
+  for (const bad of bads) { const r = recheck(env, org, b.folderId, { b64: bad }); assert.deepEqual([r.ok, r.error], [false, "bad_file"], JSON.stringify(bad)); assert.ok(r.message); }
+  assert.ok(!anySub(env)); assert.equal(entryOf(env, b.folderId).rc, undefined);
+  const noB64 = env.call({ action: "saveRecheck", token: org, folderId: b.folderId, sum: {} }); assert.equal(noB64.error, "bad_file");
+  vm.runInContext("CFG.MAX_RECHECK_B64 = 40", env.sandbox);
+  const at = "UEsD" + "A".repeat(36), over = at + "A";
+  assert.equal(at.length, 40);
+  assert.ok(recheck(env, org, b.folderId, { b64: at }).ok, "בדיוק בתקרה");
+  assert.equal(recheck(env, org, b.folderId, { b64: over }).error, "bad_file", "תו אחד מעל התקרה");
+  vm.runInContext("CFG.MAX_RECHECK_B64 = 3 * 1024 * 1024", env.sandbox);
+  const big = "UEsD" + "A".repeat(3 * 1024 * 1024 - 4);
+  env.driveCalls.reset();
+  assert.ok(recheck(env, org, b.folderId, { b64: big }).ok, "3MB בדיוק עובר");
+  assert.equal(recheck(env, org, b.folderId, { b64: big + "AAAA" }).error, "bad_file", "מעל 3MB נדחה לפני כל קריאת דרייב");
+});
+
+test("saveRecheck: השרת בונה את כל השמות — name / fileName / mime / folderName / path מהלקוח מתעלמים; sum משובש הופך לאפסים ונחסם ב-99999", () => {
+  const { env, org } = recWorld();
+  const b = recReq(env, org, "שמות — 28.02.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  const r = recheck(env, org, b.folderId, { name: "../../evil.docx", fileName: "x.exe", mime: "text/html", folderName: "פרצה", path: "/etc", folder: "ROOT", sum: { a: "7", r: -3, c: 1e12 } });
+  assert.ok(r.ok && /^בדיקה חוזרת — \d{4}-\d{2}-\d{2} \d{2}-\d{2}\.docx$/.test(r.name), r.name);
+  const f = subFiles(env, b.folderId)[0]; assert.equal(f.name, r.name); assert.equal(f.mime, DOCX_MIME);
+  assert.deepEqual(entryOf(env, b.folderId).rc[0].slice(1), [0, 0, 99999], "מחרוזת → 0, שלילי → 0, ענק → 99999");
+  const odd = [undefined, null, 5, "x", [], [1], { a: [1], r: { v: 1 }, c: null }, { a: NaN, r: Infinity, c: 2.9 }];
+  for (const sum of odd) assert.ok(recheck(env, org, b.folderId, { sum }).ok, JSON.stringify(sum));
+  const rcs = entryOf(env, b.folderId).rc.slice(1).map(x => x.slice(1));
+  assert.deepEqual(rcs, [...Array(7).fill([0, 0, 0]), [0, 0, 2]], "NaN / Infinity הופכים ל-null ב-JSON ← 0; שבר נחתך");
+  assert.ok(env.folders[b.folderId].files.every(x => !/evil|exe|פרצה/.test(x.name)));
+  assert.ok(Object.values(env.folders).every(x => !/evil|פרצה/.test(x.name)));
+  const marker = env.folders[b.folderId].files.find(x => x.name.startsWith("בדיקה חוזרת") && x.name.endsWith(".txt") && x.bytes.toString().includes("חדשים 0 · הוסרו 0 · שונו 99999"));
+  assert.ok(marker, "הסימון נושא רק מספרים");
+});
+
+test("saveRecheck: recheck_limit — עד MAX_RECHECKS_PER_REQUEST (20) לבקשה, rc נשאר בגודל התקרה, ואחרי הדחייה לא נוצר קובץ או סימון; בקשה אחרת לא מושפעת", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "תקרה — 01.03.2027"), c = recReq(env, org, "אחרת — 01.03.2027");
+  assert.ok(sendTo(env, org, b.folderId).ok); assert.ok(sendTo(env, org, c.folderId).ok);
+  for (let i = 0; i < 20; i++) { const r = recheck(env, admin, b.folderId); assert.ok(r.ok, "שמירה " + i + ": " + JSON.stringify(r)); assert.equal(r.rechecks, i + 1); }
+  assert.equal(subFiles(env, b.folderId).length, 20);
+  const nMarkers = () => reqNames(env, b.folderId).filter(n => n.startsWith("בדיקה חוזרת")).length;
+  assert.equal(nMarkers(), 20);
+  const r = recheck(env, admin, b.folderId); assert.deepEqual([r.ok, r.error], [false, "recheck_limit"]); assert.ok(r.message && !r.message.includes("@"));
+  assert.equal(recheck(env, org, b.folderId).error, "recheck_limit");
+  assert.equal(subFiles(env, b.folderId).length, 20); assert.equal(nMarkers(), 20); assert.equal(entryOf(env, b.folderId).rc.length, 20);
+  assert.ok(recheck(env, admin, c.folderId).ok, "הגבלה לכל בקשה בנפרד");
+  vm.runInContext("CFG.MAX_RECHECKS_PER_REQUEST = 21", env.sandbox);
+  assert.ok(recheck(env, admin, b.folderId).ok, "התקרה נקראת מ-CFG"); assert.equal(entryOf(env, b.folderId).rc.length, 21);
+  vm.runInContext("CFG.MAX_RECHECKS_PER_REQUEST = 5", env.sandbox);
+  assert.equal(recheck(env, admin, b.folderId).error, "recheck_limit", "רשומה שכבר חורגת מהתקרה לא נפתחת מחדש");
+});
+
+test("saveRecheck: הגבלת קצב — MAX_RECHECK_SAVES_PER_HOUR למשתמש שאינו מנהל (עובד ארגון: 10 בשעה), מנהל פטור, ובשעה הבאה ממשיכים", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "קצב — 02.03.2027"), c = recReq(env, org, "קצב ב — 02.03.2027");
+  assert.ok(sendTo(env, org, b.folderId).ok); assert.ok(sendTo(env, org, c.folderId).ok);
+  for (let i = 0; i < 10; i++) assert.ok(recheck(env, org, i % 2 ? b.folderId : c.folderId).ok, "שמירה " + i);
+  const r = recheck(env, org, b.folderId); assert.deepEqual([r.ok, r.error, r.scope, r.kind], [false, "rate", "user", "read"]);
+  assert.equal(entryOf(env, b.folderId).rc.length, 5); assert.equal(entryOf(env, c.folderId).rc.length, 5);
+  assert.ok(recheck(env, admin, b.folderId).ok && recheck(env, admin, b.folderId).ok, "מנהל פטור");
+  env.advance(HOUR);
+  assert.ok(recheck(env, org, b.folderId).ok);
+});
+
+test("saveRecheck: recheck_full — נפח תת-התיקייה עד MAX_RECHECK_FOLDER_BYTES (גבול מדויק), ותת-תיקייה מנופחת (קבצים שנוספו ידנית) נחסמת בלי סריקה מלאה", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "נפח — 03.03.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  vm.runInContext("CFG.MAX_RECHECK_FOLDER_BYTES = 1002", env.sandbox);
+  const mkB64 = bytes => Buffer.concat([Buffer.from([0x50, 0x4b, 3, 4]), Buffer.alloc(bytes - 4, 2)]).toString("base64");   // bytes כפולה של 3: אין ריפוד, והגודל המשוער בשרת מדויק
+  assert.ok(recheck(env, org, b.folderId, { b64: mkB64(600) }).ok);
+  const full = recheck(env, org, b.folderId, { b64: mkB64(609) }); assert.deepEqual([full.ok, full.error], [false, "recheck_full"]); assert.ok(full.message);
+  assert.equal(subFiles(env, b.folderId).length, 1); assert.equal(entryOf(env, b.folderId).rc.length, 1);
+  assert.ok(recheck(env, org, b.folderId, { b64: mkB64(300) }).ok, "600 + 300 < 1002");
+  assert.equal(subFiles(env, b.folderId).reduce((n, f) => n + f.bytes.length, 0), 900);
+  const c = recReq(env, org, "גבול מדויק — 03.03.2027"); assert.ok(sendTo(env, org, c.folderId).ok);
+  assert.ok(recheck(env, org, c.folderId, { b64: mkB64(600) }).ok); assert.ok(recheck(env, org, c.folderId, { b64: mkB64(402) }).ok, "600 + 402 = בדיוק התקרה");
+  assert.equal(recheck(env, org, c.folderId, { b64: mkB64(6) }).error, "recheck_full", "שישה בייטים מעל");
+  assert.equal(recheck(env, admin, c.folderId, { b64: mkB64(6) }).error, "recheck_full", "תקרת התיקייה חלה גם על מנהל");
+  vm.runInContext("CFG.MAX_RECHECK_FOLDER_BYTES = 16 * 1024 * 1024", env.sandbox);
+  const d = recReq(env, org, "מנופחת — 03.03.2027"); assert.ok(sendTo(env, org, d.folderId).ok); assert.ok(recheck(env, org, d.folderId).ok);
+  const sub = subOf(env, d.folderId);
+  for (let i = 0; i < 70; i++) sub.files.push({ id: "J" + i, name: "ידני " + i + ".docx", mime: "x", bytes: Buffer.alloc(1), trashed: false });
+  env.driveCalls.reset();
+  const inflated = recheck(env, org, d.folderId); assert.equal(inflated.error, "recheck_full");
+  assert.ok(env.driveCalls.by.getSize <= 61, "סריקה חסומה: " + env.driveCalls.by.getSize);
+});
+
+test("saveRecheck: נספר בתקציבי ההעלאה (שעתי/יומי, כמו saveFile) — חורג = rate/upload בלי קובץ; מנהל פטור; saveFile ו-saveRecheck חולקים את אותו תקציב", () => {
+  const { env, admin, org } = recWorld();
+  const b = recReq(env, org, "תקציב — 04.03.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  const up0 = () => Number(vm.runInContext("CacheService", env.sandbox).getScriptCache().get("up:" + crypto.createHash("sha256").update("org.worker").digest("hex").slice(0, 16) + ":" + Math.floor(env.now() / HOUR))) || 0;
+  const dayBytes = () => (env.props["B:" + crypto.createHash("sha256").update("org.worker").digest("hex").slice(0, 16)] ? JSON.parse(env.props["B:" + crypto.createHash("sha256").update("org.worker").digest("hex").slice(0, 16)]).b : 0);
+  const base0 = up0(), day0 = dayBytes();
+  const body = zipB64(1000), size = Math.floor(body.length * 3 / 4);
+  assert.ok(recheck(env, org, b.folderId, { b64: body }).ok);
+  assert.equal(up0() - base0, size, "השעתי עלה בגודל הדוח"); assert.equal(dayBytes() - day0, size, "היומי עלה בגודל הדוח");
+  const admBefore = Object.keys(env.props).filter(k => k.startsWith("B:")).length;
+  assert.ok(recheck(env, admin, b.folderId, { b64: body }).ok);
+  assert.equal(Object.keys(env.props).filter(k => k.startsWith("B:")).length, admBefore, "מנהל פטור: אין רישום תקציב");
+  vm.runInContext("CFG.MAX_UPLOAD_BYTES_PER_HOUR = " + (up0() + 100), env.sandbox);
+  const n = subFiles(env, b.folderId).length;
+  const over = recheck(env, org, b.folderId, { b64: zipB64(1000) });
+  assert.deepEqual([over.ok, over.error, over.scope, over.kind], [false, "rate", "user", "upload"]); assert.ok(/שעתית/.test(over.message));
+  assert.equal(subFiles(env, b.folderId).length, n); assert.equal(entryOf(env, b.folderId).rc.length, 2);
+  assert.ok(recheck(env, admin, b.folderId, { b64: zipB64(1000) }).ok, "מנהל פטור גם כשהתקציב מלא");
+  const c = recReq(env, org, "משותף — 04.03.2027"); assert.ok(sendTo(env, org, c.folderId).ok);
+  vm.runInContext("CFG.MAX_UPLOAD_BYTES_PER_HOUR = " + (up0() + 500), env.sandbox);
+  assert.equal(putFile(env, org, c.folderId, "גדול.png", 600).error, "rate", "saveFile לא יכול לחרוג מהתקציב שהדוחות אכלו");
+  assert.ok(recheck(env, org, c.folderId, { b64: zipB64(300) }).ok, "ושמירה קטנה מספיק עדיין עוברת");
+  assert.equal(putFile(env, org, c.folderId, "עוד.png", 300).error, "rate", "ו-saveFile נחסם אחרי שהדוח השתמש בתקציב");
+  vm.runInContext("CFG.MAX_UPLOAD_BYTES_PER_HOUR = 400 * 1024 * 1024; CFG.MAX_UPLOAD_BYTES_PER_DAY = " + (dayBytes() + 100), env.sandbox);
+  const dayOver = recheck(env, org, c.folderId, { b64: zipB64(1000) }); assert.deepEqual([dayOver.error, dayOver.kind], ["rate", "upload"]); assert.ok(/יומית/.test(dayOver.message));
+});
+
+/* ---- saveRecheck: רגרסיה — השליחה, השמירה והתקרות של שלב א׳ לא נפגעות (הסיכון המרכזי: דוח שמצורף בטעות לבקשה) ---- */
+const attNames = m => Array.from(m.attachments || [], a => a.name).sort();   // Array.from: המערך מגיע מה-sandbox (מרחב אחר)
+
+test("רגרסיה: אחרי saveRecheck (בדיקה וחי) השליחה הבאה מצרפת בדיוק את אותם קבצים כמו לפניה — בלי הדוח, בלי הסימון — והתשובה זהה", () => {
+  const { env, admin, org } = recWorld();
+  const b = savedRequest(env, org, "צירוף — 05.03.2027", [...STD_FILES, ["קובץ נוסף.jpg", "image/jpeg"]]);
+  const s1 = sendTo(env, org, b.folderId); assert.ok(s1.ok, JSON.stringify(s1));
+  const before = attNames(env.mails[env.mails.length - 1]);
+  assert.equal(before.length, 5, "Word, KML, שתי תמונות, JPG (ה-JSON לא מצורף)"); assert.ok(before.every(n => !/בדיקה חוזרת/.test(n)));
+  for (let i = 0; i < 3; i++) assert.ok(recheck(env, org, b.folderId, { b64: zipB64(5000 + i) }).ok);
+  const s2 = sendTo(env, org, b.folderId); assert.ok(s2.ok, JSON.stringify(s2));
+  assert.deepEqual(attNames(env.mails[env.mails.length - 1]), before, "אותם קבצים בדיוק");
+  assert.deepEqual(s2.files.slice().sort(), s1.files.slice().sort()); assert.deepEqual(Object.keys(s2).sort(), Object.keys(s1).sort());
+  assert.deepEqual(Array.from(env.mails[env.mails.length - 1].attachments, a => a.bytes.length), Array.from(env.mails[env.mails.length - 2].attachments, a => a.bytes.length));
+  assert.ok(env.mails.every(m => !JSON.stringify([m.subject, m.body, m.htmlBody]).includes("בדיקה חוזרת")));
+  // חי: הדוח נשמר *אחרי* ששלחו, ובשליחה חוזרת (again) הצירוף זהה
+  assert.ok(env.call({ action: "setMailMode", token: admin, mode: "live" }).ok);
+  const lb = savedRequest(env, org, "צירוף חי — 05.03.2027"); const live = sendTo(env, org, lb.folderId); assert.ok(live.ok && live.mode === "live");
+  const liveBefore = attNames(env.mails[env.mails.length - 1]);
+  assert.ok(recheck(env, org, lb.folderId).ok && recheck(env, admin, lb.folderId).ok);
+  assert.equal(sendTo(env, org, lb.folderId).error, "already_sent", "נעילת השליחה החוזרת לא השתנתה");
+  const again = sendTo(env, org, lb.folderId, { again: true }); assert.ok(again.ok);
+  assert.deepEqual(attNames(env.mails[env.mails.length - 1]), liveBefore);
+  assert.ok(reqNames(env, lb.folderId).some(n => /^בדיקה חוזרת — .*\.txt$/.test(n)) && reqNames(env, lb.folderId).every(n => !/\.docx$/.test(n) || n === "בקשה.docx"), reqNames(env, lb.folderId).join(" | "));
+});
+
+test("רגרסיה: ספירת MAX_FOLDER_FILES / MAX_FOLDER_BYTES לא משתנה — הדוחות והסימונים לא נספרים ואינם משחררים מקום; 20 סימונים לא הופכים את התיקייה ל'מנופחת' לשליחה", () => {
+  const { env, admin, org } = recWorld();
+  const ctl = savedRequest(env, org, "ביקורת — 06.03.2027"), rc = savedRequest(env, org, "עם דוחות — 06.03.2027");
+  for (const x of [ctl, rc]) assert.ok(sendTo(env, org, x.folderId).ok);
+  for (let i = 0; i < 20; i++) assert.ok(recheck(env, admin, rc.folderId, { b64: zipB64(2000) }).ok);
+  const fill = x => { let n = 0; while (n < 50) { const r = putFile(env, org, x.folderId, "מילוי " + n + ".png", 3); if (!r.ok) return { n, error: r.error }; n++; } return { n, error: null }; };
+  const a = fill(ctl), b = fill(rc);
+  assert.deepEqual(b, a, "אותו מספר קבצים נוסף עד folder_full"); assert.equal(b.error, "folder_full"); assert.equal(b.n, 12 - STD_FILES.length);
+  assert.equal(folderUsageOf(env, rc.folderId).count, 12);
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: org, folderId: rc.folderId, ready: true }).ready, true);
+  const s = sendTo(env, org, rc.folderId); assert.ok(s.ok, "שליחה עם 12 קבצי בקשה ו-20 סימוני בדיקה חוזרת — לא folder_full: " + JSON.stringify(s));
+  assert.equal(s.files.length, 11, "11 מצורפים: 12 קבצי בקשה פחות ה-JSON");
+  // נפח: תקרת MAX_FOLDER_BYTES לקבצי הבקשה בלבד
+  vm.runInContext("CFG.MAX_FOLDER_BYTES = 10000", env.sandbox);
+  const big = savedRequest(env, org, "נפח — 06.03.2027", [["בקשה.docx", "x"], ["הדמיה.png", "x"]]);
+  assert.ok(sendTo(env, org, big.folderId).ok);
+  for (let i = 0; i < 3; i++) assert.ok(recheck(env, admin, big.folderId, { b64: zipB64(3000) }).ok, "9000 בייטים של דוחות");
+  assert.ok(putFile(env, org, big.folderId, "גדול.png", 9000).ok, "דוחות לא אכלו מהתקרה");
+  assert.equal(putFile(env, org, big.folderId, "עוד.png", 9000).error, "folder_full", "והתקרה עצמה נשארת");
+});
+const folderUsageOf = (env, folderId) => vm.runInContext("folderUsage_", env.sandbox)(vm.runInContext("DriveApp", env.sandbox).getFolderById(folderId), "");
+
+test("רגרסיה: saveRecheck לא נוגע ב-ready, ב-sent[], ב-saved, ב-lastUser ובשום שדה אחר ברשומה (רק rc נוסף) ולא בקבצי הבקשה — גם בבקשה שנפתחה לעריכה אחרי שליחה (ready:false)", () => {
+  const { env, admin, org } = recWorld();
+  const b = savedRequest(env, org, "שלמות — 07.03.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  const files0 = env.folders[b.folderId].files.map(f => [f.id, f.name, f.trashed, f.bytes.toString()]);
+  const snap = () => JSON.stringify(entryOf(env, b.folderId), (k, v) => k === "rc" ? undefined : v);
+  const s0 = snap(), e0 = entryOf(env, b.folderId);
+  env.advance(5000);
+  assert.ok(recheck(env, org, b.folderId).ok && recheck(env, admin, b.folderId).ok);
+  assert.equal(snap(), s0, "רק rc השתנה");
+  assert.deepEqual(Object.keys(entryOf(env, b.folderId)).sort(), [...Object.keys(e0), "rc"].sort());
+  assert.equal(entryOf(env, b.folderId).ready, true);
+  assert.deepEqual(env.folders[b.folderId].files.slice(0, files0.length).map(f => [f.id, f.name, f.trashed, f.bytes.toString()]), files0, "קבצי הבקשה והסימון 'נשלח' כמו שהיו");
+  // בקשה שנשלחה בבדיקה ואז נערכה (ready:false): הבדיקה החוזרת לא "מכשירה" אותה
+  assert.ok(putFile(env, org, b.folderId, "ערוך.png", 3).ok);
+  assert.equal(entryOf(env, b.folderId).ready, false);
+  assert.ok(recheck(env, org, b.folderId).ok);
+  assert.equal(entryOf(env, b.folderId).ready, false); assert.equal(entryOf(env, b.folderId).readyAt, 0);
+  assert.equal(sendTo(env, org, b.folderId).error, "not_ready", "עדיין לא ניתנת לשליחה עד saveEnd");
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: org, folderId: b.folderId, ready: true }).ready, true);
+});
+
+test("רגרסיה: saveBegin (שמירה חוזרת) אחרי בדיקות חוזרות מוחק רק את קבצי הבקשה — תת-התיקייה והסימונים נשארים; בקשה שנשלחה חי נשארת נעולה לשמירה אבל מקבלת בדיקות חוזרות", () => {
+  const { env, admin, org } = recWorld();
+  const b = savedRequest(env, org, "שמירה חוזרת — 08.03.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  for (let i = 0; i < 3; i++) assert.ok(recheck(env, org, b.folderId, { b64: zipB64(100 + i) }).ok);
+  const subIds = subFiles(env, b.folderId).map(f => f.id), markers0 = reqNames(env, b.folderId).filter(n => n.startsWith("בדיקה חוזרת"));
+  assert.equal(subIds.length, 3); assert.equal(markers0.length, 3);
+  const re = env.call({ action: "saveBegin", token: org, folderName: "שמירה חוזרת — 08.03.2027", rid: b.rid }); assert.ok(re.ok && re.folderId === b.folderId);
+  assert.deepEqual(subFiles(env, b.folderId).map(f => f.id), subIds, "הדוחות לא נמחקו"); assert.ok(subFiles(env, b.folderId).every(f => !f.trashed));
+  assert.deepEqual(reqNames(env, b.folderId).filter(n => n.startsWith("בדיקה חוזרת")), markers0, "הסימונים לא נמחקו");
+  assert.ok(reqNames(env, b.folderId).every(n => !/\.(docx|png|kml)$/.test(n)), "קבצי הבקשה נוקו כרגיל");
+  for (const [n, m] of STD_FILES) assert.ok(env.call({ action: "saveFile", token: org, folderId: b.folderId, name: n, mime: m, b64: b64("חדש " + n) }).ok);
+  assert.equal(env.call({ action: "saveEnd", decl: DECL, token: org, folderId: b.folderId, ready: true }).ready, true);
+  assert.ok(sendTo(env, org, b.folderId).ok);
+  assert.deepEqual(attNames(env.mails[env.mails.length - 1]), STD_FILES.map(f => f[0]).filter(n => !n.endsWith(".json")).sort());
+  assert.equal(entryOf(env, b.folderId).rc.length, 3, "ההיסטוריה ביומן נשמרה");
+  // חי: נעולה
+  assert.ok(env.call({ action: "setMailMode", token: admin, mode: "live" }).ok);
+  const lv = savedRequest(env, org, "נעולה — 08.03.2027"); assert.ok(sendTo(env, org, lv.folderId).ok);
+  assert.ok(recheck(env, org, lv.folderId).ok);
+  assert.equal(env.call({ action: "saveBegin", token: org, folderName: "נעולה — 08.03.2027", rid: lv.rid }).error, "already_sent");
+  assert.equal(putFile(env, org, lv.folderId, "x.png").error, "already_sent");
+});
+
+test("Phase A: זרימה ישנה (בלי שום פרמטר חדש) לא משתנה — מפתחות הרשומה ביומן, תשובות saveBegin/saveFile/saveEnd/sendRequest ו-listRequests זהים; פרמטרים של הפרוטוקול שהוסרו (updateOf / act / snap / rc) מתעלמים", () => {
+  const { env, admin, org } = recWorld();
+  const b = env.call({ action: "saveBegin", token: org, folderName: "ישן — 09.03.2027", rid: newRid() });
+  assert.deepEqual(Object.keys(b).sort(), ["folderId", "name", "ok"]);
+  const f = env.call({ action: "saveFile", token: org, folderId: b.folderId, name: "בקשה.docx", mime: "x", b64: b64("w"), updateOf: "x", act: { f: "2027-01-01", t: "2027-01-02" }, snap: true, rc: [[1, 2, 3, 4]] });
+  assert.deepEqual(Object.keys(f).sort(), ["id", "ok", "url"]);
+  assert.ok(env.call({ action: "saveFile", token: org, folderId: b.folderId, name: "מפה.png", mime: "x", b64: b64("p") }).ok);
+  const en = env.call({ action: "saveEnd", decl: DECL, token: org, folderId: b.folderId, ready: true, act: { f: "2027-01-01", t: "2027-01-02" }, snap: true });
+  assert.deepEqual(Object.keys(en).sort(), ["ok", "ready"]); assert.equal(en.ready, true);
+  const send = sendTo(env, org, b.folderId, { updateOf: b.folderId, rc: 1, snap: true, act: 5 });
+  assert.deepEqual(Object.keys(send).sort(), ["adminCopy", "cc", "files", "from", "mode", "ok", "sentAt", "target", "to"]);
+  assert.deepEqual(Object.keys(entryOf(env, b.folderId)).sort(), ["base", "created", "decl", "id", "kind", "lastUser", "name", "parent", "ready", "readyAt", "rid", "saved", "sent", "user"]);
+  assert.equal(env.mails[0].subject.includes("עדכון"), false, "אין קידומת עדכון");
+  const lr = env.call({ action: "listRequests", token: admin }).requests[0];
+  assert.deepEqual(Object.keys(lr).sort(), ["created", "kind", "lastSent", "lastUser", "name", "ready", "saved", "sentLive", "sentSelf", "sentTest", "url", "user"]);
+});
+
+test("saveRecheck: הסימון בתיקיית הבקשה — 'לא צורף לבקשה שנשלחה ב-<תאריך>' לפי השליחה החיה (לא בדיקה מאוחרת יותר), ובבקשה שנשלחה רק בבדיקה — תאריך הבדיקה; לעצמו בלבד אינה נחשבת", () => {
+  const { env, token } = envAt("2027-03-10T10:00:00Z");
+  daveUser(env, token, "org.worker");
+  const login = (u, p) => env.call({ action: "login", user: u, pass: p }).token;      // אסימון תקף 8 שעות: מתחברים מחדש אחרי קפיצות בזמן
+  let org = login("org.worker", "dave-pass-1234"), adm = token;
+  const t = recReq(env, org, "רק בדיקה — 10.03.2027"); assert.ok(sendTo(env, org, t.folderId).ok);   // 10.03.2027 (בדיקה)
+  env.advance(2 * DAY); org = login("org.worker", "dave-pass-1234"); adm = login("itzik", PASS);
+  const l = recReq(env, org, "חי — 10.03.2027"); assert.ok(env.call({ action: "setMailMode", token: adm, mode: "live" }).ok);
+  assert.ok(sendTo(env, org, l.folderId).ok);                                                         // 12.03.2027 (חי)
+  env.advance(3 * DAY); org = login("org.worker", "dave-pass-1234"); adm = login("itzik", PASS);
+  assert.ok(env.call({ action: "setMailMode", token: adm, mode: "test" }).ok);
+  assert.ok(sendTo(env, org, l.folderId).ok, "אחרי חי, שליחת בדיקה מאוחרת");                           // 15.03.2027 (בדיקה)
+  assert.ok(sendTo(env, org, l.folderId, { target: "self" }).ok);
+  env.advance(DAY); org = login("org.worker", "dave-pass-1234");                                       // 16.03.2027
+  assert.ok(recheck(env, org, t.folderId).ok && recheck(env, org, l.folderId).ok);
+  const txt = id => env.folders[id].files.find(f => /^בדיקה חוזרת — .*\.txt$/.test(f.name)).bytes.toString().split("\n");
+  assert.ok(txt(t.folderId).includes("דוח זה לא צורף לבקשה שנשלחה ב-10.03.2027")); assert.ok(txt(t.folderId).includes("סוג השליחה: בדיקה — למבקש בלבד, לא נשלח למודיעין טיס"));
+  assert.ok(txt(l.folderId).includes("דוח זה לא צורף לבקשה שנשלחה ב-12.03.2027"), txt(l.folderId).join("|")); assert.ok(txt(l.folderId).includes("סוג השליחה: חי — למודיעין טיס"));
+  assert.ok(txt(l.folderId).includes("מתי: 16.03.2027 12:00"));
+  const row = myReqs(env, org).requests.find(x => x.id === l.folderId);
+  assert.deepEqual([row.state, row.sentMode, row.sentLive, row.sentTest, row.rechecks], ["sent_live", "live", 1, 1, 1]);
+  assert.equal(new Date(row.sentAt).toISOString(), "2027-03-12T10:00:00.000Z");
+  assert.equal(getReq(env, org, l.folderId).meta.rechecks, 1);
+});
+
+test("saveRecheck: תת-התיקייה נוצרת רק בהצלחה ונמצאת שוב (אידמפוטנטי); תת-תיקייה בפח לא בשימוש; תיקיית בקשה מהיומן בשם הזה לא משמשת כתת-תיקייה; תיקיות של בקשות אחרות לא נפגעות", () => {
+  const { env, org } = recWorld();
+  const b = recReq(env, org, "תת — 11.03.2027"), c = recReq(env, org, "אחר — 11.03.2027");
+  assert.ok(sendTo(env, org, b.folderId).ok); assert.ok(sendTo(env, org, c.folderId).ok);
+  assert.ok(recheck(env, org, b.folderId, { b64: zipB64(5), sum: {} }).ok);
+  const first = subOf(env, b.folderId).id;
+  assert.ok(recheck(env, org, b.folderId).ok);
+  assert.equal(subOf(env, b.folderId).id, first, "אותה תת-תיקייה"); assert.equal(subFiles(env, b.folderId).length, 2);
+  env.folders[first].trashed = true;     // נמחקה בדרייב: נוצרת חדשה (getFoldersByName לא מחזירה פריטי פח)
+  assert.ok(recheck(env, org, b.folderId).ok);
+  const second = subOf(env, b.folderId); assert.notEqual(second.id, first); assert.equal(subFiles(env, b.folderId).length, 1);
+  assert.equal(env.folders[first].files.filter(f => !f.trashed).length, 2, "התוכן שבפח לא נגע");
+  // רשומת יומן שהמזהה שלה הוא תיקייה בשם "בדיקות חוזרות" בתוך תיקיית הבקשה: אסור להשתמש בה
+  const trap = vm.runInContext("DriveApp", env.sandbox).getFolderById(c.folderId).createFolder(SUBNAME);
+  seedLog(env, [FULL_ENTRY({ id: trap.getId(), user: "org.worker", name: SUBNAME })]);
+  assert.ok(recheck(env, org, c.folderId).ok);
+  assert.equal(env.folders[trap.getId()].files.length, 0, "התיקייה שביומן לא קיבלה דוח");
+  const cs = Object.values(env.folders).filter(f => f.parent === c.folderId && f.name === SUBNAME && !f.trashed);
+  assert.equal(cs.length, 2, "נוצרה תת-תיקייה אמיתית נוספת");
+  const real = cs.find(f => f.id !== trap.getId()); assert.equal(real.files.filter(f => !f.trashed).length, 1, "הדוח בתת-התיקייה החדשה");
+});
+
+test("saveRecheck: כשל כתיבת היומן — שגיאה, לא נרשם דבר והדוח שנוצר נשלח לפח (אין דוח יתום); כשל ביצירת הסימון לא מכשיל (הסימון אינו חיוני); דרייב נופל / יומן פגום — נכשל סגור", () => {
+  const { env, org } = recWorld();
+  const b = recReq(env, org, "כשלים — 12.03.2027"); assert.ok(sendTo(env, org, b.folderId).ok);
+  env.fail.logWrite = true;
+  const r = recheck(env, org, b.folderId); assert.deepEqual([r.ok, r.error], [false, "server"]);
+  env.fail.logWrite = false;
+  assert.equal(entryOf(env, b.folderId).rc, undefined, "לא נרשם");
+  assert.equal(subFiles(env, b.folderId).length, 0, "הדוח שנוצר נזרק לפח");
+  assert.deepEqual(reqNames(env, b.folderId).filter(n => /^בדיקה חוזרת/.test(n)), [], "ובלי סימון");
+  env.hooks.beforeCreateFile = n => { if (/^בדיקה חוזרת — .*\.txt$/.test(n)) throw new Error("drive: cannot create marker"); };
+  const m = recheck(env, org, b.folderId); assert.ok(m.ok, JSON.stringify(m));
+  assert.equal(subFiles(env, b.folderId).length, 1); assert.equal(entryOf(env, b.folderId).rc.length, 1);
+  assert.deepEqual(reqNames(env, b.folderId).filter(n => /^בדיקה חוזרת/.test(n)), []);
+  env.hooks.beforeCreateFile = null;
+  env.fail.drive = true;
+  const d = recheck(env, org, b.folderId); assert.deepEqual([d.ok, d.error], [false, "bad_folder"], "requestFolder_ מחזירה null כשהדרייב נופל (כמו בשאר הפעולות)");
+  env.fail.drive = false;
+  assert.equal(entryOf(env, b.folderId).rc.length, 1);
+  env.folders.ROOT.files.find(f => f.name === "_יומן בקשות.json").bytes = Buffer.from("not json");
+  const bad = recheck(env, org, b.folderId); assert.deepEqual([bad.ok, bad.error], [false, "server"]);
+  assert.equal(subFiles(env, b.folderId).length, 1, "ולא נכתב דבר");
+});
+
+test("נכשל סגור וללא דליפה: getRequest דוחה JSON עמוק מאוד כפגום (bad_record) בלי להפיל את השרת; מטיס עם כתובת שמורה לא רואה את כתובת הארגון/הבעלים בשום תשובה או סימון של שלב ב׳", () => {
+  const { env, admin, org } = recWorld();
+  const deep = "{\"a\":".repeat(90000) + "1" + "}".repeat(90000);
+  const d = recReq(env, org, "עמוק — 13.03.2027", deep);
+  const r = getReq(env, org, d.folderId);
+  assert.deepEqual([r.ok, r.error], [false, "bad_record"], "קינון של 90,000 רמות: נדחה כפגום ולא כשגיאת שרת/קריסה: " + JSON.stringify(r).slice(0, 120));
+  assert.ok(myReqs(env, org).ok, "השרת ממשיך לענות");
+  const w = withWix(); goLive(w.env, w.token);
+  const p = pilotUser(w.env, "owner.pilot@example.com", "dana.pilot"); assert.ok(w.env.call({ action: "setAdv", token: w.token, target: "dana.pilot", adv: true }).ok);
+  const pr = recReq(w.env, p.token, "דליפה — 14.03.2027"); assert.ok(sendTo(w.env, p.token, pr.folderId).ok);
+  const rc = recheck(w.env, p.token, pr.folderId), list = myReqs(w.env, p.token), got = getReq(w.env, p.token, pr.folderId);
+  for (const [what, resp] of [["saveRecheck", rc], ["myRequests", list], ["getRequest", got]]) {
+    assert.ok(resp.ok, what);
+    const text = JSON.stringify(resp);
+    for (const bad of [ORG, OWNER, "notamoffice", "drive.google.com", "folderUrl"]) assert.ok(!text.includes(bad), what + " חושף: " + bad);
+  }
+  for (const f of w.env.folders[pr.folderId].files.filter(x => /^בדיקה חוזרת/.test(x.name))) for (const bad of [ORG, OWNER, "@"]) assert.ok(!f.bytes.toString().includes(bad), f.name + " חושף " + bad);
+  const mk = w.env.folders[pr.folderId].files.find(x => /^בדיקה חוזרת — .*\.txt$/.test(x.name)).bytes.toString();
+  assert.ok(mk.includes("נשמרה ע\"י: dana.pilot"));
+});
+
+test("שרת ישן / לקוח ישן: פעולות שלב ב׳ אינן מוכרות בשרת הישן (bad_action → הלקוח מסתיר את התכונה לפי features); בשרת החדש פעולות Phase A ממשיכות לעבוד בלי שדות חדשים בקלט", () => {
+  const { env, token } = bootstrapped();
+  const names = Object.keys(vm.runInContext("ACTIONS", env.sandbox)).sort();
+  for (const a of ["myRequests", "getRequest", "saveRecheck"]) assert.ok(names.includes(a), a);
+  for (const a of ["setRecheck", "updateOf"]) assert.ok(!names.includes(a), "הוחלט שלא: " + a);
+  assert.equal(env.call({ action: "setRecheck", token, target: "x", rc: true }).error, "bad_action");
+  assert.ok(env.call({ action: "me", token }).features.every(f => typeof f === "string"));
+});
+
+test("README של שלב ב׳: שלוש הפעולות, השדות והשגיאות, כל קבועי CFG החדשים (בקוד ובערך המתועד), הסעיף 'עדכון השרת - צעד אחר צעד' ושלביו; שום דבר מהפעולות שהוחלט לא לבנות (updateOf / setRecheck)", () => {
+  const readme = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "apps-script", "README.md"), "utf8");
+  const { sandbox } = makeEnv(), cfg = vm.runInContext("CFG", sandbox);
+  for (const w of ["myRequests", "getRequest", "saveRecheck", "recheck_off", "not_sent", "recheck_limit", "recheck_full", "no_record", "too_big", "bad_record", "sent_test", "sent_live", "folderUrl", "sum", "rc", "UEsD", "בדיקות חוזרות", "נתוני הבקשה.json", "לא צורף לבקשה שנשלחה ב-", '"myRequests"', '"recheck"', "נשלח — "])
+    assert.ok(readme.includes(w), "README מזכיר: " + w);
+  for (const [k, v] of [["MAX_MYREQ_ROWS", "50"], ["MAX_MYREQ_ROWS_ADMIN", "100"], ["MAX_MYREQ_PER_HOUR", "60"], ["MAX_RECORD_BYTES", "600000"], ["MAX_RECORD_SCAN_FILES", "80"], ["MAX_RECORD_READS_PER_HOUR", "30"],
+    ["RECHECK_FOLDER_NAME", "בדיקות חוזרות"], ["MAX_RECHECK_B64", "3MB"], ["MAX_RECHECKS_PER_REQUEST", "20"], ["MAX_RECHECK_FOLDER_BYTES", "16MB"], ["MAX_RECHECK_SAVES_PER_HOUR", "10"]]) {
+    assert.ok(k in cfg, k + " קיים ב-CFG"); assert.ok(readme.includes("`" + k + "`"), "README מזכיר את " + k);
+    assert.ok(new RegExp("`" + k + "`[^·.]{0,12}= `?" + v).test(readme), "README מציין את ערך ברירת המחדל של " + k + " (" + v + ")");
+  }
+  const sec = readme.split("## עדכון השרת - צעד אחר צעד")[1];
+  assert.ok(sec, "קיים סעיף 'עדכון השרת - צעד אחר צעד'");
+  const body = sec.split("\n## ")[0];
+  for (const w of ["גיבוי", "Ctrl+A", "הדבקה", "גרסה חדשה", "פריסה חדשה", "ניהול פריסות", "בדיקה מהירה", "initialize", "installTrigger", "api_url"]) assert.ok(body.includes(w), "בסעיף העדכון: " + w);
+  assert.ok(body.indexOf("גיבוי") < body.indexOf("הדבקה") && body.indexOf("הדבקה") < body.indexOf("גרסה חדשה") && body.indexOf("גרסה חדשה") < body.indexOf("בדיקה מהירה"), "סדר הצעדים: גיבוי, הדבקה, גרסה חדשה, בדיקה");
+  assert.ok(body.length < 3500, "קצר: " + body.length);
+  assert.ok(!/updateOf|setRecheck/.test(readme), "הוחלט שלא לבנות");
+});
+
 /* ===== הצהרת המבקש בשרת: saveEnd מסמן ״מוכנה״ רק עם הצהרה תקינה (גרסת נוסח + מועד אישור), והיא נרשמת ביומן וב״נשלח — ....txt״ ===== */
 test("saveEnd: בלי הצהרה תקינה הבקשה אינה מוכנה (דף ישן ללא שער ההצהרה, קריאה ישירה, ערכים פגומים); הצהרה תקינה נרשמת ביומן ובסימון השליחה", () => {
   const { env, token } = bootstrapped();
@@ -3096,4 +3871,18 @@ test("saveEnd: בלי הצהרה תקינה הבקשה אינה מוכנה (דף
   env.call({ action: "saveBegin", token, folderName: "הצהרה — 20.11.2026", rid: b.rid });
   for (const [n, mime] of STD_FILES) env.call({ action: "saveFile", token, folderId: b.folderId, name: n, mime, b64: b64("x" + n) });
   assert.equal(end(undefined).ready, false); assert.equal(logOf(env).find(e => e.id === b.folderId).decl, null);
+});
+
+/* ===== תיקון סקירה: myRequests מציג למי שאינו מנהל את השם כפי שחושב לו ב-saveBegin (בלי סיומת ״(2)״ מבקשת עמית); המנהל רואה את השם המלא ===== */
+test("myRequests: עובד ארגון שני עם אותו מקום ותאריך לא רואה (2) — המנהל כן", () => {
+  const { env, token } = bootstrapped();
+  const mk = name => { assert.ok(env.call({ action: "addUser", token, newUser: name, newPass: "pass-12345678", org: true }).ok); return env.call({ action: "login", user: name, pass: "pass-12345678" }); };
+  const o1 = mk("org.one"), o2 = mk("org.two");
+  const b1 = savedRequest(env, o1.token, "אתר — 01.01.2027"), b2 = savedRequest(env, o2.token, "אתר — 01.01.2027");
+  assert.equal(env.call({ action: "saveBegin", token: o2.token, folderName: "אתר — 01.01.2027", rid: b2.rid }).name, "אתר — 01.01.2027", "saveBegin מחזיר לעמית את השם בלי (2)");
+  const mine = env.call({ action: "myRequests", token: o2.token });
+  assert.deepEqual(mine.requests.map(r => r.name), ["אתר — 01.01.2027"], "אותו שם ברשימה (בלי (2))");
+  const adm = env.call({ action: "myRequests", token, all: true });
+  assert.deepEqual(adm.requests.map(r => r.name).sort(), ["אתר — 01.01.2027", "אתר — 01.01.2027 (2)"], "המנהל רואה את השמות המלאים בדרייב");
+  assert.equal(env.call({ action: "myRequests", token: o1.token }).requests[0].name, "אתר — 01.01.2027");
 });

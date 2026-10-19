@@ -11,6 +11,7 @@ on:
       - 'members-k38p/index.html'
       - 'members-k38p/pamat-meta.json'
       - 'scripts/export-zones.mjs'
+      - 'members-k38p/requests/js/parties.js'   # המייצא מייבא ממנו את חילוץ אנשי הקשר
   schedule:
     - cron: '17 */6 * * *'   # רשת ביטחון: גם אם הטריגר של דחיפה נכשל, הקובץ לא ישתהה יותר מ-6 שעות אחרי המפה
   workflow_dispatch: {}

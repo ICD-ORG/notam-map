@@ -69,6 +69,8 @@ const API_STATS = { preflight: 0, nonSimple: 0, posts: 0 };
 // opts.noSplit: שרת בגרסת "עצמאות המבקש" (sendTarget) שעדיין בלי ההפרדה בין הארגון למטיסים עצמאיים — בלי features.orgSplit ובלי org / totals / kind. opts.oldServer מסיר גם את שאר השדות (email, copyTo…)
 // opts.noAdv: שרת בלי "תצוגה מתקדמת" (לפני advView) — בלי adv בתשובות, בלי adv / advExplicit בשורות המשתמשים ובלי features.advView (opts.oldServer מסיר אותם גם הוא); הלקוח נשאר אז עם ברירת המחדל לפי סוג החשבון
 const oldSrv = (opts, resp) => {
+  // opts.noMyReq: שרת של שלב א׳ (features בלי myRequests / recheck): "הבקשות שלי" אינה מוצעת; opts.oldServer מסיר את כל ה-features
+  if (opts && opts.noMyReq && resp && typeof resp === "object" && Array.isArray(resp.features)) resp = { ...resp, features: resp.features.filter(f => f !== "myRequests" && f !== "recheck") };
   if (opts && (opts.oldServer || opts.noAdv) && resp && typeof resp === "object") {
     resp = { ...resp }; delete resp.adv;
     if (Array.isArray(resp.users)) resp.users = resp.users.map(u => { const x = { ...u }; delete x.adv; delete x.advExplicit; return x; });
@@ -115,6 +117,7 @@ async function newPage(browser, opts) {
   await page.route(/\/gate\.js/, r => r.fulfill({ status: 200, contentType: "text/javascript", body: "/* שער חברי האתר מוחלף בבדיקות */" }));
   await page.route(/\/requests\/config\.json/, r => { // כתובת שרת ההתחברות המדומה
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, "members-k38p", "requests", "config.json"), "utf8")); d.api_url = opts.noApi ? "" : API; d.sync_retry_ms = 400;
+    if (opts.features) d.features = Object.assign({}, d.features, opts.features);   // דגלי שלב ב׳ (config.features): למשל { myreq: false } / { recheck: false }
     if ("renewUrl" in opts) { if (opts.renewUrl === null) delete d.renew_url; else d.renew_url = opts.renewUrl; }   // כתובת רכישת הכרטיס (renew_url): null = חסרה בהגדרות; כל ערך אחר נכנס כמות שהוא (לבדיקת אימות הכתובת במסכי הכניסה וההרשמה)
     if (typeof opts.autosave === "number") d.autosave_ms = opts.autosave; else if (!opts.autosave) d.autosave_ms = 0;   // שמירה אוטומטית בדרייב (ui.js: autosave_ms) כבויה כברירת מחדל בתרחישים הקיימים (הם בודקים שמירה ושליחה ידניות); opts.autosave: true = בלי המפתח, כלומר ברירת המחדל של המוצר (1500 מ״ש); מספר = השהיה אחרת
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
@@ -299,7 +302,7 @@ try {
       check("התמונות לפי החוזה: aerial/street בתקריב (esri/osm), overview מבט כללי, region מרוחק", im.aerial.view === "detail" && im.aerial.provider === "esri" && im.street.view === "detail" && im.street.provider === "osm" && im.overview.view === "overview" && im.region.view === "region", JSON.stringify(Object.fromEntries(keys.map(k => [k, im[k].view + "/" + im[k].provider]))));
       const rep4 = await page.$$eval("#report .paper img.mapimg", els => els.map(e => e.closest(".paper").querySelector(".hdr").textContent.trim()));
       check("בדוח ארבעה עמודי תמונה עם כותרות מתאימות (תצ״א, מפת רחובות, הדמיה וסימונים, מפת אזור)", rep4.length === 4 && /תצ״א תקריב/.test(rep4[0]) && /מפת רחובות תקריב/.test(rep4[1]) && /הדמיה וסימונים/.test(rep4[2]) && /מפת אזור/.test(rep4[3]), rep4.join(" | "));
-      check("מקרא הצבעים מתחת לתצ״א הראשונה בלבד, וטבלת הפריטים בעמוד המבט הכללי", (await page.$$eval("#report .paper", ps => ps.map(p => /ירוק: אזור הסגירה/.test(p.innerText) ? 1 : 0).join(""))) === "010000" && /מכשולים, אתרים ותשתיות המסומנים במפה/.test(await page.locator("#report .paper").nth(3).innerText()), "");
+      check("מקרא הצבעים מתחת לתצ״א הראשונה בלבד, וטבלת הפריטים בעמוד המבט הכללי", (await page.$$eval("#report .paper:not(.parties)", ps => ps.map(p => /ירוק: אזור הסגירה/.test(p.innerText) ? 1 : 0).join(""))) === "010000" && /מכשולים, אתרים ותשתיות המסומנים במפה/.test(await page.locator("#report .paper").nth(3).innerText()), "");
       check("אין עוד #provider, #btnPng או ״תצ״א נקי״ בדף (הוסר לגמרי)", !(await page.$("#provider")) && !(await page.$("#btnPng")) && !/תצ״א נקי|רקע לתמונת המפה/.test(await page.evaluate(() => document.body.innerText)), "");
       check("שורת המצורפים בעמוד הראשון מזכירה ארבע תמונות, ללא מספרי עמודים", /מצורפות ארבע תמונות/.test(await page.locator("#report .paper").first().innerText()) && !/עמוד/.test(await page.locator("#report .paper").first().locator("p").last().innerText()), "");
     }
@@ -566,7 +569,7 @@ try {
     check("לחיצה בתוך הבועה אינה סוגרת אותה", !!(await bubble()), ""); await page.keyboard.press("Escape");
     check("הלחצן בתוך ״פרטי המבקש״ (summary/label) לא מחליף את מצב התיבה", await (async () => { const was = await page.evaluate(() => document.getElementById("personBox").open); await hb("#addContact").click(); const now = await page.evaluate(() => document.getElementById("personBox").open); await page.keyboard.press("Escape"); return was === now; })(), "");
     // חלון ניהול המשתמשים (עם משתמש נוסף, כדי שיהיו כפתורי פעולה בשורה)
-    check("שורת המשתמש (מנהל): לחצני ״!״ ליד החלפת סיסמה, ניהול משתמשים והתנתקות", (await page.locator("#userBar .hbtn").count()) === 3, "");
+    check("שורת המשתמש (מנהל): לחצני ״!״ ליד הבקשות שלי (שלב ב׳, כשהשרת מדווח myRequests), החלפת סיסמה, ניהול משתמשים והתנתקות", (await page.locator("#userBar .hbtn").count()) === 4 && (await page.locator(".hw:has(#ubMyReq) > .hbtn").count()) === 1, "");
     const envA = page._env, tokA = envA.call({ action: "login", user: ADMIN, pass: PASS }).token;
     envA.call({ action: "addUser", token: tokA, newUser: "dave.pilot", newPass: "dave-pass-12345" });
     await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
@@ -2935,14 +2938,14 @@ try {
       check("עריכה באמצע שמירה אוטומטית: saveEnd נשלח עם ready:false, לא מוצגת הודעת שגיאה, ושמירה נוספת בסיום (saveEnd עם ready:true) — שתי שמירות בדיוק", ends.length === 2 && ends[0].ready === false && ends[1].ready === true && n(page, "saveBegin") === sb3 + 2 && !seen.some(t => /נכשלה|שונתה/.test(t)) && (await docxOf(folders()[0])).includes("050-5555555"), JSON.stringify(ends) + " | " + seen.filter(t => /נכשלה|שונתה/.test(t)).join(" | "));
       popts.apiDelayBy = null;
       // שליחה: מצרפת את הקבצים אוטומטית; הגרסה כבר שמורה (אוטומטית) ולכן אין שמירה נוספת לפני השליחה; מייל קצר בנקודות עם htmlBody RTL
-      const sb4 = n(page, "saveBegin"), want = await page.evaluate(() => window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg));
+      const sb4 = n(page, "saveBegin"), want = await page.evaluate(() => window.__REQ.O.mail(window.__REQ.S.res, window.__REQ.S.cfg, window.ReqPartiesUI.mailOpts(window.__REQ.S.res) || undefined));   // + שורת ״דיווח לגורמים נוספים״ (features.parties, פעיל כברירת מחדל)
       await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk"); await page.click("#sendGo");
       await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
       const mail = env.mails[env.mails.length - 1];
       check("שליחה: הגרסה השמורה אוטומטית אינה נשמרת שוב לפני השליחה (saveBegin ללא שינוי), ונשלח מייל אחד עם 6 קבצים מצורפים (Word, KML וארבע תמונות)", n(page, "saveBegin") === sb4 && env.mails.length === 1 && mail.attachments.length === 6 && mail.attachments.some(a => /\.docx$/.test(a.name)) && mail.attachments.some(a => /\.kml$/.test(a.name)) && mail.attachments.filter(a => /\.(png|jpg)$/.test(a.name)).length === 4, "saveBegin " + sb4 + "→" + n(page, "saveBegin") + ", " + mail.attachments.map(a => a.name).join(" | "));
       const bl = mail.body.split("\n");
-      check("המייל שנשלח: הגוף הקצר בנקודות כפי שהלקוח בנה (4 שורות ״• ״), בלי כלי טיס / מהות / קואורדינטות / אנשי קשר, ושורת ״כל הפרטים — בטופס המצורף.״", mail.body === want.body && bl.filter(l => l.startsWith("\u2022 ")).length === 4 && bl.includes("כל הפרטים — בטופס המצורף.") && !/DJI|מהות הפעילות|כלי טיס|°|אנשי קשר|בודק שני/.test(mail.body), mail.body.slice(0, 300));
-      check("המייל שנשלח: ל-MailApp מועבר גם htmlBody — div RTL מיושר לימין, רשימת <ul> עם ארבעה <li> של הנקודות, והטקסט escaped", typeof mail.htmlBody === "string" && /^<div dir="rtl" style="direction:rtl;text-align:right/.test(mail.htmlBody) && (mail.htmlBody.match(/<li\b/g) || []).length === 4 && (mail.htmlBody.match(/<ul\b/g) || []).length === 1 && mail.htmlBody.includes("גורם מבקש: חברת עובד הארגון") && !mail.htmlBody.includes("\u2022") && !/<(a|img|script)\b/i.test(mail.htmlBody) && mail.body === want.body, String(mail.htmlBody).slice(0, 200));
+      check("המייל שנשלח: הגוף הקצר בנקודות כפי שהלקוח בנה (4 שורות ״• ״ + שורת ״דיווח לגורמים נוספים״), בלי כלי טיס / מהות / קואורדינטות / אנשי קשר, ושורת ״כל הפרטים — בטופס המצורף.״", mail.body === want.body && bl.filter(l => l.startsWith("\u2022 ")).length === 5 && bl.filter(l => l.startsWith("\u2022 דיווח לגורמים נוספים: ")).length === 1 && bl.includes("כל הפרטים — בטופס המצורף.") && !/DJI|מהות הפעילות|כלי טיס|°|אנשי קשר|בודק שני/.test(mail.body), mail.body.slice(0, 300));
+      check("המייל שנשלח: ל-MailApp מועבר גם htmlBody — div RTL מיושר לימין, רשימת <ul> עם חמישה <li> של הנקודות, והטקסט escaped", typeof mail.htmlBody === "string" && /^<div dir="rtl" style="direction:rtl;text-align:right/.test(mail.htmlBody) && (mail.htmlBody.match(/<li\b/g) || []).length === 5 && (mail.htmlBody.match(/<ul\b/g) || []).length === 1 && mail.htmlBody.includes("גורם מבקש: חברת עובד הארגון") && !mail.htmlBody.includes("\u2022") && !/<(a|img|script)\b/i.test(mail.htmlBody) && mail.body === want.body, String(mail.htmlBody).slice(0, 200));
       check("עובד ארגון: אחרי השליחה ההודעה בלי קישור לתיקייה (בחלון ובעמוד), ובתיקייה סימן ״נשלח (בדיקה)״ — שנכתב בשליחה בלבד, לא בשמירה האוטומטית", (await page.locator("#sendProg a").count()) === 0 && (await page.locator("#sendMsg a").count()) === 0 && (await page.locator("#driveMsg a").count()) === 0 && folders()[0].files.some(f => /^נשלח — .*\(בדיקה\)\.txt$/.test(f.name)), folders()[0].files.map(f => f.name).join(" | ").slice(0, 160));
       await page.click("#mdClose");
       await ctx.close();
@@ -3217,11 +3220,13 @@ try {
       check("הצהרה: בלי סימון אי אפשר לשמור או לשלוח — לחיצה על ״שמור בדרייב״ ו״שלח למשרד נוטאם״ אינה פותחת שמירה (saveBegin) או שליחה (sendRequest), ואין חלון שליחה", nSave() === before[0] && nSend() === before[1] && !(await page.$(".sendBox")) && (await state()).ready === false && (await state()).gate === DECL.gate, JSON.stringify([before, nSave(), nSend()])); }
 
     /* ---- מקלדת: Tab מגיע לתיבה (אחרי שדה ההערות), טבעת מיקוד גלויה, רווח מסמן ומבטל ---- */
-    await page.focus("#visitNotes"); await page.keyboard.press("Tab");
-    const kf = await page.evaluate(() => { const a = document.activeElement, lab = a && a.closest && a.closest(".declok"), cs = lab && getComputedStyle(lab); return { id: a && a.id, outline: cs ? cs.outlineStyle + " " + cs.outlineWidth : "" }; });
+    // בין שדה ההערות לתיבת ההצהרה נמצא עורך ״דיווח לגורמים נוספים״ (כרטיס 4): Tab עובר דרך הפקדים שלו בלבד, ואז מגיע לתיבת הסימון
+    await page.focus("#visitNotes"); let kfHops = 0, kfOut = true;
+    for (; kfHops < 120; kfHops++) { await page.keyboard.press("Tab"); const st = await page.evaluate(() => { const a = document.activeElement; return { id: a && a.id, inParties: !!(a && a.closest && a.closest("#partiesBox")) }; }); if (st.id === "reviewOk") break; if (!st.inParties) kfOut = false; }
+    const kf = await page.evaluate(() => { const a = document.activeElement, lab = a && a.closest && a.closest(".declok"), cs = lab && getComputedStyle(lab); return { id: a && a.id, outline: cs ? cs.outlineStyle + " " + cs.outlineWidth : "", viaOnlyParties: null }; }); kf.viaOnlyParties = kfOut;
     await page.keyboard.press("Space"); const k1 = await state();
     await page.keyboard.press("Space"); const k2 = await state();
-    check("הצהרה: מקלדת — Tab משדה ההערות מגיע לתיבת הסימון, מסביבה טבעת מיקוד גלויה (≥2px), רווח מסמן (ההצהרה אושרה, השער נפתח) ורווח נוסף מבטל (ההודעה חוזרת)", kf.id === "reviewOk" && /^solid 2px$/.test(kf.outline) && k1.checked && k1.ok && !!k1.at && k1.gate === "" && !k2.checked && !k2.ok && k2.at === null && k2.gate === DECL.gate && k2.dis.every(Boolean), JSON.stringify([kf, k1.checked, k1.gate, k2.checked, k2.gate]));
+    check("הצהרה: מקלדת — Tab משדה ההערות מגיע לתיבת הסימון, מסביבה טבעת מיקוד גלויה (≥2px), רווח מסמן (ההצהרה אושרה, השער נפתח) ורווח נוסף מבטל (ההודעה חוזרת)", kf.id === "reviewOk" && kf.viaOnlyParties === true && /^solid 2px$/.test(kf.outline) && k1.checked && k1.ok && !!k1.at && k1.gate === "" && !k2.checked && !k2.ok && k2.at === null && k2.gate === DECL.gate && k2.dis.every(Boolean), JSON.stringify([kf, k1.checked, k1.gate, k2.checked, k2.gate]));
 
     /* ---- לחיצה על טקסט התווית מסמנת (יעד מגע רחב), והבקשה נפתחת; האישור נכנס לדף הבדיקות ---- */
     const tLabel0 = Date.now() - 2000;
@@ -3494,6 +3499,1126 @@ try {
     await adm.ctx.close();
   }
   /* ADV20-END */
+  /* MYREQ-BEGIN */
+  /* ===== תרחיש ״הבקשות שלי״ (שלב ב׳, U2): כפתור בשורת המשתמש (לכל משתמש מחובר, רק כשהשרת מדווח myRequests והדגל features.myreq לא כבוי), רשימה עם מצב וזמן שמירה, ״הצג״ (סיכום לקריאה בלבד), ״השתמש כבסיס לבקשה חדשה״ (נקודה, רדיוס, גובה, כלי טיס, מהות, מכשולים, תוספות ידניות;
+     בלי תאריכים/שעות ובלי תוצאות בדיקה; מזהה בקשה חדש; אישור לפני החלפת בקשה בעבודה), ותמונת מצב (snapshot) בקובץ נתוני הבקשה — בלי פרטי מבקש, ולעולם לא חוסמת שמירה. כשהדגלים כבויים (או שרת ישן) — הדף כמו בשלב א׳ ===== */
+  if (!LIVE) {
+    const REC_SUFFIX = " — נתוני הבקשה.json", PH_A_KEYS = ["savedAt", "site", "version", "edition", "declaration", "inputs", "zones", "items"];
+    const DECL_ = { v: "2026-10-19", at: "2026-10-19T10:00:00.000Z" };
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    const mkUser = (u, org) => env.call({ action: "addUser", token: admTok, newUser: u, newPass: u.split(".")[0] + "-pass-12345", org });
+    mkUser("ron.pilot", false); mkUser("sam.pilot", false); mkUser("ora.org", true);
+    const passOf = u => (u === ADMIN ? PASS : u.split(".")[0] + "-pass-12345");
+    const tokOf = u => env.call({ action: "login", user: u, pass: passOf(u) }).token;
+    const recFiles = () => Object.values(env.folders).flatMap(f => f.files.filter(x => !x.trashed && x.name.endsWith(REC_SUFFIX)).map(x => ({ folder: f, file: x, rec: (() => { try { return JSON.parse(x.bytes.toString("utf8")); } catch (e) { return null; } })() })));
+    const reqFolderCount = () => reqFolders(env).length;
+    const logRun = (fn, ...a) => require("node:vm").runInContext(fn, env.sandbox)(...a);
+    const setSent = (id, sent) => logRun("(function (id, sent) { var log = readLog_(); findById_(log, id).sent = sent; writeLog_(log, id); })", id, sent);
+    // בקשה שמורה כמו בדפדפן, בשרת האמיתי (Code.gs על הדמיית דרייב): saveBegin → saveFile (Word, תמונה, נתוני הבקשה) → saveEnd. rec = אובייקט או מחרוזת גולמית; null = בלי קובץ נתונים
+    let ridN = 0;
+    const seed = (user, base, rec) => {
+      const tok = tokOf(user), rid = (++ridN + "").padStart(2, "0") + "ab".repeat(15), b = env.call({ action: "saveBegin", token: tok, folderName: base, rid });
+      if (!b.ok) throw new Error("seed " + JSON.stringify(b));
+      const files = [[base + " — בקשה.docx", "W"], [base + " — מפה.png", "P"]].concat(rec === null ? [] : [[base + REC_SUFFIX, typeof rec === "string" ? rec : JSON.stringify(rec)]]);
+      for (const [n, c] of files) env.call({ action: "saveFile", token: tok, folderId: b.folderId, name: n, mime: "application/octet-stream", b64: Buffer.from(c).toString("base64") });
+      env.call({ action: "saveEnd", token: tok, folderId: b.folderId, ready: true, decl: DECL_ });
+      env.advance(2000);
+      return b.folderId;
+    };
+    const goodRec = over => ({ savedAt: "2026-10-10T09:00:00.000Z", site: "אתר", version: "1", edition: "ed", declaration: { version: "2026-10-19", confirmedAt: "2026-10-10T08:59:00.000Z" },
+      inputs: Object.assign({ lat: 32.1, lon: 34.8, radius: 150, heightM: 60, dateFrom: "2026-11-02", dateTo: "2026-11-02", timeFrom: "14:30", timeTo: "17:30", purpose: "מהות מותאמת אישית", aircraft: ["כלי טיס מותאם א", "כלי טיס מותאם ב"], vlos: true, siteName: "חדרה", knownObstacles: "מגדל מים\nאנטנה", visitDate: "2026-10-01", visitNotes: "סיור קודם", manualItems: [{ name: "עמוד חשמל ישן", lat: 32.1005, lon: 34.8005, heightM: 12 }] }, over), zones: [], items: [] });
+    const dlgText = page => page.evaluate(() => { const m = document.getElementById("authModal"); return m ? m.innerText : null; });
+    const openAs = async (user, extra) => {
+      const popts = Object.assign({ env, autosave: true }, extra || {}), { ctx, page } = await newPage(browser, popts);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, passOf(user));
+      return { ctx, page, popts };
+    };
+    const openDlg = async page => { await page.click("#ubMyReq"); await page.waitForSelector("#mrBody", { state: "attached" }); await page.waitForFunction(() => { const b = document.getElementById("mrBody"); return b && !b.hasAttribute("aria-busy") && document.getElementById("mrStatus").textContent.trim() !== ""; }, null, { timeout: 15000 }); };
+    const rowsOf = page => page.evaluate(() => [...document.querySelectorAll("#mrBody .mrRow")].map(r => ({ id: r.dataset.id, name: r.querySelector(".mrName").textContent, chip: r.querySelector(".mrChip").textContent, state: r.querySelector(".mrChip").dataset.state, meta: (r.querySelector(".mrMeta") || {}).textContent || "" })));
+    const ymd = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
+    /* ---- א. זרימה מלאה אמיתית: מטיס עצמאי מריץ בקשה, היא נשמרת אוטומטית; הרשימה, ״הצג״ ו״השתמש כבסיס״ ---- */
+    {
+      const { ctx, page, popts } = await openAs("ron.pilot");
+      const dialogs = []; page.on("dialog", d => { dialogs.push(d.type()); d.dismiss(); });
+      check("הבקשות שלי: מטיס עצמאי (org=false) רואה את הכפתור, עם ״!״ צמוד (aria-label ״הסבר על: הבקשות שלי״) והסבר שמתאר מה הוא עושה", (await page.locator("#ubMyReq").count()) === 1 && (await page.locator(".hw:has(#ubMyReq) > .hbtn").getAttribute("aria-label")) === "הסבר על: הבקשות שלי" && /בסיס לבקשה חדשה/.test(await page.locator(".hw:has(#ubMyReq) > .hbtn").getAttribute("data-help")) && !(await page.evaluate(() => window.ReqAuth.isOrg())), "");
+      // רשימה ריקה + נגישות החלון
+      await openDlg(page);
+      const a11y = await page.evaluate(() => { const m = document.getElementById("authModal"), box = m.firstElementChild, h = document.getElementById(m.getAttribute("aria-labelledby")); return { role: m.getAttribute("role"), modal: m.getAttribute("aria-modal"), title: h && h.textContent, focusIn: m.contains(document.activeElement), inertBg: document.querySelector("header").hasAttribute("inert") && document.querySelector("main").hasAttribute("inert"), status: document.getElementById("mrStatus").textContent, hbtns: [...m.querySelectorAll(".hbtn")].map(b => b.getAttribute("aria-label")) }; });
+      check("הבקשות שלי: חלון נגיש — role=dialog, aria-modal, aria-labelledby לכותרת ״הבקשות שלי״, המיקוד בתוכו והרקע inert; בלי בקשות: ״עדיין אין בקשות שמורות״; ״!״ לכל כפתור פעולה (הצג / השתמש כבסיס) עם aria-label ייחודי", a11y.role === "dialog" && a11y.modal === "true" && a11y.title === "הבקשות שלי" && a11y.focusIn && a11y.inertBg && /עדיין אין בקשות שמורות/.test(a11y.status) && a11y.hbtns.join("|") === "הסבר על: הצגת בקשה שמורה|הסבר על: שימוש בבקשה כבסיס", JSON.stringify(a11y));
+      // Tab בתוך החלון: לולאה (מהאחרון לראשון ובחזרה), Escape סוגר ומחזיר את המיקוד לכפתור שפתח
+      { const f = await page.evaluate(() => { const m = document.getElementById("authModal"); return [...m.querySelectorAll("button:not([disabled])")].filter(e => e.getClientRects().length).map(e => e.id || e.className || e.dataset.act || e.textContent.slice(0, 8)); });
+        await page.focus("#mdClose"); await page.keyboard.press("Tab"); const afterLast = await page.evaluate(() => document.activeElement.className + "|" + document.activeElement.id);
+        await page.keyboard.press("Shift+Tab"); const afterFirst = await page.evaluate(() => document.activeElement.id + "|" + document.activeElement.className);
+        check("הבקשות שלי: מלכודת מיקוד — Tab מהכפתור האחרון (״סגור״) חוזר לראשון (ה-״!״ הראשון), ו-Shift+Tab מהראשון חוזר לאחרון; המיקוד לא בורח לדף שמאחור", /hbtn/.test(afterLast) && /mdClose/.test(afterFirst), JSON.stringify([f, afterLast, afterFirst])); }
+      await page.keyboard.press("Escape");
+      check("הבקשות שלי: Escape סוגר את החלון והמיקוד חוזר לכפתור ״הבקשות שלי״ (והרקע חוזר לפעול)", (await page.locator("#authModal").count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === "ubMyReq" && (await page.evaluate(() => !document.querySelector("header").hasAttribute("inert"))), "");
+      // ״!״ פתוחה: Escape סוגר את הבועה בלבד
+      await openDlg(page); await page.click("#authModal .hbtn >> nth=0");
+      const bub0 = await page.evaluate(() => { const b = document.getElementById("hbubble"); return b && !b.hidden ? b.textContent : null; });
+      await page.keyboard.press("Escape");
+      const afterEsc1 = { bubble: await page.evaluate(() => { const b = document.getElementById("hbubble"); return !!b && !b.hidden; }), dlg: await page.locator("#authModal").count() };
+      await page.keyboard.press("Escape");
+      check("הבקשות שלי: ״!״ פתוחה — Escape הראשון סוגר את הבועה בלבד (החלון נשאר), השני סוגר את החלון; הבועה מסבירה ״הצג״ (קריאה בלבד, בלי פרטי מבקש)", /קריאה בלבד/.test(bub0 || "") && /פרטי המבקש אינם נשמרים/.test(bub0 || "") && !afterEsc1.bubble && afterEsc1.dlg === 1 && (await page.locator("#authModal").count()) === 0, JSON.stringify([bub0 && bub0.slice(0, 40), afterEsc1]));
+
+      // בקשה אמיתית: מילוי, הרצה, תוספת ידנית, סיור, וידוא שנשמרה בדרייב
+      await fillExample(page, { radius: 200, height: 80, known: "עגורן בכניסה", participants: [["פרטי", "משפחה", "050-1111111"]], aircraft: [(await page.locator('input[name="ac"]').first().getAttribute("value"))] });
+      await page.selectOption("#vlos", "no"); await page.fill("#siteName", "אתר בדיקה א׳");
+      await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await page.fill("#mName", "עמוד חשמל"); await page.fill("#mCoord", "32.0993, 34.8168"); await page.fill("#mHeight", "15"); await page.click("#mAdd");
+      await page.waitForFunction(() => window.__REQ.S.manual.length === 1 && !window.__REQ.S.building, null, { timeout: 60000 });
+      await setVisit(page, ymd(5), "הערות סיור בדיקה");
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      const A = recFiles(); const recA = A.length === 1 ? A[0].rec : null, folderA = A.length === 1 ? A[0].folder : null;
+      check("הבקשות שלי, snapshot: בקשה שנשמרה בדרייב נושאת בקובץ נתוני הבקשה שדה snapshot (גרסה 1, עם נקודה, רדיוס, גובה, זמן) בנוסף לשדות שלב א׳ — והשדות הקיימים לא השתנו", !!recA && JSON.stringify(Object.keys(recA).sort()) === JSON.stringify(PH_A_KEYS.concat(["snapshot", "parties"]).sort()) && recA.snapshot.v === 1 && recA.snapshot.scan.R === 200 && Math.abs(recA.snapshot.scan.lat - 32.099128) < 1e-9 && typeof recA.snapshot.at === "string" && recA.inputs.radius === 200 && recA.inputs.heightM === 80, recA ? Object.keys(recA).join(",") : "אין רשומה");
+      const text = JSON.stringify(recA), sn = JSON.stringify(recA.snapshot);
+      check("הבקשות שלי, snapshot: אין בתמונת המצב (ובשום מקום בקובץ) שם מבקש, טלפון, גורם מבקש, אנשי קשר או משתתפים; בשדות הקלט אין מפתחות מבקש", ["בודק ראשון", "050-0000001", "חברת הבדיקה", "בודק שני", "050-0000002", "בודק שלישי", "050-0000003", "050-1111111", "משפחה"].every(s => !text.includes(s)) && !Object.keys(recA.inputs).some(k => /^(req|contact|requester|participant|callsign|registration)/i.test(k)) && !/requester|participants|contacts/.test(sn), sn.length + " תווים");
+      const rawBytes = A[0].file.bytes.length;
+      check("הבקשות שלי, snapshot: גודל קובץ נתוני הבקשה (עם ההזחה שבה הוא נכתב) קטן מתקרת הקריאה של השרת (MAX_RECORD_BYTES = 600000)", rawBytes > 1000 && rawBytes < 600000, rawBytes + " בתים");
+      const ridA = await page.evaluate(() => window.__REQ.S.rid);
+
+      // הרשימה: שורה אחת, מצב ״נשמרה, לא נשלחה״, זמן שמירה, שם הבקשה כפי שבדרייב
+      await openDlg(page);
+      let rows = await rowsOf(page);
+      check("הבקשות שלי: הבקשה השמורה מופיעה ברשימה עם שם המקום והתאריך, צ׳יפ ״נשמרה, לא נשלחה״ וזמן שמירה (dd.mm.yyyy hh:mm)", rows.length === 1 && rows[0].id === folderA.id && rows[0].name === folderA.name && rows[0].chip === "נשמרה, לא נשלחה" && rows[0].state === "draft" && /נשמרה: \d\d\.\d\d\.\d{4} \d\d:\d\d/.test(rows[0].meta) && !/נשלחה:/.test(rows[0].meta), JSON.stringify(rows));
+      await page.keyboard.press("Escape");
+      // שליחה (נרשמת ביומן): בדיקה ואחר כך חי — הצ׳יפ משתנה
+      const idA = folderA.id;
+      setSent(idA, [{ sid: "t1", t: Date.now() - 5000, user: "ron.pilot", mode: "test", target: "office", st: "sent" }]);
+      await openDlg(page); rows = await rowsOf(page);
+      const t1 = rows[0];
+      await page.keyboard.press("Escape");
+      setSent(idA, [{ sid: "t1", t: Date.now() - 5000, user: "ron.pilot", mode: "test", target: "office", st: "sent" }, { sid: "t2", t: Date.now() - 1000, user: "ron.pilot", mode: "live", target: "office", st: "sent" }]);
+      await openDlg(page); rows = await rowsOf(page);
+      check("הבקשות שלי: צ׳יפ המצב לפי השרת — נשלחה בבדיקה: ״נשלחה לבדיקה בלבד״; אחרי שליחה חיה: ״נשלחה למשרד נוטאם״ (עם זמן השליחה בשורה)", t1.chip === "נשלחה לבדיקה בלבד" && t1.state === "sent_test" && rows[0].chip === "נשלחה למשרד נוטאם" && rows[0].state === "sent_live" && /נשלחה: \d\d\.\d\d\.\d{4} \d\d:\d\d/.test(rows[0].meta), JSON.stringify([t1, rows[0]]));
+
+      // ״הצג״: סיכום לקריאה בלבד
+      const nGet0 = page._calls.actions.filter(a => a === "getRequest").length;
+      const nList0 = page._calls.actions.filter(a => a === "myRequests").length;
+      await page.click('#mrBody button[data-act="view"]'); await page.waitForSelector("#mrView");
+      const view = await page.evaluate(() => { const v = document.getElementById("mrView"); return { text: v.innerText, focus: document.activeElement === v, status: document.getElementById("mrStatus").textContent, btns: [...document.querySelectorAll("#mrBody .mrBtns button")].map(b => b.textContent) }; });
+      check("הבקשות שלי, ״הצג״: סיכום קריאה-בלבד של הקובץ השמור (שם הבקשה, נקודה, רדיוס 200, גובה 80, מהות, כלי טיס, מכשול ידוע, התוספת הידנית, הערות הסיור) — קריאה אחת לשרת, המיקוד עובר לסיכום, בלי שם ובלי טלפון של המבקש", /הבקשה: /.test(view.text) && /32\.099128, 34\.816617/.test(view.text) && /200 מ׳/.test(view.text) && /80 מ׳/.test(view.text) && /עגורן בכניסה/.test(view.text) && /עמוד חשמל/.test(view.text) && /הערות סיור בדיקה/.test(view.text) && !/בודק ראשון|050-0000001|חברת הבדיקה/.test(view.text) && view.focus && page._calls.actions.filter(a => a === "getRequest").length === nGet0 + 1 && view.btns.join("|") === "השתמש כבסיס לבקשה חדשה|חזרה לרשימה", JSON.stringify({ focus: view.focus, btns: view.btns, head: view.text.slice(0, 80) }));
+      const orgChk = await page.evaluate(() => { const html = document.documentElement.outerHTML, helps = [...document.querySelectorAll(".hbtn")].map(e => e.dataset.help || "").join(" | "); return { html: html.includes("office@icd.org.il"), text: document.body.innerText.includes("office@icd.org.il"), helps: helps.includes("office@icd.org.il") }; });
+      check("הבקשות שלי: כתובת הארגון (office@icd.org.il) לא מופיעה בדף של מטיס עצמאי — לא ב-HTML, לא בטקסט הגלוי ולא בהסברי ה-! — גם כשהחלון והסיכום פתוחים", !orgChk.html && !orgChk.text && !orgChk.helps, JSON.stringify(orgChk));
+      await page.click('#mrBody button[data-act="back"]');
+      check("הבקשות שלי: ״חזרה לרשימה״ מחזירה לרשימה (בלי קריאת שרת נוספת) והמיקוד חוזר לכפתור ״הצג״ של אותה בקשה", (await page.locator("#mrBody .mrRow").count()) === 1 && (await page.evaluate(() => document.activeElement.dataset.act + "|" + document.activeElement.closest("li").dataset.id)) === "view|" + idA && page._calls.actions.filter(a => a === "myRequests").length === nList0, "");
+      await page.keyboard.press("Escape");
+
+      /* ---- ״השתמש כבסיס״ כשיש בקשה בעבודה: אישור בתוך החלון (לא confirm), ביטול משאיר הכול, אישור מחליף ---- */
+      const before = await page.evaluate(() => ({ coord: document.getElementById("coord").value, site: document.getElementById("siteName").value, df: document.getElementById("dateFrom").value, hasRes: !!window.__REQ.S.res, rid: window.__REQ.S.rid, person: [document.getElementById("reqName").value, document.getElementById("reqPhone").value, document.getElementById("reqOrg").value, [...document.querySelectorAll("#contactList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";"), [...document.querySelectorAll("#partList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";")].join("|") }));
+      await openDlg(page); await page.click('#mrBody button[data-act="base"]'); await page.waitForSelector(".mrConfirm");
+      const conf = await page.evaluate(() => ({ text: document.querySelector(".mrConfirm").textContent, focus: document.activeElement.dataset.act, btns: [...document.querySelectorAll(".mrConfirm button")].map(b => b.textContent), res: !!window.__REQ.S.res }));
+      check("הבקשות שלי: יש בקשה בעבודה — ״השתמש כבסיס״ מבקש אישור בתוך החלון (לא confirm של הדפדפן), ברירת המחדל במיקוד היא ״ביטול״, ועדיין לא הוחלף דבר", /בקשה בעבודה/.test(conf.text) && conf.focus === "no" && conf.btns.join("|") === "ביטול|כן, החלף" && conf.res && dialogs.length === 0, JSON.stringify(conf));
+      await page.click('.mrConfirm button[data-act="no"]');
+      const afterNo = await page.evaluate(() => ({ coord: document.getElementById("coord").value, hasRes: !!window.__REQ.S.res, rid: window.__REQ.S.rid, list: document.querySelectorAll("#mrBody .mrRow").length, note: !!document.getElementById("baseNote") }));
+      check("הבקשות שלי: ביטול באישור — חוזרים לרשימה; הבקשה שבעבודה, הניתוח ומזהה הבקשה לא השתנו ואין הודעת ״נטענה כבסיס״", afterNo.hasRes && afterNo.rid === before.rid && afterNo.list === 1 && !afterNo.note && afterNo.coord === before.coord, JSON.stringify(afterNo));
+      // busy: הרצה בעיצומה חוסמת (מדמים S.running) — הודעה, והטופס לא משתנה
+      await page.evaluate(() => { window.__REQ.S.running = true; });
+      await page.click('#mrBody button[data-act="base"]'); await page.waitForFunction(() => document.getElementById("mrMsg").textContent.trim() !== "", null, { timeout: 15000 });
+      const busyMsg = await page.textContent("#mrMsg");
+      await page.evaluate(() => { window.__REQ.S.running = false; });
+      check("הבקשות שלי: הרצה / שמירה / שליחה בעיצומה — ״השתמש כבסיס״ לא מחליף דבר ומסביר (הרצה בעיצומה)", /בעיצומה/.test(busyMsg) && (await page.evaluate(() => !!window.__REQ.S.res)), busyMsg);
+      await page.click('#mrBody button[data-act="base"]'); await page.waitForSelector(".mrConfirm"); await page.click('.mrConfirm button[data-act="yes"]');
+      await page.waitForSelector("#baseNote");
+      const nA0 = page._calls.overpass;
+      const after = await page.evaluate(() => {
+        const $ = id => document.getElementById(id), S = window.__REQ.S, v = id => $(id).value;
+        return { coord: v("coord"), radius: v("radius"), height: v("height"), vlos: v("vlos"), purpose: v("purpose"), ac: [...document.querySelectorAll('input[name="ac"]:checked')].map(i => i.value), site: v("siteName"), known: v("knownObs"), notes: v("visitNotes"), visit: v("visitDate"), dates: [v("dateFrom"), v("dateTo"), v("timeFrom"), v("timeTo")],
+          manual: S.manual.map(m => m.name + "|" + m.heightM), manualKey: S.manualKey, rd: (() => { const i = window.__REQ.readInputs(); return i.lat + "," + i.lon; })(), manualLi: [...document.querySelectorAll("#manualList li")].map(l => l.textContent).join(";"),
+          res: S.res, ready: S.ready, review: $("reviewOk").checked, reviewSt: S.statuses.review && S.statuses.review.ok, resultsShown: $("resultsSec").style.display !== "none", report: $("report").innerHTML.length, rid: S.rid, sent: S.sent, saved: S.saved, center: S.center, focus: document.activeElement.id, dlg: !!$("authModal"), inert: document.querySelector("main").hasAttribute("inert"), eRun: $("e_run").textContent,
+          note: $("baseNote").textContent, noteRole: $("baseNote").getAttribute("role"), person: [v("reqName"), v("reqPhone"), v("reqOrg"), [...document.querySelectorAll("#contactList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";"), [...document.querySelectorAll("#partList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";")].join("|"), btnSendDis: $("btnSend").disabled };
+      });
+      check("הבקשות שלי, ״כבסיס״: הטופס נטען מהבקשה השמורה — נקודה בדיוק כפי ששמורה, רדיוס 200, גובה 80, ללא קשר עין, מהות, כלי הטיס, שם האתר, המכשול הידוע, הערות הסיור והתוספת הידנית (עם שם וגובה); S.manualKey תואם את הנקודה שנקראת מהשדה, כדי שההרצה לא תמחק את התוספת", after.coord === "32.099128, 34.816617" && after.radius === "200" && after.height === "80" && after.vlos === "no" && after.purpose !== "" && after.ac.length === 1 && after.site === "אתר בדיקה א׳" && after.known === "עגורן בכניסה" && after.notes === "הערות סיור בדיקה" && after.manual.join(";") === "עמוד חשמל|15" && after.manualKey === after.rd && /עמוד חשמל/.test(after.manualLi), JSON.stringify(after));
+      check("הבקשות שלי, ״כבסיס״: תאריכים, שעות ותאריך סיור ריקים — המבקש חייב להזין חדשים", after.dates.every(x => x === "") && after.visit === "", JSON.stringify(after.dates));
+      check("הבקשות שלי, ״כבסיס״: לא נטענות תוצאות — אין ניתוח, הבקשה לא מוכנה, אזור התוצאות והדוח ריקים ומוסתרים, ההצהרה לא מאושרת (וגם הסטטוס), לא נשלחה ולא נשמרה, ומזהה הבקשה חדש", after.res === null && !after.ready && !after.review && !after.reviewSt && !after.resultsShown && after.report === 0 && after.sent === null && after.saved === null && after.rid && after.rid !== before.rid && after.rid !== ridA, JSON.stringify({ res: after.res, ready: after.ready, review: after.review, rid: after.rid }));
+      check("הבקשות שלי, ״כבסיס״: פרטי המבקש, אנשי הקשר והמשתתפים נשארים כפי שהם במכשיר ובדף (לא נטענים מהקובץ ולא נמחקים)", after.person === before.person && /בודק ראשון/.test(after.person), after.person);
+      check("הבקשות שלי, ״כבסיס״: החלון נסגר, הרקע פעיל, ההודעה ״נטענה כבסיס״ מוצגת (role=status; שם הבקשה, תאריכים, בדיקות מחדש, הצהרה) והמיקוד בשדה ״מתאריך״", !after.dlg && !after.inert && after.noteRole === "status" && after.note.includes(folderA.name) && /תאריכים ושעות/.test(after.note) && /להריץ את הבדיקות מחדש/.test(after.note) && /ההצהרה/.test(after.note) && after.focus === "dateFrom" && after.eRun === "", after.note + " | focus=" + after.focus);
+      check("הבקשות שלי, ״כבסיס״: לא הופעל אישור דפדפן (confirm) ולא נשלחה שום בקשה לשרת מלבד הרשימה והבקשה; ולא נקראו נתוני OSM", dialogs.length === 0 && nA0 === page._calls.overpass, JSON.stringify(dialogs));
+
+      // הרצה בלי תאריכים נעצרת; אחרי שמזינים תאריכים — ההרצה אמיתית, והבקשה החדשה נשמרת בתיקייה נפרדת בלי לגעת במקורית
+      await page.click("#runBtn");
+      const noDates = await page.evaluate(() => ({ e: document.getElementById("e_run").textContent, res: !!window.__REQ.S.res, ov: 0 }));
+      check("הבקשות שלי, ״כבסיס״: הרצה בלי תאריכים ושעות נעצרת (״חסר או שגוי״ עם שמות השדות) — אין שימוש בתוצאות הישנות", /חסר או שגוי/.test(noDates.e) && /מתאריך/.test(noDates.e) && !noDates.res && page._calls.overpass === nA0, noDates.e);
+      const bytesA = A[0].file.bytes.toString("utf8"), foldersBefore = reqFolderCount();
+      await page.fill("#dateFrom", ymd(12)); await page.fill("#dateTo", ymd(12)); await page.fill("#timeFrom", "16:00"); await page.fill("#timeTo", "18:00");
+      await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      const g1 = await page.evaluate(() => ({ ready: window.__REQ.S.ready, review: document.getElementById("reviewOk").checked, note: !!document.getElementById("baseNote"), manual: window.__REQ.S.manual.length, gate: document.getElementById("gate").textContent.replace(/\s+/g, " ") }));
+      check("הבקשות שלי, ״כבסיס״: אחרי הרצה חדשה — ההצהרה עדיין לא מאושרת (הבקשה לא מוכנה עד שמאשרים שוב), התוספת הידנית נשמרה בהרצה, וההודעה ״נטענה כבסיס״ נעלמה", !g1.ready && !g1.review && !g1.note && g1.manual === 1 && /יש לאשר את ההצהרה/.test(g1.gate), JSON.stringify(g1));
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      const B = recFiles(), newOnes = B.filter(x => x.folder.id !== folderA.id);
+      check("הבקשות שלי, ״כבסיס״: הבקשה החדשה נשמרה בתיקייה נפרדת (תיקייה נוספת), הבקשה המקורית לא השתנתה בבית אחד ולא נמחקה, ובקובץ החדש תמונת מצב משלו עם הרדיוס והגובה של הבסיס", reqFolderCount() === foldersBefore + 1 && newOnes.length === 1 && A[0].file.bytes.toString("utf8") === bytesA && B.find(x => x.folder.id === folderA.id) && newOnes[0].rec.snapshot && newOnes[0].rec.snapshot.scan.R === 200 && newOnes[0].rec.inputs.dateFrom === ymd(12) && recA.inputs.dateFrom !== ymd(12), "תיקיות: " + foldersBefore + " → " + reqFolderCount());
+      // כשל בלכידת תמונת המצב לא חוסם שמירה: עורכים שדה רך (אותה תיקייה, שמירה חוזרת) כש-ReqRecheck.capture זורק
+      await page.evaluate(() => { window.__origCapture = window.ReqRecheck.capture; window.ReqRecheck.capture = () => { throw new Error("boom"); }; });
+      await page.fill("#siteName", "אתר בדיקה ב׳");
+      await page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent) && window.__REQ.S.ready, null, { timeout: 90000 });
+      const C2 = recFiles().find(x => x.folder.id === newOnes[0].folder.id);
+      check("הבקשות שלי, snapshot: כשל בלכידת תמונת המצב (ReqRecheck.capture זורק) לא חוסם שמירה — הבקשה נשמרת שוב מוצלחת, בלי snapshot ובלי שגיאה בדף", C2 && C2.rec.inputs.siteName === "אתר בדיקה ב׳" && C2.rec.snapshot === undefined && JSON.stringify(Object.keys(C2.rec).sort()) === JSON.stringify(PH_A_KEYS.concat(["parties"]).sort()), C2 ? Object.keys(C2.rec).join(",") : "אין");
+      await page.evaluate(() => { window.ReqRecheck.capture = window.__origCapture; });
+      await ctx.close();
+    }
+    /* ---- ב. רשימה עם מצבים, שמות עוינים, קבצים חסרים/פגומים/עוינים, שגיאות רשת ושרת ---- */
+    const RLO = String.fromCharCode(0x202e), ZW = String.fromCharCode(0x200b);
+    const hostileRec = goodRec({ purpose: "<img src=x onerror=window.__pwn=1>", aircraft: ['"><svg onload=window.__pwn=1>', "<b>כלי</b>"], siteName: "<script>window.__pwn=1</script>", knownObstacles: "<b>מכשול</b>\n<img src=x onerror=window.__pwn=1>", visitNotes: "<iframe src=javascript:window.__pwn=1>",
+      manualItems: [{ name: "<img src=x onerror=window.__pwn=1>", lat: 32.1, lon: 34.8, heightM: 5 }] });
+    const hostileBigRec = JSON.parse(JSON.stringify(hostileRec)); hostileBigRec.inputs.radius = 1e9; hostileBigRec.inputs.heightM = 1e9; hostileBigRec.inputs.purpose = "מהות רגילה";
+    const hostileJson = JSON.stringify(hostileRec).replace("{", '{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},');
+    const ids = {
+      good: seed("ron.pilot", "חדרה — 02.11.2026", goodRec()),
+      test: seed("ron.pilot", "קיסריה — 04.11.2026", goodRec({ siteName: "קיסריה", purpose: "לצורך מיפוי ומחקר חקלאי" })),
+      nofile: seed("ron.pilot", "בלי קובץ — 05.11.2026", null),
+      hostile: seed("ron.pilot", "עוין — 06.11.2026", hostileJson),
+      hostileBig: seed("ron.pilot", "עוין ענק — 12.11.2026", JSON.stringify(hostileBigRec)),
+      trashed: seed("ron.pilot", "בפח — 07.11.2026", goodRec()),
+      badLat: seed("ron.pilot", "נקודה רעה — 08.11.2026", goodRec({ lat: 10 })),
+      badJson: seed("ron.pilot", "JSON פגום — 09.11.2026", "{not json"),
+      arr: seed("ron.pilot", "מערך — 10.11.2026", "[1,2]"),
+      many: seed("ron.pilot", "הרבה כלים — 11.11.2026", goodRec({ aircraft: Array.from({ length: 21 }, (_, i) => "כלי מותאם " + i), purpose: "מהות מותאמת ג" }))
+    };
+    setSent(ids.test, [{ sid: "a1", t: Date.now() - 1000, user: "ron.pilot", mode: "test", target: "office", st: "sent" }]);
+    {
+      const { ctx, page, popts } = await openAs("ron.pilot");
+      await page.evaluate(() => { window.__pwn = undefined; });
+      const srvList = env.call({ action: "myRequests", token: tokOf("ron.pilot") }).requests;
+      await openDlg(page);
+      let rows = await rowsOf(page);
+      check("הבקשות שלי: הרשימה מהשרת — כל הבקשות של המשתמש, מהחדשה לישנה (לפי saved), בלי בקשות של אחרים; מצב ״נשלחה לבדיקה בלבד״ לבקשה שנשלחה בבדיקה", rows.length === srvList.length && rows.length === 12 && rows.map(r => r.id).join() === srvList.map(r => r.id).join() && rows.find(r => r.id === ids.test).chip === "נשלחה לבדיקה בלבד" && rows.find(r => r.id === ids.good).chip === "נשמרה, לא נשלחה", rows.map(r => r.name).join(" | "));
+      // שורות עוינות מהשרת (patchResp)
+      const hostileList = { ok: true, total: 999, requests: [
+        { id: "H1", name: "<img src=x onerror=window.__pwn=1>" + RLO + "אבג" + ZW + "דהו", state: "<script>window.__pwn=1</script>", saved: "not-a-time", sentAt: 1e99 },
+        { id: 'bad"id><b>', name: "id לא תקין", state: "draft" }, { id: "H1", name: "כפילות", state: "draft" }, null, "x", 7, [1], { id: 5, name: "id מספרי" },
+        { id: "H2", name: "א".repeat(500), state: "sent_live", saved: Date.now(), sentAt: Date.now() }, { id: "H3", name: 42, state: "sent_test", saved: -5 }] };
+      await page.keyboard.press("Escape");
+      popts.patchResp = (b, r) => (b.action === "myRequests" ? hostileList : undefined);
+      await openDlg(page);
+      rows = await rowsOf(page);
+      const hostileDom = await page.evaluate(() => ({ bad: document.querySelectorAll("#authModal img, #authModal script, #authModal b.x, #authModal iframe, #authModal svg").length, boldInBody: document.querySelectorAll("#mrBody b:not(.mrName)").length, pwn: window.__pwn, status: document.getElementById("mrStatus").textContent, ids: [...document.querySelectorAll("#mrBody [data-id]")].map(e => e.dataset.id), html: document.getElementById("mrBody").innerHTML }));
+      check("הבקשות שלי, קלט עוין מהשרת: שורות עם מזהה לא תקין / כפול / לא אובייקט נזרקות; שם עם HTML מוצג כטקסט (בלי אלמנט ובלי הרצת קוד), תווי כיווניות ורוחב-אפס מוסרים, שם ארוך נחתך ל-120, שם שאינו מחרוזת — ״בקשה ללא שם״, מצב לא מוכר — ״מצב לא ידוע״; ספירת ״מוצגות 3 מתוך 999״", rows.length === 3 && rows[0].id === "H1" && rows[0].name === "<img src=x onerror=window.__pwn=1>אבגדהו" && rows[0].chip === "מצב לא ידוע" && rows[0].state === "unknown" && !/נשלחה|נשמרה/.test(rows[0].meta) && rows[1].name.length === 120 && rows[1].chip === "נשלחה למשרד נוטאם" && rows[2].name === "בקשה ללא שם" && rows[2].chip === "נשלחה לבדיקה בלבד" && rows[2].meta === "" && hostileDom.bad === 0 && hostileDom.pwn === undefined && hostileDom.status === "מוצגות 3 הבקשות האחרונות מתוך 999." && hostileDom.ids.filter((x, i, a) => a.indexOf(x) === i).join() === "H1,H2,H3", JSON.stringify({ rows: rows.map(r => [r.id, r.name.slice(0, 30), r.chip]), hostileDom: { bad: hostileDom.bad, pwn: hostileDom.pwn, status: hostileDom.status } }));
+      // לחיצה על שורה עם מזהה שאינו בדרייב: bad_folder → הודעה ברורה, והרשימה נשארת
+      await page.click('#mrBody li[data-id="H1"] button[data-act="view"]'); await page.waitForFunction(() => document.getElementById("mrMsg").textContent.trim() !== "", null, { timeout: 15000 });
+      const m1 = await page.textContent("#mrMsg");
+      check("הבקשות שלי: תיקייה שאינה קיימת (bad_folder) — הודעה ברורה בעברית, הרשימה נשארת ושאר הכפתורים פעילים", /לא נמצא קובץ הנתונים/.test(m1) && /אפשר למלא בקשה חדשה ידנית/.test(m1) && (await page.locator("#mrBody li").count()) === 3 && (await page.locator('#mrBody button[data-act]:not([aria-disabled="true"])').count()) === 6, m1);
+      popts.patchResp = null; await page.keyboard.press("Escape");
+
+      // קבצים חסרים / פגומים / בפח
+      env.folders[ids.trashed].trashed = true;
+      await openDlg(page);
+      const clickMsg = async (id, act) => { await page.evaluate(() => { document.getElementById("mrMsg").textContent = ""; }); await page.click('#mrBody li[data-id="' + id + '"] button[data-act="' + act + '"]'); await page.waitForFunction(() => document.getElementById("mrMsg").textContent.trim() !== "" || document.getElementById("mrView") || document.querySelector(".mrConfirm") || document.getElementById("baseNote"), null, { timeout: 15000 }); return page.textContent("#mrMsg"); };
+      const formSnap = () => page.evaluate(() => [document.getElementById("coord").value, document.getElementById("siteName").value, window.__REQ.S.rid, !!window.__REQ.S.res].join("|"));
+      const f0 = await formSnap();
+      const mNoFile = await clickMsg(ids.nofile, "view"), mNoFileB = await clickMsg(ids.nofile, "base"), mTrash = await clickMsg(ids.trashed, "base"), mBadJson = await clickMsg(ids.badJson, "base"), mArr = await clickMsg(ids.arr, "view");
+      check("הבקשות שלי: קובץ נתוני הבקשה חסר בדרייב (no_record), התיקייה בפח (bad_folder), JSON פגום או מערך (bad_record) — הודעה ברורה לכל מקרה, אין טעינה חלקית ואין שינוי בטופס, והחלון נשאר פתוח עם הרשימה", /לא נמצא קובץ הנתונים/.test(mNoFile) && mNoFile === mNoFileB && mTrash === mNoFile && /פגום/.test(mBadJson) && /פגום/.test(mArr) && (await formSnap()) === f0 && (await page.locator("#mrBody li").count()) === 12 && !(await page.locator("#baseNote").count()), JSON.stringify([mNoFile, mBadJson, mArr]));
+      const mLat = await clickMsg(ids.badLat, "base");
+      check("הבקשות שלי: קובץ תקין מבחינת JSON אך בלי נקודה חוקית בארץ — ״אי אפשר להשתמש בבקשה הזו כבסיס״, והטופס לא משתנה", /אי אפשר להשתמש בבקשה הזו כבסיס/.test(mLat) && (await formSnap()) === f0, mLat);
+      // שגיאת מגבלת קצב מהשרת: ההודעה של השרת מוצגת כלשונה
+      popts.intercept = b => (b.action === "getRequest" ? { ok: false, error: "rate", scope: "user", kind: "read", message: "יותר מדי פעולות בשעה האחרונה — נסו שוב בעוד זמן מה" } : undefined);
+      const mRate = await clickMsg(ids.good, "base"); popts.intercept = null;
+      check("הבקשות שלי: מגבלת קצב מהשרת (rate) — הודעת השרת כלשונה, בלי טעינה", mRate === "יותר מדי פעולות בשעה האחרונה — נסו שוב בעוד זמן מה" && (await formSnap()) === f0, mRate);
+      // תשובה תקינה (ok) בלי rec תקין
+      popts.patchResp = (b, r) => (b.action === "getRequest" ? { ok: true, meta: {}, rec: [1, 2] } : undefined);
+      const mShape = await clickMsg(ids.good, "view"); popts.patchResp = null;
+      check("הבקשות שלי: תשובת getRequest ״תקינה״ בלי אובייקט rec — הודעה (לא חריגה ולא טעינה)", /התשובה מהשרת אינה תקינה/.test(mShape) && (await formSnap()) === f0, mShape);
+      // אין חיבור לשרת
+      popts.apiDown = true; const mNet = await clickMsg(ids.good, "view"); popts.apiDown = false;
+      check("הבקשות שלי: אין חיבור לשרת בלחיצה על ״הצג״ — ״אין חיבור לשרת״, הכפתורים חוזרים לפעול והמיקוד נשאר על הכפתור שנלחץ", /אין חיבור לשרת/.test(mNet) && (await page.locator('#mrBody button[data-act]:not([aria-disabled="true"])').count()) === 24 && (await page.evaluate(() => document.activeElement.dataset.act)) === "view", mNet);
+      await page.keyboard.press("Escape");
+      popts.apiDown = true; await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrBtns button[data-act=retry]", { timeout: 15000 });
+      const listErr = await page.evaluate(() => ({ msg: document.getElementById("mrMsg").textContent, rows: document.querySelectorAll("#mrBody .mrRow").length, st: document.getElementById("mrStatus").textContent }));
+      popts.apiDown = false; await page.click('#mrBody button[data-act="retry"]'); await page.waitForSelector("#mrBody .mrRow", { timeout: 15000 });
+      check("הבקשות שלי: טעינת הרשימה נכשלה (אין חיבור) — הודעה וכפתור ״נסו שוב״ שמצליח אחרי שהחיבור חוזר (ואין שורות חלקיות)", /לא ניתן לטעון את רשימת הבקשות/.test(listErr.msg) && /אין חיבור לשרת/.test(listErr.msg) && listErr.rows === 0 && listErr.st === "" && (await page.locator("#mrBody .mrRow").count()) === 12 && (await page.textContent("#mrMsg")) === "", JSON.stringify(listErr));
+
+      // ״השתמש כבסיס״ בטופס נקי: בלי אישור; מהות וכלי טיס שאינם ברשימה נוספים לרשימה השמורה ונבחרים; מה שלא נכנס מדווח
+      const nConf = await page.evaluate(() => document.querySelectorAll(".mrConfirm").length);
+      await page.click('#mrBody li[data-id="' + ids.good + '"] button[data-act="base"]'); await page.waitForSelector("#baseNote");
+      const g = await page.evaluate(() => ({ purpose: document.getElementById("purpose").value, ac: [...document.querySelectorAll('input[name="ac"]:checked')].map(i => i.value), coord: document.getElementById("coord").value, radius: document.getElementById("radius").value, height: document.getElementById("height").value, manual: window.__REQ.S.manual.map(m => m.name), known: document.getElementById("knownObs").value, note: document.getElementById("baseNote").textContent, ftHint: document.getElementById("ftHint").textContent }));
+      const puSaved = JSON.parse(await lsRead(page, "icd_req_purposes_v1")), acSaved = JSON.parse(await lsRead(page, "icd_req_aircraft_v1"));
+      check("הבקשות שלי, ״כבסיס״ בטופס נקי: אין בקשת אישור; מהות וכלי טיס מותאמים (לא ברשימות) נבחרים ונוספים לרשימה השמורה של המשתמש; רדיוס 150, גובה 60 (ורמז הרגל), מכשולים ידועים בשורות, התוספת הידנית", nConf === 0 && g.purpose === "מהות מותאמת אישית" && g.ac.join() === "כלי טיס מותאם א,כלי טיס מותאם ב" && puSaved.includes("מהות מותאמת אישית") && acSaved.includes("כלי טיס מותאם א") && g.coord === "32.1, 34.8" && g.radius === "150" && g.height === "60" && /196\.9/.test(g.ftHint) && g.manual.join() === "עמוד חשמל ישן" && g.known === "מגדל מים\nאנטנה" && !/לא נטענו/.test(g.note), JSON.stringify(g));
+      // עכשיו יש בקשה בעבודה (שדות מלאים, בלי ניתוח): הטעינה הבאה מבקשת אישור; אישור מחליף
+      await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrRow");
+      await page.click('#mrBody li[data-id="' + ids.test + '"] button[data-act="base"]'); await page.waitForSelector(".mrConfirm");
+      await page.click('.mrConfirm button[data-act="yes"]'); await page.waitForSelector("#baseNote");
+      const g2 = await page.evaluate(() => ({ site: document.getElementById("siteName").value, purpose: document.getElementById("purpose").value, notes: document.getElementById("baseNote").textContent, count: document.querySelectorAll("#baseNote").length }));
+      check("הבקשות שלי: שדות שמולאו (גם בלי ניתוח) נחשבים בקשה בעבודה — נדרש אישור; אחרי ״כן, החלף״ הבקשה השמורה נטענת וההודעה מוחלפת (הודעה אחת)", g2.site === "קיסריה" && g2.purpose === "לצורך מיפוי ומחקר חקלאי" && g2.count === 1 && g2.notes.includes("קיסריה — 04.11.2026"), JSON.stringify(g2));
+      // קובץ עוין (HTML בשדות, __proto__): מנוקה ומוצג/נטען כטקסט; בלי הרצת קוד ובלי זיהום אב-טיפוס
+      await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrRow");
+      await page.click('#mrBody li[data-id="' + ids.hostile + '"] button[data-act="view"]'); await page.waitForSelector("#mrView");
+      const hv = await page.evaluate(() => ({ bad: document.querySelectorAll("#authModal img, #authModal script, #authModal iframe, #authModal svg, #authModal b.inj").length, text: document.getElementById("mrView").innerText, pwn: window.__pwn, pol: ({}).polluted === undefined && Object.prototype.polluted === undefined }));
+      check("הבקשות שלי, ״הצג״ בקובץ עוין: כל התוכן מוצג כטקסט (HTML מוגן) — בלי אלמנטים שהוזרקו, בלי הרצת קוד ובלי זיהום אב-טיפוס (__proto__ / constructor)", hv.bad === 0 && hv.pwn === undefined && hv.pol && /<img src=x onerror=window\.__pwn=1>/.test(hv.text) && /<script>window\.__pwn=1<\/script>/.test(hv.text) && /<iframe src=javascript:window\.__pwn=1>/.test(hv.text), JSON.stringify({ bad: hv.bad, pwn: hv.pwn, pol: hv.pol, text: hv.text.slice(0, 200) }));
+      await page.click('#mrBody button[data-act="base"]'); await page.waitForSelector(".mrConfirm"); await page.click('.mrConfirm button[data-act="yes"]'); await page.waitForSelector("#baseNote");
+      const injected = "#purpose img, #purpose svg, #aircraft img, #aircraft svg, #aircraft b, #manualList img, #manualList svg, #manualList b, #baseNote img, #baseNote svg, #knownObs img, #authModal img";   // אלמנטים בפועל (DOM) — לא מחרוזת HTML: ערכי תכונות עם < > מסורגלים אחרת בכרום חדש וישן (וכך זה נשאר נכון בשניהם)
+      const hb = await page.evaluate(inj => ({ bad: document.querySelectorAll(inj).length, pwn: window.__pwn, pol: Object.prototype.polluted === undefined, site: document.getElementById("siteName").value, purpose: document.getElementById("purpose").value, ac: [...document.querySelectorAll('input[name="ac"]:checked')].map(i => i.value), man: window.__REQ.S.manual.map(m => m.name), mdom: document.getElementById("manualList").innerHTML, acdom: document.getElementById("aircraft").innerHTML, pudom: document.getElementById("purpose").innerHTML }), injected);
+      check("הבקשות שלי, ״כבסיס״ מקובץ עוין: מהות וכלי טיס עם HTML נטענים כטקסט (ערכי שדות; אפשרויות ורשימות ב-HTML מוגן), בלי אלמנטים שהוזרקו, בלי הרצת קוד ובלי זיהום אב-טיפוס", hb.bad === 0 && hb.pwn === undefined && hb.pol && hb.site === "<script>window.__pwn=1</script>" && hb.purpose === "<img src=x onerror=window.__pwn=1>" && hb.ac.join() === '"><svg onload=window.__pwn=1>,<b>כלי</b>' && !/<img|<svg/.test(hb.pudom.replace(/(value|aria-label)="[^"]*"/g, "")) && /&lt;img/.test(hb.mdom) && /&lt;svg/.test(hb.acdom) && hb.man.length === 1, JSON.stringify(hb));
+      // ערכים עצומים (רדיוס / גובה): ״הצג״ — הקובץ נדחה כפגום (אימות מלא); ״כבסיס״ — נחתכים לתקרה
+      await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrRow");
+      await page.click('#mrBody li[data-id="' + ids.hostileBig + '"] button[data-act="view"]'); await page.waitForSelector("#mrView");
+      const bv = await page.textContent("#mrView");
+      await page.click('#mrBody button[data-act="base"]'); await page.waitForSelector(".mrConfirm"); await page.click('.mrConfirm button[data-act="yes"]'); await page.waitForSelector("#baseNote");
+      const bb = await page.evaluate(() => ({ radius: document.getElementById("radius").value, height: document.getElementById("height").value, ft: document.getElementById("ftHint").textContent }));
+      check("הבקשות שלי: רדיוס וגובה עצומים בקובץ — ״הצג״ מציג שהנתונים אינם תקינים (בלי להציג את הערכים), ״כבסיס״ חותך לתקרה (רדיוס 5000, גובה 20000) ולא טוען ערך חורג", /אינם תקינים/.test(bv) && !/1000000000|1e\+?9/.test(bv) && bb.radius === "5000" && bb.height === "20000", JSON.stringify([bv.slice(0, 80), bb]));
+      // תקרות הרשימות השמורות בדפדפן (30 מהויות, 30 כלי טיס): מה שלא נכנס לא נבחר ומדווח; 21 כלי טיס בקובץ נחתכים ל-20 (ReqRecheck)
+      await page.evaluate(() => { const k = b => window.__REQ.userKey(b); localStorage.setItem(k("icd_req_purposes_v1"), JSON.stringify(Array.from({ length: 30 }, (_, i) => "מהות שמורה " + i))); localStorage.setItem(k("icd_req_aircraft_v1"), JSON.stringify(Array.from({ length: 25 }, (_, i) => "כלי שמור " + i))); });
+      await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true && !document.body.classList.contains("authLocked"), null, { timeout: 60000 });
+      await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrRow");
+      await page.click('#mrBody li[data-id="' + ids.many + '"] button[data-act="base"]'); await page.waitForSelector("#baseNote");
+      const g3 = await page.evaluate(() => ({ ac: [...document.querySelectorAll('input[name="ac"]:checked')].length, purpose: document.getElementById("purpose").value, note: document.getElementById("baseNote").textContent, extraAc: window.__REQ.S.extraAc.length, saved: JSON.parse(localStorage.getItem(window.__REQ.userKey("icd_req_aircraft_v1"))).length, savedPu: JSON.parse(localStorage.getItem(window.__REQ.userKey("icd_req_purposes_v1"))).length }));
+      check("הבקשות שלי, תקרות: ברשימות שמורות מלאות (30 מהויות; 25 כלי טיס) מהות מותאמת לא נבחרת, וכלי טיס נכנסים עד התקרה (30) — השאר לא נבחרים; ההודעה מפרטת ״לא נטענו: מהות הפעילות, כלי טיס: <שלושה שמות> ועוד 12״ (21 כלי הקובץ נחתכו ל-20, 5 נכנסו); הרשימות השמורות לא חורגות מ-30", g3.purpose === "" && g3.ac === 5 && g3.extraAc === 30 && g3.saved === 30 && g3.savedPu === 30 && /לא נטענו: מהות הפעילות, כלי טיס: /.test(g3.note) && /כלי מותאם 5, כלי מותאם 6, כלי מותאם 7 ועוד 12/.test(g3.note), JSON.stringify(g3));
+
+      await ctx.close();
+    }
+    /* ---- ג. דגלים, שרת ישן, סוגי חשבון, והפרדה בין משתמשים ---- */
+    const bad0 = () => results.filter(r => !r.ok).length;
+    {
+      const ronNames = env.call({ action: "myRequests", token: tokOf("ron.pilot") }).requests.map(r => r.name);
+      const calledMy = page => page._calls.actions.filter(a => a === "myRequests" || a === "getRequest").length;
+      // הדגל כבוי: אין כפתור, אין חלון, אין קריאות רשת, אין CSS/DOM של התכונה — גם כשהשרת מדווח myRequests
+      { const { ctx, page } = await openAs("ron.pilot", { features: { myreq: false } });
+        const o = await page.evaluate(() => ({ btn: !!document.getElementById("ubMyReq"), hw: document.querySelectorAll("#userBar .hbtn").length, feats: window.ReqAuth.getFeatures(), avail: window.ReqMyReq.available(window.ReqAuth.cfg, window.ReqAuth.getFeatures()), open: window.ReqMyReq.open(), modal: !!document.getElementById("authModal"), style: !!document.getElementById("myreqStyle"), note: !!document.getElementById("baseNote"), cfg: window.ReqAuth.cfg.features }));
+        check("הבקשות שלי, דגל כבוי (features.myreq=false): אין כפתור, הפונקציה לא פותחת חלון, אין CSS/הודעה בדף, ״!״ בשורת המשתמש רק לשני הכפתורים של שלב א׳ — והשרת עדיין מדווח myRequests; ואפס קריאות myRequests/getRequest", !o.btn && o.hw === 2 && o.feats.includes("myRequests") && o.avail === false && o.open === null && !o.modal && !o.style && !o.note && o.cfg.myreq === false && calledMy(page) === 0, JSON.stringify(o));
+        await ctx.close(); }
+      // מפתח חסר ב-config.features = פעיל (ברירת מחדל); features בכלל חסר — פעיל
+      { const { ctx, page } = await openAs("ron.pilot", { features: { recheck: true } });
+        await page.evaluate(() => { delete window.ReqAuth.cfg.features.myreq; });
+        const o = await page.evaluate(() => [window.ReqMyReq.available(window.ReqAuth.cfg, ["myRequests"]), (() => { const c = Object.assign({}, window.ReqAuth.cfg); delete c.features; return window.ReqMyReq.available(c, ["myRequests"]); })(), window.ReqMyReq.available(window.ReqAuth.cfg, []), window.ReqMyReq.available(window.ReqAuth.cfg, null), window.ReqMyReq.available(window.ReqAuth.cfg, ["myrequests"])]);
+        check("הבקשות שלי: מפתח myreq חסר (או features חסר) = פעיל; בלי myRequests ברשימת התכונות של השרת (או רשימה ריקה / שאינה מערך / באותיות אחרות) = לא זמין", o.join() === "true,true,false,false,false", o.join());
+        await ctx.close(); }
+      // שרת של שלב א׳ (features בלי myRequests) ושרת ישן לגמרי (בלי features): אין כפתור ואין קריאות
+      for (const [label, extra] of [["שרת של שלב א׳ (בלי myRequests)", { noMyReq: true }], ["שרת ישן לגמרי (בלי features)", { oldServer: true }]]) {
+        const { ctx, page } = await openAs("ron.pilot", extra);
+        const o = await page.evaluate(() => ({ btn: !!document.getElementById("ubMyReq"), feats: window.ReqAuth.getFeatures(), open: window.ReqMyReq.open(), modal: !!document.getElementById("authModal") }));
+        check("הבקשות שלי, " + label + ": הכפתור מוסתר, אין חלון, ואפס קריאות myRequests/getRequest — הדף פועל כמו בשלב א׳", !o.btn && !o.feats.includes("myRequests") && o.open === null && !o.modal && calledMy(page) === 0, JSON.stringify(o.feats));
+        await ctx.close(); }
+      // עובד ארגון ומנהל: הכפתור קיים; כל אחד רואה רק את בקשותיו
+      const oraId = seed("ora.org", "בקשה של עובד ארגון — 20.11.2026", goodRec({ siteName: "אתר ארגוני" }));
+      { const { ctx, page } = await openAs("ora.org");
+        await openDlg(page); const rows = await rowsOf(page);
+        const t = await page.evaluate(() => document.documentElement.outerHTML);
+        check("הבקשות שלי: עובד ארגון (org=true) רואה את הכפתור ורק את בקשותיו (לא של המטיסים), כולל ״!״ לכפתורי הפעולה", (await page.locator("#ubMyReq").count()) === 1 && rows.length === 1 && rows[0].id === oraId && ronNames.every(n => !t.includes(n)) && (await page.evaluate(() => window.ReqAuth.isOrg())), JSON.stringify(rows));
+        await ctx.close(); }
+      { const { ctx, page } = await openAs(ADMIN);
+        await openDlg(page); const rows = await rowsOf(page); const st = await page.textContent("#mrStatus");
+        const t = await page.evaluate(() => document.documentElement.outerHTML);
+        check("הבקשות שלי: מנהל רואה את הכפתור, ורשימת ״הבקשות שלי״ שלו כוללת רק את בקשותיו (בלי בקשות המטיסים והארגוני; לכל המשתמשים — בניהול המשתמשים כמו קודם), בלי קישור דרייב", (await page.locator("#ubMyReq").count()) === 1 && rows.length === 0 && /עדיין אין בקשות/.test(st) && ronNames.every(n => !t.includes(n)) && !/drive\.google\.com/.test(await page.locator("#authModal").innerHTML()), JSON.stringify(rows));
+        await ctx.close(); }
+
+      /* ---- התנתקות והחלפת משתמש: דבר לא דולף; תשובה מאוחרת נזרקת ---- */
+      { const { ctx, page, popts } = await openAs("ron.pilot");
+        await openDlg(page); const ronRows = (await rowsOf(page)).length; await page.keyboard.press("Escape");
+        await page.click("#ubOut");   // התנתקות יזומה: איפוס מלא וטעינה מחדש
+        await page.waitForSelector("#authForm", { timeout: 30000 }); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+        await login(page, "sam.pilot", passOf("sam.pilot"));
+        await openDlg(page);
+        const iso = await page.evaluate(names => { const all = document.documentElement.outerHTML + JSON.stringify(Object.assign({}, localStorage)) + JSON.stringify(Object.assign({}, sessionStorage)); return { leaked: names.filter(n => all.includes(n)), rows: document.querySelectorAll("#mrBody .mrRow").length, status: document.getElementById("mrStatus").textContent, st: window.ReqMyReq.state(), user: window.ReqAuth.user_() }; }, ronNames);
+        check("הבקשות שלי, בידוד: אחרי התנתקות וכניסה של משתמש אחר באותו דפדפן — הרשימה שלו בלבד (ריקה), אף שם בקשה של המשתמש הקודם לא מופיע בדף, ב-localStorage או ב-sessionStorage, ומצב המודול נקי למשתמש החדש", ronRows >= 10 && iso.leaked.length === 0 && iso.rows === 0 && /עדיין אין בקשות/.test(iso.status) && iso.st.who === "sam.pilot" && iso.user === "sam.pilot", JSON.stringify(iso));
+        await page.keyboard.press("Escape");
+        // תשובה מאוחרת: הרשימה בדרך (מושהית), ההתנתקות מתרחשת — אין שגיאה ואין ציור; ואחרי כניסה מחדש הכול תקין
+        popts.apiDelayBy = { myRequests: 2500 };
+        const b0 = bad0();
+        await page.click("#ubMyReq"); await page.waitForSelector("#mrTitle");
+        await page.evaluate(() => { setTimeout(() => window.ReqAuth.logout(), 0); });
+        await page.waitForSelector("#authForm", { timeout: 30000 }); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+        popts.apiDelayBy = null;
+        check("הבקשות שלי, בידוד: התנתקות באמצע טעינת הרשימה (תשובה מושהית) — הדף נטען נקי, בלי חלון ובלי שגיאת JS", (await page.locator("#authModal").count()) === 0 && (await page.locator("#baseNote").count()) === 0 && bad0() === b0, "");
+        await ctx.close(); }
+      // תשובה מאוחרת בלי טעינה מחדש (המודול נוקה ע״י req-auth/req-logout): לא מציירת בחלון הישן
+      { const { ctx, page, popts } = await openAs("ron.pilot");
+        popts.apiDelayBy = { myRequests: 1500 };
+        await page.click("#ubMyReq"); await page.waitForSelector("#mrTitle");
+        await page.evaluate(() => window.ReqMyReq.reset());
+        await page.waitForTimeout(2200);
+        const o = await page.evaluate(() => ({ rows: document.querySelectorAll("#mrBody .mrRow").length, st: window.ReqMyReq.state() }));
+        check("הבקשות שלי, בידוד: תשובת רשימה שמגיעה אחרי reset (החלפת משתמש / התנתקות) נזרקת — לא נבנות שורות בחלון הישן והמצב נקי", o.rows === 0 && o.st.rows === 0 && o.st.who === "", JSON.stringify(o));
+        await ctx.close(); }
+      // תשובה איטית של חלון שנסגר ונפתח מחדש: לא דורסת את הרשימה העדכנית של החלון החדש
+      { const { ctx, page, popts } = await openAs("ron.pilot");
+        let calls = 0;   // patchResp רץ בסדר ההשלמה: הבקשה האיטית (של החלון שנסגר) מסתיימת שנייה, ולכן היא זו שמחזירה את הרשימה הישנה
+        popts.apiDelayBy = { myRequests: 1500 };
+        popts.patchResp = (b, r) => (b.action === "myRequests" && ++calls === 2 ? { ok: true, total: 1, requests: [{ id: "OLD1", name: "רשימה ישנה מהחלון שנסגר", state: "draft", saved: 1e12 }] } : undefined);
+        await page.click("#ubMyReq"); await page.waitForSelector("#mrTitle");
+        await page.keyboard.press("Escape"); popts.apiDelayBy = null;
+        await page.click("#ubMyReq"); await page.waitForSelector("#mrBody .mrRow", { timeout: 15000 });
+        const fresh = (await rowsOf(page)).length;
+        await page.waitForTimeout(2000);
+        const after = await rowsOf(page);
+        check("הבקשות שלי, בידוד: תשובה איטית של חלון שנסגר (אותו משתמש, חלון חדש כבר הציג את הרשימה העדכנית) נזרקת ולא דורסת אותה", fresh >= 10 && after.length === fresh && after.every(r => r.id !== "OLD1") && calls === 2, JSON.stringify({ fresh, after: after.length, calls }));
+        await ctx.close(); }
+      // פקיעת התחברות באמצע ״הצג״ (השרת מחזיר expired): התנתקות מלאה עם ההודעה הרגילה, בלי חלון ובלי נתונים
+      { const { ctx, page, popts } = await openAs("ron.pilot");
+        await openDlg(page);
+        popts.intercept = b => (b.action === "getRequest" ? { ok: false, error: "expired" } : undefined);
+        await page.click('#mrBody button[data-act="view"] >> nth=0');
+        await page.waitForSelector("#authForm", { timeout: 30000 });
+        const note = await page.textContent("#auErr");
+        check("הבקשות שלי: פקיעת התחברות באמצע פעולה — התנתקות מלאה (כמו בכל קריאה מאומתת) עם ״פג תוקף ההתחברות״, בלי חלון פתוח ובלי תוכן הבקשה בדף", /פג תוקף ההתחברות/.test(note) && (await page.locator("#authModal").count()) === 0 && !(await page.evaluate(() => document.documentElement.outerHTML.includes("עוין"))), note);
+        await ctx.close(); }
+      // שמירה/שליחה בעיצומה (A.busy): auth.js לא מחליף חלון — אין חלון ואין קריאה
+      { const { ctx, page } = await openAs("ron.pilot");
+        const n0 = calledMy(page);
+        await page.evaluate(() => window.ReqAuth.setBusy(true)); await page.evaluate(() => document.getElementById("ubMyReq").click());
+        const busy = { modal: await page.locator("#authModal").count(), calls: calledMy(page) - n0 };
+        await page.evaluate(() => window.ReqAuth.setBusy(false)); await page.click("#ubMyReq"); await page.waitForSelector("#mrTitle");
+        check("הבקשות שלי: בזמן שמירה/שליחה (A.busy) הכפתור לא פותח חלון ולא קורא לשרת; אחרי שהסתיימו — נפתח", busy.modal === 0 && busy.calls === 0 && (await page.locator("#authModal").count()) === 1, JSON.stringify(busy));
+        await ctx.close(); }
+    }
+
+    /* ---- ד. שלב א׳ זהה כשהדגלים כבויים: הקובץ השמור (שדות וסדר) ללא snapshot, בלי כפתור ובלי קריאות myRequests/getRequest ---- */
+    {
+      const { ctx, page } = await openAs("sam.pilot", { features: { myreq: false, recheck: false, parties: false } });
+      await fillExample(page, {}); await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      const mine = recFiles().filter(x => /sam\.pilot/.test(folderPath(env, x.folder)));
+      check("הבקשות שלי, שלב א׳ זהה (דגלים כבויים): הקובץ השמור נושא בדיוק את שדות שלב א׳ בסדרם — בלי snapshot ובלי snapshotError — אין כפתור ״הבקשות שלי״, ואפס קריאות myRequests/getRequest", mine.length === 1 && Object.keys(mine[0].rec).join() === PH_A_KEYS.join() && (await page.locator("#ubMyReq").count()) === 0 && page._calls.actions.filter(a => a === "myRequests" || a === "getRequest").length === 0, mine.length ? Object.keys(mine[0].rec).join() : "אין קובץ");
+      await ctx.close();
+    }
+
+    /* ---- ה. מסך צר (320px): הרשימה, הסיכום והאישור בלי גלילה אופקית ובלי חיתוך; מגע 44px; ניגודיות הצ׳יפים ---- */
+    {
+      const { ctx, page, popts } = await openAs("ron.pilot", { viewport: { width: 320, height: 640 }, touch: true });
+      const longName = "אתר בדיקה עם שם ארוך מאוד מאוד מאוד " + "ארוךארוךארוךארוךארוך".repeat(8) + " — 30.10.2026";
+      popts.patchResp = (b, r) => (b.action === "myRequests" && r.ok ? Object.assign({}, r, { requests: [Object.assign({}, r.requests[0], { name: longName, state: "sent_live", sentAt: r.requests[0].saved })].concat(r.requests.slice(1)) }) : undefined);
+      const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      const rgb = s => (String(s).match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      await openDlg(page);
+      const measure = () => page.evaluate(() => { const vw = innerWidth, m = document.getElementById("authModal"), box = m.firstElementChild, r = box.getBoundingClientRect();
+        const over = [...m.querySelectorAll("*")].filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && !e.closest(".hbtn") && (b.right > vw + 1 || b.left < -1); }).map(e => e.tagName + "." + e.className).slice(0, 5);
+        const btns = [...m.querySelectorAll("button:not(.hbtn)")].filter(b => b.getClientRects().length).map(b => Math.round(b.getBoundingClientRect().height));
+        const rowsOver = [...m.querySelectorAll(".mrRow")].filter(e => e.scrollWidth > e.clientWidth + 1).length;
+        const small = [...m.querySelectorAll("button:not(.hbtn)")].filter(b => b.getClientRects().length && b.getBoundingClientRect().height < 44).map(b => (b.id || b.dataset.act || b.className) + ":" + Math.round(b.getBoundingClientRect().height) + ":" + getComputedStyle(b).minHeight + ":" + b.matches(".authBox.mr #mdClose")).slice(0, 4);
+        return { small, vw, docW: document.documentElement.scrollWidth, boxL: Math.round(r.left), boxR: Math.round(r.right), over, minBtn: btns.length ? Math.min(...btns) : null, nBtns: btns.length, rowsOver, hs: box.scrollWidth > box.clientWidth + 1 }; });
+      const L1 = await measure();
+      const chips = await page.evaluate(() => [...document.querySelectorAll(".mrChip")].map(c => ({ state: c.dataset.state, color: getComputedStyle(c).color, bg: getComputedStyle(c.closest(".mrRow")).backgroundColor })));
+      const minRatio = Math.min(...chips.map(c => ratio(rgb(c.color), rgb(c.bg))));
+      check("הבקשות שלי, מסך 320px: רשימה עם שם ארוך מאוד — בלי גלילה אופקית בדף או בחלון, שום אלמנט לא יוצא מהמסך, החלון בתוך המסך, שורות לא נחתכות, כפתורי פעולה בגובה 44px לפחות (מגע)", L1.docW <= L1.vw && L1.over.length === 0 && L1.boxL >= 0 && L1.boxR <= L1.vw && !L1.hs && L1.rowsOver === 0 && L1.minBtn >= 44 && L1.nBtns >= 20, JSON.stringify(L1));
+      check("הבקשות שלי: ניגודיות צ׳יפי המצב מול הרקע — לפחות 4.5:1 לכל מצב (והמצב מוצג גם בטקסט, לא רק בצבע)", chips.length >= 3 && minRatio >= 4.5 && new Set(chips.map(c => c.state)).size >= 2, minRatio.toFixed(2) + " " + JSON.stringify(chips.map(c => c.state)));
+      await page.screenshot({ path: path.join(OUT, "myreq-320-list.png") });
+      await page.click('#mrBody li[data-id] button[data-act="view"] >> nth=-1'); await page.waitForSelector("#mrView");
+      const L2 = await measure();
+      await page.screenshot({ path: path.join(OUT, "myreq-320-view.png") });
+      check("הבקשות שלי, מסך 320px: סיכום ״הצג״ (טבלה, רשימות, ערכים ארוכים) — בלי גלילה אופקית ובלי אלמנט שיוצא מהמסך", L2.docW <= L2.vw && L2.over.length === 0 && L2.boxR <= L2.vw && !L2.hs, JSON.stringify(L2));
+      await ctx.close();
+    }
+  }
+  /* MYREQ-END */
+  /* RECHECKUI-BEGIN */
+  /* ===== תרחיש ״בדיקה חוזרת״ (שלב ב׳, U3): הכפתור ״🔁 בדיקה חוזרת״ ב״הבקשות שלי״ (רק בתצוגה מתקדמת, כשהשרת מדווח recheck והדגל features.recheck לא כבוי, ורק לבקשה שנשלחה), בדיקה טרייה מול הנתונים העדכניים בלי לגעת בבקשה שבטופס,
+     סעיף ״שינויים מאז ההגשה״ עם הבאנר ״לא צורף״, שמירה בדרייב (saveRecheck בלבד) והורדה של דוח ה-Word, ״הכן בקשה מעודכנת״ (אותם תאריכים; שליחה שמחליפה את הקודמת דרך again, בלי ״כבר שלחתם״) — וכשהדגל כבוי / שרת ישן / בלי תצוגה מתקדמת: הכול כמו בשלב א׳ ===== */
+  if (!LIVE) {
+    const REC_SUFFIX = " — נתוני הבקשה.json", crypto_ = require("node:crypto"), JSZ = require(path.join(ROOT, "members-k38p/requests/vendor/jszip.min.js"));
+    const DECL_ = { v: "2026-10-19", at: "2026-10-19T10:00:00.000Z" }, SENT_T = Date.UTC(2026, 9, 10, 8, 30), SENT_TXT = "10.10.2026";
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    const mkUser = (u, org, adv) => { env.call({ action: "addUser", token: admTok, newUser: u, newPass: u.split(".")[0] + "-pass-12345", org }); if (adv !== undefined) env.call({ action: "setAdv", token: admTok, target: u, adv }); };
+    mkUser("ava.pilot", false, true); mkUser("pam.pilot", false); mkUser("ora.org", true); mkUser("bob.pilot", false, true);
+    { const rec = JSON.parse(env.props["U:ava.pilot"]); rec.email = "ava@example.com"; env.props["U:ava.pilot"] = JSON.stringify(rec); }   // כתובת רשומה: בלעדיה מטיס עצמאי לא יכול לשלוח
+    const passOf = u => (u === ADMIN ? PASS : u.split(".")[0] + "-pass-12345");
+    const tokOf = u => env.call({ action: "login", user: u, pass: passOf(u) }).token;
+    const logRun = (fn, ...a) => require("node:vm").runInContext(fn, env.sandbox)(...a);
+    const setSent = (id, sent) => logRun("(function (id, sent) { var log = readLog_(); findById_(log, id).sent = sent; writeLog_(log, id); })", id, sent);
+    const logEntry = id => JSON.parse(logRun("(function (id) { return JSON.stringify(findById_(readLog_(), id)); })", id));
+    const recFiles = () => Object.values(env.folders).flatMap(f => f.files.filter(x => !x.trashed && x.name.endsWith(REC_SUFFIX)).map(x => ({ folder: f, file: x, rec: (() => { try { return JSON.parse(x.bytes.toString("utf8")); } catch (e) { return null; } })() })));
+    const driveSnap = () => JSON.stringify(Object.values(env.folders).map(f => [f.id, f.name, f.parent, !!f.trashed, f.files.map(x => [x.name, !!x.trashed, crypto_.createHash("sha1").update(x.bytes).digest("hex")]).sort()]).sort());
+    const folderFilesOf = id => env.folders[id].files.filter(x => !x.trashed).map(x => x.name + ":" + crypto_.createHash("sha1").update(x.bytes).digest("hex"));
+    const reqFolderCountNow = () => reqFolders(env).length;
+    let ridN = 0;
+    // בקשה שמורה כמו בדפדפן, בשרת האמיתי (Code.gs על הדמיית דרייב): saveBegin → saveFile (Word, תמונה, נתוני הבקשה) → saveEnd. rec = אובייקט או מחרוזת גולמית; null = בלי קובץ נתונים
+    const seed = (user, base, rec) => {
+      const tok = tokOf(user), rid = (++ridN + "").padStart(2, "0") + "cd".repeat(15), b = env.call({ action: "saveBegin", token: tok, folderName: base, rid });
+      if (!b.ok) throw new Error("seed " + JSON.stringify(b));
+      const files = [[base + " — בקשה.docx", "W"], [base + " — מפה.png", "P"]].concat(rec === null ? [] : [[base + REC_SUFFIX, typeof rec === "string" ? rec : JSON.stringify(rec)]]);
+      for (const [n, c] of files) env.call({ action: "saveFile", token: tok, folderId: b.folderId, name: n, mime: "application/octet-stream", b64: Buffer.from(c).toString("base64") });
+      env.call({ action: "saveEnd", token: tok, folderId: b.folderId, ready: true, decl: DECL_ });
+      env.advance(2000);
+      return b.folderId;
+    };
+    const goodRec = over => ({ savedAt: "2026-10-10T09:00:00.000Z", site: "אתר", version: "1", edition: "ed", declaration: { version: "2026-10-19", confirmedAt: "2026-10-10T08:59:00.000Z" },
+      inputs: Object.assign({ lat: 32.099128, lon: 34.816617, radius: 200, heightM: 60, dateFrom: "2026-11-02", dateTo: "2026-11-02", timeFrom: "14:30", timeTo: "17:30", purpose: "מהות מותאמת אישית", aircraft: ["כלי טיס מותאם א"], vlos: true, siteName: "חדרה", knownObstacles: "מגדל מים\nאנטנה", visitDate: "2026-10-01", visitNotes: "סיור קודם", manualItems: [{ name: "עמוד חשמל ישן", lat: 32.1005, lon: 34.8005, heightM: 12 }] }, over), zones: [], items: [] });
+    const sentLive = (user, id, t) => setSent(id, [{ sid: "r" + id, t: t || SENT_T, user, mode: "live", target: "office", st: "sent" }]);
+    const sentTest = (user, id) => setSent(id, [{ sid: "r" + id, t: SENT_T, user, mode: "test", target: "office", st: "sent" }]);
+    const openAs = async (user, extra) => {
+      const popts = Object.assign({ env }, extra || {}), { ctx, page } = await newPage(browser, popts);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, passOf(user));
+      return { ctx, page, popts };
+    };
+    const openDlg = async page => { await page.click("#ubMyReq"); await page.waitForSelector("#mrBody", { state: "attached" }); await page.waitForFunction(() => { const b = document.getElementById("mrBody"); return b && !b.hasAttribute("aria-busy") && document.getElementById("mrStatus").textContent.trim() !== ""; }, null, { timeout: 15000 }); };
+    const n = (page, a) => page._calls.actions.filter(x => x === a).length;
+    // לוחץ ״בדיקה חוזרת״ בשורה ומחכה לתוצאה (סעיף השינויים) או להודעת שגיאה
+    const doRecheck = async (page, id) => {
+      await page.click('#mrBody button[data-act="recheck"][data-id="' + id + '"]');
+      await page.waitForSelector("#rcTitle", { timeout: 15000 });
+      await page.waitForFunction(() => document.getElementById("rcRes") || (document.getElementById("rcMsg") && document.getElementById("rcMsg").textContent.trim()), null, { timeout: 150000 });
+    };
+    const rcText = page => page.evaluate(() => { const m = document.getElementById("authModal"); return m ? m.innerText : ""; });
+    const orgAddr = page => page.evaluate(() => { const html = document.documentElement.outerHTML, helps = [...document.querySelectorAll(".hbtn")].map(e => e.dataset.help || "").join(" | "); return html.includes("office@icd.org.il") || document.body.innerText.includes("office@icd.org.il") || helps.includes("office@icd.org.il"); });
+    const ymd = d => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+    let ctrl = -1;   // בקרת ביקורת: כמה כפתורי ״בדיקה חוזרת״ רואה מטיס עם תצוגה מתקדמת — הבדיקות ״אין כפתור״ בהמשך תקפות רק כשהבקרה חיובית (אחרת הן עוברות גם כשהתכונה לא קיימת)
+    const tapBodies = page => { const arr = []; page.on("request", r => { if (r.method() === "POST" && r.url().startsWith(API)) { try { arr.push(JSON.parse(r.postData() || "{}")); } catch (e) { /* ignore */ } } }); return arr; };
+    const clone = o => JSON.parse(JSON.stringify(o));
+    const plainDoc = async bytes => { const z = await JSZ.loadAsync(bytes), doc = await z.file("word/document.xml").async("string"); return { doc, files: Object.keys(z.files), plain: doc.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").split(String.fromCharCode(0x200f)).join("").replace(/[\u202a-\u202c]/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&") }; };
+    const subDocx = folderId => { const sub = Object.values(env.folders).find(f => f.parent === folderId && f.name === "בדיקות חוזרות" && !f.trashed); return sub ? sub.files.filter(x => !x.trashed && x.name.endsWith(".docx")) : []; };
+    const markers = folderId => env.folders[folderId].files.filter(x => !x.trashed && /^בדיקה חוזרת — .*\.txt$/.test(x.name));
+    let recA = null, folderA = null, recTampered = null;
+
+    /* ---- א. מי רואה את הכפתור: רק תצוגה מתקדמת + שרת עם recheck + דגל לא כבוי; רק בקשה שנשלחה (חי / בדיקה); הרשימה בלעדיו זהה לשלב א׳ ---- */
+    {
+      const live = seed("ava.pilot", "אתר חי — 02.11.2026", goodRec()), tst = seed("ava.pilot", "אתר בדיקה — 03.11.2026", goodRec({ dateFrom: "2026-11-03", dateTo: "2026-11-03" })), draft = seed("ava.pilot", "אתר טיוטה — 04.11.2026", goodRec({ dateFrom: "2026-11-04", dateTo: "2026-11-04" }));
+      sentLive("ava.pilot", live); sentTest("ava.pilot", tst);
+      const plainLive = seed("pam.pilot", "אתר פמ — 02.11.2026", goodRec()); sentLive("pam.pilot", plainLive);
+      const btnsOf = page => page.evaluate(() => [...document.querySelectorAll("#mrBody .mrRow")].map(r => ({ id: r.dataset.id, state: r.querySelector(".mrChip").dataset.state, acts: [...r.querySelectorAll(".mrAct button")].map(b => b.dataset.act), re: (r.querySelector('button[data-act="recheck"]') || {}).textContent || "", label: (r.querySelector('button[data-act="recheck"]') || { getAttribute: () => "" }).getAttribute("aria-label") })));
+      const legend = page => page.evaluate(() => [...document.querySelectorAll("#authModal .mrLegend .hbtn")].map(b => b.getAttribute("aria-label")));
+      { // מטיס עם תצוגה מתקדמת: כפתור רק לבקשות שנשלחו; ״!״ לכפתור
+        const { ctx, page } = await openAs("ava.pilot"); const dialogs = []; page.on("dialog", d => { dialogs.push(d.type()); d.dismiss(); });
+        check("בדיקה חוזרת: מטיס עצמאי עם תצוגה מתקדמת (org=false, adv=true) והשרת מדווח recheck", await page.evaluate(() => window.ReqAuth.isAdv() && !window.ReqAuth.isOrg() && window.ReqAuth.hasFeature("recheck")), "");
+        await openDlg(page); const rows = await btnsOf(page), byId = Object.fromEntries(rows.map(r => [r.id, r]));
+        ctrl = rows.filter(r => r.acts.includes("recheck")).length;
+        check("בדיקה חוזרת: כפתור ״🔁 בדיקה חוזרת״ מופיע לבקשה שנשלחה חי ולבקשה שנשלחה בבדיקה — ולא לטיוטה; ליד ״הצג״ ו״כבסיס״, עם שם נגיש שמתחיל ב״בדיקה חוזרת: <שם הבקשה>״", rows.length === 3 && byId[live].acts.join() === "view,base,recheck" && byId[tst].acts.join() === "view,base,recheck" && byId[draft].acts.join() === "view,base" && byId[live].re === "🔁 בדיקה חוזרת" && byId[live].label === "בדיקה חוזרת: אתר חי — 02.11.2026", JSON.stringify(rows));
+        const lg = await legend(page), help = await page.locator("#authModal .mrLegend .hbtn").last().getAttribute("data-help");
+        check("בדיקה חוזרת: בראש החלון נוסף ״!״ של הבדיקה החוזרת (שם נגיש ייחודי) שמסביר מה היא עושה — מודיעין טיס, לא צורף ולא נשלח, תצוגה מתקדמת — בלי כתובת מייל", lg.join("|") === "הסבר על: הצגת בקשה שמורה|הסבר על: שימוש בבקשה כבסיס|הסבר על: בדיקה חוזרת" && /מודיעין טיס/.test(help) && /לא מצורף ולא נשלח/.test(help) && /תצוגה מתקדמת/.test(help) && !/@/.test(help) && !/נוטאם/.test(help), lg.join("|") + " | " + help.slice(0, 80));
+        check("בדיקה חוזרת: פתיחת הרשימה לא קוראת ל-getRequest ולא פותחת חלון של הדפדפן", n(page, "getRequest") === 0 && n(page, "myRequests") === 1 && dialogs.length === 0, "");
+        await ctx.close();
+      }
+      { // מטיס עצמאי בלי תצוגה מתקדמת: אין כפתור ואין קריאה — גם לבקשה שנשלחה
+        const { ctx, page } = await openAs("pam.pilot");
+        check("בדיקה חוזרת: מטיס עצמאי בלי תצוגה מתקדמת — ״הבקשות שלי״ זמינה, אבל אין ״בדיקה חוזרת״ (לא בשורה ולא ב-״!״ שבראש החלון), ואין קריאות getRequest", await page.evaluate(() => !window.ReqAuth.isAdv() && !window.ReqAuth.isOrg()) && (await page.locator("#ubMyReq").count()) === 1, "");
+        await openDlg(page); const rows = await btnsOf(page);
+        check("בדיקה חוזרת: בלי תצוגה מתקדמת — לבקשה שנשלחה חי שני כפתורי פעולה בלבד (הצג / כבסיס), בלי בדיקה חוזרת; ובראש החלון שני הסברים בלבד", ctrl === 2 && rows.length === 1 && rows[0].state === "sent_live" && rows[0].acts.join() === "view,base" && (await legend(page)).join("|") === "הסבר על: הצגת בקשה שמורה|הסבר על: שימוש בבקשה כבסיס" && n(page, "getRequest") === 0, JSON.stringify(rows));
+        await ctx.close();
+      }
+      for (const [who, label] of [[ADMIN, "מנהל"], ["ora.org", "חשבון ארגוני"]]) { // מנהל ועובד ארגון: תצוגה מתקדמת כברירת מחדל
+        const u = who === ADMIN ? ADMIN : who, id = seed(u, "אתר " + label + " — 02.11.2026", goodRec()); sentLive(u, id);
+        const { ctx, page } = await openAs(u); await openDlg(page);
+        const rows = (await btnsOf(page)).filter(r => r.id === id);
+        check("בדיקה חוזרת: " + label + " (תצוגה מתקדמת כברירת מחדל) רואה את הכפתור בבקשה שנשלחה", rows.length === 1 && rows[0].acts.includes("recheck") && (await page.evaluate(() => window.ReqAuth.isAdv())), JSON.stringify(rows));
+        await ctx.close();
+      }
+      { // הדגל features.recheck כבוי: אין כפתור, אין ״!״, אין קריאות — והרשימה כמו בשלב א׳ (״הבקשות שלי״ ממשיכה לפעול)
+        const { ctx, page } = await openAs("ava.pilot", { features: { recheck: false } }); await openDlg(page); const rows = await btnsOf(page);
+        check("בדיקה חוזרת, דגל כבוי (features.recheck=false): מטיס עם תצוגה מתקדמת — בלי כפתור בשום שורה, ללא ״!״ נוסף, רשימה כמו בשלב א׳ (שני כפתורים לשורה), ובלי קריאות getRequest/saveRecheck", ctrl === 2 && rows.length === 3 && rows.every(r => r.acts.join() === "view,base") && (await legend(page)).length === 2 && n(page, "getRequest") === 0 && n(page, "saveRecheck") === 0 && (await page.locator('#authModal [data-act="recheck"], #authModal [data-rc]').count()) === 0, JSON.stringify(rows.map(r => r.acts)));
+        await page.click('#mrBody button[data-act="view"] >> nth=0'); await page.waitForSelector("#mrView");
+        check("בדיקה חוזרת, דגל כבוי: ״הצג״ עדיין עובד כרגיל (הבדיקה החוזרת לא מכבה את ״הבקשות שלי״)", (await page.locator("#mrView").innerText()).length > 50 && n(page, "getRequest") === 1, "");
+        await ctx.close();
+      }
+      { // שרת שמדווח myRequests אבל לא recheck (שרת בגרסה ביניים): אין כפתור
+        const { ctx, page } = await openAs("ava.pilot", { patchResp: (b, r) => (r && Array.isArray(r.features) ? Object.assign({}, r, { features: r.features.filter(f => f !== "recheck") }) : undefined) });
+        await openDlg(page); const rows = await btnsOf(page);
+        check("בדיקה חוזרת, שרת בלי recheck (מדווח myRequests בלבד): אין כפתור — ״הבקשות שלי״ כרגיל", ctrl === 2 && rows.length === 3 && rows.every(r => r.acts.join() === "view,base") && (await page.evaluate(() => window.ReqAuth.isAdv())) && n(page, "getRequest") === 0, JSON.stringify(rows.map(r => r.acts)));
+        await ctx.close();
+      }
+      { // שרת של שלב א׳ (בלי myRequests ובלי recheck): אין ״הבקשות שלי״ בכלל, ואין שום ממשק בדיקה חוזרת
+        const { ctx, page } = await openAs("ava.pilot", { noMyReq: true });
+        check("בדיקה חוזרת, שרת של שלב א׳ (בלי myRequests / recheck): אין כפתור ״הבקשות שלי״, אין חלון ואין אף אלמנט של בדיקה חוזרת — הדף כמו בשלב א׳", ctrl === 2 && (await page.locator("#ubMyReq").count()) === 0 && (await page.locator("#authModal, [data-rc], #rcTitle").count()) === 0 && !(await page.evaluate(() => window.ReqAuth.hasFeature("recheck"))) && n(page, "getRequest") === 0, "");
+        await ctx.close();
+      }
+    }
+
+    /* ---- ב. זרימה מלאה אמיתית: בקשה שהורצה ונשמרה (עם תמונת מצב) ונשלחה; בדיקה חוזרת (טרייה, בלי לגעת בטופס ובדרייב), הורדה, שמירה, ״הכן בקשה מעודכנת״ (אישור, אותם תאריכים), הרצה ושליחה שמחליפה (נושא, again, בלי ״כבר שלחתם״) ---- */
+    {
+      const ids0 = new Set(recFiles().map(x => x.folder.id));
+      const one = await openAs("ava.pilot", { autosave: true });
+      await fillExample(one.page, { radius: 200, height: 80, known: "עגורן בכניסה" });
+      await one.page.click("#runBtn"); await one.page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await one.page.check("#reviewOk");
+      await one.page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+      const fresh = recFiles().filter(x => !ids0.has(x.folder.id));
+      check("בדיקה חוזרת: הבקשה האמיתית נשמרה אוטומטית עם תמונת מצב (snapshot) — הבסיס להשוואה", fresh.length === 1 && !!fresh[0].rec && !!fresh[0].rec.snapshot && fresh[0].rec.snapshot.v === 1, fresh.length + " רשומות");
+      folderA = fresh[0].folder; recA = fresh[0].rec; const idA = folderA.id, fileA = fresh[0].file;
+      await one.ctx.close();
+      sentLive("ava.pilot", idA);
+      // התמונה שנשמרה בהגשה מוחלפת באחת שונה מהמצב הנוכחי: חסר אזור ופריט (עכשיו ״חדשים״), פריט במרחק אחר, חסר נוטם
+      recTampered = clone(recA); const S0 = recTampered.snapshot, zid = S0.zones[0].id; S0.zones.shift(); S0.items.shift(); S0.items[0].d += 120; if (S0.notams.hits.length) S0.notams.hits.shift();
+      fileA.bytes = Buffer.from(JSON.stringify(recTampered, null, 1));
+      env.call({ action: "setMailMode", token: admTok, mode: "live" });
+
+      const two = await openAs("ava.pilot"), page = two.page, bodies = tapBodies(page), dialogs = []; page.on("dialog", d => { dialogs.push(d.type()); d.dismiss(); });
+      // בקשה בעבודה בטופס (נקודה ורדיוס אחרים) ופרטי מבקש: הבדיקה החוזרת לא קוראת ולא משנה אותם
+      await page.evaluate(() => { document.getElementById("personBox").open = true; });
+      await page.fill("#reqName", "בודק ראשון"); await page.fill("#reqPhone", "050-0000001"); await page.fill("#reqOrg", "חברת הבדיקה בע״מ"); await setContacts(page, [["בודק שני", "050-0000002"], ["בודק שלישי", "050-0000003"]]);
+      await page.fill("#coord", "31.5, 34.9"); await page.dispatchEvent("#coord", "change"); await page.fill("#radius", "321");
+      const formState = () => page.evaluate(() => { const S = window.__REQ.S, v = id => document.getElementById(id).value; return { coord: v("coord"), radius: v("radius"), height: v("height"), dates: [v("dateFrom"), v("dateTo"), v("timeFrom"), v("timeTo")].join("|"), hasRes: !!S.res, near: S.data.near === undefined, st: JSON.stringify(["osm_near", "osm_far", "osm_ext", "map", "review", "input"].map(k => S.statuses[k])), rev: S.rev, rid: S.rid, update: S.update,
+        person: [v("reqName"), v("reqPhone"), v("reqOrg"), [...document.querySelectorAll("#contactList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";")].join("|") }; });
+      const f0 = await formState();
+      await openDlg(page);
+      const snap0 = driveSnap(), c0 = { ov: page._calls.overpass, nom: page._calls.nominatim, tiles: page._calls.tiles, acts: page._calls.actions.length }, filesA0 = folderFilesOf(idA);
+      await doRecheck(page, idA);
+      const T1 = await rcText(page), m1 = await page.evaluate(() => { const m = document.getElementById("authModal"), box = m.firstElementChild, h = document.getElementById(m.getAttribute("aria-labelledby")), banner = document.querySelector(".rc-banner"), res = document.getElementById("rcRes");
+        return { role: m.getAttribute("role"), modal: m.getAttribute("aria-modal"), title: h && h.textContent, name: (document.querySelector(".rcName") || {}).textContent, focus: document.activeElement && document.activeElement.id, region: res.getAttribute("role") + "|" + res.getAttribute("aria-label"), bannerFirst: !!banner && banner.getBoundingClientRect().height > 30 && res.querySelector("h3").nextElementSibling === banner, status: document.getElementById("rcStatus").textContent, btns: [...document.querySelectorAll(".rcBtns > .hw > button:not(.hbtn), .rcBtns > button")].map(b => b.textContent), hbtns: [...document.querySelectorAll(".rcBtns .hbtn")].map(b => b.getAttribute("aria-label")), inert: document.querySelector("main").hasAttribute("inert") }; });
+      check("בדיקה חוזרת: חלון נגיש — role=dialog, aria-modal, aria-labelledby לכותרת ״בדיקה חוזרת״, שם הבקשה מוצג, הרקע inert, והמיקוד עובר לאזור התוצאות (region עם שם); בסיום ״הבדיקה הסתיימה״", m1.role === "dialog" && m1.modal === "true" && m1.title === "בדיקה חוזרת" && m1.name === folderA.name && m1.inert && m1.focus === "rcRes" && m1.region === "region|תוצאות הבדיקה החוזרת" && m1.status === "הבדיקה הסתיימה.", JSON.stringify(m1));
+      check("בדיקה חוזרת: הכפתורים — שמור דוח בדרייב, הורד, הכן בקשה מעודכנת (יש שינויים), חזרה לרשימה — ולכל אחד מהשלושה ״!״ עם שם נגיש", m1.btns.join("|") === "שמור דוח בדרייב|הורד|הכן בקשה מעודכנת|חזרה לרשימה" && m1.hbtns.join("|") === "הסבר על: שמור דוח בדרייב|הסבר על: הורדת דוח הבדיקה החוזרת|הסבר על: הכן בקשה מעודכנת", JSON.stringify([m1.btns, m1.hbtns]));
+      check("בדיקה חוזרת: הבאנר הבולט ״דוח זה לא צורף לבקשה שנשלחה למודיעין טיס ב-10.10.2026״ מיד מתחת לכותרת ״שינויים מאז ההגשה״, לפני כל השאר — עם ההבהרה שאם הבקשה כבר אושרה אין צורך לשלוח שוב (בלי חלון, בלי אישור)", m1.bannerFirst && T1.includes("שינויים מאז ההגשה") && T1.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס ב-" + SENT_TXT) && /אם הבקשה כבר אושרה — אין צורך לשלוח שוב/.test(T1) && T1.indexOf("דוח זה לא צורף") < T1.indexOf("הוגשה:") && !T1.includes("נשלחה במצב בדיקה בלבד") && dialogs.length === 0, T1.slice(0, 200));
+      const total = +(/נמצאו (\d+) שינויים/.exec(T1) || [])[1], ctx1 = T1;
+      check("בדיקה חוזרת: סיכום השינויים — לפחות ארבעה (האזור והפריט שהיו חסרים בהגשה, הפריט שמרחקו שונה, הנוטם), עם ספירה לפי קבוצה, ושורות עם מזהה האזור, ״התקרב״/״התרחק״ ופרטים; התאריכים: הוגשה, נבדקה מחדש, מועד הפעילות", total >= 4 && /אזורי איסור\/הגבלה \d/.test(ctx1) && ctx1.includes(zid) && /התקרב|התרחק/.test(ctx1) && /הוגשה: 10\.10\.2026/.test(ctx1) && /נבדקה מחדש: \d\d\.\d\d\.\d{4}/.test(ctx1) && /מועד הפעילות: \d\d\.\d\d\.\d{4}( עד \d\d\.\d\d\.\d{4})? 17:00–20:00/.test(ctx1), "total=" + total);
+      check("בדיקה חוזרת: הסריקה נעולה לבקשה השמורה — נקודה (32.099128, 34.816617), רדיוס 200, גובה 80 וההתאריכים מהרשומה — ולא מהטופס (שם נקודה אחרת ורדיוס 321)", /מה נבדק/.test(T1) && /32\.099128, 34\.816617/.test(T1) && /רדיוס\s+200 מ׳/.test(T1) && /גובה\s+80 מ׳/.test(T1) && !/321/.test(T1) && !/31\.5/.test(T1) && T1.includes("נלקח מהבקשה השמורה ואי אפשר לשנותו") && (await page.locator("#rcRes input, #rcRes select, #rcRes textarea").count()) === 0, "");
+      const f1 = await formState();
+      check("בדיקה חוזרת: הבקשה שבטופס לא נגעה — אותה נקודה ורדיוס שהוזנו, בלי ניתוח, אותם סטטוסים של ההרצה, אותה גרסה ומזהה, פרטי המבקש ואנשי הקשר כפי שהיו, ולא נשמרו נתוני OSM ב-S.data", JSON.stringify(f1) === JSON.stringify(f0) && !f1.hasRes && f1.near && f1.radius === "321", JSON.stringify(f1).slice(0, 200));
+      check("בדיקה חוזרת: רשת — getRequest פעם אחת, שלוש שאילתות OSM טריות, בלי Nominatim ובלי אריחי מפה; ושום קריאה לשמירה או לשליחה (saveBegin / saveFile / saveEnd / saveRecheck / sendRequest) — ותיקיות הדרייב ללא שינוי", page._calls.actions.slice(c0.acts).join() === "getRequest" && page._calls.overpass === c0.ov + 3 && page._calls.nominatim === c0.nom && page._calls.tiles === c0.tiles && driveSnap() === snap0, page._calls.actions.slice(c0.acts).join() + " ov+" + (page._calls.overpass - c0.ov));
+      check("בדיקה חוזרת: כתובת הארגון (office@icd.org.il) לא מופיעה בדף של מטיס עצמאי — לא ב-HTML, לא בטקסט הגלוי ולא בהסברי ה-״!״ — גם כשתוצאות הבדיקה החוזרת פתוחות", !(await orgAddr(page)), "");
+
+      // הורדה: קובץ Word נפרד — בלי שמירה
+      const [dl] = await Promise.all([page.waitForEvent("download"), page.click('[data-rc="dl"]')]);
+      const dlDoc = await plainDoc(fs.readFileSync(await dl.path()));
+      check("בדיקה חוזרת, ״הורד״: קובץ Word בשם ״בדיקה חוזרת — <שם האתר> — <תאריכים>.docx״ עם הבאנר ״לא צורף״, השינויים (מזהה האזור), מקורות הנתונים ודף הבדיקות העדכני — בלי טופס הבקשה ובלי תמונות; ללא קריאת שמירה לשרת", /^בדיקה חוזרת — .+ — \d\d\.\d\d\.\d{4}( עד \d\d\.\d\d\.\d{4})?\.docx$/.test(dl.suggestedFilename()) && dlDoc.plain.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס") && dlDoc.plain.includes(zid) && dlDoc.plain.includes("דף הבדיקות העדכני") && dlDoc.plain.includes("מקורות הנתונים") && !dlDoc.plain.includes("נספח ג׳") && !dlDoc.files.some(f => /^word\/media\/./.test(f)) && !bodies.some(b => b.action === "saveRecheck") && driveSnap() === snap0, dl.suggestedFilename());
+      check("בדיקה חוזרת, ״הורד״: ה-XML תקין (מאוזן) וקובץ ה-ZIP שלם", /^<\?xml/.test(dlDoc.doc) && dlDoc.doc.split("<w:p>").length > 20 && dlDoc.doc.split("<w:tbl>").length === dlDoc.doc.split("</w:tbl>").length, "");
+
+      // שמירה בדרייב: saveRecheck בלבד, בתת-תיקייה נפרדת; הקבצים שנשלחו לא משתנים
+      await page.click('[data-rc="save"]'); await page.waitForFunction(() => /הדוח נשמר בדרייב/.test(document.getElementById("rcStatus").textContent), null, { timeout: 30000 });
+      const sr = bodies.filter(b => b.action === "saveRecheck"), docsA = subDocx(idA), mk = markers(idA), filesA1 = folderFilesOf(idA).filter(x => !/^בדיקה חוזרת — /.test(x)), e1 = logEntry(idA);
+      check("בדיקה חוזרת, ״שמור דוח בדרייב״: קריאת saveRecheck אחת לתיקיית הבקשה, קובץ zip תקין (UEsD…), וסיכום הממצאים (חדשים / הוסרו / שונו) שמסתכם במספר השינויים שעל המסך", sr.length === 1 && sr[0].folderId === idA && /^UEsD/.test(sr[0].b64) && sr[0].sum && sr[0].sum.a + sr[0].sum.r + sr[0].sum.c === total && sr[0].sum.a >= 3 && Object.keys(sr[0]).sort().join() === "action,b64,folderId,sum,token", JSON.stringify(sr[0].sum));
+      check("בדיקה חוזרת, שמירה: הדוח נשמר בתת-תיקייה ״בדיקות חוזרות״ בתוך תיקיית הבקשה, ובתיקיית הבקשה עצמה רק סימון טקסט (לא צורף ולא נספר); הקבצים שנשלחו (Word, תמונות, נתוני הבקשה) זהים בתוכנם; ביומן נרשמה בדיקה אחת עם הספירות", docsA.length === 1 && mk.length === 1 && /לא צורף לבקשה שנשלחה/.test(mk[0].bytes.toString("utf8")) && JSON.stringify(filesA1) === JSON.stringify(filesA0) && Array.isArray(e1.rc) && e1.rc.length === 1 && e1.rc[0][1] === sr[0].sum.a && e1.rc[0][2] === sr[0].sum.r && e1.rc[0][3] === sr[0].sum.c && e1.sent.length === 1, docsA.length + "/" + mk.length);
+      const savedPlain = await plainDoc(docsA[0].bytes);
+      check("בדיקה חוזרת, שמירה: הדוח שבדרייב הוא אותו דוח (הבאנר והשינויים), ההודעה במסך מציינת שהוא לא צורף לבקשה (״בדיקה חוזרת מס׳ 1״), והכפתור הופך ל״הדוח נשמר ✔״ מושבת — ולחיצה נוספת לא שומרת שוב", savedPlain.plain.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס") && savedPlain.plain.includes(zid) && /בדיקה חוזרת מס׳ 1 לבקשה זו\). הוא לא צורף לבקשה שנשלחה/.test(await page.textContent("#rcStatus")) && (await page.textContent('[data-rc="save"]')) === "הדוח נשמר ✔" && (await page.getAttribute('[data-rc="save"]', "aria-disabled")) === "true", "");
+      await page.click('[data-rc="save"]', { force: true }); await page.waitForTimeout(400);
+      check("בדיקה חוזרת: לחיצה נוספת אחרי השמירה לא שולחת קריאה נוספת", bodies.filter(b => b.action === "saveRecheck").length === 1 && subDocx(idA).length === 1, "");
+
+      // ״הכן בקשה מעודכנת״ כשיש בקשה בעבודה: אישור בתוך החלון (ביטול = ברירת מחדל), ואז החלפה
+      const pre = await formState();
+      await page.click('[data-rc="update"]'); await page.waitForSelector(".rcConfirm");
+      const conf = await page.evaluate(() => ({ text: document.querySelector(".rcConfirm").textContent, focus: document.activeElement.dataset.rc, btns: [...document.querySelectorAll(".rcConfirm button")].map(b => b.textContent) }));
+      check("בדיקה חוזרת, ״הכן בקשה מעודכנת״ כשיש בקשה בעבודה: אישור בתוך החלון (לא confirm של הדפדפן) — ברירת המחדל ״ביטול״, ולא הוחלף דבר", /בקשה בעבודה/.test(conf.text) && /תחליף אותה/.test(conf.text) && conf.focus === "no" && conf.btns.join("|") === "ביטול|כן, החלף" && dialogs.length === 0 && JSON.stringify(await formState()) === JSON.stringify(pre), JSON.stringify(conf));
+      await page.click('.rcConfirm button[data-rc="no"]');
+      check("בדיקה חוזרת: ביטול באישור חוזר לתוצאות — הדוח, השינויים והכפתורים (״הדוח נשמר ✔״ נשאר מושבת); הטופס לא השתנה, ולא נשלחה קריאה", (await page.locator("#rcRes").count()) === 1 && (await page.textContent('[data-rc="save"]')) === "הדוח נשמר ✔" && (await page.locator('[data-rc="update"]').count()) === 1 && JSON.stringify(await formState()) === JSON.stringify(pre) && (await page.evaluate(() => document.activeElement.id)) === "rcRes", "");
+      await page.click('[data-rc="update"]'); await page.waitForSelector(".rcConfirm"); await page.click('.rcConfirm button[data-rc="yes"]');
+      await page.waitForSelector("#updNote");
+      const upd = await page.evaluate(() => { const S = window.__REQ.S, v = id => document.getElementById(id).value, nt = document.getElementById("updNote"); return { coord: v("coord"), radius: v("radius"), height: v("height"), dates: [v("dateFrom"), v("dateTo"), v("timeFrom"), v("timeTo")], visit: v("visitDate"), known: v("knownObs"), hasRes: !!S.res, ready: S.ready, review: document.getElementById("reviewOk").checked, rid: S.rid, update: S.update, dlg: !!document.getElementById("authModal"), inert: document.querySelector("main").hasAttribute("inert"), focus: document.activeElement.id, note: nt.textContent, noteRole: nt.getAttribute("role"),
+        person: [v("reqName"), v("reqPhone"), v("reqOrg"), [...document.querySelectorAll("#contactList .prow")].map(r => [...r.querySelectorAll("input")].map(i => i.value).join("/")).join(";")].join("|"), sendDis: document.getElementById("btnSend").disabled }; });
+      check("בדיקה חוזרת, ״כן, החלף״: הטופס נטען מהבקשה השמורה — אותה נקודה בדיוק, רדיוס 200, גובה 80, מכשול ידוע — ו**אותם תאריכים ושעות** כמו בבקשה שנשלחה (בניגוד ל״השתמש כבסיס״ שמרוקן אותם); החלון נסגר, הרקע פעיל, המיקוד על ״הרץ״", upd.coord === recA.inputs.lat + ", " + recA.inputs.lon && upd.radius === "200" && upd.height === "80" && upd.known === "עגורן בכניסה" && upd.dates.join("|") === [recA.inputs.dateFrom, recA.inputs.dateTo, recA.inputs.timeFrom, recA.inputs.timeTo].join("|") && !upd.dlg && !upd.inert && upd.focus === "runBtn", JSON.stringify(upd));
+      check("בדיקה חוזרת, בקשה מעודכנת: לא נטענות תוצאות — אין ניתוח, לא מוכנה, ההצהרה לא מאושרת, מזהה בקשה חדש; פרטי המבקש ואנשי הקשר כפי שהיו; ההודעה בדף (role=status) מציינת את הבקשה, שהתאריכים נשמרו, להריץ מחדש ולאשר הצהרה, ושהשליחה תחליף את הבקשה שנשלחה ב-10.10.2026", !upd.hasRes && !upd.ready && !upd.review && upd.rid && upd.rid !== pre.rid && upd.person === pre.person && upd.noteRole === "status" && upd.note.includes("נטענה בקשה מעודכנת") && upd.note.includes("התאריכים והשעות נשמרו") && /להריץ את הבדיקות מחדש/.test(upd.note) && /ההצהרה/.test(upd.note) && upd.note.includes("תחליף את הבקשה שנשלחה ב-" + SENT_TXT) && upd.update && upd.update.sentAt === SENT_T && upd.sendDis, upd.note.slice(0, 120));
+      check("בדיקה חוזרת: הכנת הבקשה המעודכנת לא כתבה דבר בדרייב ולא שלחה דבר — עדיין saveRecheck אחד, בלי saveBegin / saveFile / sendRequest, ובלי מיילים; תיקיית הבקשה המקורית ללא שינוי", ["saveBegin", "saveFile", "saveEnd", "sendRequest"].every(a => !bodies.some(b => b.action === a)) && bodies.filter(b => b.action === "saveRecheck").length === 1 && env.mails.length === 0 && JSON.stringify(folderFilesOf(idA).filter(x => !/^בדיקה חוזרת — /.test(x))) === JSON.stringify(filesA0), "");
+
+      // טעינת בסיס אחרת (״השתמש כבסיס״ מ״הבקשות שלי״) מבטלת את הקשר: הבקשה כבר לא ״מחליפה״ והודעת הדף נעלמת — ואז מכינים שוב את הבקשה המעודכנת
+      await openDlg(page); await page.click('#mrBody button[data-act="base"][data-id="' + idA + '"]'); await page.waitForSelector(".mrConfirm"); await page.click('.mrConfirm button[data-act="yes"]'); await page.waitForSelector("#baseNote");
+      const cl = await page.evaluate(() => ({ update: window.__REQ.S.update, note: !!document.getElementById("updNote"), dates: [document.getElementById("dateFrom").value, document.getElementById("timeFrom").value].join("|") }));
+      check("בדיקה חוזרת: טעינת בסיס אחרת (״השתמש כבסיס״) מבטלת את הקשר לבקשה שנשלחה — S.update מתאפס והודעת ״נטענה בקשה מעודכנת״ נעלמת (ההודעה של ״כבסיס״ במקומה; התאריכים ריקים)", cl.update === null && !cl.note && cl.dates === "|", JSON.stringify(cl));
+      await openDlg(page); await doRecheck(page, idA); await page.click('[data-rc="update"]'); await page.waitForSelector(".rcConfirm"); await page.click('.rcConfirm button[data-rc="yes"]'); await page.waitForSelector("#updNote");
+      check("בדיקה חוזרת: הכנה מחודשת של הבקשה המעודכנת — שוב אותם תאריכים ושעות, S.update בתוקף, וההודעה בדף", await page.evaluate(([f, t]) => document.getElementById("dateFrom").value === f && document.getElementById("timeFrom").value === t && !!window.__REQ.S.update && !!document.getElementById("updNote"), [recA.inputs.dateFrom, recA.inputs.timeFrom]), "");
+
+      // הרצה אמיתית של הבקשה המעודכנת
+      await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 30000 });
+      check("בדיקה חוזרת: אחרי ״הרץ״ וההצהרה — הבקשה המעודכנת מוכנה לשליחה, ו-S.update עדיין בתוקף (אותה נקודה, רדיוס, גובה ומועדים)", await page.evaluate(() => window.__REQ.S.ready && !!window.__REQ.S.update), "");
+      const mi = await page.evaluate(() => ({ info: document.getElementById("mailInfo").textContent, href: decodeURIComponent(document.getElementById("btnMail").getAttribute("href")), note: !!document.getElementById("updNote") }));
+      check("בדיקה חוזרת: גם המייל הידני של המנהל (הקישור ו״נושא:״ בדף) נבנה כבקשה מעודכנת — הנושא עם קידומת העדכון וגוף עם משפט ההחלפה; והודעת ״נטענה בקשה מעודכנת״ נעלמה אחרי ״הרץ״", mi.info.startsWith("נושא: [עדכון לבקשה מ-" + SENT_TXT + "] בקשה לסגירה אווירית") && mi.href.includes("subject=[עדכון לבקשה מ-" + SENT_TXT + "] ") && mi.href.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-" + SENT_TXT + ".") && !mi.note, mi.info.slice(0, 80));
+
+      // בדיקה חוזרת נוספת בזמן שיש בטופס בקשה מוכנה: הבקשה, הניתוח, התמונות, ההצהרה והסטטוסים לא נוגעים
+      await page.evaluate(() => { const S = window.__REQ.S; window.__hold = { res: S.res, near: S.data.near, far: S.data.far, ext: S.data.ext, rev: S.rev, rid: S.rid, imgs: S.imgs, reviewAt: S.reviewAt, st: JSON.stringify(["osm_near", "osm_far", "osm_ext", "map", "review", "input"].map(k => S.statuses[k])), update: S.update }; });
+      const ov1 = page._calls.overpass; await openDlg(page); await doRecheck(page, idA);
+      const held = await page.evaluate(() => { const S = window.__REQ.S, h = window.__hold; return { res: S.res === h.res, near: S.data.near === h.near && S.data.far === h.far && S.data.ext === h.ext, rev: S.rev === h.rev, rid: S.rid === h.rid, imgs: S.imgs === h.imgs, reviewAt: S.reviewAt === h.reviewAt, st: JSON.stringify(["osm_near", "osm_far", "osm_ext", "map", "review", "input"].map(k => S.statuses[k])) === h.st, ready: S.ready, review: document.getElementById("reviewOk").checked, update: S.update === h.update, focusRes: document.activeElement.id }; });
+      check("בדיקה חוזרת כשיש בטופס בקשה מוכנה: הניתוח (S.res), נתוני ה-OSM שלה, התמונות, ההצהרה, הסטטוסים, הגרסה (S.rev) ומזהה הבקשה — כולם אותו אובייקט בדיוק; הבקשה נשארת מוכנה והאישור מסומן; והבדיקה משכה נתוני OSM טריים (עוד שלוש שאילתות)", held.res && held.near && held.rev && held.rid && held.imgs && held.reviewAt && held.st && held.ready && held.review && held.update && page._calls.overpass === ov1 + 3 && held.focusRes === "rcRes", JSON.stringify(held));
+      await page.keyboard.press("Escape");
+      check("בדיקה חוזרת: Escape סוגר את החלון והמיקוד חוזר לכפתור ״הבקשות שלי״; הבקשה שבטופס עדיין מוכנה", (await page.locator("#authModal").count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === "ubMyReq" && (await page.evaluate(() => window.__REQ.S.ready)), "");
+
+      // חלון השליחה: בקשה מעודכנת מחליפה — נאמר במפורש, הנושא עם קידומת, שליחה למשרד דרך again בלי ״כבר שלחתם״
+      const mails0 = env.mails.length, nFold0 = reqFolderCountNow(), bodiesN0 = bodies.length;
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      const sd = await page.evaluate(() => { const b = document.querySelector(".sendBox"), u = document.getElementById("sendUpdate"); return { text: b.innerText, upd: u ? u.innerText : null, updFirst: !!u && u.previousElementSibling && /מצב חי/.test(u.previousElementSibling.textContent), pre: b.querySelector("details pre").textContent }; });
+      check("בדיקה חוזרת, חלון השליחה: באנר ״בקשה מעודכנת. בקשה זו מחליפה את הבקשה שנשלחה ב-10.10.2026. השליחה למודיעין טיס מחליפה אצלם את הבקשה הקודמת…״ מיד אחרי באנר המצב; הנושא עם ״[עדכון לבקשה מ-10.10.2026]״ ונוסח המייל עם משפט ההחלפה — ובלי שאלה או חלון נוסף", !!sd.upd && sd.updFirst && sd.upd.startsWith("בקשה מעודכנת.") && sd.upd.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-" + SENT_TXT + ".") && /השליחה למודיעין טיס מחליפה אצלם את הבקשה הקודמת/.test(sd.upd) && sd.text.includes("[עדכון לבקשה מ-" + SENT_TXT + "] בקשה לסגירה אווירית") && sd.pre.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-" + SENT_TXT + ".") && sd.pre.includes("מצורפת בקשה מעודכנת"), JSON.stringify(sd.upd));
+      check("בדיקה חוזרת, חלון השליחה: אין כתובת הארגון (office@icd.org.il) בחלון של מטיס עצמאי", !(await orgAddr(page)) && !/נוטאם/.test(sd.upd), "");
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלחה למשרד נוטאם|נכשלה|כבר שלחתם|כבר נשלחה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      const sends = bodies.slice(bodiesN0).filter(b => b.action === "sendRequest"), sendT = await page.textContent("#sendProg"), newFolders = reqFolders(env).filter(f => f.id !== idA && !ids0.has(f.id) && logEntry(f.id) && (logEntry(f.id).sent || []).length);
+      check("בדיקה חוזרת, שליחה: קודם sendRequest רגיל (again=false: ההגנה מפני כפילות פעילה), והשרת מזהה את הבקשה שמוחלפת (similar) — ואז מעבר אוטומטי יחיד ל-again=true, שניהם ליעד office במצב חי עם הנושא המלא (קידומת העדכון) וגוף עם משפט ההחלפה — בלי ״כבר שלחתם למשרד נוטאם״ ובלי כפתור ״שלח שוב בכל זאת״; ההודעה: נשלחה למשרד נוטאם", sends.length === 2 && sends.every(x => x.target === "office" && x.expectMode === "live" && x.subject.startsWith("[עדכון לבקשה מ-" + SENT_TXT + "] בקשה לסגירה אווירית") && x.body.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-" + SENT_TXT + ".")) && sends[0].again === false && sends[1].again === true && (await page.locator("#sendAgain").count()) === 0 && /נשלחה למשרד נוטאם/.test(sendT) && !/כבר שלחתם|כבר נשלחה/.test(sendT), sendT.slice(0, 120));
+      const lastMail = env.mails[env.mails.length - 1];
+      check("בדיקה חוזרת, המייל שיצא (שרת ללא שינוי): נשלח פעם אחת למשרד, הנושא מתחיל ב״[עדכון לבקשה מ-10.10.2026] ״, בגוף ״מצורפת בקשה מעודכנת…״ ו״בקשה זו מחליפה את הבקשה שנשלחה ב-10.10.2026.״; הקבצים מצורפים מהתיקייה החדשה", env.mails.length === mails0 + 1 && /notamoffice@iaa\.gov\.il/.test(lastMail.to) && lastMail.subject.startsWith("[עדכון לבקשה מ-" + SENT_TXT + "] ") && /מצורפת בקשה מעודכנת/.test(lastMail.body) && lastMail.body.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-" + SENT_TXT + ".") && !/office@icd\.org\.il/.test(lastMail.body + lastMail.subject), lastMail.subject.slice(0, 80));
+      check("בדיקה חוזרת, שליחה: נוצרה תיקיית בקשה חדשה (בקשה מעודכנת היא בקשה חדשה בדרייב) שנשלחה חי; הבקשה המקורית לא נגעה — אותם קבצים, ושליחה חיה אחת בלבד ביומן שלה", reqFolderCountNow() === nFold0 + 1 && newFolders.length === 1 && logEntry(newFolders[0].id).sent.length === 1 && logEntry(newFolders[0].id).sent[0].mode === "live" && logEntry(idA).sent.length === 1 && JSON.stringify(folderFilesOf(idA).filter(x => !/^בדיקה חוזרת — /.test(x))) === JSON.stringify(filesA0), reqFolderCountNow() + " תיקיות");
+      check("בדיקה חוזרת: כתובת הארגון לא הופיעה אצל המטיס גם אחרי השליחה", !(await orgAddr(page)), "");
+
+      // סריקה ששונתה אחרי הטעינה (רדיוס אחר) — זו כבר לא ״מחליפה״: נושא רגיל, בלי באנר, בלי again (נכשל סגור)
+      await page.click("#mdClose"); await page.waitForSelector(".sendBox", { state: "detached" });
+      await page.fill("#radius", "210"); await page.click("#runBtn");
+      await page.waitForFunction(() => window.__REQ.S.res && window.__REQ.S.res.inp.radius === 210 && !window.__REQ.S.running, null, { timeout: 150000 });
+      await page.check("#reviewOk");
+      await page.waitForFunction(() => /הבקשה מוכנה לשליחה/.test(document.querySelector("#gate").textContent), null, { timeout: 60000 });
+      const bN1 = bodies.length; await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      const sd2 = await page.evaluate(() => { const b = document.querySelector(".sendBox"); return { upd: !!document.getElementById("sendUpdate"), text: b.innerText, pre: b.querySelector("details pre").textContent }; });
+      check("בדיקה חוזרת: אחרי שהרדיוס שונה (הסריקה כבר אחרת) הבקשה אינה ״מחליפה״ — חלון השליחה בלי באנר עדכון, נושא רגיל ללא קידומת וגוף בלי משפט החלפה (כמו שלב א׳)", !sd2.upd && !/עדכון לבקשה/.test(sd2.text) && !/מחליפה את הבקשה/.test(sd2.pre) && !/מצורפת בקשה מעודכנת/.test(sd2.pre) && /מצורפת בקשה לסגירה אווירית/.test(sd2.pre), JSON.stringify(sd2.upd));
+      await page.click("#mdClose"); await page.waitForSelector(".sendBox", { state: "detached" });
+      check("בדיקה חוזרת: סגירת חלון השליחה בלי לשלוח לא שלחה דבר", bodies.slice(bN1).every(b => b.action !== "sendRequest") && env.mails.length === mails0 + 1, "");
+      await two.ctx.close();
+    }
+
+    /* ---- ג. בקשה בלי תמונת מצב (נשלחה במצב בדיקה, לפני שהמערכת שמרה תמונות): הבדיקה רצה ומציגה את הממצאים הנוכחיים בלבד; שגיאת שמירה מוצגת ואפשר לנסות שוב; חזרה לרשימה ---- */
+    {
+      const idC = seed("ava.pilot", "אתר בלי תמונה — 05.11.2026", goodRec({ dateFrom: "2026-11-05", dateTo: "2026-11-05", heightM: 60 })); sentTest("ava.pilot", idC);
+      const { ctx, page, popts } = await openAs("ava.pilot"), bodies = tapBodies(page);
+      await openDlg(page); const snap0 = driveSnap(), ov0 = page._calls.overpass;
+      await doRecheck(page, idC);
+      const T = await rcText(page), btns = await page.evaluate(() => [...document.querySelectorAll(".rcBtns > .hw > button:not(.hbtn), .rcBtns > button")].map(b => b.textContent));
+      check("בדיקה חוזרת, בקשה בלי תמונת מצב: ״אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב.״ + ״מוצגים הממצאים הנוכחיים בלבד״ — עם הבאנר ״לא צורף״ (ב-10.10.2026, כשנשלחה בבדיקה)", T.includes("אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב. מוצגים הממצאים הנוכחיים בלבד.") && T.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס ב-" + SENT_TXT) && T.includes("הבקשה הזו נשלחה במצב בדיקה בלבד (לא נשלחה למודיעין טיס).") && !/נמצאו \d+ שינויים|לא נמצאו שינויים/.test(T), T.slice(0, 160));
+      check("בדיקה חוזרת, בלי תמונת מצב: מוצגים הממצאים הנוכחיים (נוטמים, אזורי איסור — LLU20 במרחק 525 מ׳, מכשולים ותשתיות עם מרחקים), הקלט הנעול מהרשומה (גובה 60, תאריך 05.11.2026), ואין ״הכן בקשה מעודכנת״ — רק שמור / הורד / חזרה", T.includes("הממצאים הנוכחיים") && /נוטמים \(\d+\)/.test(T) && /LLU20[^\n]*525 מ׳/.test(T) && /מכשולים ותשתיות \(\d+\)/.test(T) && /גובה\s+60 מ׳/.test(T) && T.includes("05.11.2026 · 14:30–17:30") && btns.join("|") === "שמור דוח בדרייב|הורד|חזרה לרשימה", btns.join("|"));
+      check("בדיקה חוזרת, בלי תמונת מצב: אותה בדיקה טרייה (שלוש שאילתות OSM, getRequest אחד), ושום כתיבה בדרייב; בלי הערת ״מועד שעבר״ (התאריך עתידי)", page._calls.overpass === ov0 + 3 && driveSnap() === snap0 && !T.includes("מועד הפעילות שנבדק כבר עבר"), "");
+      // שגיאת שרת בשמירה: מוצגת (עם הסבר), הכפתור נשאר פעיל ולא נכתב דבר; ניסיון חוזר מצליח
+      popts.intercept = b => (b.action === "saveRecheck" ? { ok: false, error: "recheck_limit", message: "הגעתם למספר הבדיקות המרבי לבקשה זו — פנו לתמיכה" } : undefined);
+      await page.click('[data-rc="save"]'); await page.waitForFunction(() => document.getElementById("rcMsg").textContent.trim() !== "", null, { timeout: 15000 });
+      const em = await page.evaluate(() => ({ msg: document.getElementById("rcMsg").textContent, role: document.getElementById("rcMsg").getAttribute("role"), label: document.querySelector('[data-rc="save"]').textContent, dis: document.querySelector('[data-rc="save"]').getAttribute("aria-disabled"), status: document.getElementById("rcStatus").textContent }));
+      check("בדיקה חוזרת, שגיאת שמירה (recheck_limit): ההודעה מוצגת (role=alert) בעברית, הכפתור נשאר ״שמור דוח בדרייב״ פעיל, אין ״נשמר״, ובדרייב לא נכתב דבר", /הגעתם למספר הבדיקות המרבי/.test(em.msg) && em.role === "alert" && em.label === "שמור דוח בדרייב" && em.dis === null && !/נשמר/.test(em.status) && driveSnap() === snap0, JSON.stringify(em));
+      delete popts.intercept;
+      // שגיאת רשת בשמירה (הבקשה לא הגיעה לשרת): ״אין חיבור לשרת״ — לא ״לא ניתן להכין את קובץ ה-Word״ — והכפתור נשאר פעיל
+      const dropSave = r => { try { if (JSON.parse(r.request().postData() || "{}").action === "saveRecheck") return r.abort(); } catch (e) { /* ignore */ } return r.fallback(); };
+      await page.route(API, dropSave); await page.click('[data-rc="save"]'); await page.waitForFunction(() => document.getElementById("rcMsg").textContent.trim() !== "", null, { timeout: 15000 });
+      const nm = await page.evaluate(() => ({ msg: document.getElementById("rcMsg").textContent, dis: document.querySelector('[data-rc="save"]').getAttribute("aria-disabled"), busy: document.getElementById("rcBody").getAttribute("aria-busy") }));
+      check("בדיקה חוזרת, שגיאת רשת בשמירה: ״אין חיבור לשרת. נסו שוב.״ (ולא הודעה על קובץ ה-Word), הכפתור נשאר פעיל, המצב לא נשאר ״עסוק״, ובדרייב לא נכתב דבר", nm.msg === "אין חיבור לשרת. נסו שוב." && nm.dis === null && nm.busy === null && driveSnap() === snap0, JSON.stringify(nm));
+      await page.unroute(API, dropSave);
+      await page.click('[data-rc="save"]'); await page.waitForFunction(() => /הדוח נשמר בדרייב/.test(document.getElementById("rcStatus").textContent), null, { timeout: 30000 });
+      const sr = bodies.filter(b => b.action === "saveRecheck").pop(), e = logEntry(idC), docs = subDocx(idC), d = await plainDoc(docs[0].bytes);
+      check("בדיקה חוזרת, אחרי ניסיון חוזר: נשמר דוח אחד (בקשה שנשלחה בבדיקה מתקבלת), סיכום 0/0/0, הודעת השגיאה נמחקה; ה-Word מציין ״אין בסיס להשוואה״ ומציג את דף הבדיקות העדכני", sr.sum.a === 0 && sr.sum.r === 0 && sr.sum.c === 0 && docs.length === 1 && e.rc.length === 1 && (await page.textContent("#rcMsg")).trim() === "" && d.plain.includes("אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב") && d.plain.includes("דף הבדיקות העדכני"), JSON.stringify(sr.sum));
+      // אותה תמונת מצב שנשמרה בהרצה האמיתית, מול אותם נתונים: ״לא נמצאו שינויים״ (לא שינויים מדומים) — בלי ״הכן בקשה מעודכנת״ ובלי שינוי בספירות
+      const idN = seed("ava.pilot", "אתר ללא שינוי — 03.11.2026", clone(recA)); sentLive("ava.pilot", idN);
+      await page.click('[data-rc="back"]'); await page.waitForSelector("#mrBody .mrRow"); await doRecheck(page, idN);
+      const TN = await rcText(page), bn = await page.evaluate(() => [...document.querySelectorAll(".rcBtns > .hw > button:not(.hbtn), .rcBtns > button")].map(b => b.textContent));
+      check("בדיקה חוזרת, בלי שינוי בנתונים: אותה תמונת מצב שנשמרה בהרצה האמיתית מול הנתונים הנוכחיים ← ״לא נמצאו שינויים מאז ההגשה.״ עם ספירת מה שנבדק (נוטמים, אזורים, פריטים — ללא שינוי), בלי שורות שינוי ובלי ״הכן בקשה מעודכנת״ (שמירה והורדה עדיין זמינות)", TN.includes("לא נמצאו שינויים מאז ההגשה.") && /נבדקו — נוטמים: \d+ · אזורים: \d+ · פריטים: \d+\. לא השתנו — נוטמים: \d+ · אזורים: \d+ · פריטים: \d+\./.test(TN) && !/נמצאו \d+ שינויים/.test(TN) && (await page.locator(".rc-table").count()) === 0 && bn.join("|") === "שמור דוח בדרייב|הורד|חזרה לרשימה", TN.slice(0, 200) + " | " + bn.join("|"));
+      // חזרה לרשימה: חלון הרשימה חוזר (קריאה אחת ל-myRequests), והמיקוד בו
+      const nl0 = n(page, "myRequests"); await page.click('[data-rc="back"]'); await page.waitForSelector("#mrTitle"); await page.waitForSelector("#mrBody .mrRow");
+      check("בדיקה חוזרת, ״חזרה לרשימה״: חלון ״הבקשות שלי״ נפתח מחדש עם הרשימה (קריאת myRequests אחת), בלי שאריות מחלון הבדיקה החוזרת", n(page, "myRequests") === nl0 + 1 && (await page.locator("#rcTitle, [data-rc]").count()) === 0 && (await page.locator('#mrBody button[data-act="recheck"]').count()) >= 1 && (await page.evaluate(() => document.getElementById("authModal").contains(document.activeElement))), "");
+      await ctx.close();
+    }
+
+    /* ---- ד. קלט עוין: רשומה שנשמרה עם טקסט זדוני בשמות (אתר, אזור, פריט, נוטם, מכשולים, הערות) — מוצגת כטקסט בלבד במסך ובקובץ ה-Word; רשומות פגומות / חסרות / גדולות — הודעה בעברית בלי ניתוח ובלי נתונים חלקיים; מועד שעבר — הערה ---- */
+    {
+      const EV = '<img src=x onerror="window.__pwn=1">';
+      const H = clone(recA), SH = H.snapshot;
+      H.site = EV; H.edition = EV; H.inputs.siteName = EV; H.inputs.knownObstacles = EV; H.inputs.visitNotes = EV; H.inputs.manualItems = [{ name: EV, lat: 32.0995, lon: 34.8168, heightM: 10 }];
+      SH.zones.push(Object.assign({}, SH.zones[0], { id: "ZZ9", n: EV })); SH.items.push(Object.assign({}, SH.items[0], { k: "evil-k", t: EV, i: ["x1"] })); SH.notams.hits.push(Object.assign({}, SH.notams.hits[0] || { id: "C0001/26", k: "c", f: 0, t: 0, d: 100, e: 0, r: "o", lo: 0, up: 100, g: "", h: "" }, { id: "C9999/26", x: EV }));
+      const idH = seed("ava.pilot", "אתר עוין — 02.11.2026", H); sentLive("ava.pilot", idH);
+      const idBad = seed("ava.pilot", "אתר פגום — 06.11.2026", goodRec({ lat: 10 })); sentLive("ava.pilot", idBad);
+      const idNone = seed("ava.pilot", "אתר בלי קובץ — 07.11.2026", null); sentLive("ava.pilot", idNone);
+      const idJson = seed("ava.pilot", "אתר JSON שבור — 08.11.2026", "{not json"); sentLive("ava.pilot", idJson);
+      const idBig = seed("ava.pilot", "אתר גדול — 09.11.2026", JSON.stringify({ pad: "x".repeat(650000) })); sentLive("ava.pilot", idBig);
+      const idPast = seed("ava.pilot", "אתר שעבר — 01.09.2026", goodRec({ dateFrom: "2026-09-01", dateTo: "2026-09-01" })); sentLive("ava.pilot", idPast);
+      const { ctx, page } = await openAs("ava.pilot"), bodies = tapBodies(page), dialogs = []; page.on("dialog", d => { dialogs.push(d.type()); d.dismiss(); });
+      await openDlg(page);
+      const snap0 = driveSnap();
+      await doRecheck(page, idH);
+      const hx = await page.evaluate(() => ({ pwn: window.__pwn, img: !!document.querySelector('img[src="x"]'), onerr: document.querySelectorAll("[onerror]").length, esc: document.getElementById("rcRes").innerHTML.split('&lt;img src=x onerror="window.__pwn=1"&gt;').length - 1, text: document.getElementById("authModal").innerText.split('<img src=x onerror="window.__pwn=1">').length - 1, scripts: document.querySelectorAll("#authModal script").length }));
+      check("בדיקה חוזרת, רשומה עוינת: הטקסט הזדוני (אזור, פריט, נוטם) מוצג כטקסט בלבד — לא נוצר אלמנט img ולא מאפיין onerror, window.__pwn לא הוגדר, בלי חלון דפדפן, והמחרוזת נראית כלשונה על המסך", hx.pwn === undefined && !hx.img && hx.onerr === 0 && hx.scripts === 0 && hx.esc >= 3 && hx.text >= 3 && dialogs.length === 0, JSON.stringify(hx));
+      await page.click('[data-rc="save"]'); await page.waitForFunction(() => /הדוח נשמר בדרייב/.test(document.getElementById("rcStatus").textContent), null, { timeout: 30000 });
+      const hd = await plainDoc(subDocx(idH)[0].bytes);
+      check("בדיקה חוזרת, רשומה עוינת: קובץ ה-Word שנשמר תקין (תגיות מאוזנות), הטקסט הזדוני מופיע כטקסט ולא נכנס כ-XML, ושם האתר העוין לא שבר את הכותרת", !hd.doc.includes("<img") && !/<w:t[^>]*><img/.test(hd.doc) && hd.doc.split("<w:p>").length > 20 && hd.doc.split("<w:tbl>").length === hd.doc.split("</w:tbl>").length && hd.plain.includes(EV), hd.doc.length + " תווים");
+      await page.click('[data-rc="back"]'); await page.waitForSelector("#mrBody .mrRow");
+      // רשומות פגומות: הודעה בעברית, אין ניתוח (אפס שאילתות OSM), רק ״חזרה לרשימה״
+      const cases = [[idBad, /פגום או חסר פרטים/, "קואורדינטה מחוץ לישראל"], [idNone, /לא נמצא קובץ הנתונים/, "אין קובץ נתונים"], [idJson, /פגום או חסר פרטים/, "JSON שבור"], [idBig, /גדול מדי/, "קובץ גדול מדי"]];
+      for (const [id, re, what] of cases) {
+        const ov = page._calls.overpass, g = n(page, "getRequest"), s0 = driveSnap();
+        await doRecheck(page, id);
+        const r = await page.evaluate(() => ({ msg: document.getElementById("rcMsg").textContent, role: document.getElementById("rcMsg").getAttribute("role"), btns: [...document.querySelectorAll("#rcBody button:not(.hbtn)")].map(b => b.dataset.rc), res: !!document.getElementById("rcRes"), status: document.getElementById("rcStatus").textContent, focusIn: document.getElementById("authModal").contains(document.activeElement) }));
+        check("בדיקה חוזרת, " + what + ": הודעה בעברית (role=alert), בלי תוצאה חלקית, בלי ניתוח (אפס שאילתות OSM, getRequest אחד), בלי כתיבה בדרייב, ורק כפתור ״חזרה לרשימה״ — והמיקוד בתוך החלון", re.test(r.msg) && r.role === "alert" && !r.res && r.btns.join() === "back" && r.status === "" && r.focusIn && page._calls.overpass === ov && n(page, "getRequest") === g + 1 && driveSnap() === s0, JSON.stringify(r));
+        await page.click('[data-rc="back"]'); await page.waitForSelector("#mrBody .mrRow");
+      }
+      // מועד פעילות שעבר: ההערה מוצגת, והבדיקה ממשיכה
+      await doRecheck(page, idPast);
+      check("בדיקה חוזרת, מועד פעילות שעבר (01.09.2026): ההערה ״שימו לב: מועד הפעילות שנבדק כבר עבר.״ מוצגת בתוצאות, והבדיקה לא נחסמת", (await rcText(page)).includes("שימו לב: מועד הפעילות שנבדק כבר עבר.") && (await page.locator("#rcRes").count()) === 1, "");
+      check("בדיקה חוזרת: אף אחת מבדיקות הקלט העוין / הפגום לא שלחה או שמרה דבר מעבר ל-saveRecheck של הרשומה העוינת, ולא נפתח חלון דפדפן", bodies.filter(b => ["saveBegin", "saveFile", "saveEnd", "sendRequest"].includes(b.action)).length === 0 && bodies.filter(b => b.action === "saveRecheck").length === 1 && dialogs.length === 0, "");
+      await ctx.close();
+    }
+
+    /* ---- ה. כשלים: ההרשאה בוטלה (השרת מסרב ל-saveRecheck; req-adv סוגר את החלון), נתוני OSM לא נטענו (ניסיון חוזר), נוטמים ישנים, פקיעת התחברות, סגירה באמצע בדיקה (בדיקה אחת בכל רגע) ---- */
+    {
+      const idE = seed("bob.pilot", "אתר כשלים — 10.11.2026", goodRec({ dateFrom: "2026-11-10", dateTo: "2026-11-10" })); sentLive("bob.pilot", idE);
+      { // ההרשאה בוטלה בשרת אחרי שהתוצאות הוצגו: השרת מסרב; אחרי רענון (req-adv) החלון נסגר והכפתור נעלם
+        const { ctx, page } = await openAs("bob.pilot"); await openDlg(page); await doRecheck(page, idE);
+        env.call({ action: "setAdv", token: admTok, target: "bob.pilot", adv: false });
+        const s0 = driveSnap(); await page.click('[data-rc="save"]'); await page.waitForFunction(() => document.getElementById("rcMsg").textContent.trim() !== "", null, { timeout: 15000 });
+        const msg = await page.textContent("#rcMsg");
+        check("בדיקה חוזרת, ההרשאה בוטלה בשרת (תצוגה מתקדמת כבויה): ״שמור דוח בדרייב״ נדחה בהודעה בעברית מהשרת (recheck_off) — ובדרייב לא נכתב דבר", /בדיקה חוזרת זמינה רק בתצוגה מתקדמת/.test(msg) && driveSnap() === s0 && subDocx(idE).length === 0, msg);
+        await page.evaluate(() => window.ReqAuth.refresh());
+        await page.waitForFunction(() => !document.getElementById("authModal"), null, { timeout: 15000 });
+        check("בדיקה חוזרת, רענון ההרשאה (req-adv): חלון הבדיקה החוזרת נסגר מעצמו, הדף חוזר לפעול (הרקע לא inert), ואין שאריות", (await page.locator("#rcTitle, #authModal").count()) === 0 && (await page.evaluate(() => !document.querySelector("main").hasAttribute("inert") && !window.ReqAuth.isAdv())), "");
+        await openDlg(page);
+        check("בדיקה חוזרת: אחרי ביטול התצוגה המתקדמת — ״הבקשות שלי״ ללא כפתור בדיקה חוזרת (שני כפתורים לשורה, ללא ״!״ נוסף)", (await page.locator('#mrBody button[data-act="recheck"]').count()) === 0 && (await page.locator("#authModal .mrLegend .hbtn").count()) === 2 && (await page.locator("#mrBody .mrAct").first().locator("button").count()) === 2, "");
+        await ctx.close();
+        env.call({ action: "setAdv", token: admTok, target: "bob.pilot", adv: true });
+      }
+      { // השרת הפסיק לדווח recheck (רענון) בזמן שהחלון פתוח — בלי אירוע req-adv: הלקוח בודק שוב את הזמינות ולא שולח ל-saveRecheck בעצמו
+        const { ctx, page, popts } = await openAs("bob.pilot"); await openDlg(page); await doRecheck(page, idE);
+        popts.patchResp = (b, r) => (r && Array.isArray(r.features) ? Object.assign({}, r, { features: r.features.filter(f => f !== "recheck") }) : undefined);
+        await page.evaluate(() => window.ReqAuth.refresh());
+        const s0 = driveSnap(), n0 = n(page, "saveRecheck");
+        await page.click('[data-rc="save"]'); await page.waitForFunction(() => document.getElementById("rcMsg").textContent.trim() !== "", null, { timeout: 8000 }).catch(() => {});
+        check("בדיקה חוזרת, השרת הפסיק לדווח recheck בזמן שהחלון פתוח: ״שמור דוח בדרייב״ נעצר בלקוח — ״הבדיקה החוזרת אינה זמינה בחשבון הזה.״, בלי קריאת saveRecheck ובלי כתיבה בדרייב (התוצאות נשארות על המסך)", (await page.textContent("#rcMsg")) === "הבדיקה החוזרת אינה זמינה בחשבון הזה." && n(page, "saveRecheck") === n0 && driveSnap() === s0 && (await page.locator("#rcRes").count()) === 1, "");
+        await ctx.close();
+      }
+      { // נתוני OSM לא נטענו: הודעה, ״נסו שוב״; הטופס והסטטוסים לא נפגעו; אחרי שהנתונים חוזרים — תוצאות
+        const { ctx, page, popts } = await openAs("bob.pilot", { failExt: true }); await openDlg(page);
+        const s0 = driveSnap(), st0 = await page.evaluate(() => JSON.stringify(["osm_near", "osm_far", "osm_ext", "map"].map(k => window.__REQ.S.statuses[k])));
+        await doRecheck(page, idE);
+        const r = await page.evaluate(() => ({ msg: document.getElementById("rcMsg").textContent, btns: [...document.querySelectorAll("#rcBody button:not(.hbtn)")].map(b => b.dataset.rc), res: !!document.getElementById("rcRes") }));
+        check("בדיקה חוזרת, נתוני OpenStreetMap לא נטענו: ״נתוני OpenStreetMap לא נטענו…״ עם ״נסו שוב״ ו״חזרה לרשימה״, בלי תוצאה חלקית ובלי כתיבה; סטטוסי הטופס (osm_near/far/ext/map) לא השתנו", /^נתוני OpenStreetMap לא נטענו/.test(r.msg) && r.btns.join() === "retry,back" && !r.res && driveSnap() === s0 && (await page.evaluate(() => JSON.stringify(["osm_near", "osm_far", "osm_ext", "map"].map(k => window.__REQ.S.statuses[k])))) === st0, JSON.stringify(r));
+        popts.failExt = false; await page.click('[data-rc="retry"]');
+        await page.waitForFunction(() => document.getElementById("rcRes"), null, { timeout: 150000 });
+        check("בדיקה חוזרת: ״נסו שוב״ אחרי שהנתונים זמינים — התוצאות מוצגות והודעת השגיאה נמחקה", (await page.locator("#rcRes").count()) === 1 && (await page.textContent("#rcMsg")).trim() === "", "");
+        await ctx.close();
+      }
+      { // נוטמים ישנים (100 שעות; מרבי 72): לא משווים, ולא מושכים נתוני OSM לחינם
+        const { ctx, page } = await openAs("bob.pilot", { notamAgeH: 100 }); await openDlg(page); const ov0 = page._calls.overpass;
+        await doRecheck(page, idE);
+        const msg = await page.textContent("#rcMsg");
+        check("בדיקה חוזרת, נתוני נוטמים ישנים מהמרבי: ״נתוני הנוטמים ישנים (100 שעות; מרבי 72), ולכן אי אפשר לבדוק מחדש״ — בלי שאילתות OSM ובלי תוצאה", /נתוני הנוטמים ישנים \(100 שעות; מרבי 72\), ולכן אי אפשר לבדוק מחדש/.test(msg) && page._calls.overpass === ov0 && (await page.locator("#rcRes").count()) === 0, msg);
+        await ctx.close();
+      }
+      { // פקיעת התחברות באמצע הבדיקה: התנתקות מלאה, בלי חלון ובלי תוכן
+        const { ctx, page, popts } = await openAs("bob.pilot"); await openDlg(page);
+        popts.intercept = b => (b.action === "getRequest" ? { ok: false, error: "expired" } : undefined);
+        await page.click('#mrBody button[data-act="recheck"] >> nth=0'); await page.waitForSelector("#authForm", { timeout: 30000 });
+        const note = await page.textContent("#auErr");
+        check("בדיקה חוזרת: פקיעת התחברות באמצע הבדיקה (השרת מחזיר expired) — התנתקות מלאה עם ״פג תוקף ההתחברות״, בלי חלון בדיקה חוזרת פתוח ובלי תוכן הבקשה בדף", /פג תוקף ההתחברות/.test(note) && (await page.locator("#authModal, #rcTitle").count()) === 0, note);
+        await ctx.close();
+      }
+      { // סגירה באמצע בדיקה שרצה: התוצאה המאוחרת נזרקת; בדיקה חדשה כל עוד הקודמת רצה — הודעה (בדיקה אחת בכל רגע); אחרי שהסתיימה — ניסיון חוזר מצליח
+        const { ctx, page } = await openAs("bob.pilot"); await openDlg(page); const s0 = driveSnap();
+        await page.click('#mrBody button[data-act="recheck"] >> nth=0'); await page.waitForSelector("#rcTitle"); await page.waitForTimeout(300);
+        const busyState = await page.evaluate(() => ({ busy: document.getElementById("rcBody").getAttribute("aria-busy"), status: document.getElementById("rcStatus").textContent, btns: document.querySelectorAll("#rcBody button").length }));
+        await page.keyboard.press("Escape");
+        await openDlg(page); await page.click('#mrBody button[data-act="recheck"] >> nth=0'); await page.waitForSelector("#rcTitle");
+        await page.waitForFunction(() => document.getElementById("rcMsg").textContent.trim() !== "", null, { timeout: 15000 });
+        const m2 = await page.textContent("#rcMsg");
+        check("בדיקה חוזרת: בזמן הבדיקה — המצב ״עסוק״ (aria-busy) והסטטוס מעודכן וללא כפתורי פעולה; סגירה באמצע ופתיחה מחדש כשהקודמת עוד רצה: ״בדיקה חוזרת קודמת עדיין רצה״ (אין שתי בדיקות במקביל)", busyState.busy === "true" && busyState.status.length > 5 && busyState.btns === 0 && /בדיקה חוזרת קודמת עדיין רצה/.test(m2), JSON.stringify(busyState) + " | " + m2);
+        await page.waitForTimeout(9000);
+        await page.click('[data-rc="retry"]').catch(async () => { await page.click('[data-rc="back"]'); });
+        await page.waitForFunction(() => document.getElementById("rcRes") || document.getElementById("rcMsg").textContent.trim(), null, { timeout: 150000 });
+        check("בדיקה חוזרת: אחרי שהבדיקה הקודמת הסתיימה (התוצאה המאוחרת נזרקה) — ״נסו שוב״ מצליח, ולא נכתב דבר בדרייב", (await page.locator("#rcRes").count()) === 1 && driveSnap() === s0, (await page.textContent("#rcMsg")).slice(0, 80));
+        await ctx.close();
+      }
+    }
+
+    /* ---- ו. נגישות ומקלדת: מלכודת מיקוד, Escape (עם ״!״ פתוחה — סוגר את הבועה בלבד), הפעלה במקלדת, מצב עסוק, גודל מגע — ואחר כך מסך 320px ---- */
+    {
+      const idG = seed("ava.pilot", "אתר נגישות — 11.11.2026", goodRec({ dateFrom: "2026-11-11", dateTo: "2026-11-11" })); sentLive("ava.pilot", idG);
+      const { ctx, page } = await openAs("ava.pilot"); await openDlg(page);
+      await doRecheck(page, idG);
+      { const f = await page.evaluate(() => { const m = document.getElementById("authModal"); return [...m.querySelectorAll("button:not([disabled])")].filter(e => e.getClientRects().length).map(e => e.id || e.dataset.rc || e.className); });
+        await page.focus("#mdClose"); await page.keyboard.press("Tab"); const afterLast = await page.evaluate(() => document.activeElement.id + "|" + document.activeElement.className + "|" + document.activeElement.dataset.rc);
+        await page.keyboard.press("Shift+Tab"); const afterFirst = await page.evaluate(() => document.activeElement.id + "|" + document.activeElement.className);
+        check("בדיקה חוזרת, נגישות: מלכודת מיקוד — Tab מהכפתור האחרון (״סגור״) חוזר לראשון (בתוך החלון), ו-Shift+Tab מהראשון חוזר לאחרון; המיקוד לא בורח לדף שמאחור", /\|save$/.test(afterLast) && /^mdClose\|/.test(afterFirst) && f.length >= 6, JSON.stringify([f, afterLast, afterFirst])); }
+      { // הפעלה במקלדת: Enter על ״הורד״
+        await page.focus('[data-rc="dl"]');
+        const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Enter")]);
+        check("בדיקה חוזרת, נגישות: Enter על ״הורד״ מוריד את הדוח (ללא עכבר)", /\.docx$/.test(dl.suggestedFilename()), dl.suggestedFilename()); }
+      { // ״!״ פתוחה: Escape ראשון סוגר את הבועה בלבד, והשני את החלון
+        await page.click('.rcBtns .hbtn >> nth=0');
+        const bub = await page.evaluate(() => { const b = document.getElementById("hbubble"); return b && !b.hidden ? b.textContent : null; });
+        await page.keyboard.press("Escape");
+        const a1 = { bubble: await page.evaluate(() => { const b = document.getElementById("hbubble"); return !!b && !b.hidden; }), dlg: await page.locator("#authModal").count() };
+        await page.keyboard.press("Escape");
+        check("בדיקה חוזרת, נגישות: ״!״ פתוחה — Escape הראשון סוגר את הבועה בלבד (החלון נשאר, והיא מסבירה ששמירה לא מצורפת ולא נשלחת למודיעין טיס), והשני סוגר את החלון ומחזיר את המיקוד ל״הבקשות שלי״", /לא מצורף למייל של הבקשה ולא נשלח למודיעין טיס/.test(bub || "") && !a1.bubble && a1.dlg === 1 && (await page.locator("#authModal").count()) === 0 && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === "ubMyReq", JSON.stringify([bub && bub.slice(0, 40), a1])); }
+      await ctx.close();
+    }
+    {
+      const idW = seed("ava.pilot", "אתר צר — 12.11.2026", (() => { const W = clone(recA), SW = W.snapshot, LONG = "אבגדהוזחטיכלמנסעפצקרשת".repeat(5);
+        W.inputs.siteName = LONG.slice(0, 118); SW.zones.push(Object.assign({}, SW.zones[0], { id: "LONGID" + "9".repeat(60), n: LONG.slice(0, 60) })); SW.notams.hits.push(Object.assign({}, SW.notams.hits[0] || { id: "C0001/26", k: "c", f: 0, t: 0, d: 100, e: 0, r: "o", lo: 0, up: 100, g: "", h: "" }, { id: "C9998/26", x: "X".repeat(100) }));
+        for (let i = 0; i < 40; i++) SW.items.push(Object.assign({}, SW.items[0], { k: "bulk-" + i, t: "פריט ארוך מאוד " + LONG.slice(0, 50) + i, i: ["b" + i], d: 400 + i * 7 }));
+        return W; })()); sentLive("ava.pilot", idW);
+      const { ctx, page } = await openAs("ava.pilot", { viewport: { width: 320, height: 640 }, touch: true });
+      await openDlg(page); await doRecheck(page, idW);
+      const measure = () => page.evaluate(() => { const vw = innerWidth, m = document.getElementById("authModal"), box = m.firstElementChild, r = box.getBoundingClientRect();
+        const over = [...m.querySelectorAll("*")].filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && !e.closest(".hbtn") && !e.closest("details:not([open])") && (b.right > vw + 1 || b.left < -1); }).map(e => e.tagName + "." + e.className).slice(0, 5);
+        const small = [...m.querySelectorAll("button:not(.hbtn)")].filter(b => b.getClientRects().length && b.getBoundingClientRect().height < 44).map(b => (b.id || b.dataset.rc || b.className) + ":" + Math.round(b.getBoundingClientRect().height)).slice(0, 4);
+        const tbl = [...m.querySelectorAll(".rcSince table")].filter(t => t.getClientRects().length && t.scrollWidth > t.clientWidth + 1).length;
+        const fs = Math.min(...[...m.querySelectorAll(".rcSince td, .rcSince th, .rcSince p, .rcLock dd, .rcList li")].filter(e => e.getClientRects().length).map(e => parseFloat(getComputedStyle(e).fontSize)));
+        return { vw, docW: document.documentElement.scrollWidth, boxL: Math.round(r.left), boxR: Math.round(r.right), over, small, tbl, hs: box.scrollWidth > box.clientWidth + 1, minFont: fs, rows: m.querySelectorAll(".rc-table tbody tr").length }; });
+      const L1 = await measure();
+      check("בדיקה חוזרת, מסך 320px: תוצאות עם שמות ארוכים מאוד ועשרות שורות — בלי גלילה אופקית בדף או בחלון, שום אלמנט (כולל טבלאות) לא יוצא מהמסך, החלון בתוך המסך, כל הכפתורים בגובה 44px לפחות (מגע), וגופן הטבלה לא קטן מ-12px", L1.docW <= L1.vw && L1.over.length === 0 && L1.boxL >= 0 && L1.boxR <= L1.vw && !L1.hs && L1.tbl === 0 && L1.small.length === 0 && L1.minFont >= 12 && L1.rows >= 10, JSON.stringify(L1));
+      await page.screenshot({ path: path.join(OUT, "recheck-320-result.png") });
+      await page.evaluate(() => { const b = document.querySelector(".rcBtns"); b.scrollIntoView({ block: "center" }); });
+      const L2 = await measure();
+      await page.screenshot({ path: path.join(OUT, "recheck-320-buttons.png") });
+      check("בדיקה חוזרת, מסך 320px: שורת הכפתורים (שמור, הורד, הכן בקשה מעודכנת, חזרה) עוברת לשורות בלי חיתוך וכל כפתור נגיש; ושמירה והורדה עובדות בו", L2.docW <= L2.vw && L2.over.length === 0 && L2.small.length === 0 && (await page.locator(".rcBtns button:not(.hbtn)").count()) === 4, JSON.stringify(L2));
+      // ״עוד N שורות״ (details) פתוח: גם התוכן שנחשף לא חורג
+      await page.evaluate(() => { document.querySelectorAll(".rc-more").forEach(d => { d.open = true; }); });
+      const L3 = await measure();
+      check("בדיקה חוזרת, מסך 320px: אחרי פתיחת ״הצג את כל השורות״ — עדיין בלי גלילה אופקית ובלי אלמנט שיוצא מהמסך", L3.docW <= L3.vw && L3.over.length === 0 && L3.tbl === 0 && !L3.hs, JSON.stringify(L3));
+      await ctx.close();
+    }
+  }
+  /* RECHECKUI-END */
+  /* PARTIES-BEGIN */
+  /* ===== תרחיש ״דיווח לגורמים נוספים״ (שלב ב׳, U4): עורך בכרטיס 4 (אחרי ״הערות המבקש״, לפני ההצהרה) ועמוד קריאה בדוח; סימון סוג/סטטוס/הערה, הוספה והסרה של גורם ידני (מיקוד, הכרזה, תקרות), ״הצג רק פתוחות״; כל עריכה כמו שדה רך אחר (ננעל עד הרינדור, ״נשמר״ נמחק, נשמר שוב אוטומטית בדרייב — והקובץ בדרייב זהה למסך);
+     אף פעם לא חוסם מוכנות; סימונים שורדים הרצה חוזרת ודף שנטען מחדש (אחסון לפי משתמש + בקשה), לא עוברים בין משתמשים, ונמחקים ב״מחק פרטים שמורים״; שורת המייל עם ספירה בלבד; דגל כבוי = שלב א׳ בדיוק (אין DOM, אין עמוד, אין שורה, אין בלוק ברשומה, אין אחסון); מטיס עצמאי על שרת שלב א׳; קלט עוין (OSM, אחסון, שדות ידניים) — נשאר טקסט; 375/320 ללא גלילה אופקית; מקלדת; ״!״ ===== */
+  if (!LIVE) {
+    const JZ = require(path.join(ROOT, "members-k38p", "requests", "vendor", "jszip.min.js")), ymd = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const BIDI_ = new RegExp("[" + String.fromCharCode(0x202a, 0x202c, 0x200e, 0x200f) + "]", "g");
+    const EVIL_ = "<img src=x onerror=\"window.__pwn=1\">\"'`&<script>window.__pwn=2</script>";
+    const driveOf = env => { const fo = reqFolders(env)[0]; return fo ? { docx: fo.files.find(f => !f.trashed && /\.docx$/.test(f.name)), json: fo.files.find(f => !f.trashed && / — נתוני הבקשה\.json$/.test(f.name)) } : {}; };
+    const wordXml = async env => { const d = driveOf(env).docx; return d ? (await (await JZ.loadAsync(d.bytes)).file("word/document.xml").async("string")) : ""; };
+    const plainOf = xml => xml.replace(/<[^>]+>/g, "").replace(BIDI_, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&apos;/g, "'");
+    const recOf = env => { const j = driveOf(env).json; try { return JSON.parse(j.bytes.toString("utf8")); } catch (e) { return null; } };
+    const autosaved = page => page.waitForFunction(() => /נשמר אוטומטית בדרייב/.test(document.getElementById("driveMsg").textContent), null, { timeout: 90000 });
+    const settled = page => page.waitForFunction(() => { const S = window.__REQ.S; return S.ready && !S.pending && !S.building; }, null, { timeout: 40000 });
+    const rerun = async page => { await page.evaluate(() => { window.__prevRes = window.__REQ.S.res; }); await page.click("#runBtn"); await page.waitForFunction(() => { const S = window.__REQ.S; return S.res && S.res !== window.__prevRes && !S.running && !S.building && document.querySelector("#gate .banner"); }, null, { timeout: 150000 }); };
+    const goReady = async (page, user, pass, over) => { await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, pass); await readyRequest(page, over); };
+    const st = page => page.evaluate(() => { const s = window.ReqPartiesUI.state(); return { built: s.built, n: s.rows.length, status: s.rows.map(r => r.status), news: s.news, keys: s.rows.map(r => r.key), notes: s.rows.map(r => r.note || ""), manual: s.rows.filter(r => r.manual).map(r => r.title), stale: s.rows.filter(r => r.stale).map(r => r.title) }; });
+    const li = n => "#ptyList > li.pty:nth-child(" + n + ")";
+    const injected = (page, sel) => page.evaluate(s => [...document.querySelectorAll(s)].map(root => ({ tags: root.querySelectorAll("img,script,svg,iframe,object,embed,style,link,form").length, on: [root, ...root.querySelectorAll("*")].filter(e => [...e.attributes].some(a => /^on/i.test(a.name))).length, hrefs: [...root.querySelectorAll("a[href]")].map(a => a.getAttribute("href")).filter(h => !/^(tel:|https?:)/i.test(h)).length })), sel);
+    const dialogs = []; const onDialog = d => { dialogs.push(d.message()); d.dismiss().catch(() => {}); };
+
+    /* ---- א. חשבון ארגוני (מנהל), שרת נוכחי: מבנה, בנייה, מוכנות, עריכה, דרייב, ידני, שדות פגומים, הרצה חוזרת, סינון, שליחה, מקלדת, ״!״ ---- */
+    {
+      const { ctx, page } = await newPage(browser, { autosave: 400 }); page.on("dialog", onDialog);
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      check("דיווח לגורמים: לפני הרצה אין שורות ואין חיווי (העורך עצמו מוסתר עם כל אזור התוצאות)", await page.evaluate(() => document.getElementById("resultsSec").style.display === "none" && document.querySelectorAll("#ptyList > li").length === 0 && window.ReqPartiesUI.state().built === false && window.ReqPartiesUI.modelOpts(window.__REQ.S.res) !== null), "");
+      await readyRequest(page); await autosaved(page);
+      const L1 = await page.evaluate(() => {
+        const box = document.getElementById("partiesBox"), rb = document.getElementById("reviewBox"), vn = document.getElementById("visitNotes"), db = document.getElementById("declBox"), rep = document.getElementById("report"), papers = [...rep.querySelectorAll(".paper")];
+        const pi = papers.findIndex(p => p.classList.contains("parties")), ci = papers.findIndex(p => p.classList.contains("checks")), ri = papers.map(p => !!p.querySelector("img.mapimg")).lastIndexOf(true), after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return { inReview: rb.contains(box), afterNotes: after(vn, box), beforeDecl: after(box, db), notInReport: !rep.contains(box), cards: document.querySelectorAll("#ptyList > li.pty").length, n: window.ReqPartiesUI.state().rows.length, sum: document.getElementById("ptySum").textContent, live: document.getElementById("ptySum").getAttribute("aria-live"), pi, ci, ri, np: papers.length, h3: box.querySelector("h3").textContent.trim(), ready: window.__REQ.S.ready, send: !document.getElementById("btnSend").disabled, gate: document.getElementById("gate").textContent.replace(/\s+/g, " "), unmarked: window.ReqPartiesUI.state().rows.every(r => r.status === "unmarked" || r.status === "nocontact"), tools: !document.getElementById("ptyTools").hidden, chk: !!document.getElementById("ptyChkNote") };
+      });
+      check("דיווח לגורמים: העורך בתוך סעיף 4 — אחרי ״הערות המבקש״ ולפני ההצהרה, ולא בתוך #report; כותרת עם ״!״", L1.inReview && L1.afterNotes && L1.beforeDecl && L1.notInReport && /^דיווח לגורמים נוספים/.test(L1.h3) && /!$/.test(L1.h3), JSON.stringify(L1).slice(0, 300));
+      check("דיווח לגורמים: כרטיס לכל שורה (22 בחמשת האתרים של הירקון), סיכום חי (aria-live=polite) ״22 גורמים — …״, וליד ״כולל דף בדיקות״ הערה שהעמוד נכלל תמיד", L1.cards === 22 && L1.n === 22 && /^22 גורמים — /.test(L1.sum) && L1.live === "polite" && L1.chk, L1.sum);
+      check("דיווח לגורמים: עמוד קריאה בדוח — אחרי ארבעה עמודי התמונה ולפני דף הבדיקות (7 עמודים)", L1.pi === L1.ri + 1 && L1.ci === L1.pi + 1 && L1.np === 7, JSON.stringify([L1.pi, L1.ri, L1.ci, L1.np]));
+      check("דיווח לגורמים: לעולם לא חוסם — כל השורות ״טרם סומן״ / ״לא נמצא איש קשר״, הבקשה מוכנה לשליחה, והשליחה זמינה (בלי שום הודעה על הרשימה בשער)", L1.unmarked && L1.ready && L1.send && /הבקשה מוכנה לשליחה/.test(L1.gate) && !/גורמ/.test(L1.gate), L1.gate.slice(0, 120));
+      { const env = page._env, d = driveOf(env), xml = await wordXml(env), plain = plainOf(xml), rec = recOf(env);
+        check("דיווח לגורמים: הבקשה השמורה בדרייב (אוטומטית) כוללת עמוד ב-Word (כותרת, ״LLU20״, חותמת ״מצב נכון ל-״) ובלוק parties בקובץ הנתונים (22 שורות, סיכום), לפני תמונת המצב", /דיווח לגורמים נוספים/.test(plain) && /LLU20/.test(plain) && /מצב נכון ל-/.test(plain) && !!rec && !!rec.parties && rec.parties.rows.length === 22 && rec.parties.summary.total === 22 && (!("snapshot" in rec) || Object.keys(rec).indexOf("parties") < Object.keys(rec).indexOf("snapshot")), rec ? Object.keys(rec).join() : "אין רשומה"); }
+      // עריכה: סטטוס (select) והערה (טקסט) — אותו נתיב של שדה רך: ״נשמר״ נמחק מיד, הלחצנים ננעלים, ואחרי ההשהיה הדוח והדרייב מעודכנים
+      await page.selectOption(li(1) + ' select[data-f="status"]', "needed");
+      const E1 = await page.evaluate(() => ({ drive: document.getElementById("driveMsg").textContent, ready: window.__REQ.S.ready, pending: window.__REQ.S.pending, saved: window.__REQ.S.saved, st: document.querySelector("#ptyList > li.pty").dataset.st, icon: document.querySelector("#ptyList > li.pty .pty-ic").textContent, sum: document.getElementById("ptySum").textContent }));
+      check("דיווח לגורמים: בחירת סטטוס — ״נשמר בדרייב״ נמחק מיד, הבקשה נועלת (ממתין לרינדור), הכרטיס והסמל מתעדכנים והסיכום מציג ״1 נדרש״", E1.drive === "" && E1.pending && !E1.ready && E1.saved === null && E1.st === "needed" && E1.icon === "!" && /1 נדרש/.test(E1.sum), JSON.stringify(E1));
+      await page.fill(li(1) + ' input[data-f="note"]', "התקשרתי ליחידה, ממתין לאישור");
+      await settled(page);
+      const R1 = await page.evaluate(() => { const p = document.querySelector("#report .paper.parties"); return { t: p ? p.innerText.replace(/\s+/g, " ") : "", ready: window.__REQ.S.ready }; });
+      check("דיווח לגורמים: אחרי ההשהיה עמוד הקריאה בדוח מציג את הסטטוס ״נדרש״ ואת ההערה, והבקשה חוזרת להיות מוכנה (העריכה לא חוסמת)", /נדרש/.test(R1.t) && /התקשרתי ליחידה, ממתין לאישור/.test(R1.t) && R1.ready, R1.t.slice(0, 200));
+      await autosaved(page);
+      { const env = page._env, plain = plainOf(await wordXml(env)), rec = recOf(env), s = await st(page);
+        check("דיווח לגורמים: הקובץ שנשמר שוב בדרייב זהה למסך — ה-Word כולל את ההערה ואת כל כותרות השורות, והרשומה את אותם סטטוסים", plain.includes("התקשרתי ליחידה, ממתין לאישור") && rec.parties.rows[0].status === "needed" && rec.parties.rows[0].note === "התקשרתי ליחידה, ממתין לאישור" && JSON.stringify(rec.parties.rows.map(r => r.status)) === JSON.stringify(s.status) && (await page.evaluate(() => window.ReqPartiesUI.state().rows.every(r => !r.title || document.querySelector("#report .paper.parties").innerText.replace(/\s+/g, " ").includes(r.title.replace(/\s+/g, " ").slice(0, 20))))), JSON.stringify(s.status)); }
+      // שדות פגומים: הודעה ליד השדה (aria-describedby), בלי alert; המודל לא משתנה; ביציאה מהשדה הערך הקודם חוזר
+      const bad = await page.evaluate(() => {
+        const inp = document.querySelector('#ptyList > li.pty:nth-child(2) input[data-f="note"]'), out = {}, fire = t => inp.dispatchEvent(new Event(t, { bubbles: true }));
+        inp.value = "א".repeat(301); fire("input"); out.e1 = document.getElementById("ptyE2").textContent; out.inv1 = inp.getAttribute("aria-invalid"); out.desc = inp.getAttribute("aria-describedby"); out.model1 = window.ReqPartiesUI.state().rows[1].note || "";
+        fire("change"); out.after1 = inp.value; out.inv1b = inp.getAttribute("aria-invalid");
+        inp.value = "ab\u0007c"; fire("input"); out.e2 = document.getElementById("ptyE2").textContent; out.model2 = window.ReqPartiesUI.state().rows[1].note || ""; fire("change"); out.after2 = inp.value;
+        inp.value = "תקין"; fire("input"); out.e3 = document.getElementById("ptyE2").textContent; out.model3 = window.ReqPartiesUI.state().rows[1].note; inp.value = ""; fire("input"); out.model4 = window.ReqPartiesUI.state().rows[1].note || "";
+        return out;
+      });
+      check("דיווח לגורמים: הערה של 301 תווים או עם תו בקרה — הודעה בעברית ליד השדה (ללא alert), aria-invalid, המודל לא משתנה, וביציאה מהשדה הערך הקודם חוזר; ערך תקין מנקה את ההודעה", /300/.test(bad.e1) && bad.inv1 === "true" && bad.desc === "ptyE2" && bad.model1 === "" && bad.after1 === "" && bad.inv1b === null && /תווים/.test(bad.e2) && bad.model2 === "" && bad.after2 === "" && bad.e3 === "" && bad.model3 === "תקין" && bad.model4 === "" && dialogs.length === 0, JSON.stringify(bad));
+      await settled(page);
+      // הצעות (צ׳יפים): שבע הצעות קבועות + ״רשות מקומית: <שם>״ לפי OSM (במקום הצ׳יפ הכללי); לחיצה ממלאת את השם בטופס וממקדת בו — בלי להוסיף
+      const chip = await page.evaluate(() => ({ texts: [...document.querySelectorAll("#ptyChips .pty-chip")].map(c => c.textContent), label: document.getElementById("ptyChipsL").textContent, grp: document.getElementById("ptyChips").getAttribute("aria-labelledby") }));
+      await page.click("#ptyChips .pty-chip");
+      const chipS = await page.evaluate(() => ({ name: document.getElementById("ptyDName").value, open: !document.getElementById("ptyDraft").hidden, focus: document.activeElement.id, n: document.querySelectorAll("#ptyList > li.pty").length }));
+      check("דיווח לגורמים: ״הצעות:״ — שבע הצעות קבועות ובראשן ״רשות מקומית: <שם>״ לפי OSM (ולא ״רשות מקומית״ כללי); לחיצה ממלאת את שם הגורם בטופס וממקדת בו, בלי להוסיף שורה", chip.texts.length === 8 && /^רשות מקומית: \S/.test(chip.texts[0]) && !chip.texts.includes("רשות מקומית") && chip.texts.includes("משטרה") && chip.label === "הצעות:" && chip.grp === "ptyChipsL" && chipS.name === chip.texts[0] && chipS.open && chipS.focus === "ptyDName" && chipS.n === 22, JSON.stringify([chip.texts.length, chip.texts[0], chipS]));
+      await page.click('#ptyDraft [data-act="draft-cancel"]');
+      // גורם ידני: ➕, מיקוד בשדה השם, Enter מוסיף, הכרזה, הטקסט נשאר טקסט (בעורך, בדוח וב-Word)
+      await page.click("#ptyAdd");
+      check("דיווח לגורמים: ״➕ הוסף גורם״ פותח טופס גורם חדש והמיקוד בשדה השם", await page.evaluate(() => !document.getElementById("ptyDraft").hidden && document.activeElement.id === "ptyDName"), "");
+      await page.fill("#ptyDName", EVIL_); await page.fill("#ptyDContact", "050-1234567 <b>x</b>"); await page.selectOption("#ptyDType", "report"); await page.selectOption("#ptyDStatus", "needed"); await page.fill("#ptyDNote", "הערה <i>y</i>");
+      await page.press("#ptyDNote", "Enter");
+      await page.waitForFunction(() => document.querySelectorAll("#ptyList > li.pty").length === 23, null, { timeout: 5000 });
+      const M1 = await page.evaluate(() => { const last = document.querySelector("#ptyList > li.pty:last-child"), a = document.activeElement; return { focusName: !!last.querySelector('input[data-f="name"]') && a === last.querySelector('input[data-f="name"]'), name: last.querySelector('input[data-f="name"]').value, contact: last.querySelector('input[data-f="contact"]').value, st: last.dataset.st, sum: document.getElementById("ptySum").textContent, draftHidden: document.getElementById("ptyDraft").hidden, pwn: window.__pwn, grp: last.getAttribute("role"), lbl: document.getElementById(last.getAttribute("aria-labelledby")).textContent }; });
+      check("דיווח לגורמים: Enter בטופס מוסיף גורם ידני — המיקוד בשדה השם של השורה החדשה, שם ופרטי קשר נשמרים כטקסט (HTML לא הופעל), הסיכום 23, הטופס נסגר, קבוצה נגישה", M1.focusName && M1.name === EVIL_ && M1.contact === "050-1234567 <b>x</b>" && M1.st === "needed" && /^23 גורמים/.test(M1.sum) && M1.draftHidden && M1.pwn === undefined && M1.grp === "group" && /ידני 23/.test(M1.lbl), JSON.stringify(M1).slice(0, 260));
+      await page.waitForFunction(() => /נוסף גורם 23/.test(document.getElementById("ptyLive").textContent), null, { timeout: 3000 });
+      check("דיווח לגורמים: ההוספה מוכרזת באזור aria-live (״נוסף גורם 23״)", true, "");
+      await settled(page);
+      const inj1 = await injected(page, "#partiesBox, #report .paper.parties"), pap = await page.evaluate(() => document.querySelector("#report .paper.parties").innerText);
+      check("דיווח לגורמים: בעורך ובעמוד הקריאה אין אלמנט, מאפיין on* או קישור חשוד שהוזרק מהשם ומפרטי הקשר שהוקלדו — הטקסט מוצג כטקסט", inj1.every(x => x.tags === 0 && x.on === 0 && x.hrefs === 0) && pap.includes("<img src=x") && (await page.evaluate(() => window.__pwn)) === undefined, JSON.stringify(inj1));
+      await autosaved(page);
+      { const xml = await wordXml(page._env), ok = await page.evaluate(x => new DOMParser().parseFromString(x, "application/xml").getElementsByTagName("parsererror").length === 0, xml), rec = recOf(page._env);
+        check("דיווח לגורמים: ה-Word שנשמר עם השם העוין תקין (XML בלי parsererror, התווים escaped, אין ״<img״ גולמי) והרשומה JSON תקין עם הטקסט כמחרוזת", ok && plainOf(xml).includes("<img src=x") && plainOf(xml).includes('onerror="window.__pwn=1"') && !/<img src=x|<script/.test(xml) && !!rec && rec.parties.manual.some(m => m.title === EVIL_) && rec.parties.rows.length === 22, "XML " + xml.length); }
+      // הסרה: מיקוד לכרטיס הסמוך, הכרזה; תקרת 20 ידניים — הודעה ליד השדה
+      await page.click(li(23) + ' button[data-act="rm"]');
+      const rm1 = await page.evaluate(() => ({ n: document.querySelectorAll("#ptyList > li.pty").length, sum: document.getElementById("ptySum").textContent, inList: !!document.activeElement.closest("#ptyList"), tag: document.activeElement.tagName }));
+      await page.waitForFunction(() => /הוסר גורם 23/.test(document.getElementById("ptyLive").textContent), null, { timeout: 3000 });
+      check("דיווח לגורמים: ״הסר״ בגורם ידני מסיר אותו, הסיכום חוזר ל-22, המיקוד עובר לכרטיס הסמוך (לא אובד), וההסרה מוכרזת", rm1.n === 22 && /^22 גורמים/.test(rm1.sum) && rm1.inList, JSON.stringify(rm1));
+      await page.evaluate(() => { for (let i = 0; i < 20; i++) window.ReqPartiesUI.addManual({ name: "ידני " + i }); });
+      await page.click("#ptyAdd"); await page.fill("#ptyDName", "עודף"); await page.click('#ptyDraft [data-act="draft-ok"]');
+      const cap = await page.evaluate(() => ({ err: document.getElementById("ptyDErr").textContent, open: !document.getElementById("ptyDraft").hidden, inv: document.getElementById("ptyDName").getAttribute("aria-invalid"), desc: document.getElementById("ptyDName").getAttribute("aria-describedby"), manual: window.ReqPartiesUI.state().rows.filter(r => r.manual).length }));
+      check("דיווח לגורמים: ניסיון להוסיף גורם ידני מעבר ל-20 — הודעה ליד השדה (aria-describedby), הטופס נשאר פתוח, בלי alert ובלי הוספה", /20/.test(cap.err) && cap.open && cap.inv === "true" && cap.desc === "ptyDErr" && cap.manual === 20 && dialogs.length === 0, JSON.stringify(cap));
+      await page.click('#ptyDraft [data-act="draft-cancel"]');
+      check("דיווח לגורמים: ״ביטול״ סוגר את הטופס ומחזיר את המיקוד לכפתור ההוספה", await page.evaluate(() => document.getElementById("ptyDraft").hidden && document.activeElement.id === "ptyAdd"), "");
+      await page.evaluate(() => { window.ReqPartiesUI.state().rows.filter(r => r.manual).forEach(r => window.ReqPartiesUI.removeManual(r.key)); });
+      // מקלדת: סדר Tab בכרטיס (סוג, סטטוס, הערה, הכרטיס הבא), Enter בטופס, Escape
+      await page.focus(li(1) + ' select[data-f="type"]');
+      const tabs = []; for (let i = 0; i < 4; i++) { await page.keyboard.press("Tab"); tabs.push(await page.evaluate(() => { const a = document.activeElement, c = a.closest("li.pty"); return (c ? [...c.parentNode.children].indexOf(c) + 1 : 0) + ":" + (a.dataset.f || a.id || a.tagName); })); }
+      check("דיווח לגורמים: ניווט מקלדת — Tab עובר סטטוס, הערה, ואז לסוג של הכרטיס הבא (בלי עצירות מיותרות בכרטיס גורם אוטומטי)", tabs.slice(0, 3).join() === "1:status,1:note,2:type", tabs.join());
+      for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+Tab");
+      check("דיווח לגורמים: Shift+Tab חוזר אחורה בסדר ההפוך (לסטטוס של הכרטיס הראשון)", await page.evaluate(() => document.activeElement.dataset.f === "status" && document.activeElement.closest("li.pty") === document.querySelector("#ptyList > li.pty")), "");
+      await page.focus("#ptyAdd"); await page.keyboard.press("Enter");
+      check("דיווח לגורמים: Enter על ״הוסף גורם״ פותח את הטופס עם מיקוד בשם; Escape סוגר וממקד חזרה בכפתור", (await page.evaluate(() => document.activeElement.id)) === "ptyDName", "");
+      await page.keyboard.press("Escape");
+      check("דיווח לגורמים: Escape בטופס סוגר אותו ומחזיר את המיקוד לכפתור", await page.evaluate(() => document.getElementById("ptyDraft").hidden && document.activeElement.id === "ptyAdd"), "");
+      // ״!״
+      await page.click("#ptyTitle .hbtn");
+      const hb = await page.evaluate(() => { const b = document.getElementById("hbubble"), btn = document.querySelector("#ptyTitle .hbtn"), r = b && !b.hidden ? b.getBoundingClientRect() : null; return { text: r ? b.textContent : "", label: btn.getAttribute("aria-label"), exp: btn.getAttribute("aria-expanded"), inView: !!r && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, size: Math.round(btn.getBoundingClientRect().width) }; });
+      check("דיווח לגורמים: ״!״ ליד הכותרת — aria-label ״הסבר על: דיווח לגורמים נוספים״ (ייחודי), הבועה מוצגת בתוך המסך עם ההסבר (מודיעין טיס, לא מאומת, לא חוסם), וקוטר 20–22px", hb.label === "הסבר על: דיווח לגורמים נוספים" && hb.exp === "true" && hb.inView && /מודיעין טיס/.test(hb.text) && /אינם מאומתים/.test(hb.text) && /אינה מונעת שמירה או שליחה/.test(hb.text) && hb.size >= 20 && hb.size <= 22 && !/office@icd|icd\.org\.il|מנהל המערכת/.test(hb.text), JSON.stringify(hb).slice(0, 200));
+      await page.keyboard.press("Escape");
+      check("דיווח לגורמים: Escape סוגר את הבועה והמיקוד חוזר ללחצן ״!״", await page.evaluate(() => document.getElementById("hbubble").hidden && document.activeElement.matches("#ptyTitle .hbtn")), "");
+      const hlp = await page.evaluate(() => [...document.querySelectorAll(".hbtn")].map(e => e.getAttribute("aria-label")));
+      check("דיווח לגורמים: כל לחצני ״!״ בדף ממשיכים להיות עם aria-label ייחודי", new Set(hlp).size === hlp.length && hlp.length >= 27, hlp.length + " לחצנים");
+      // הרצה חוזרת: סימונים נשמרים, בלי ״חדש״ ובלי הודעה; גורם ידני נשמר
+      await page.evaluate(() => { window.ReqPartiesUI.addManual({ name: "מנהל האתר", contact: "050-7654321", note: "להתקשר" }); });
+      await page.selectOption(li(2) + ' select[data-f="status"]', "done");
+      await settled(page);
+      await rerun(page);
+      const A2 = await st(page), msg2 = await page.textContent("#ptyMsg");
+      check("דיווח לגורמים: הרצה חוזרת של אותה בקשה — הסימונים (נדרש + הערה, דווח) והגורם הידני נשמרים, בלי ״חדש״ ובלי הודעה", A2.n === 23 && A2.status[0] === "needed" && A2.notes[0] === "התקשרתי ליחידה, ממתין לאישור" && A2.status[1] === "done" && A2.manual.join() === "מנהל האתר" && A2.news === 0 && msg2 === "", JSON.stringify([A2.n, A2.status.slice(0, 3), A2.manual, msg2]));
+      // סינון
+      const F0 = await page.evaluate(() => { const s = window.ReqPartiesUI.state(); return { open: s.rows.filter(r => window.ReqPartiesUI.isOpen(r)).length, total: s.rows.length }; });
+      await page.check("#ptyOpen");
+      const F1 = await page.evaluate(() => ({ cards: document.querySelectorAll("#ptyList > li.pty").length, ids: [...document.querySelectorAll("#ptyList > li.pty")].map(c => +c.getAttribute("aria-labelledby").replace("ptyT", "")), n: document.getElementById("ptyOpenN").textContent, model: window.ReqPartiesUI.state().rows.length }));
+      check("דיווח לגורמים: ״הצג רק פתוחות״ (מעל 8 שורות) — מסתיר ״אין צורך״ / ״לא נמצא איש קשר״ בלי הערה, המספור קבוע, ההודעה ״מוצגות X מתוך Y״, והמודל (Word) לא משתנה", F1.cards === F0.open && F1.cards < F0.total && F1.ids[0] === 1 && F1.ids.some((x, i) => i > 0 && x - F1.ids[i - 1] > 1) && F1.n === "מוצגות " + F0.open + " מתוך " + F0.total && F1.model === F0.total, JSON.stringify([F0, F1.n]));
+      await page.uncheck("#ptyOpen");
+      check("דיווח לגורמים: ביטול הסינון מציג את כל הכרטיסים", (await page.locator("#ptyList > li.pty").count()) === F0.total, "");
+      // שליחה (מצב בדיקה, חשבון ארגוני בלי כתובת): שורת המייל עם ספירה בלבד; עריכה אחרי השליחה מוחקת את ״נשלח״
+      await page.check("#reviewOk"); await settled(page);
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox");
+      const pre = await page.evaluate(() => document.querySelector(".sendBox pre").textContent);
+      check("דיווח לגורמים: חלון השליחה מציג את שורת המייל ״• דיווח לגורמים נוספים: 23 גורמים — 1 דווח/התקבל אישור״ (ספירה בלבד)", pre.split("\n").includes("• דיווח לגורמים נוספים: 23 גורמים — 1 דווח/התקבל אישור"), pre.slice(0, 300));
+      await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      { const mail = page._env.mails[page._env.mails.length - 1], ls = mail.body.split("\n"), i = ls.findIndex(l => l.startsWith("• דיווח לגורמים נוספים")), docx = mail.attachments.find(a => /\.docx$/.test(a.name));
+        check("דיווח לגורמים: המייל שנשלח כולל את שורת הסיכום אחרי ״סגירה״ ולפני ״קבצים מצורפים״, ללא שמות, טלפונים או קישורים, והנושא לא השתנה; ה-Word המצורף כולל את העמוד", i > 0 && ls[i] === "• דיווח לגורמים נוספים: 23 גורמים — 1 דווח/התקבל אישור" && ls[i - 1].startsWith("• סגירה:") && ls[i + 1] === "" && !/LLU|074-|03-6427080|lunapark|מנהל האתר|050-7654321|https?:/.test(mail.body) && !/דיווח לגורמים/.test(mail.subject) && !!docx, ls[i] || mail.body.slice(0, 200)); }
+      await page.click("#mdClose");
+      const sentBefore = await page.textContent("#sendMsg");
+      await page.fill(li(3) + ' input[data-f="note"]', "אחרי השליחה");
+      const sentAfter = await page.textContent("#sendMsg");
+      check("דיווח לגורמים: עריכה אחרי שליחה מוחקת את ״נשלח״ מהעמוד (אותה התנהגות של שדה רך), והבקשה נעולה עד הרינדור מחדש", /נשלח/.test(sentBefore) && sentAfter === "" && !(await page.evaluate(() => window.__REQ.S.ready)), sentBefore.slice(0, 60));
+      await settled(page);
+      check("דיווח לגורמים: לא נקראה אף פעולת שרת חדשה של הגורמים (הכול בקבצים הקיימים: saveFile / sendRequest) ולא הוצג alert", !page._calls.actions.some(a => /part|group|contact/i.test(a)) && page._calls.actions.includes("saveFile") && dialogs.length === 0, [...new Set(page._calls.actions)].join());
+      await ctx.close();
+    }
+
+    /* ---- ב. דגל כבוי: שלב א׳ בדיוק ---- */
+    {
+      const { ctx, page } = await newPage(browser, { autosave: 400, features: { parties: false } });
+      await goReady(page); await autosaved(page);
+      const O0 = await page.evaluate(() => ({ box: !!document.getElementById("partiesBox"), style: !!document.getElementById("partiesStyle"), chk: !!document.getElementById("ptyChkNote"), papers: document.querySelectorAll("#report .paper").length, parties: !!document.querySelector("#report .paper.parties"), ptyEls: document.querySelectorAll('[id^="pty"], .pty, .pty-box').length, st: window.ReqPartiesUI.state().built, opts: JSON.stringify(window.ReqPartiesUI.modelOpts(window.__REQ.S.res)), mail: window.ReqPartiesUI.mailOpts(window.__REQ.S.res), rec: window.ReqPartiesUI.record(window.__REQ.S.res), wipeHelp: document.querySelector(".hw:has(#wipePerson) .hbtn").getAttribute("data-help") }));
+      check("דיווח לגורמים, דגל כבוי: אין עורך, אין סגנון, אין הערה ליד ״כולל דף בדיקות״, אין עמוד בדוח (6 עמודים) ואין שום אלמנט ״pty״ בדף; ההסבר של ״מחק פרטים שמורים״ כמו בשלב א׳", !O0.box && !O0.style && !O0.chk && O0.papers === 6 && !O0.parties && O0.ptyEls === 0 && !O0.st && O0.opts === "{}" && O0.mail === null && O0.rec === null && !/גורמים נוספים/.test(O0.wipeHelp), JSON.stringify(O0));
+      { const env = page._env, plain = plainOf(await wordXml(env)), rec = recOf(env), ls = await page.evaluate(() => Object.keys(localStorage).filter(k => /parties/i.test(k)));
+        check("דיווח לגורמים, דגל כבוי: ה-Word בדרייב בלי העמוד, קובץ נתוני הבקשה בלי בלוק parties, ואין מפתח parties באחסון בדפדפן", !/דיווח לגורמים נוספים/.test(plain) && !!rec && !("parties" in rec) && ls.length === 0, rec ? Object.keys(rec).join() : "אין רשומה"); }
+      await page.click("#btnSend"); await page.waitForSelector(".sendBox"); await page.check("#sendOk"); await page.click("#sendGo");
+      await page.waitForFunction(() => /נשלח במצב בדיקה|נכשלה/.test(document.querySelector("#sendProg").textContent), null, { timeout: 120000 });
+      { const mail = page._env.mails[page._env.mails.length - 1];
+        check("דיווח לגורמים, דגל כבוי: המייל כמו בשלב א׳ — ארבע נקודות, בלי שורת הגורמים", mail.body.split("\n").filter(l => l.startsWith("• ")).length === 4 && !/גורמים נוספים/.test(mail.body), mail.body.slice(0, 200)); }
+      check("דיווח לגורמים, דגל כבוי: פעולות השרת רק הרגילות (בלי שום קריאה חדשה), והרשת ללא קריאה נוספת", !page._calls.actions.some(a => /part|group|contact/i.test(a)) && page._calls.actions.includes("saveFile"), [...new Set(page._calls.actions)].join());
+      await ctx.close();
+    }
+
+    /* ---- ג. מטיס עצמאי על שרת שלב א׳ (בלי features): העורך עובד, הקובץ נשמר, ואין כתובת הארגון / ״מנהל המערכת״ בשום מקום בעורך, בעמוד ובהסבר ---- */
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "addUser", token: admTok, newUser: "par.pilot", newPass: "par-pass-12345", org: false });
+      const { ctx, page } = await newPage(browser, { env, oldServer: true, autosave: 400 });
+      await goReady(page, "par.pilot", "par-pass-12345"); await autosaved(page);
+      const P3 = await page.evaluate(() => ({ cards: document.querySelectorAll("#ptyList > li.pty").length, box: document.getElementById("partiesBox").innerText, paper: document.querySelector("#report .paper.parties").innerText, feats: window.ReqAuth.getFeatures(), org: window.ReqAuth.isOrg() }));
+      check("דיווח לגורמים, מטיס עצמאי על שרת שלב א׳ (בלי features): העורך מוצג עם כל השורות והעמוד בדוח — התוספת אינה תלויה בשרת", P3.cards === 22 && P3.feats.length === 0 && !P3.org && /^דיווח לגורמים נוספים/.test(P3.box.trim()), "features=" + P3.feats.length);
+      await page.click("#ptyTitle .hbtn");
+      const ht = await page.evaluate(() => document.getElementById("hbubble").textContent);
+      check("דיווח לגורמים, מטיס עצמאי: בעורך, בעמוד הקריאה ובבועת ההסבר אין כתובת הארגון, ״icd.org.il״ או ״מנהל המערכת״", ![P3.box, P3.paper, ht].some(t => /office@icd|icd\.org\.il|מנהל המערכת/.test(t)), "");
+      await page.keyboard.press("Escape");
+      { const xml = await wordXml(env), plain = plainOf(xml), rec = recOf(env), ps = JSON.stringify(rec && rec.parties);
+        check("דיווח לגורמים, מטיס עצמאי על שרת שלב א׳: ה-Word שנשמר כולל את העמוד והרשומה את בלוק parties (השרת הישן מקבל כל JSON), בלי כתובת הארגון", /דיווח לגורמים נוספים/.test(plain) && !!rec && rec.parties.rows.length === 22 && !/office@icd|icd\.org\.il|052-5076677/.test(plain + ps), rec ? Object.keys(rec).join() : "אין רשומה"); }
+      await page.selectOption(li(1) + ' select[data-f="status"]', "done"); await settled(page); await autosaved(page);
+      check("דיווח לגורמים, מטיס עצמאי: עריכה נשמרת שוב בדרייב (השרת הישן)", recOf(env).parties.rows[0].status === "done", "");
+      await ctx.close();
+    }
+
+    /* ---- ד. עמידות בדפדפן: דף שנטען מחדש, בקשה אחרת, מעבר בין משתמשים, ״מחק פרטים שמורים״ ---- */
+    {
+      const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+      const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+      env.call({ action: "addUser", token: admTok, newUser: "sec.pilot", newPass: "sec-pass-12345", org: false });
+      const { ctx, page } = await newPage(browser, { env });
+      const reloadLogin = async (user, pass) => { await page.reload(); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await page.waitForFunction(() => document.getElementById("authForm") || (window.ReqAuth && window.ReqAuth.loggedIn()), null, { timeout: 20000 }); if (!(await page.evaluate(() => window.ReqAuth.loggedIn()))) await login(page, user, pass); };
+      const runAgain = async over => { await fillExample(page, over); await rerun(page); };
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await runAgain();
+      await page.selectOption(li(1) + ' select[data-f="status"]', "done"); await page.fill(li(1) + ' input[data-f="note"]', "N1-אושר");
+      await page.evaluate(() => { window.ReqPartiesUI.addManual({ name: "ידני-1", contact: "03-1234567", note: "M1" }); });
+      const key = await uk(page, "icd_req_parties_v1"), raw1 = await page.evaluate(k => localStorage.getItem(k), key), fp1 = await page.evaluate(() => window.ReqParties.fingerprint(window.__REQ.readInputs()));
+      check("דיווח לגורמים: כל עריכה נשמרת בדפדפן תחת מפתח המשתמש (icd_req_parties_v1:<גיבוב>) ותחת מפתח הבקשה (נקודה ומועדים), עד 60KB, וכולל את הסימון והגורם הידני", !!raw1 && raw1.length < 60000 && Object.keys(JSON.parse(raw1)).join() === fp1 && JSON.parse(raw1)[fp1].marks[(await st(page)).keys[0]].status === "done" && JSON.parse(raw1)[fp1].manual[0].title === "ידני-1" && !/(^|:)icd_req_parties_v1$/.test(key), key + " " + (raw1 || "").length);
+      await reloadLogin();
+      await runAgain();
+      const A = await st(page);
+      check("דיווח לגורמים: דף שנטען מחדש והרצה של אותה בקשה — הסימון, ההערה והגורם הידני חוזרים מהאחסון, בלי ״חדש״", A.status[0] === "done" && A.notes[0] === "N1-אושר" && A.manual.join() === "ידני-1" && A.news === 0 && (await page.textContent("#ptyMsg")) === "", JSON.stringify([A.status[0], A.notes[0], A.manual, A.news]));
+      await runAgain({ dateFrom: ymd(20), dateTo: ymd(21) });
+      const B = await st(page), rawB = await page.evaluate(k => localStorage.getItem(k), key);
+      check("דיווח לגורמים: בקשה אחרת (מועדים אחרים) מתחילה נקי — בלי סימונים ובלי גורמים ידניים; שתי הבקשות באחסון", B.status.every(s => s !== "done") && B.notes.every(n => !n) && B.manual.length === 0 && Object.keys(JSON.parse(rawB)).length === 2, JSON.stringify(B.status.slice(0, 3)));
+      // באחסון של הבקשה הראשונה חסר גורם (כאילו לא היה בסריקה הקודמת): בחזרה אליה הוא מסומן ״חדש״ וההודעה מוצגת פעם אחת
+      const dropKey = B.keys[3];
+      await page.evaluate(([k, f, dk]) => { const o = JSON.parse(localStorage.getItem(k)); o[f].keys = o[f].keys.filter(x => x !== dk); delete o[f].marks[dk]; localStorage.setItem(k, JSON.stringify(o)); }, [key, fp1, dropKey]);
+      await runAgain();
+      const C0 = await st(page), newMsg = await page.textContent("#ptyMsg"), newFlag = await page.evaluate(dk => { const c = [...document.querySelectorAll("#ptyList > li.pty")].find(x => x.dataset.key === dk); return c ? [...c.querySelectorAll(".pty-flag")].map(f => f.textContent).join() : null; }, dropKey);
+      check("דיווח לגורמים: חזרה לבקשה הראשונה משחזרת את הסימונים שלה מהאחסון", C0.status[0] === "done" && C0.manual.join() === "ידני-1", JSON.stringify(C0.status.slice(0, 2)));
+      check("דיווח לגורמים: גורם שלא היה בסריקה הקודמת מסומן ״חדש״ ומוצגת ההודעה ״נוסף גורם אחד חדש מאז הבדיקה הקודמת״ (בלי חלון ובלי חסימה)", C0.news === 1 && newMsg === "נוסף גורם אחד חדש מאז הבדיקה הקודמת" && newFlag === "חדש" && dialogs.length === 0, newMsg + " | " + newFlag);
+      // התנתקות: הזיכרון והדף נקיים, האחסון של המשתמש נשאר; משתמש אחר לא רואה דבר; חזרה מחזירה
+      const rawPre = await page.evaluate(k => localStorage.getItem(k), key);
+      await page.click("#ubOut"); await page.waitForSelector("#authForm"); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      const LO = await page.evaluate(k => ({ built: window.ReqPartiesUI.state().built, cards: document.querySelectorAll("#ptyList > li").length, raw: localStorage.getItem(k), body: document.getElementById("partiesBox") ? document.getElementById("partiesBox").innerText : "" }), key);
+      check("דיווח לגורמים: אחרי התנתקות הדף נטען נקי — אין שורות, אין סימונים ואין שם גורם בדף; האחסון של המשתמש נשמר לכניסה הבאה שלו", !LO.built && LO.cards === 0 && LO.raw === rawPre && !!rawPre && !/N1-אושר|ידני-1/.test(LO.body), "");
+      await login(page, "sec.pilot", "sec-pass-12345");
+      await runAgain();
+      const D = await st(page), keyP = await uk(page, "icd_req_parties_v1"), rawP = await page.evaluate(k => localStorage.getItem(k), keyP), rawA = await page.evaluate(k => localStorage.getItem(k), key);
+      check("דיווח לגורמים: משתמש אחר באותו דפדפן לא יורש סימונים או גורמים ידניים (מפתח אחר), ואחסון המשתמש הראשון לא נגע", D.status.every(s => s !== "done") && D.manual.length === 0 && keyP !== key && rawA === rawPre, keyP + " vs " + key);
+      await page.click("#ubOut"); await page.waitForSelector("#authForm"); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+      await login(page); await runAgain();
+      const E = await st(page);
+      check("דיווח לגורמים: חזרת המשתמש הראשון — הסימונים שלו חוזרים", E.status[0] === "done" && E.manual.join() === "ידני-1", "");
+      await page.evaluate(() => { document.getElementById("personBox").open = true; }); await page.click("#wipePerson");
+      const W = await page.evaluate(k => ({ raw: localStorage.getItem(k), cards: document.querySelectorAll("#ptyList > li.pty").length }), key);
+      check("דיווח לגורמים: ״מחק פרטים שמורים״ מוחק גם את הסימונים השמורים של המשתמש (הרשימה שעל המסך נשארת)", W.raw === null && W.cards > 0, "");
+      check("דיווח לגורמים: ההסבר של ״מחק פרטים שמורים״ מזכיר את הסימונים השמורים", /הסימונים השמורים של ״דיווח לגורמים נוספים״/.test(await page.getAttribute(".hw:has(#wipePerson) .hbtn", "data-help")), "");
+      await ctx.close();
+    }
+
+    /* ---- ה. קלט עוין: שמות ותגיות מ-OSM, וסימונים משובשים באחסון — נשארים טקסט; XML ו-JSON תקינים ---- */
+    {
+      const { ctx, page } = await newPage(browser, { autosave: 400 });
+      await page.route(/overpass/, async r => {
+        if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: { ...CORS, "access-control-allow-headers": "*" } });
+        const body = decodeURIComponent((r.request().postData() || "").replace(/^data=/, "")), which = body.includes("is_in(") ? "far" : body.includes("nature_reserve") ? "ext" : "near", d = JSON.parse(fx(which));
+        if (which === "near") d.elements.forEach(e => { if (e.tags && e.tags.name) { e.tags.name = e.tags.name + " " + EVIL_; e.tags.operator = EVIL_; if (e.tags.website) e.tags.website = "javascript:alert(1)"; e.tags["contact:phone"] = "+972 3 642 7080; " + EVIL_; } });
+        r.fulfill({ status: 200, contentType: "application/json", headers: CORS, body: JSON.stringify(d) });
+      });
+      await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page);
+      await fillExample(page);
+      const key = await uk(page, "icd_req_parties_v1");
+      await page.evaluate(([k, evil]) => { const fp = window.ReqParties.fingerprint(window.__REQ.readInputs()); let raw = JSON.stringify({ [fp]: { t: 1, keys: ["z:LLU20", "z:GONE"], marks: { "z:LLU20": { status: "needed", note: evil }, "z:GONE": { status: "done", title: evil, src: "zone", note: evil }, "x:bad<>": { status: "done" } }, manual: [{ key: "m:1", title: evil, contact: evil, type: "report", status: "needed", note: evil }, { key: "m:2", title: 5 }, null] } });
+        raw = raw.replace('"marks":{', '"marks":{"__proto__":{"status":"done"},').replace(/^\{/, '{"__proto__":{"t":1},');   // __proto__ כמפתח אמיתי ב-JSON (בליטרל JS זה היה קובע אב-טיפוס)
+        localStorage.setItem(k, raw); }, [key, EVIL_]);
+      await page.click("#runBtn"); await page.waitForFunction(() => document.querySelector("#gate .banner") && !window.__REQ.S.running, null, { timeout: 150000 });
+      await page.check("#reviewOk"); await settled(page); await autosaved(page);
+      const inj = await injected(page, "#partiesBox, #report .paper.parties"), S5 = await st(page);
+      const T5 = await page.evaluate(() => ({ box: document.getElementById("partiesBox").innerText, paper: document.querySelector("#report .paper.parties").innerText, mval: [...document.querySelectorAll('#ptyList input[data-f="name"]')].map(i => i.value), pwn: window.__pwn, tel: [...document.querySelectorAll("#partiesBox a[href^='tel:']")].map(a => a.getAttribute("href")), ext: [...document.querySelectorAll("#partiesBox a[target=_blank]")].map(a => a.getAttribute("rel")) }));
+      check("דיווח לגורמים, קלט עוין: שמות ותגיות OSM עוינים וסימונים משובשים באחסון — בעורך ובעמוד הקריאה אין אלמנט, מאפיין on* או קישור שהוזרק, הטקסט מוצג כטקסט, ו-window.__pwn לא הוגדר", inj.every(x => x.tags === 0 && x.on === 0 && x.hrefs === 0) && T5.pwn === undefined && T5.box.includes("<img src=x onerror") && T5.paper.includes("<img src=x onerror") && T5.mval.includes(EVIL_), JSON.stringify(inj));
+      check("דיווח לגורמים, קלט עוין: מהאחסון נטענו רק הרשומות התקינות — הסימון של LLU20, שתי שורות שנעלמו וסומנו ״דווח״ (״מחוץ לטווח״, גם מפתח עם ״<>״ — מוצג כטקסט) והגורם הידני התקין; ״__proto__״ ורשומות פגומות נבלעו", S5.status[S5.keys.indexOf("z:LLU20")] === "needed" && S5.stale.length === 2 && S5.stale.includes(EVIL_) && S5.stale.includes("x:bad<>") && S5.manual.length === 1 && S5.manual[0] === EVIL_ && ({}).status === undefined, JSON.stringify([S5.stale.length, S5.manual.length]));
+      check("דיווח לגורמים, קלט עוין: קישורי tel: רק למספרים תקינים (+972…), וקישורים חיצוניים עם rel=noopener noreferrer", T5.tel.every(h => /^tel:\+972\d{8,9}$/.test(h)) && T5.ext.every(r => r === "noopener noreferrer"), JSON.stringify([T5.tel, T5.ext]));
+      { const xml = await wordXml(page._env), ok = await page.evaluate(x => new DOMParser().parseFromString(x, "application/xml").getElementsByTagName("parsererror").length === 0, xml), rec = recOf(page._env);
+        check("דיווח לגורמים, קלט עוין: ה-Word בדרייב XML תקין (הטקסט escaped) והרשומה JSON תקין שבו הטקסט העוין הוא מחרוזת בלבד", ok && !/<img src=x|<script/.test(xml) && plainOf(xml).includes("<img src=x") && !!rec && JSON.stringify(rec.parties).includes("onerror") && typeof rec.parties.manual[0].title === "string", "XML " + xml.length); }
+      await ctx.close();
+    }
+
+    /* ---- ו. פריסה: 1280 / 480 / 375 / 320, מגע, אין גלילה אופקית, אזורי מגע 44px, אין אנימציות (כל רוחב בהקשר נפרד: ההדמיה של מגע נקבעת ביצירת ההקשר) ---- */
+    {
+      const layoutAt = async (width, touch) => {
+        const { ctx, page } = await newPage(browser, { viewport: { width, height: width < 700 ? 800 : 1000 }, touch });
+        await goReady(page);
+        await page.evaluate(() => { window.ReqPartiesUI.addManual({ name: "גורם ידני לבדיקת פריסה", contact: "03-1234567" }); });
+        const M = await page.evaluate(() => {
+          const vw = innerWidth, de = document.documentElement, r = e => e.getBoundingClientRect(), box = document.getElementById("partiesBox"), c0 = document.querySelector("#ptyList > li.pty"), f = c0.querySelector(".pty-f"), sel = f.querySelectorAll("select"), note = f.querySelector('input[data-f="note"]');
+          const man = document.querySelector("#ptyList > li.pty:last-child"), tel = [...document.querySelectorAll("#ptyList a.pty-tel")], paper = document.querySelector("#report .paper.parties"), tr = paper.querySelector("tbody tr");
+          const ctl = [...sel, note, document.getElementById("ptyAdd"), ...document.querySelectorAll("#ptyChips .pty-chip"), man.querySelector('input[data-f="name"]'), man.querySelector('button[data-act="rm"]')];
+          const bad = [...box.querySelectorAll("*"), ...paper.querySelectorAll("*")].filter(e => { const b = r(e); return b.width > 0 && (b.right > vw + 1 || b.left < -1); }).length;
+          return { vw, docW: de.scrollWidth, over: bad, typeTop: Math.round(r(sel[0]).top), statusTop: Math.round(r(sel[1]).top), noteTop: Math.round(r(note).top),
+            minH: Math.round(Math.min(...ctl.map(e => r(e).height))), rmW: Math.round(r(man.querySelector('button[data-act="rm"]')).width), telH: tel.length ? Math.round(Math.min(...tel.map(a => r(a).height))) : 0, coarse: matchMedia("(pointer: coarse)").matches,
+            trDisplay: getComputedStyle(tr).display, paperR: Math.round(r(paper).right), trans: [document.getElementById("ptyAdd"), sel[0], note].map(e => getComputedStyle(e).transitionDuration).join(), anim: [...box.querySelectorAll("*")].filter(e => getComputedStyle(e).animationName !== "none").length };
+        });
+        await page.locator("#partiesBox").screenshot({ path: path.join(OUT, "parties-" + width + ".png") }).catch(() => {});
+        let hb = null;
+        if (width === 320) { await page.click("#ptyTitle .hbtn"); hb = await page.evaluate(() => { const b = document.getElementById("hbubble"), r = b.getBoundingClientRect(); return { l: r.left, r: r.right, vw: innerWidth, hidden: b.hidden }; }); await page.keyboard.press("Escape"); }
+        await ctx.close();
+        return { M, hb };
+      };
+      const L375 = await layoutAt(375, true), M375 = L375.M;
+      check("דיווח לגורמים, 375px (מגע): אין גלילה אופקית ואין רכיב שיוצא מהמסך; סוג וסטטוס אחד מתחת לשני (מתחת ל-420px); כל הבקרים (בחירות, הערה, הוספה, הצעות, הסרה) לפחות 44px, ״הסר״ 44×44, וקישורי tel: לפחות 44px; עמוד הקריאה בדוח ככרטיסים בלי גלישה; בלי אנימציות", M375.coarse && M375.docW <= M375.vw && M375.over === 0 && M375.statusTop > M375.typeTop && M375.minH >= 44 && M375.rmW >= 44 && M375.telH >= 44 && M375.trDisplay === "grid" && M375.paperR <= M375.vw && /^0s,0s,0s$/.test(M375.trans) && M375.anim === 0, JSON.stringify(M375));
+      const M480 = (await layoutAt(480, true)).M;
+      check("דיווח לגורמים, 480px: סוג וסטטוס זה לצד זה (מעל 420px), ההערה ברוחב מלא מתחתם, בלי גלישה", M480.statusTop === M480.typeTop && M480.noteTop > M480.typeTop && M480.docW <= M480.vw && M480.over === 0, JSON.stringify([M480.typeTop, M480.statusTop, M480.noteTop]));
+      const L320 = await layoutAt(320, true), M320 = L320.M;
+      check("דיווח לגורמים, 320px: אין רכיב של העורך או של עמוד הקריאה שיוצא מהמסך (documentElement בלי גלילה אופקית), סוג וסטטוס אחד מתחת לשני, בקרים 44px", M320.docW <= M320.vw && M320.over === 0 && M320.statusTop > M320.typeTop && M320.minH >= 44 && M320.paperR <= M320.vw && M320.coarse, JSON.stringify(M320));
+      check("דיווח לגורמים, 320px: בועת ה-״!״ נכנסת כולה למסך", !L320.hb.hidden && L320.hb.l >= 0 && L320.hb.r <= L320.hb.vw, JSON.stringify(L320.hb));
+      const M1280 = (await layoutAt(1280, false)).M;
+      check("דיווח לגורמים, 1280px: סוג, סטטוס והערה בשורה אחת בכל כרטיס, בלי גלישה, ועמוד הקריאה כטבלה", M1280.typeTop === M1280.statusTop && M1280.statusTop === M1280.noteTop && M1280.docW <= M1280.vw && M1280.over === 0 && M1280.trDisplay === "table-row", JSON.stringify([M1280.typeTop, M1280.statusTop, M1280.noteTop, M1280.trDisplay]));
+    }
+  }
+  /* PARTIES-END */
   check("שרת ההתחברות נקרא רק ב'בקשות פשוטות' (text/plain) — אפס OPTIONS ואפס Content-Type אחר (Apps Script אמיתי אינו תומך ב-preflight)", API_STATS.posts > 0 && API_STATS.preflight === 0 && API_STATS.nonSimple === 0, JSON.stringify(API_STATS));
 } finally {
   await browser.close(); server.close();
