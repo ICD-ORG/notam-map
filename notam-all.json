@@ -1,10 +1,45 @@
 {
- "fetched_at": "19/10/2026 09:11 UTC",
- "fetched_iso": "2026-10-19T09:11:05Z",
+ "fetched_at": "19/10/2026 19:01 UTC",
+ "fetched_iso": "2026-10-19T19:01:15Z",
  "listed": 117,
  "count": 117,
  "failed": [],
  "notams": [
+  {
+   "id": "C2201/26",
+   "loc": "LLLL",
+   "name": "TAANACHIM AND GADISH",
+   "heb": "פעילות כטב\"מ תתקיים ב-TAANACHIM ו- GADISH. אזור סגור מהקרקע ועד 100 מטר מעל הקרקע 560 רגל מעל פני הים בין נקודות הציון הבאות 32°33'33\"N 35°17'19\"E 32°32'19\"N 35°17'47\"E 32°32'21\"N 35°17'59\"E 32°32'07\"N 35°18'03\"E 32°32'01\"N 35°17'22\"E 32°32'54\"N 35°16'40\"E 32°33'13\"N 35°16'37\"E 32°33'17\"N 35°15'58\"E 32°33'35\"N 35°15'58\"E. אזור בתוך ברדיוס 400 מטר שמרכזו בנ.צ. 32°33'09\"N 35°14'47\"E סגור מהקרקע ועד 100 מטר מעל הקרקע, 560 רגל מעל פני הים. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-01/11/2026 00:01 UTC עד 30/11/2026 21:59 UTC",
+   "raw": "C2201/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/006/3233N03517E002\nA) LLLL B) 2611010001 C) 2611302159\nE) UAS ACT WILL TAKE PLACE AT TAANACHIM AND GADISH.\nAN AREA CLSD FM GND UP TO 100M AGL 560FT AMSL BTN FLW PSN\n323333N0351719E 323219N0351747E 323221N0351759E\n323207N0351803E 323201N0351722E 323254N0351640E\n323313N0351637E 323317N0351558E 323335N0351558E.\nAN AREA WI 400M RADIUS CENTERED ON PSN 323309N0351447E\nCLSD FM GND UP TO 100M AGL, 560FT AMSL.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 560FT AMSL)"
+  },
+  {
+   "id": "C2200/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 3,200 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-25/10/2026 03:30 UTC עד 29/10/2026 15:30 UTC\nלו\"ז: DAILY 0330-1530",
+   "raw": "C2200/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/032/3057N03456E002\nA) LLLL B) 2610250330 C) 2610291530\nD) DAILY 0330-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 3,200FT AMSL.\nCTN ADZ.\nF) GND G) 3200FT AMSL)"
+  },
+  {
+   "id": "C2199/26",
+   "loc": "LLLL",
+   "name": "MAGEN-SHAUL",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-MAGEN-SHAUL, עד 100 מטר מעל הקרקע. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 1,500 רגל מעל פני הים 32°31'45\"N 35°16'42\"E 32°30'24\"N 35°16'38\"E 32°30'39\"N 35°20'04\"E 32°31'39\"N 35°19'54\"E 32°31'53\"N 35°19'30\"E 32°31'59\"N 35°19'07\"E מומלצת זהירות.\nבתוקף: מ-01/11/2026 00:01 UTC עד 30/11/2026 21:59 UTC",
+   "raw": "C2199/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3231N03518E002\nA) LLLL B) 2611010001 C) 2611302159\nE) UAS/UAV ACT WILL TAKE PLACE AT MAGEN-SHAUL, UP TO 100M AGL.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 1,500FT AMSL\n323145N0351642E 323024N0351638E 323039N0352004E\n323139N0351954E 323153N0351930E 323159N0351907E\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
+  },
+  {
+   "id": "C2198/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM, מהקרקע ועד 600 מטר מעל הקרקע. אזור בתוך ברדיוס 0.3 מייל ימי שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-25/10/2026 03:30 UTC עד 29/10/2026 15:30 UTC\nלו\"ז: DAILY 0330-1530",
+   "raw": "C2198/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2610250330 C) 2610291530\nD) DAILY 0330-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
+  },
+  {
+   "id": "C2197/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור SORES-ESTOL-BSEMS-ZHRYA-GOVRN",
+   "heb": "נתיב CVFR סגור SORES-ESTOL-BSEMS-ZHRYA-GOVRN.\nבתוקף: מ-22/10/2026 07:20 UTC עד 22/10/2026 07:40 UTC",
+   "raw": "C2197/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/040/3142N03459E008\nA) LLLL B) 2610220720 C) 2610220740\nE) CVFR RTE CLSD  SORES-ESTOL-BSEMS-ZHRYA-GOVRN.)"
+  },
   {
    "id": "C2196/26",
    "loc": "LLLL",
@@ -39,41 +74,6 @@
    "name": "מרחב פעילות צניחה חופשית METZADA ACT מ-8",
    "heb": "מרחב פעילות צניחה חופשית METZADA ACT מ-8,000 רגל מעל פני הים. הפעלה באישור מוקדם מבקרת התעופה בלבד.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-22/10/2026 10:00 UTC עד 23/10/2026 11:00 UTC\nלו\"ז: 22 1000-1530, 23 0600-1100",
    "raw": "C2192/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3120N03523E003\nA) LLLL B) 2610221000 C) 2610231100\nD) 22 1000-1530, 23 0600-1100\nE) PJE AIRSPACE METZADA ACT FM 8,000FT AMSL.\nOPR BY PPR FM ATC ONLY.\nF) GND G) 8000FT AMSL)"
-  },
-  {
-   "id": "A0839/26",
-   "loc": "LLLL",
-   "name": "ATS נתיב J14 LIMITED ל-MIN 6",
-   "heb": "ATS נתיב J14 LIMITED ל-MIN 6,000 רגל בין ZACCI-GIMIK.\nבתוקף: מ-19/10/2026 10:00 UTC עד 19/10/2026 17:00 UTC",
-   "raw": "A0839/26 NOTAMN\nQ) LLLL/QANLT/I /NBO/E /050/060/3236N03518E018\nA) LLLL B) 2610191000 C) 2610191700\nE) ATS RTE J14 LIMITED TO MIN 6,000 FT BTN\nZACCI-GIMIK.)"
-  },
-  {
-   "id": "C2191/26",
-   "loc": "LLLL",
-   "name": "ULTRALIGHT ו- מסוקים נתיב סגור EIRON-ARRAA-ZMGID…",
-   "heb": "ULTRALIGHT ו- מסוקים נתיב סגור EIRON-ARRAA-ZMGID-NIRYA-MRHVA-TAVOR. התנועה תוסט דרך FRDIS-HASID.\nבתוקף: מ-19/10/2026 10:00 UTC עד 19/10/2026 17:00 UTC",
-   "raw": "C2191/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /010/020/3235N03513E013\nA) LLLL B) 2610191000 C) 2610191700\nE) ULTRALIGHT AND HEL RTE CLSD\nEIRON-ARRAA-ZMGID-NIRYA-MRHVA-TAVOR.\nTFC WILL BE DIVERTED VIA FRDIS-HASID.)"
-  },
-  {
-   "id": "C2190/26",
-   "loc": "LLLL",
-   "name": "נתיב CVFR סגור עקב ILS ACT בתוך LLRD EIRON-ZMGID…",
-   "heb": "נתיב CVFR סגור עקב ILS ACT בתוך LLRD EIRON-ZMGID-AFULA-TAVOR. AFULA-EITAN.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-19/10/2026 10:00 UTC עד 19/10/2026 17:00 UTC",
-   "raw": "C2190/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3235N03513E013\nA) LLLL B) 2610191000 C) 2610191700\nE) CVFR RTE CLSD DUE ILS ACT WI LLRD\nEIRON-ZMGID-AFULA-TAVOR.\nAFULA-EITAN.)"
-  },
-  {
-   "id": "C2189/26",
-   "loc": "LLMG",
-   "name": "AIRSTRIP LTD ל-מקסימום 400 רגל מעל פני הים עקב I…",
-   "heb": "AIRSTRIP LTD ל-מקסימום 400 רגל מעל פני הים עקב ILS ACT בתוך LLRD מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-19/10/2026 10:00 UTC עד 19/10/2026 17:00 UTC",
-   "raw": "C2189/26 NOTAMN\nQ) LLLL/QFALT/IV/NBO/A /000/999/3236N03514E001\nA) LLMG B) 2610191000 C) 2610191700\nE) AIRSTRIP LTD TO MAX 400FT AMSL DUE ILS ACT WI LLRD\nCTN ADZ.)"
-  },
-  {
-   "id": "C2188/26",
-   "loc": "LLLL",
-   "name": "LLMG אזור אימונים ו- בועת זעירים NR B-WEST (BMGW…",
-   "heb": "LLMG אזור אימונים ו- בועת זעירים NR B-WEST (BMGWB) LTD ל-מקסימום 1,600 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-19/10/2026 10:00 UTC עד 19/10/2026 17:00 UTC",
-   "raw": "C2188/26 NOTAMN\nQ) LLLL/QAELP/IV/NBO/E /000/020/3237N03523E005\nA) LLLL B) 2610191000 C) 2610191700\nE) LLMG TRG AREA AND ULTRALIGHT BUBBLE NR B-WEST (BMGWB)\nLTD TO MAX 1,600FT AMSL.\nCTN ADZ.)"
   },
   {
    "id": "C2186/26",
