@@ -253,3 +253,88 @@ test("נתיב-מפה: פס הסיכום — a.area מחשב מהציר: אזו�
   const none = LY.preview(Object.assign({ lat: undefined, lon: undefined, radius: 100 }, base)); assert.equal(none.state, "need-point"); assert.equal(none.lines[0].text, "בחרו נקודה במפה");
   const rad = LY.preview(Object.assign({ lat: LAT0, lon: LON0, radius: NaN }, base)); assert.match(line(rad, "radius").text, /^לא הוזן רדיוס תקין — החישוב הוא לנקודה עצמה/);
 });
+
+/* ================= טבעת 2W לא תקינה (corridorRing(area, 2).simple === false) — הכתום מצויר כקפסולה מדויקת ================= */
+const arcXY = (R, n) => Array.from({ length: n }, (_, i) => { const th = (Math.PI / 2) * i / (n - 1); return [R * Math.sin(th), R * (1 - Math.cos(th))]; });
+// נתיבים תקינים (validateRoute: []) שטבעת ה-2W שלהם לא תקינה: רבע מעגל R=250 (10 נקודות, W=150), סיכת שיער (W=40), פנייה חדה (W=40)
+const BAD2 = [["רבע מעגל R=250", arcXY(250, 10), 150], ["סיכת שיער", [[0, 0], [500, 0], [500, 120], [0, 120]], 40], ["פנייה חדה", [[0, 0], [500, 0], [-100, 150]], 40]];
+const WIND_LL = [[32.099128, 34.816617], [32.099362, 34.817104], [32.100102, 34.818354], [32.100246, 34.818863], [32.100138, 34.819689], [32.099994, 34.820738], [32.099849, 34.821819]];   // נתיב מתפתל, W=100 (ממצא 12)
+const analyzeLL = (pts, W) => C.analyze(inpOf({ kind: "route", pts: C.roundPts(pts), halfWidth: W }), Object.assign({ near: { elements: [] } }, EMPTY), cfg, NOW);
+
+test("נתיב-מפה: טבעת 2W לא תקינה — routeLayout מסמן capsule2 (בלי פוליגון ring2, ring1 נשאר), ובנתיב רגיל capsule2=false", () => {
+  const cases = BAD2.map(([n, xy, W]) => [n, analyzeRoute(xy, W)]).concat([["מתפתל W=100", analyzeLL(WIND_LL, 100)]]);
+  for (const [name, res] of cases) {
+    const a = res.area; assert.deepEqual(C.validateRoute({ area: a }, cfg), [], name); assert.equal(C.corridorRing(a, 2).simple, false, name); assert.equal(C.corridorRing(a, 1).simple, true, name);
+    const { W, H } = M.sizeFor(res, {}), v = M.viewFor(res, W, H, "detail"), L = M.routeLayout(res, v, "detail"), vp = M.viewProj(v);
+    assert.ok(!L.bands && !L.enlarged, name + ": רוחב גדול מספיק לציור"); assert.equal(L.capsule2, true, name); assert.equal(L.ring2.length, 0, name + ": אין פוליגון 2W"); assert.ok(L.ring1.length > 3, name + ": ירוק נשאר פוליגון");
+    assert.ok(Math.abs(L.wO - 2 * a.halfWidth * vp.pxPerM) < 1e-9, name + ": חצי-רוחב הקפסולה בפיקסלים = 2W×pxPerM");
+  }
+  const ok = analyzeRoute([[0, 0], [600, 100], [900, 500]], 100), Lo = M.routeLayout(ok, M.viewFor(ok, 1280, 960, "detail"), "detail");
+  assert.equal(C.corridorRing(ok.area, 2).simple, true); assert.equal(Lo.capsule2, false); assert.ok(Lo.ring2.length > 3);
+  const long = analyzeRoute([[-9000, -9000], [9000, 9000]], 30), Ll = M.routeLayout(long, M.viewFor(long, 1280, 960, "detail"), "detail"); assert.equal(Ll.capsule2, false, "פס מוגדל (bands) — לא קפסולה");
+});
+
+test("נתיב-מפה: טבעת 2W לא תקינה — תיבת התצוגה (תקריב) מכילה את כל הקפסולה של 2W (לא רק את הטבעת השבורה), בשוליים", () => {
+  for (const [name, xy, Wd] of BAD2) {
+    const res = analyzeRoute(xy, Wd), { W, H } = M.sizeFor(res, {}), v = M.viewFor(res, W, H, "detail"), vp = M.viewProj(v), d = 2 * Wd;
+    // 16 כיוונים סביב כל קודקוד במרחק 2W: כולם בתוך מלבן ההתאמה (inView)
+    xy.forEach(q => { for (let k = 0; k < 16; k++) { const e = vp.X(...ll(q[0] + d * Math.cos(k * Math.PI / 8), q[1] + d * Math.sin(k * Math.PI / 8))); assert.ok(inRect(e, W, H), name + ": נקודת קפסולה מחוץ לתצוגה " + e.map(Math.round)); } });
+    ["detail", "overview"].forEach(mode => { const vv = M.viewFor(res, W, H, mode), bb = vv.bb, lo = ll(Math.min(...xy.map(q => q[0])) - d, Math.min(...xy.map(q => q[1])) - d), hi = ll(Math.max(...xy.map(q => q[0])) + d, Math.max(...xy.map(q => q[1])) + d); assert.ok(bb[0] <= lo[0] + 1e-6 && bb[1] <= lo[1] + 1e-6 && bb[2] >= hi[0] - 1e-6 && bb[3] >= hi[1] - 1e-6, name + "/" + mode + ": תיבה ⊇ תיבת הקפסולה"); });
+  }
+  // נתיב רגיל: התיבה היא תיבת הטבעת, כמו קודם
+  const res = analyzeRoute(BEND, 50), v = M.viewFor(res, 1280, 960, "detail"), rb = C.corridorRing(res.area, 2).ring;
+  assert.equal(C.corridorRing(res.area, 2).simple, true); assert.deepEqual(v.bb, [Math.min(...rb.map(q => q[0])), Math.min(...rb.map(q => q[1])), Math.max(...rb.map(q => q[0])), Math.max(...rb.map(q => q[1]))]);
+});
+
+// קנבס מדומה שמתעד גם השמות (lineWidth, lineCap, globalCompositeOperation...) לפי סדר, לכל הקשר בנפרד — כדי לבדוק איך הכתום מצויר
+async function renderRecorded(res, opts) {
+  const log = []; let id = 0;
+  const mk = () => { const me = ++id; return new Proxy({}, { get: (t, k) => (k === "measureText" ? s => ({ width: String(s).length * 7 }) : k === "getImageData" ? () => ({}) : typeof k === "symbol" ? undefined : (...a) => { log.push({ c: me, op: "call", k, a }); }), set: (t, k, v) => { log.push({ c: me, op: "set", k, v }); return true; } }); };
+  const saved = globalThis.document; globalThis.document = { createElement: () => { const ctx = mk(); return { width: 0, height: 0, getContext: () => ctx, toDataURL: () => "data:image/png;base64,AA==" }; } };
+  try { await M.render(res, opts); } finally { globalThis.document = saved; }
+  return log;
+}
+
+test("נתיב-מפה: render עם טבעת 2W לא תקינה — הכתום הוא קפסולה מדויקת: קו עבה לאורך הציר ברוחב 2×(2W) פיקסלים, קצוות ופינות מעוגלים, פחות הפוליגון הירוק; בלי evenodd ובלי פוליגון ring2", async () => {
+  for (const [name, xy, Wd] of BAD2) {
+    const res = analyzeRoute(xy, Wd), { W, H } = M.sizeFor(res, {}), v = M.viewFor(res, W, H, "detail"), L = M.routeLayout(res, v, "detail"), log = await renderRecorded(res, { view: "detail", provider: "esri" });
+    const wi = log.findIndex(e => e.op === "set" && e.k === "lineWidth" && Math.abs(e.v - 2 * L.wO) < 1e-6);
+    assert.ok(wi > 0, name + ": קו ברוחב " + 2 * L.wO + " פיקסלים (= 4W×pxPerM)");
+    const e = log[wi], same = log.filter(x => x.c === e.c), before = same.slice(0, same.indexOf(e));
+    const lastSet = k => { const s = before.filter(x => x.op === "set" && x.k === k); return s.length ? s[s.length - 1].v : undefined; };
+    assert.equal(lastSet("lineJoin"), "round", name + ": פינות מעוגלות"); assert.equal(lastSet("lineCap"), "round", name + ": קצוות מעוגלים"); assert.equal(lastSet("strokeStyle"), "#ff9500", name + ": כתום");
+    // הנתיב שנמשך הוא הציר: moveTo לנקודה הראשונה ו-lineTo לכל השאר, ואחריהם stroke
+    const after = same.slice(same.indexOf(e) + 1), strokeAt = after.findIndex(x => x.op === "call" && x.k === "stroke"); assert.ok(strokeAt === 0, name + ": stroke מיד אחרי קביעת הרוחב");
+    const bp = before.map(x => x).reverse().findIndex(x => x.op === "call" && x.k === "beginPath"), path = before.slice(before.length - bp).filter(x => x.op === "call");
+    assert.deepEqual(path.map(x => x.k), ["moveTo"].concat(Array(L.axis.length - 1).fill("lineTo")), name + ": נתיב הציר");
+    L.axis.forEach((q, i) => assert.deepEqual(path[i].a.map(Math.round), q.map(Math.round), name + ": נקודה " + i));
+    // החור: הפוליגון הירוק (destination-out) — לא evenodd
+    const tail = same.slice(same.indexOf(e)), dOut = tail.findIndex(x => x.op === "set" && x.k === "globalCompositeOperation" && x.v === "destination-out"); assert.ok(dOut > 0, name + ": חור בפוליגון הירוק");
+    const hole = tail.slice(dOut), fillAt = hole.findIndex(x => x.op === "call" && x.k === "fill"); assert.ok(fillAt > 0 && hole[fillAt].a.length === 0, name + ": מילוי החור (nonzero)");
+    const hp = hole.slice(0, fillAt).filter(x => x.op === "call"), hb = hp.findIndex(x => x.k === "beginPath"), pts = hp.slice(hb + 1).filter(x => x.k === "moveTo" || x.k === "lineTo");
+    assert.equal(pts.length, L.ring1.length, name + ": החור = ring1"); assert.deepEqual(pts[0].a.map(Math.round), L.ring1[0].map(Math.round));
+    assert.ok(!log.some(x => x.op === "call" && x.k === "fill" && x.a[0] === "evenodd"), name + ": בלי evenodd");
+  }
+  // נתיב רגיל: הפוליגונים (evenodd) כמו תמיד, ובלי קו בעובי 4W
+  const ok = analyzeRoute([[0, 0], [600, 100], [900, 500]], 100), Lo = M.routeLayout(ok, M.viewFor(ok, 1280, 960, "detail"), "detail"), lo = await renderRecorded(ok, { view: "detail", provider: "esri" });
+  assert.ok(lo.some(x => x.op === "call" && x.k === "fill" && x.a[0] === "evenodd")); assert.ok(!lo.some(x => x.op === "set" && x.k === "lineWidth" && Math.abs(x.v - 2 * Lo.wO) < 1e-6));
+});
+
+test("נתיב-מפה: מבנה — פינות ה-2W של טבעת לא תקינה אינן נכנסות לציור (בקוד: capsule2 מנתק את ring2), והמעגל לא עובר בענף הזה", () => {
+  const code = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.ok(/capsule2\s*=\s*!bands\s*&&\s*!c2\.simple/.test(code) && /ring2\s*=\s*bands\s*\|\|\s*capsule2\s*\?\s*\[\]/.test(code), "ring2 ריק כשהטבעת לא תקינה");
+  assert.ok(!/C\.corridorRing\(a,\s*2\)\.ring/.test(code.replace(/c2\s*=\s*C\.corridorRing\(a,\s*2\)/, "")), "אין שימוש ב-ring של 2W בלי בדיקת simple");
+});
+
+test("נתיב-מפה: טבעת לא תקינה אינה קובעת את גבולות התצוגה — גם אם תיבתה קטנה מהקפסולה, התיבה כוללת את הקפסולה (הגנה לעומק; ובטבעת תקינה התיבה היא תיבת הטבעת)", () => {
+  const res = analyzeRoute([[0, 0], [800, 0]], 60), orig = C.corridorRing, d = 120;
+  const tiny = [ll(380, -10), ll(420, -10), ll(420, 10), ll(380, 10), ll(380, -10)];
+  try {
+    C.corridorRing = (a, m) => (m === 2 ? { ring: tiny, simple: false } : orig(a, m));
+    const bb = M.viewFor(res, 1280, 960, "detail").bb, lo = ll(-d, -d), hi = ll(800 + d, d);
+    assert.ok(bb[0] <= lo[0] + 1e-6 && bb[1] <= lo[1] + 1e-6 && bb[2] >= hi[0] - 1e-6 && bb[3] >= hi[1] - 1e-6, "תיבה ⊇ קפסולה 2W: " + bb);
+    C.corridorRing = (a, m) => (m === 2 ? { ring: tiny, simple: true } : orig(a, m));
+    const bt = M.viewFor(res, 1280, 960, "detail").bb; assert.deepEqual(bt, [Math.min(...tiny.map(q => q[0])), Math.min(...tiny.map(q => q[1])), Math.max(...tiny.map(q => q[0])), Math.max(...tiny.map(q => q[1]))], "טבעת תקינה — תיבתה");
+  } finally { C.corridorRing = orig; }
+  assert.equal(C.corridorRing, orig);
+});

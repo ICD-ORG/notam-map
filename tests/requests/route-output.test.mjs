@@ -1,5 +1,5 @@
 /* נתיב (קו) כאזור פעילות — פלטים: שדה 8 בטופס, דף הבדיקות, KML, מייל, מודל ה-Word, בדיקה חוזרת ודיווח לגורמים נוספים. המעגל נשמר בייט-בבייט (golden.test.mjs) — כאן רק הנתיב. */
-import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { createRequire } from "node:module"; import { spawnSync } from "node:child_process";
+import test, { after } from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs"; import path from "node:path"; import { fileURLToPath } from "node:url"; import { createRequire } from "node:module"; import { spawnSync } from "node:child_process";
 const require = createRequire(import.meta.url), ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REQ = "members-k38p/requests/";
 const C = require(path.join(ROOT, REQ, "js/core.js")), O = require(path.join(ROOT, REQ, "js/output.js")), D = require(path.join(ROOT, REQ, "js/docx.js")), PP = require(path.join(ROOT, REQ, "js/parties.js")), JSZip = require(path.join(ROOT, REQ, "vendor/jszip.min.js"));
@@ -190,7 +190,7 @@ test("מודל Word של נתיב: כותרות ״הנתיב״ / ״מרחק מה
   assert.equal(Object.keys(m).length, Object.keys(circ).length + 2);
   assert.ok(m.mapNote.startsWith("ירוק: אזור הסגירה (נתיב, 150 מ׳ מכל צד של הציר) · כתום: עד 300 מ׳ מהציר · לבן: ציר הנתיב ונקודותיו P1–P4 (לפי הסדר) · אדום: אזור אסור/מוגבל (פמ״ת א-17)"), m.mapNote);
   assert.ok(m.mapNote.endsWith(circ.mapNote.slice(circ.mapNote.indexOf(" · אדום:"))), "שאר המקרא זהה למעגל");
-  assert.equal(m.checkPoint, `נתיב: 4 נקודות · אורך ${(res.area.lengthM / 1000).toFixed(2)} ק״מ · התחלה (P1) ${dmsPt(res.area.pts[0])} · סוף (P4) ${dmsPt(res.area.pts[3])} · ירוק: 150 מ׳ מכל צד של הציר · כתום: עד 300 מ׳ מהציר · גובה 80 מ׳ (262.5 רגל)`);
+  assert.equal(m.checkPoint, `נתיב: 4 נקודות · אורך ${(res.area.lengthM / 1000).toFixed(2)} ק״מ · ירוק: 150 מ׳ מכל צד של הציר · כתום: עד 300 מ׳ מהציר · גובה 80 מ׳ (262.5 רגל)\nהתחלה: P1 ${dmsPt(res.area.pts[0])}\nסוף: P4 ${dmsPt(res.area.pts[3])}`);
   assert.equal(m.rows[7].html, f8().html, "שדה 8 במודל = שדה 8 בטופס");
   // Word: XML תקין, הכותרות החדשות, שורות P/V, ואין ״הנקודה״ / ״מרחק מהנקודה״
   const z = await JSZip.loadAsync(await D.build(m)), xml = await z.file("word/document.xml").async("string"), plain = plainOf(xml);
@@ -205,7 +205,8 @@ test("מודל Word של נתיב: כותרות ״הנתיב״ / ״מרחק מה
   for (const s of ["P1. " + dmsPt(res.area.pts[0]), "P4. " + dmsPt(res.area.pts[3]), "V1. " + dmsPt(C.corridorRing(res.area, 1).ring[0]), "נתיב — 4 נקודות, לפי סדר הטיסה:", "פינות פוליגון הסגירה (8 פינות, לפי סדר ההקפה):"]) {
     assert.ok(norm(plain).includes(norm(s)), "חסר ב-Word: " + s);
   }
-  assert.ok(plain.includes("התחלה (P1)") && plain.includes("סוף (P4)"));
+  assert.ok(paras.includes("התחלה: P1 " + dmsPt(res.area.pts[0])) && paras.includes("סוף: P4 " + dmsPt(res.area.pts[3])), "התחלה וסוף — פסקה לכל אחת");
+  assert.ok(!/\(P\d+\)/.test(plain), "בלי סוגריים סביב P1/P4 (נשברים בכיווניות ב-Word)");
   // מעגל: הכותרות הרגילות
   const cz = await JSZip.loadAsync(await D.build(Object.assign({}, circ, { includeChecks: true, images: { aerial: img } }))), cparas = (await cz.file("word/document.xml").async("string")).split("</w:p>").map(plainOf).map(x => x.trim());
   assert.ok(cparas.includes("1. הנקודה") && !cparas.includes("1. הנתיב"), "מעגל: ״הנקודה״"); assert.ok(cparas.includes("מרחק מהנקודה") && !cparas.includes("מרחק מהציר"));
@@ -240,4 +241,137 @@ test("נתיב: summaryModel, גבולות ופריטים — מרחק מהצי�
   const s = O.summaryModel(res, cfg); assert.ok(s.lines[0].startsWith("<b>נמצאו בסריקה:</b>")); assert.ok(!/מעגל|נקודה/.test(s.lines.join(" ")));
   const first = res.nearScan.items[0]; assert.equal(first.d, 0); assert.equal(O.itemText(first), first.n + ". " + first.title + " — בתוך השטח");
   assert.equal(O.isRoute(res), true); assert.equal(O.isRoute(C.analyze(baseInput, data, cfg, now)), false);
+});
+
+/* ================= תיקוני סקירה: מעבר עמוד של שדה 8 (Word / הדפסה), כיווניות שורת ההתחלה והסוף, טבעת 2W לא תקינה ב-KML, הגנה לעומק לשדה 8 ================= */
+const P0 = new C.Proj(32.0991, 34.8166), llxy = xy => xy.map(q => P0.ll(q[0], q[1]));
+const arcXY = (R, n) => Array.from({ length: n }, (_, i) => { const th = (Math.PI / 2) * i / (n - 1); return [R * Math.sin(th), R * (1 - Math.cos(th))]; });
+const WIND = [[32.099128, 34.816617], [32.099362, 34.817104], [32.100102, 34.818354], [32.100246, 34.818863], [32.100138, 34.819689], [32.099994, 34.820738], [32.099849, 34.821819]];
+// נתיבים תקינים (validateRoute: []) שטבעת ה-2W שלהם אינה תקינה (corridorRing(area, 2).simple === false): רבע מעגל בקוטר 250 מ׳ (10 נקודות, W=150), נתיב מתפתל (W=100), סיכת שיער (W=40), פנייה חדה (W=40)
+const BAD2 = [["רבע מעגל R=250", llxy(arcXY(250, 10)), 150], ["מתפתל W=100", WIND, 100], ["סיכת שיער W=40", llxy([[0, 0], [500, 0], [500, 120], [0, 120]]), 40], ["פנייה חדה W=40", llxy([[0, 0], [500, 0], [-100, 150]]), 40]];
+const routeOf = (pts, W) => ({ kind: "route", pts: C.roundPts(pts), halfWidth: W });
+// מתוך XML של Word: רשימת השורות (w:tr) של הטבלה ה-n (מ-0), ובכל אחת אם היא cantSplit
+const tableRows = (xml, n) => { const t = xml.split("<w:tbl>")[n + 1].split("</w:tbl>")[0]; return t.split("<w:tr>").slice(1).map(r => ({ cantSplit: r.split("</w:trPr>")[0].includes("<w:cantSplit/>"), text: plainOf(r) })); };
+
+test("שדה 8 בנתיב מותר לו להישבר בין עמודים: המודל מסמן split ו-cls=f8route לשורה 8 בלבד, ובקובץ ה-Word רק שורה זו בלי cantSplit; מעגל — כל 17 השורות cantSplit וללא מפתחות חדשים", async () => {
+  const m = O.docxModel(res, data, cfg, {}), c = O.docxModel(C.analyze(baseInput, data, cfg, now), data, cfg, {});
+  assert.equal(m.rows.length, 17);
+  m.rows.forEach(r => { if (r.n === 8) { assert.equal(r.split, true); assert.equal(r.cls, "f8route"); } else assert.deepEqual(Object.keys(r), ["n", "label", "sub", "html"], "שורה " + r.n); });
+  c.rows.forEach(r => assert.deepEqual(Object.keys(r), ["n", "label", "sub", "html"], "מעגל: שורה " + r.n + " ללא split/cls"));
+  const docXml = async mdl => (await JSZip.loadAsync(await D.build(mdl))).file("word/document.xml").async("string");
+  const rt = tableRows(await docXml(m), 1), ct = tableRows(await docXml(c), 1);
+  assert.equal(rt.length, 17); assert.equal(ct.length, 17);
+  assert.ok(ct.every(r => r.cantSplit), "מעגל: כל השורות cantSplit");
+  rt.forEach((r, i) => assert.equal(r.cantSplit, i !== 7, "נתיב: שורה " + (i + 1) + (i === 7 ? " (שדה 8) ניתנת לשבירה" : " cantSplit")));
+  assert.ok(rt[7].text.includes("סגירה/הגבלה") && rt[7].text.includes("לפי סדר הטיסה"), "שורה 8 היא שדה 8");
+});
+
+const sofficeOk = (() => { const r = spawnSync("soffice", ["--version"], { encoding: "utf8", timeout: 60000 }); return !r.error && r.status === 0; })();
+const pdfTool = (() => { const r = spawnSync("pdftotext", ["-v"], { encoding: "utf8" }); return !r.error; })();
+// ממיר קובצי docx ל-PDF ב-LibreOffice (פרופיל זמני משלו — בלי התנגשות עם ריצות מקבילות); מחזיר {name: נתיב pdf} או null אם ההמרה נכשלה (סביבה)
+const tmpDirs = []; after(() => tmpDirs.forEach(d => fs.rmSync(d, { recursive: true, force: true })));
+function toPdfs(files) {
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "reqdocx-")), out = {}; tmpDirs.push(dir);
+  for (const [k, b] of Object.entries(files)) fs.writeFileSync(path.join(dir, k + ".docx"), b);
+  const r = spawnSync("soffice", ["-env:UserInstallation=file://" + path.join(dir, "profile"), "--headless", "--convert-to", "pdf", "--outdir", dir, ...Object.keys(files).map(k => path.join(dir, k + ".docx"))], { encoding: "utf8", timeout: 170000 });
+  for (const k of Object.keys(files)) { const p = path.join(dir, k + ".pdf"); if (!fs.existsSync(p)) return null; out[k] = p; }
+  return r.error ? null : out;
+}
+const pdfPage = (pdf, n, args) => spawnSync("pdftotext", [...(args || []), "-f", String(n), "-l", String(n), pdf, "-"], { encoding: "utf8" }).stdout;
+const pdfPages = pdf => +(spawnSync("pdfinfo", [pdf], { encoding: "utf8" }).stdout.match(/Pages:\s+(\d+)/) || [0, 0])[1];
+const bboxWords = html => [...html.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)].map(x => ({ x0: +x[1], y0: +x[2], x1: +x[3], y1: +x[4], t: x[5].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&apos;/g, "'") }));
+
+test("Word (LibreOffice → PDF): נתיב של 5–8 נקודות — שדה 8 מתחיל בעמוד 1 (לא קופץ שלם לעמוד 2), והטופס לא מתארך מעבר למעגל + עמוד", { skip: !sofficeOk || !pdfTool ? "soffice / poppler לא מותקנים" : false, timeout: 200000 }, async () => {
+  const files = {}, Ns = [5, 6, 7, 8];
+  for (const N of Ns) {
+    const pts = Array.from({ length: N }, (_, i) => [32.0991 + 60 * Math.sin(i / 1.5) / 111133, 34.8166 + i * 120 / 94400]);
+    files["r" + N] = await D.build(O.docxModel(routeRes(pts, 50).res, data, cfg, { now, includeChecks: false, images: {} }));
+  }
+  files.circle = await D.build(O.docxModel(C.analyze(baseInput, data, cfg, now), data, cfg, { now, includeChecks: false, images: {} }));
+  const pdfs = toPdfs(files); if (!pdfs) return;   // ההמרה נכשלה בסביבה: אין מה לאמת
+  const circlePages = pdfPages(pdfs.circle);
+  for (const N of Ns) {
+    const p1 = pdfPage(pdfs["r" + N], 1);
+    assert.ok(p1.includes("לפי סדר הטיסה"), "N=" + N + ": תחילת שדה 8 בעמוד 1");
+    assert.ok(p1.split("\n").filter(Boolean).length >= 45, "N=" + N + ": עמוד 1 לא ריק ברובו: " + p1.split("\n").filter(Boolean).length + " שורות");
+    assert.ok(pdfPages(pdfs["r" + N]) <= circlePages + 1, "N=" + N + ": " + pdfPages(pdfs["r" + N]) + " עמודים מול " + circlePages + " במעגל");
+  }
+  assert.ok(pdfPage(pdfs.circle, 1).includes("נ.צ. מרכזי") || pdfPage(pdfs.circle, 1).includes("מרכזי"), "מעגל: שדה 8 בעמוד 1 כמו תמיד");
+});
+
+test("דף הבדיקות בנתיב: התחלה וסוף בשתי שורות, כל אחת ״תווית: P# נ.צ.״ — בלי סוגריים ובלי מפריד אחרי הגוש הלטיני (ריצה לטינית אחת מבודדת)", async () => {
+  const lines = O.docxModel(res, data, cfg, {}).checkPoint.split("\n");
+  assert.equal(lines.length, 3); assert.ok(lines[0].startsWith("נתיב: 4 נקודות · אורך ") && /\(262\.5 רגל\)$/.test(lines[0]));
+  const LRE = String.fromCharCode(0x202a), PDF = String.fromCharCode(0x202c), RLM = String.fromCharCode(0x200f);
+  [[lines[1], "התחלה: ", "P1 " + dmsPt(res.area.pts[0])], [lines[2], "סוף: ", "P4 " + dmsPt(res.area.pts[3])]].forEach(([ln, label, latin]) => {
+    assert.equal(ln, label + latin);
+    const ts = [...D.runsOf(ln).matchAll(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g)].map(x => x[1].replace(/&quot;/g, '"'));
+    assert.deepEqual(ts, [label, LRE + latin + PDF + RLM], "ריצה עברית ואז ריצה לטינית אחת עטופה (LRE…PDF) — בלי ״ · ״ או סוגר בתוכה");
+    assert.ok(!/[()·]/.test(ts[1]));
+  });
+  // ב-Word: פסקה נפרדת לכל שורה (בבדיקה חוזרת — אותו דף בדיקות)
+  const paras = (await (await JSZip.loadAsync(await D.build(O.docxModel(res, data, cfg, { includeChecks: true })))).file("word/document.xml").async("string")).split("</w:p>").map(plainOf).map(x => x.trim());
+  lines.forEach(l => assert.ok(paras.includes(l), "פסקה: " + l));
+  const rc = O.recheckDocxModel(res, data, cfg, { banner: { text: "ב" }, dates: [], sections: [] }, { now }), rp = (await (await JSZip.loadAsync(await D.buildRecheck(rc))).file("word/document.xml").async("string")).split("</w:p>").map(plainOf).map(x => x.trim());
+  lines.forEach(l => assert.ok(rp.includes(l), "בדיקה חוזרת — פסקה: " + l));
+  // מעגל: שורה אחת כמו תמיד (אין \n)
+  assert.ok(!O.docxModel(C.analyze(baseInput, data, cfg, now), data, cfg, {}).checkPoint.includes("\n"));
+});
+
+test("Word (LibreOffice → PDF): בדף הבדיקות ״התחלה: P1 …״ ו״סוף: P4 …״ נקראות נכון — התווית מימין והגוש הלטיני משמאלה בסדר P → קו רוחב → קו אורך, באותה שורה", { skip: !sofficeOk || !pdfTool ? "soffice / poppler לא מותקנים" : false, timeout: 200000 }, async () => {
+  const pdfs = toPdfs({ chk: await D.build(O.docxModel(res, data, cfg, { now, includeChecks: true, images: {} })) }); if (!pdfs) return;
+  let page = 0; for (let p = 1; p <= pdfPages(pdfs.chk); p++) if (pdfPage(pdfs.chk, p).includes("דף בדיקות")) { page = p; break; }
+  assert.ok(page > 0, "דף הבדיקות נמצא");
+  const words = bboxWords(pdfPage(pdfs.chk, page, ["-bbox"])), want = [["התחלה:", "P1", res.area.pts[0]], ["סוף:", "P4", res.area.pts[3]]];
+  want.forEach(([label, pn, q]) => {
+    const lab = words.find(w => w.t === [...label].reverse().join("")); assert.ok(lab, "מילה (pdftotext -bbox נותן עברית בסדר חזותי הפוך): " + label);
+    const row = words.filter(w => Math.abs(w.y0 - lab.y0) < 3), at = t => row.find(w => w.t === t);
+    const lat = at(C.dmsLat(q[0])), lon = at(C.dmsLon(q[1])), pw = at(pn);
+    assert.ok(pw && lat && lon, label + ": כל מילות הגוש באותה שורה: " + row.map(w => w.t).join(" | "));
+    assert.ok(pw.x0 < lat.x0 && lat.x0 < lon.x0 && lon.x1 <= lab.x0 + 1, label + ": סדר חזותי (משמאל לימין): " + [pw.t, lat.t, lon.t, lab.t].join(" ") + " " + [pw.x0, lat.x0, lon.x0, lab.x0]);
+    assert.ok(!row.some(w => /[()·]/.test(w.t) && w !== lab), label + ": אין סוגר/מפריד תועה בשורה: " + row.map(w => w.t).join(" | "));
+  });
+});
+
+test("KML של נתיב עם טבעת 2W לא תקינה (corridorRing(area,2).simple=false גם כשהנתיב עבר אימות): אין Placemark כתום, יש הערה ב-Document וב-Placemark הירוק, הירוק מלא, ה-KML תקין", () => {
+  for (const [name, pts, W] of BAD2) {
+    const a = routeOf(pts, W);
+    assert.deepEqual(C.validateRoute({ area: a }, cfg), [], name + ": הנתיב עבר אימות"); assert.equal(C.corridorRing(a, 1).simple, true, name); assert.equal(C.corridorRing(a, 2).simple, false, name + ": טבעת ה-2W לא תקינה");
+    const r = routeRes(pts, W), k = O.kml(r.res, r.data, cfg), lint = xmllint(k); if (lint !== null) assert.equal(lint, "", name + " xmllint: " + lint);
+    assert.ok(wellFormed(k), name);
+    const pm = k.split("<Placemark>").slice(1).map(x => x.split("</Placemark>")[0]);
+    assert.equal(pm.filter(x => /<styleUrl>#orange<\/styleUrl>/.test(x)).length, 0, name + ": בלי פוליגון כתום (גאומטריה לא תקינה)");
+    assert.ok(!k.includes("<innerBoundaryIs>") || !/<styleUrl>#orange/.test(k), name);
+    const green = pm.filter(x => /<styleUrl>#green<\/styleUrl>/.test(x)); assert.equal(green.length, 1, name + ": הירוק נשאר");
+    const note = k.match(/<description>(טבעת ה-2W[^<]*)<\/description>/); assert.ok(note, name + ": הערה"); assert.match(note[1], /אינה מצוירת בקובץ זה/);
+    assert.ok(green[0].includes(note[1]), name + ": ההערה גם על הפוליגון הירוק");
+    assert.ok(/<\/name>\s*<description>טבעת ה-2W/.test(k.split("<Style")[0]), name + ": description של ה-Document מיד אחרי ה-name ולפני הסגנונות (סדר הסכמה)");
+    assert.equal(k.split("טבעת ה-2W (הכתומה) אינה מצוירת").length - 1, 2, name + ": הערה אחת ב-Document ואחת בירוק");
+    assert.ok(pm.some(x => /^<name>ציר הנתיב/.test(x)) && pm.filter(x => /^<name>P\d+<\/name>/.test(x)).length === pts.length, name + ": ציר ונקודות נשארים");
+    // כל שאר הפלטים בנויים בלי הנחה על טבעת ה-2W: שדה 8 (ירוק), מודל וקובץ Word, מייל
+    const f = O.buildForm(r.res, cfg)[7].text; assert.ok(f.includes("הפוליגון מכיל את כל אזור הסגירה"), name);
+    assert.ok(O.mail(r.res, cfg).body.includes("נתיב באורך")); assert.ok(O.docxModel(r.res, r.data, cfg, { includeChecks: true }).mapNote.includes("כתום: עד " + 2 * W + " מ׳ מהציר"), name + ": מקרא המפה נשאר (התמונות מציירות את הקפסולה המדויקת)");
+  }
+});
+
+test("KML של נתיב רגיל (טבעת 2W תקינה): הפוליגון הכתום קיים ואין הערה; KML של מעגל — בלי description ב-Document", () => {
+  const k = O.kml(res, data, cfg); assert.equal(C.corridorRing(res.area, 2).simple, true);
+  assert.ok(/<styleUrl>#orange<\/styleUrl><Polygon>/.test(k) && !k.includes("אינה מצוירת בקובץ זה") && !/<\/name>\s*<description>/.test(k.split("<Style")[0]));
+  const ck = O.kml(C.analyze(baseInput, data, cfg, now), data, cfg); assert.ok(!/<\/name>\s*<description>/.test(ck.split("<Style")[0]) && !ck.includes("אינה מצוירת בקובץ זה") && ck.includes("<styleUrl>#orange</styleUrl>"));
+});
+
+test("הגנה לעומק לשדה 8: ״הפוליגון מכיל את כל אזור הסגירה״ מודפס רק לנתיב שטבעתו תקינה (corridorRing(area,1).simple); נתיב עם simple=false נדחה כבר ב-validateInput ולכן לא מגיע לפלט", () => {
+  const SENT = "הפוליגון מכיל את כל אזור הסגירה", c = Math.cos, sn = Math.sin, d2r = Math.PI / 180;
+  const bad = [["קצה 10 מ׳ ואז פנייה של 130°", [[0, 0], [10, 0], [10 + 400 * c(130 * d2r), 400 * sn(130 * d2r)]], 50], ["סיכת שיער צפופה (רגליים 60 מ׳ זו מזו, W=40)", [[0, 0], [500, 0], [500, 60], [0, 60]], 40],
+    ["S עם קטע אמצעי 60 מ׳, W=500", [[0, 0], [1500, 0], [1500 + 60 * c(0.7), 60 * sn(0.7)], [1500 + 60 * c(0.7) + 800 * c(-0.7), 60 * sn(0.7) + 800 * sn(-0.7)]], 500]];
+  for (const [name, xy, W] of bad) {
+    const a = routeOf(llxy(xy), W); assert.equal(C.corridorRing(a, 1).simple, false, name + ": simple=false");
+    const inp = Object.assign({}, baseInput, { area: a, lat: C.routeInfo(a.pts).anchor[0], lon: C.routeInfo(a.pts).anchor[1] }); delete inp.radius;
+    const errs = C.validateInput(inp, cfg); assert.ok(errs.some(e => e.field === "route" && /חד או צפוף/.test(e.msg)), name + ": נדחה ב-validateInput: " + JSON.stringify(errs.map(e => e.field)));
+    // אילו הגיע בכל זאת (בקשה שנשמרה בכללים ישנים, בדיקה חוזרת): הטענה לא מודפסת, ובמקומה אזהרה
+    const f8 = O.buildForm(C.analyze(inp, data, cfg, now), cfg)[7].text; assert.ok(!f8.includes(SENT), name + ": בלי הטענה"); assert.ok(f8.includes("אינו מכיל בהכרח את כל אזור הסגירה"), name + ": אזהרה");
+  }
+  // כל נתיב תקין (ואלה שבקובץ זה): simple=true והמשפט מודפס
+  const good = [R1.res, routeRes([[32.0985, 34.8120], [32.0998, 34.8100]], 100).res, ...BAD2.map(([, pts, W]) => routeRes(pts, W).res)];
+  good.forEach(r => { assert.equal(C.corridorRing(r.area, 1).simple, true); assert.ok(O.buildForm(r, cfg)[7].text.includes(SENT)); assert.ok(!O.buildForm(r, cfg)[7].text.includes("אינו מכיל בהכרח")); });
 });

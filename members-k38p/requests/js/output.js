@@ -26,6 +26,8 @@
   const routeCorners = res => { const r = C.corridorRing(res.area, 1).ring; return r.length > 1 ? r.slice(0, -1) : []; };
   const CORNER_CAP = 60;   // תקרת שורות הפינות בשדה 8 (נתיב עד 20 נקודות נותן עד 58 פינות, ולכן התקרה אינה נחתכת בפועל); מעבר לה — הפניה ל-KML
   const routeKm = res => (res.area.lengthM / 1000).toFixed(2);
+  // הערה ב-KML כשאי אפשר לצייר את טבעת ה-2W (הכתומה) כפוליגון תקין לצורת הנתיב הזו
+  const NOTE_NO_2W = "טבעת ה-2W (הכתומה) אינה מצוירת בקובץ זה: בצורת הנתיב הזו (פניות חדות או קטעים קצרים ביחס לרוחב) אי אפשר לבנות לה פוליגון תקין. הפריטים שברשימות נמדדים מהציר ולכן אינם מושפעים; הפוליגון הירוק (אזור הסגירה) מצויר במלואו.";
   // שדה 8 בנתיב: הנקודות לפי הסדר (P1..PN), האורך והרוחב, פינות הפוליגון המודפס (V1..VM; DMS בלבד) והסבר קצר איך הוא נבנה. הפוליגון מכיל את כל אזור הסגירה (כל נקודה במרחק עד W מהציר)
   function routeF8Head(res) {
     const a = res.area, W = res.R, cs = routeCorners(res);
@@ -36,7 +38,9 @@
       h += "<br><b>פינות פוליגון הסגירה (" + cs.length + " פינות, לפי סדר ההקפה):</b>";
       cs.slice(0, CORNER_CAP).forEach((q, i) => { h += "<br>" + lbl("V" + (i + 1)) + " " + dmsPair(q); });
       if (cs.length > CORNER_CAP) h += "<br>ועוד " + (cs.length - CORNER_CAP) + " פינות (הרשימה המלאה בקובץ ה-KML המצורף)";
-      h += "<br><span class='muted'>הפוליגון נבנה במקביל לציר הנתיב במרחק " + W + " מ׳ מכל צד; בפנייה חדה הפינה החיצונית נחתכת במרחק " + 2 * W + " מ׳ מהקודקוד, וקצות הנתיב מורחבים ב-" + W + " מ׳. הפוליגון מכיל את כל אזור הסגירה (כל נקודה במרחק עד " + W + " מ׳ מהציר).</span>";
+      // המשפט ״הפוליגון מכיל את כל אזור הסגירה״ נכון רק כשהטבעת תקינה (simple: פשוטה ומכילה את הקפסולה). validateRoute דוחה כל נתיב אחר כבר בקלט (ולכן ב-UI הוא לא מגיע לכאן); הגנה לעומק לנתיב שמגיע בלי אימות (בקשה שנשמרה בכללים ישנים, בדיקה חוזרת) — במקום הטענה, אזהרה
+      h += "<br><span class='muted'>הפוליגון נבנה במקביל לציר הנתיב במרחק " + W + " מ׳ מכל צד; בפנייה חדה הפינה החיצונית נחתכת במרחק " + 2 * W + " מ׳ מהקודקוד, וקצות הנתיב מורחבים ב-" + W + " מ׳. " +
+        (C.corridorRing(a, 1).simple ? "הפוליגון מכיל את כל אזור הסגירה (כל נקודה במרחק עד " + W + " מ׳ מהציר)." : "לצורת נתיב זו (חדה או צפופה ביחס לרוחב) הפוליגון אינו מכיל בהכרח את כל אזור הסגירה — יש להשתמש בציר הנתיב וברוחב שצוינו.") + "</span>";
     }
     return h;
   }
@@ -398,7 +402,7 @@
       docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || orgName(inp),
       title: "פמ״ת פנים ארצי א-11 — נספח ג׳", subtitle: "טופס בקשה לסגירה אווירית",
       draftText: o.draft ? "טיוטה — לא מוכן לשליחה: " + o.draft : "",
-      rows: buildForm(res, cfg).map(r => ({ n: r.n, label: r.label, sub: r.sub, html: r.html })),
+      rows: buildForm(res, cfg).map(r => (isRoute(res) && r.n === 8 ? { n: r.n, label: r.label, sub: r.sub, html: r.html, split: true, cls: "f8route" } : { n: r.n, label: r.label, sub: r.sub, html: r.html })),   // נתיב: שורת שדה 8 ארוכה ולכן מותר לה להישבר בין עמודים (split: Word) ומקבלת class ‏f8route (מסך/הדפסה); במעגל השורה כמו תמיד
       attachLine: attachmentsLine(),
       mailLine: "*את הבקשה יש להגיש לכתובות המייל: " + cfg.mail.to.join(", "),
       formFooter: cfg.form + " · הופק " + now.toLocaleDateString("he-IL"),
@@ -423,7 +427,8 @@
     // נתיב: נקודת ההתחלה והסיום, האורך והרוחב במקום "נקודה + רדיוס" (דף הבדיקות), וכותרות שמחליפות את "הנקודה" / "מרחק מהנקודה" (docx.js: pointHeading, itemsDistHead). במעגל המפתחות האלה אינם במודל כלל
     if (isRoute(res)) {
       const a = res.area, last = a.pts[a.pts.length - 1];
-      model.checkPoint = "נתיב: " + a.pts.length + " נקודות · אורך " + routeKm(res) + " ק״מ · התחלה (P1) " + dmsText(a.pts[0]) + " · סוף (P" + a.pts.length + ") " + dmsText(last) + " · ירוק: " + res.R + " מ׳ מכל צד של הציר · כתום: עד " + 2 * res.R + " מ׳ מהציר · גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)";
+      // שלוש שורות (\n; docx.js מפצל לפסקאות): סיכום בעברית, ואז התחלה וסוף — כל אחת מסתיימת בגוש לטיני אחד (P1/P5 ונ.צ.) בלי סוגריים ובלי מפריד אחריו, כי ב-Word מפריד או סוגר שאחרי ריצה לטינית נכנס לתוכה והשורה מתהפכת
+      model.checkPoint = "נתיב: " + a.pts.length + " נקודות · אורך " + routeKm(res) + " ק״מ · ירוק: " + res.R + " מ׳ מכל צד של הציר · כתום: עד " + 2 * res.R + " מ׳ מהציר · גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)\nהתחלה: P1 " + dmsText(a.pts[0]) + "\nסוף: P" + a.pts.length + " " + dmsText(last);
       model.pointHeading = "הנתיב"; model.itemsDistHead = "מרחק מהציר";
     }
     // דיווח לגורמים נוספים (שלב ב׳, features.parties): o.parties = מערך השורות (גם ריק). דגל כבוי / מודול לא נטען / o.parties חסר ← אין מפתח parties בכלל, והמודל זהה לשלב א׳
@@ -549,8 +554,11 @@
     const circ = r => C.circlePoints(P, r, 96);
     const axisPt = ll => { const q = P.xy(ll[0], ll[1]), n = C.routeNearest(P.route, q[0], q[1]); return P.ll(n.x, n.y); };   // נתיב: הנקודה הקרובה על הציר
     const out = [];
+    // נתיב: טבעת ה-2W (C.corridorRing(area, 2)) אינה תמיד תקינה גם כשטבעת ה-W תקינה (חיתוך עצמי / אינה מכילה את הקפסולה): אז פוליגון הכתום מושמט (גאומטריה לא תקינה ב-KML) ומצוינת הערה ב-Document וב-Placemark הירוק; רשימות הפריטים נמדדות מהציר ואינן מושפעות
+    const c2 = isRoute(res) ? C.corridorRing(res.area, 2) : null, ring2Ok = !!c2 && c2.ring.length > 0 && c2.simple, note2 = c2 && !ring2Ok && C.corridorRing(res.area, 1).ring.length ? X(NOTE_NO_2W) : "";
     out.push('<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>');
     out.push("<name>" + X("בקשת סגירה אווירית — " + inp.siteName + " — " + C.ddmmyyyy(C.parseDate(inp.dateFrom)) + (inp.dateFrom !== inp.dateTo ? "–" + C.ddmmyyyy(C.parseDate(inp.dateTo)) : "")) + "</name>");
+    if (note2) out.push("<description>" + note2 + "</description>");
     out.push('<Style id="green"><LineStyle><color>ff3e8e1e</color><width>3</width></LineStyle><PolyStyle><color>663e8e1e</color></PolyStyle></Style>');
     out.push('<Style id="orange"><LineStyle><color>ff007be0</color><width>3</width></LineStyle><PolyStyle><color>55007be0</color></PolyStyle></Style>');
     out.push('<Style id="red"><LineStyle><color>ff202dd9</color><width>3</width></LineStyle><PolyStyle><color>55202dd9</color></PolyStyle></Style>');
@@ -564,9 +572,9 @@
     if (route) out.push('<Style id="route"><LineStyle><color>ffffffff</color><width>4</width></LineStyle></Style>');   // ציר הנתיב: קו לבן (כמו במפה)
     if (route) {
       // נתיב: פוליגון הסגירה (C.corridorRing(area, 1): אותם קודקודים כמו ב-V1..VM בשדה 8) בירוק, טבעת ה-2W בכתום (חור = הפוליגון הירוק, בכיוון הפוך), ציר הנתיב ונקודותיו P1..PN
-      const a = res.area, n = a.pts.length, g1 = C.corridorRing(a, 1).ring, g2 = C.corridorRing(a, 2).ring;
-      if (g1.length) out.push("<Placemark><name>" + X("אזור ההטסה — נתיב, " + R + " מ׳ מכל צד של הציר (אורך " + routeKm(res) + " ק״מ)") + '</name><styleUrl>#green</styleUrl>' + poly(g1) + "</Placemark>");
-      if (g1.length && g2.length) out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳ מהציר)") + '</name><styleUrl>#orange</styleUrl>' + poly(g2, g1.slice().reverse()) + "</Placemark>");
+      const a = res.area, n = a.pts.length, g1 = C.corridorRing(a, 1).ring, g2 = c2.ring;
+      if (g1.length) out.push("<Placemark><name>" + X("אזור ההטסה — נתיב, " + R + " מ׳ מכל צד של הציר (אורך " + routeKm(res) + " ק״מ)") + '</name>' + (note2 ? "<description>" + note2 + "</description>" : "") + '<styleUrl>#green</styleUrl>' + poly(g1) + "</Placemark>");
+      if (g1.length && ring2Ok) out.push("<Placemark><name>" + X(R + " מ׳ נוספים (עד " + 2 * R + " מ׳ מהציר)") + '</name><styleUrl>#orange</styleUrl>' + poly(g2, g1.slice().reverse()) + "</Placemark>");
       out.push("<Placemark><name>" + X("ציר הנתיב — " + n + " נקודות · " + routeKm(res) + " ק״מ") + "</name><description>" + X("רוחב הסגירה " + R + " מ׳ מכל צד של הציר · גובה " + inp.heightM + " מ׳ (" + res.ft.toFixed(1) + " רגל)") + '</description><styleUrl>#route</styleUrl><LineString><tessellate>1</tessellate><coordinates>' + coords(a.pts) + "</coordinates></LineString></Placemark>");
       a.pts.forEach((q, i) => out.push("<Placemark><name>P" + (i + 1) + "</name><description>" + X("נקודה " + (i + 1) + " מתוך " + n + (i === 0 ? " (התחלה)" : i === n - 1 ? " (סיום)" : "") + " · " + dmsText(q)) + "</description><Point><coordinates>" + q[1] + "," + q[0] + ",0</coordinates></Point></Placemark>"));
     } else {

@@ -134,6 +134,7 @@ details{margin-top:8px}details summary{cursor:pointer;color:var(--amber);font-we
 .warnTxt{color:#ffd27a}
 #rtMsg{color:#ffd27a;font-size:12.5px;line-height:1.6;margin-top:2px}
 #rtMsg:empty{display:none}
+#rtLocal{display:block}#rtLocal:empty{display:none}   /* הודעות ההדבקה ועריכת שורה: ממש מתחת לבקרים (לא במפה, רחוק מהם); id בלי e_ — showErrors אינה מוחקת אותן */
 .st-list{list-style:none;display:grid;gap:3px;margin-top:6px;font-size:13px}
 .st-list .ok{color:var(--green)}.st-list .no{color:var(--red)}
 #places{display:flex;flex-direction:column;gap:4px;margin-top:6px}
@@ -200,6 +201,7 @@ body.pendDraft #report .paper::before{content:"טיוטה — לא מוכן לש
   .paper td.k small{font-size:9.3px !important}
   .paper .hdr{margin-bottom:5px}
   .paper table.t tr,.paper table.f tr{break-inside:avoid;page-break-inside:avoid}
+  .paper table.f tr.f8route{break-inside:auto !important;page-break-inside:auto !important}   /* שדה 8 בנתיב ארוך מעמוד: השורה רשאית להישבר בין עמודים (output.js: cls "f8route" בשורה; ui.js renderReport מעתיק למחלקת ה-tr). מעגל: אין המחלקה — ללא שינוי */
   .paper h2{break-after:avoid;page-break-after:avoid}
   .paper table.t td,.paper table.t th{font-size:10.8px}
   .paper td.k,.paper table.t th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -288,6 +290,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
       <div class="plist" id="routeList"></div>
       <textarea autocomplete="off" id="rtText" rows="3" dir="ltr" aria-label="הדבקת רשימת נקודות לנתיב" placeholder="הדבקת נקודות — נקודה בכל שורה:&#10;32.099128, 34.816617&#10;32.101340, 34.821002"></textarea>
       <div class="row"><button type="button" id="rtApply">טען את הנקודות שהודבקו</button></div>
+      <span class="err" id="rtLocal" role="status" aria-live="polite"></span>
       <span class="err" id="e_route"></span>
     </div>
     <label class="f"><b>גובה טיסה מרבי (מטר, מעל הקרקע)</b>
@@ -389,7 +392,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
     <div class="fld" style="margin-top:10px">
       <span class="flh"><label for="visitNotes"><b>הערות המבקש / ממצאי סיור באתר</b></label><span class="hint">(אופציונלי, מלל חופשי)</span></span>
       <textarea autocomplete="off" id="visitNotes" rows="4" placeholder="למשל: ביקרתי באתר יום לפני ויש לי ממצאים על האזור"></textarea>
-      <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף "הנקודה") ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
+      <span class="hint">ההערות והתאריך מופיעים בדף הבדיקות (בסעיף <span id="visitSec">"הנקודה"</span>) ובקובץ ה-Word בלבד — לא בשדות הטופס ולא במייל.</span>
       <span class="err" id="e_visitNotes"></span></div>
     <!-- הצהרה ואישור המבקש (חובה: בלי סימון אי אפשר לשמור או לשלוח). הנוסח המאושר ב-js/output.js DECLARATION — שינוי כאן מחייב שינוי שם ואת version (בדיקת core.test.mjs מוודאת שהם זהים) -->
     <div class="decl" id="declBox" role="group" aria-labelledby="declTitle">
@@ -451,16 +454,16 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="js/help.js?v=2"></script>
 <script src="js/auth.js?v=11"></script>
 <script src="js/sync.js?v=2"></script>
-<script src="js/core.js?v=8"></script>
+<script src="js/core.js?v=9"></script>
 <script src="js/maplayers.js?v=2"></script>
-<script src="js/output.js?v=11"></script>
-<script src="js/docx.js?v=6"></script>
-<script src="js/mapimg.js?v=5"></script>
+<script src="js/output.js?v=12"></script>
+<script src="js/docx.js?v=7"></script>
+<script src="js/mapimg.js?v=6"></script>
 <script src="js/recheck.js?v=3"></script>
 <script src="js/myreq.js?v=2"></script>
 <script src="js/recheckui.js?v=3"></script>
 <script src="js/parties.js?v=3"></script>
 <script src="js/partiesui.js?v=2"></script>
-<script src="js/ui.js?v=17"></script>
+<script src="js/ui.js?v=18"></script>
 </body>
 </html>

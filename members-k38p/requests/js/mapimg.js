@@ -52,11 +52,15 @@
   const MIN_G = 7, MIN_O = 14;   // נתיב: חצי-רוחב מינימלי גלוי (פיקסלים) לפס הירוק ולכתום — צר מזה הוא נבלע בקו הציר, ואז הפס מוגדל לקריאות ומסומן במקרא
   const bboxOf = pts => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; pts.forEach(q => { a = Math.min(a, q[0]); b = Math.min(b, q[1]); c = Math.max(c, q[0]); d = Math.max(d, q[1]); }); return [a, b, c, d]; };   // [minLat,minLon,maxLat,maxLon]
   // תיבת הטבעת סביב הנתיב ברוחב mult×W (כשהטבעת לא נבנתה — תיבת הנקודות מורחבת ב-mult×W)
+  // טבעת לא תקינה (simple=false: חותכת את עצמה או לא מכילה את הקפסולה) אינה מגדירה את גבולות הציור — התיבה היא איחוד תיבת הטבעת ותיבת הנקודות המורחבת ב-mult×W (תיבת הקפסולה המדויקת)
   function corridorBB(a, mult) {
-    const r = C.corridorRing(a, mult).ring;
-    if (r.length) return bboxOf(r);
+    const cr = C.corridorRing(a, mult), r = cr.ring;
+    if (r.length && cr.simple) return bboxOf(r);
     const bb = bboxOf(a.pts), P = new C.Proj((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2), d = a.halfWidth * mult;
-    return [bb[0] - d / P.ky, bb[1] - d / P.kx, bb[2] + d / P.ky, bb[3] + d / P.kx];
+    const ex = [bb[0] - d / P.ky, bb[1] - d / P.kx, bb[2] + d / P.ky, bb[3] + d / P.kx];
+    if (!r.length) return ex;
+    const rb = bboxOf(r);
+    return [Math.min(rb[0], ex[0]), Math.min(rb[1], ex[1]), Math.max(rb[2], ex[2]), Math.max(rb[3], ex[3])];
   }
   const halfM = bb => { const P = new C.Proj((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2); return [((bb[3] - bb[1]) / 2) * P.kx, ((bb[2] - bb[0]) / 2) * P.ky]; };   // חצי-רוחב וחצי-גובה של תיבה, במטרים
   // גודל התמונה: כמו תמיד (1280×960); נתיב שגבוה יותר מרחב (צפון-דרום, יחס מעל 1.25) — תמונה עומדת 960×1200, כך שהוא ממלא אותה. opts.width/height מכריעים
@@ -157,9 +161,11 @@
   function routeLayout(res, V, mode) {
     const a = res.area, vp = viewProj(V), X = vp.X, px = rg => rg.map(q => X(q[0], q[1]));
     const axis = a.pts.map(q => X(q[0], q[1])), wG0 = a.halfWidth * vp.pxPerM, wO0 = 2 * wG0, wG = Math.max(wG0, MIN_G), wO = Math.max(wO0, MIN_O);
-    const g1 = C.corridorRing(a, 1).ring, g2 = C.corridorRing(a, 2).ring, enlarged = wG > wG0 + 0.5 || wO > wO0 + 0.5, bands = enlarged || !g1.length || !g2.length;
-    const ring1 = bands ? [] : px(g1), ring2 = bands ? [] : px(g2), badges = placeBadges(axis, mode === "region");
-    return { axis, ring1, ring2, bands, enlarged, wG, wO, badges, anchor: X(a.lat, a.lon), pxPerM: vp.pxPerM, samples: sampleLine(axis, 8).concat(ring1) };
+    const g1 = C.corridorRing(a, 1).ring, c2 = C.corridorRing(a, 2), g2 = c2.ring, enlarged = wG > wG0 + 0.5 || wO > wO0 + 0.5, bands = enlarged || !g1.length || !g2.length;
+    // טבעת ה-2W אינה תמיד תקינה (פינה פנימית חולפת על פני קטע קצר, או חיתוך עצמי) גם כשטבעת ה-W תקינה: אז הכתום הוא הקפסולה המדויקת (קו עבה ברוחב 2×2W בפיקסלים, קצוות ופינות מעוגלים) ולא הפוליגון
+    const capsule2 = !bands && !c2.simple;
+    const ring1 = bands ? [] : px(g1), ring2 = bands || capsule2 ? [] : px(g2), badges = placeBadges(axis, mode === "region");
+    return { axis, ring1, ring2, bands, capsule2, enlarged, wG, wO, badges, anchor: X(a.lat, a.lon), pxPerM: vp.pxPerM, samples: sampleLine(axis, 8).concat(ring1) };
   }
 
   // כותרת הקנבס לפי (תצוגה, ספק) — הקידומת היא שם האתר
@@ -230,11 +236,14 @@
     const axisPath = c => { c.beginPath(); RL.axis.forEach((q, i) => i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1])); };
     const ringSub = rg => { rg.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); };
     // פס עבה סביב הציר (קצוות ופינות מעוגלים) על קנבס עזר ואז לקנבס הראשי בשקיפות — כך אין כהות כפולה בחפיפות. half = חצי-רוחב בפיקסלים; hole = חצי-רוחב החור (הירוק מתחת לכתום), edge = קו המסגרת
-    const band = (half, hole, fill, alpha, edge, edgeW) => {
+    const band = (half, hole, fill, alpha, edge, edgeW, holeRing) => {
       const lc = document.createElement("canvas"); lc.width = W; lc.height = H; const lg = lc.getContext("2d"); lg.lineJoin = "round"; lg.lineCap = "round";
       const line = w => { axisPath(lg); lg.lineWidth = w; lg.stroke(); };
       lg.strokeStyle = fill; line(2 * half);
       if (hole) { lg.globalCompositeOperation = "destination-out"; line(2 * hole); lg.globalCompositeOperation = "source-over"; }
+      if (holeRing && holeRing.length) {   // חור בצורת פוליגון (הפוליגון הירוק של הטופס) במקום קפסולה
+        lg.globalCompositeOperation = "destination-out"; lg.beginPath(); holeRing.forEach((q, i) => i ? lg.lineTo(q[0], q[1]) : lg.moveTo(q[0], q[1])); lg.closePath(); lg.fillStyle = "#000"; lg.fill(); lg.globalCompositeOperation = "source-over";
+      }
       g.globalAlpha = alpha; g.drawImage(lc, 0, 0); g.globalAlpha = 1;
       lg.clearRect(0, 0, W, H); lg.strokeStyle = edge; line(2 * half + edgeW); lg.globalCompositeOperation = "destination-out"; line(2 * half - edgeW); g.drawImage(lc, 0, 0);
     };
@@ -242,8 +251,11 @@
       // נתיב: כתום = טבעת ה-2W פחות טבעת ה-W (evenodd), ירוק = טבעת ה-W (הפוליגון שבטופס); כשהרוחב האמיתי צר מדי לציור — פס עבה סביב הציר ברוחב מינימלי גלוי
       if (RL.bands) { band(RL.wO, RL.wG, "#ff9500", 0.28, "#ff9500", 3); band(RL.wG, 0, "#34a853", 0.30, "#22c55e", 3.5); }
       else {
-        g.beginPath(); ringSub(RL.ring2); ringSub(RL.ring1); g.fillStyle = "rgba(255,149,0,0.28)"; g.fill("evenodd");
-        g.lineWidth = 3; g.strokeStyle = "#ff9500"; g.beginPath(); ringSub(RL.ring2); g.stroke();
+        if (RL.capsule2) band(RL.wO, 0, "#ff9500", 0.28, "#ff9500", 3, RL.ring1);   // טבעת ה-2W לא תקינה: קפסולה מדויקת (קו עבה בעל קצוות ופינות מעוגלים) פחות הפוליגון הירוק
+        else {
+          g.beginPath(); ringSub(RL.ring2); ringSub(RL.ring1); g.fillStyle = "rgba(255,149,0,0.28)"; g.fill("evenodd");
+          g.lineWidth = 3; g.strokeStyle = "#ff9500"; g.beginPath(); ringSub(RL.ring2); g.stroke();
+        }
         g.beginPath(); ringSub(RL.ring1); g.fillStyle = "rgba(52,168,83,0.30)"; g.fill();
         g.lineWidth = 3.5; g.strokeStyle = "#22c55e"; g.stroke();
       }

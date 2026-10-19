@@ -195,7 +195,7 @@
   };
   const HELP_FIELD = {
     knownObs: "מכשולים שאתם מכירים באתר, עד " + (C.KO_MAX || 20) + " פריטים, מופרדים בפסיק, בנקודה-פסיק או בשורה חדשה (יותר מזה חוסם את ההרצה). כל פריט מושווה לסריקה לפי מילים בלבד (בלי מיקום): התאמה אפשרית מוצגת בדף הבדיקות, ופריט שלא נמצא מופיע כאזהרה מעל הדוח וגם בדף הבדיקות. ההשוואה אינה מחליפה סימון ידני בסעיף 4. הטקסט נכנס לשדה 8 בטופס ולקובץ ה-Word כלשונו (לא לגוף המייל הקצר).",
-    visitNotes: "מלל חופשי, למשל ממצאי סיור באתר. ההערות, ותאריך הסיור אם הוזן, מופיעים בדף הבדיקות (בסעיף ״הנקודה״) ובקובץ ה-Word בלבד — לא בשדות הטופס ולא בנוסח המייל. כל שינוי בהן מוחק את ההודעות ״נשמר״ ו״נשלח״."
+    visitNotes: "מלל חופשי, למשל ממצאי סיור באתר. ההערות, ותאריך הסיור אם הוזן, מופיעים בדף הבדיקות (בסעיף 1: ״הנקודה״ בבקשה לנקודה ורדיוס, ״הנתיב״ בבקשה לנתיב) ובקובץ ה-Word בלבד — לא בשדות הטופס ולא בנוסח המייל. כל שינוי בהן מוחק את ההודעות ״נשמר״ ו״נשלח״."
   };
   function wrapHelp(el, text, name) {
     if (!el || !H || el.closest(".hw")) return;
@@ -621,6 +621,10 @@
     errs.forEach(e => {
       const el = $("e_" + e.field); if (el) el.textContent = e.msg;
       if (e.field === "route" && $("routeBox")) $("routeBox").classList.add("bad");   // אין שדה בודד לסמן: מסגרת סביב נקודות הנתיב
+      if (e.field === "route") {   // שגיאה שאותרה לנקודות (rows: אינדקסים מ-0) או לתיבת ההדבקה (paste): הסימון על השורה עצמה, ו-focusFirstError ממקד אותה
+        (Array.isArray(e.rows) ? e.rows : []).forEach(i => { const r = document.querySelector('#routeList [data-rt="' + i + '"] input'); if (r) r.classList.add("bad"); });
+        if (e.paste && $("rtText")) $("rtText").classList.add("bad");
+      }
       const dateErr = e.field === "visitNotes" && /תאריך/.test(e.msg);   // שגיאת תאריך הסיור מדווחת תחת הערות המבקש
       const inp = !dateErr && idMap[e.field] && $(idMap[e.field]); if (inp) inp.classList.add("bad");
       if (dateErr) $("visitDate").classList.add("bad");
@@ -642,7 +646,7 @@
     $("baseOsm").onclick = () => { m.removeLayer(sat); osm.addTo(m); };
     m.on("click", e => {
       if (S.pick) { S.pick = false; $("mCoord").value = e.latlng.lat.toFixed(6) + ", " + e.latlng.lng.toFixed(6); $("mPick").textContent = "בחר מיקום מהמפה"; $("mCoord").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
-      if (routeMode()) { const w = e.latlng.wrap(); addRoutePoint(w.lat, w.lng); return; }   // נתיב: לחיצה מוסיפה נקודה (גם כרטיס הלחיצה אינו נפתח — הפס מתחת למפה מדווח על הנתיב); בחירת מיקום לתוספת ידנית (S.pick) קודמת
+      if (routeMode()) { const w = e.latlng.wrap(); addRoutePoint(w.lat, w.lng, e); return; }   // נתיב: לחיצה מוסיפה נקודה (גם כרטיס הלחיצה אינו נפתח — הפס מתחת למפה מדווח על הנתיב); בחירת מיקום לתוספת ידנית (S.pick) קודמת
       const moved = setCenter(e.latlng.lat, e.latlng.lng, false);
       showHitsAt(e.latlng, moved);   // הנקודה נבחרת תמיד; במקביל נפתח כרטיס עם האזורים והנוטמים שמתחתיה (אם יש)
     });
@@ -692,9 +696,16 @@
   const widthVal = () => { const v = parseFloat($("halfWidth").value); return isFinite(v) ? v : NaN; };
   // האזור כפי שבטופס (העתק): ממנו נבנים inp.area, מפתח הסריקה ותצוגת הפס
   const readArea = () => ({ kind: "route", pts: S.route.pts.map(q => [q[0], q[1]]), halfWidth: parseFloat($("halfWidth").value) });
-  // מפתח "אותה בקשה" לתוספות הידניות: מעגל — הנקודה (כמו תמיד); נתיב — הנקודות (הרוחב אינו חלק מהמפתח, כמו הרדיוס במעגל)
-  const areaKey = i => (i.area ? "route:" + JSON.stringify(i.area.pts) : i.lat + "," + i.lon);
-  const routeMsg = t => { const e = $("rtMsg"); if (e) e.textContent = t || ""; };
+  // מפתח "אותה בקשה" לתוספות הידניות: מעגל — הנקודה (כמו תמיד, נקודה אחרת = בקשה אחרת); נתיב — "route" קבוע: הוספה, גרירה, עריכה ומחיקה של קודקודים הן עריכה של אותו נתיב ואינן מוחקות תוספות ידניות בשקט.
+  // התחלה מחדש מפורשת (״נקה נתיב״, מעבר בין מעגל לנתיב, טעינת בקשה אחרת) מאפסת: ״נקה נתיב״ מאפס את S.manualKey, מעבר סוג משנה את המפתח, וטעינת בסיס קובעת רשימה ומפתח משלה
+  const areaKey = i => (i.area ? "route" : i.lat + "," + i.lon);
+  // routeMsg: הודעות הלחיצה והגרירה על המפה (#rtMsg, בפס שמעל המפה). routeLocal: הודעות ההדבקה ועריכת השורה (#rtLocal) — ממש מתחת לבקרים ולא במפה, שנמצאת הרבה מתחתיהם בעמוד. הודעה אחת בכל רגע: האחרונה מחליפה את הקודמת בשני המקומות
+  const routeMsg = t => { const e = $("rtMsg"), l = $("rtLocal"); if (e) e.textContent = t || ""; if (l) l.textContent = ""; };
+  const routeLocal = t => { const e = $("rtMsg"), l = $("rtLocal"); if (l) l.textContent = t || ""; if (e) e.textContent = ""; };
+  // לחיצה כפולה (עכבר) או הקשה כפולה (מגע) על המפה: הלחיצה השנייה בתוך DBL_MS מהוספת הנקודה ובתוך DBL_PX פיקסלים ממנה מתעלמת (לא תלוי בזום; כלל המטר האחד נשאר בנוסף)
+  const DBL_MS = 350, DBL_PX = 10;
+  const isDupTap = (prev, t, x, y) => !!prev && t >= prev.t && t - prev.t < DBL_MS && Math.hypot(x - prev.x, y - prev.y) < DBL_PX;
+  let lastRouteAdd = null;   // {t, x, y}: ההוספה האחרונה בלחיצה על המפה (זמן ופיקסל בקונטיינר)
   const coarsePointer = () => !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
   const mkRtIcon = i => L.divIcon({ className: "rtPt", html: '<span dir="ltr">P' + (i + 1) + "</span>", iconSize: [28, 28], iconAnchor: [14, 14] });
   // שכבות הנתיב נוצרות פעם אחת (ונשארות באובייקט): ציר (קו לבן עם מסגרת כהה), פוליגון ירוק (הרוחב), פוליגון כתום (פי 2), ועיגול ירוק לנקודה בודדת. interactive:false — הלחיצה מגיעה למפה
@@ -711,7 +722,7 @@
       const R = routeLayers(), pts = S.route.pts, on = routeMode(), W = widthVal(), ok2 = on && pts.length > 1, w = isFinite(W) && W > 0 ? Math.min(W, routeLim().maxW) : 0;
       const put = (l, yes) => { if (yes && !m.hasLayer(l)) l.addTo(m); else if (!yes && m.hasLayer(l)) m.removeLayer(l); };
       let g1 = null, g2 = null;
-      if (ok2 && w) { const a = { kind: "route", pts, halfWidth: w }; g1 = C.corridorRing(a, 1).ring; g2 = C.corridorRing(a, 2).ring; }
+      if (ok2 && w) { const a = { kind: "route", pts, halfWidth: w }, r2 = C.corridorRing(a, 2); g1 = C.corridorRing(a, 1).ring; g2 = r2.simple ? r2.ring : null; }   // הפס הכתום (פי 2) מצויר רק כשהטבעת הכפולה פשוטה ומכילה את הקפסולה; אחרת מושמט, וה-#rtInfo מסביר (orangeCut)
       put(R.outer, !!(g2 && g2.length)); put(R.corr, !!(g1 && g1.length)); put(R.casing, ok2); put(R.line, ok2);
       if (g2 && g2.length) R.outer.setLatLngs(g2.slice(0, -1));
       if (g1 && g1.length) R.corr.setLatLngs(g1.slice(0, -1));
@@ -728,6 +739,7 @@
           mk.on("contextmenu", ev => { if (ev.originalEvent && ev.originalEvent.preventDefault) ev.originalEvent.preventDefault(); if (!coarsePointer()) removeRoutePoint(i); });   // לחיצה ימנית על קודקוד מוחקת אותו (לא לחיצה כפולה: לחיצה כפולה על המפה נוחתת על הסמן שזה עתה נוסף ומחקה אותו); במגע (לחיצה ארוכה לפני גרירה) לא מוחקים — שם × בשורה, ״מחק נקודה אחרונה״ ו״נקה נתיב״
           return mk;
         });
+        if (S.running) syncRunLock();   // סמנים שנבנו באמצע הרצה — לא נגררים
       } else R.marks.forEach((mk, i) => mk.setLatLng(want[i]));
     } catch (e) { try { console.error("[route] drawRoute", e); } catch (e2) { /* ignore */ } }
   }
@@ -738,6 +750,7 @@
     if (rows.length === pts.length) { rows.forEach((r, i) => { const f = r.querySelector("input"); if (f !== document.activeElement) { f.value = fmtPt(pts[i]); f.classList.remove("bad"); } }); return; }
     box.innerHTML = pts.map((q, i) => '<div class="prow rtRow" data-rt="' + i + '"><span class="rtN" dir="ltr">P' + (i + 1) + '</span><input type="text" dir="ltr" inputmode="decimal" data-f="rtpt" value="' + esc(fmtPt(q)) + '" aria-label="' + esc("נקודה P" + (i + 1) + " בנתיב — קו רוחב, קו אורך") + '" autocomplete="off">' +
       '<button type="button" class="xbtn" data-rtrm="' + i + '" title="הסר נקודה" aria-label="' + esc("הסר את P" + (i + 1) + " מהנתיב") + '">×</button></div>').join("");
+    if (S.running) syncRunLock();
   }
   // שורת המידע: מספר הנקודות, האורך והרוחב; ואם הנתיב אינו תקין (אותו אימות כמו בהרצה) — הסיבה הראשונה
   function routeInfoLine() {
@@ -747,9 +760,48 @@
     let t = pts.length + (pts.length === 1 ? " נקודה" : " נקודות") + " מתוך " + lim.maxPts;
     if (pts.length > 1) t += " · אורך " + (C.routeInfo(pts).lengthM / 1000).toFixed(2) + " ק״מ";
     if (isFinite(W)) t += " · רוחב כולל " + C.fmtInt(2 * W) + " מ׳ (" + C.fmtInt(W) + " מ׳ מכל צד)";
-    const errs = pts.length > 1 ? C.validateRoute({ area: readArea() }, S.cfg) : [];
-    e.textContent = t + (errs.length ? " — " + errs[0].msg : ""); e.classList.toggle("warnTxt", errs.length > 0);
+    const a = readArea(), errs = pts.length > 1 ? locateRouteErrs(C.validateRoute({ area: a }, S.cfg), a) : [], cut = orangeCut(pts, W);
+    e.textContent = t + (errs.length ? " — " + errs[0].msg : "") + (cut ? " · הפס הכתום (עד פי 2) אינו מצויר בצורת נתיב זו — המרחקים והרשימות אינם מושפעים" : ""); e.classList.toggle("warnTxt", errs.length > 0 || cut);
   }
+  // הפס הכתום (טבעת הרוחב הכפול) מושמט מהמפה כשהיא אינה פשוטה / אינה מכילה את הקפסולה (C.corridorRing(...).simple === false): פינות פנימיות חולפות על פני קטעים קצרים ביחס לפי 2 מהרוחב
+  const orangeCut = (pts, W) => { try { return pts.length > 1 && isFinite(W) && W > 0 && !C.corridorRing({ kind: "route", pts, halfWidth: Math.min(W, routeLim().maxW) }, 2).simple; } catch (e) { return false; } };
+  // איתור הנקודה הפגומה לשגיאת אימות נתיב (C.validateRoute אינו מציין נקודה): אותו סדר בדיקות כמו שם. מחזיר {rows: אינדקסים מ-0, txt} או null (שגיאה כללית — מספר נקודות, אורך, רוחב — או נתיב תקין)
+  function routeWhere(a) {
+    const pts = Array.isArray(a.pts) ? a.pts : [], lim = routeLim(), P = i => "P" + (i + 1), n = pts.length;
+    if (n < 2 || n > lim.maxPts) return null;
+    const pick = (f, one, many) => { const r = pts.map((q, i) => i).filter(i => f(pts[i], i)); return r.length ? { rows: r, txt: (r.length === 1 ? one : many) + r.map(P).join(", ") } : null; };
+    const w = pick(q => !Array.isArray(q) || !isFinite(q[0]) || !isFinite(q[1]), "נקודה ", "נקודות ") || pick(q => !(q[0] >= 29 && q[0] <= 34 && q[1] >= 34 && q[1] <= 36.5), "נקודה ", "נקודות ");
+    if (w) return w;
+    const info = C.routeInfo(pts), k = info.segs.findIndex(l => l < 1);
+    if (k >= 0) return { rows: [k, k + 1], txt: "בין " + P(k) + " ל-" + P(k + 1) };
+    const Q = new C.Proj(pts[0][0], pts[0][1]), xy = pts.map(q => Q.xy(q[0], q[1]));
+    for (let i = 1; i < n - 1; i++) {   // פנייה של כמעט 180° (C.routeReverses, מעל 170°)
+      const ax = xy[i][0] - xy[i - 1][0], ay = xy[i][1] - xy[i - 1][1], bx = xy[i + 1][0] - xy[i][0], by = xy[i + 1][1] - xy[i][1], la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+      if (la > 0 && lb > 0 && (ax * bx + ay * by) / (la * lb) < -0.9848) return { rows: [i], txt: "הפנייה ב-" + P(i) };
+    }
+    if (info.lengthM > lim.maxLen || !(a.halfWidth >= lim.minW && a.halfWidth <= lim.maxW)) return null;
+    for (let j = 0; j < n - 1; j++) {   // הטבעת חותכת את עצמה: מחפשים את החלון הקצר הראשון (קטע ושכניו) שהטבעת שלו אינה פשוטה
+      const sub = pts.slice(Math.max(0, j - 1), Math.min(n, j + 3));
+      if (sub.length > 1 && !C.corridorRing({ kind: "route", pts: sub, halfWidth: a.halfWidth }, 1).simple) return { rows: [j, j + 1], txt: "בקרבת הקטע בין " + P(j) + " ל-" + P(j + 1) };
+    }
+    return null;
+  }
+  // מוסיף לשגיאת הנתיב הראשונה את מספר הנקודה (P) ואת השורות לסימון (rows); עורך את errs במקום ומחזיר אותו. שגיאה בלי איתור (כללית) נשארת כמות שהיא
+  function locateRouteErrs(errs, a) {
+    const i = errs.findIndex(e => e.field === "route"); if (i < 0) return errs;
+    let w = null; try { w = routeWhere(a); } catch (e) { w = null; }
+    if (w) errs[i] = Object.assign({}, errs[i], { msg: errs[i].msg + " (" + w.txt + ")", rows: w.rows });
+    return errs;
+  }
+  // בזמן הרצה (S.running) סוג האזור ועריכת הנתיב נעולים: מעבר סוג או שינוי נקודות באמצע הרצה היו מזרימים אזור אחר לניתוח (ראו run)
+  const RUN_LOCK = ["akCircle", "akRoute", "halfWidth", "rtUndo", "rtClear", "rtApply", "rtText"];
+  function syncRunLock() {
+    const on = !!S.running;
+    RUN_LOCK.forEach(id => { const e = $(id); if (e) e.disabled = on; });
+    document.querySelectorAll("#routeList input,#routeList button").forEach(e => { e.disabled = on; });
+    const R = S.lf.route; if (R) R.marks.forEach(mk => { try { if (mk.dragging) { if (on) mk.dragging.disable(); else mk.dragging.enable(); } } catch (e) { /* תצוגה בלבד */ } });
+  }
+  const routeBusy = () => { if (!S.running) return false; routeMsg("הבדיקות רצות — אפשר לערוך את הנתיב בסיומן."); return true; };
   function fitRoute() { const m = S.lf.m; if (m && S.route.pts.length && typeof L !== "undefined") { try { m.fitBounds(L.latLngBounds(S.route.pts), { padding: [30, 30], maxZoom: 17 }); } catch (e) { /* תצוגה בלבד */ } } }
   function routeChanged(fit) {
     closeCard();
@@ -757,19 +809,31 @@
     if (fit) fitRoute();
     onScanInputChange(); scheduleLayerUpdate();
   }
-  function addRoutePoint(lat, lon) {
-    const lim = routeLim(), pts = S.route.pts, q = [round6(lat), round6(lon)];
+  // tap: האירוע של הלחיצה על המפה (Leaflet; containerPoint) — רק לחיצה של משתמש עוברת את שומר הלחיצה הכפולה; קריאה תוכנתית (בדיקות, טעינה) ללא tap אינה מושפעת
+  function addRoutePoint(lat, lon, tap) {
+    if (routeBusy()) return false;
+    const lim = routeLim(), pts = S.route.pts, q = [round6(lat), round6(lon)], tp = tap && tap.containerPoint ? { t: Date.now(), x: tap.containerPoint.x, y: tap.containerPoint.y } : null;
     if (pts.length >= lim.maxPts) { routeMsg("הנתיב מוגבל ל-" + lim.maxPts + " נקודות — מחקו נקודה כדי להוסיף."); return false; }
+    if (tp && isDupTap(lastRouteAdd, tp.t, tp.x, tp.y)) return false;   // החצי השני של לחיצה כפולה / הקשה כפולה: בשקט (הנקודה כבר נוספה בלחיצה הראשונה)
     if (pts.length && C.routeInfo([pts[pts.length - 1], q]).lengthM < 1) { routeMsg("הנקודה קרובה פחות ממטר לנקודה הקודמת — לא נוספה."); return false; }   // לחיצה כפולה לא מוסיפה שתי נקודות
-    pts.push(q); routeMsg(""); routeChanged(); return true;
+    pts.push(q); if (tp) lastRouteAdd = tp; routeMsg(""); routeChanged(); return true;
   }
-  function movePoint(i, lat, lon) {
-    if (!S.route.pts[i]) return;
-    S.route.pts[i] = [round6(lat), round6(lon)]; routeMsg(""); routeChanged();
+  // fit: עריכה מהרשימה — המפה מתקרבת לנתיב כשהנקודה שנערכה מחוץ לתצוגה או כשהתצוגה רחוקה בהרבה מהנתיב (למשל אחרי תיקון טעות הקלדה שהרחיקה את המפה); גרירה על המפה אינה מקרבת
+  function movePoint(i, lat, lon, fit) {
+    if (!S.route.pts[i] || routeBusy()) return;
+    S.route.pts[i] = [round6(lat), round6(lon)]; routeMsg(""); routeChanged(!!fit && needFit(S.route.pts[i]));
   }
-  function removeRoutePoint(i) { if (!S.route.pts[i]) return; S.route.pts.splice(i, 1); routeMsg(""); routeChanged(); }
+  function needFit(q) {
+    const m = S.lf.m; if (!m || typeof L === "undefined") return false;
+    try {
+      const vb = m.getBounds(), rb = L.latLngBounds(S.route.pts);
+      return !vb.contains(q) || ((vb.getNorth() - vb.getSouth()) > 8 * (rb.getNorth() - rb.getSouth()) && (vb.getEast() - vb.getWest()) > 8 * (rb.getEast() - rb.getWest()));
+    } catch (e) { return false; }
+  }
+  function removeRoutePoint(i) { if (!S.route.pts[i] || routeBusy()) return; S.route.pts.splice(i, 1); routeMsg(""); routeChanged(); }
   const undoRoutePoint = () => { if (S.route.pts.length) removeRoutePoint(S.route.pts.length - 1); };
-  function clearRoute() { if (!S.route.pts.length) return; S.route.pts = []; routeMsg(""); routeChanged(); }
+  // ״נקה נתיב״ = התחלה מחדש: התוספות הידניות של הבקשה הקודמת יימחקו בהרצה הבאה (מפתח התוספות מתאפס; עריכת קודקודים בלבד אינה מוחקת אותן)
+  function clearRoute() { if (!S.route.pts.length || routeBusy()) return; S.route.pts = []; S.manualKey = ""; routeMsg(""); routeChanged(); }
   // נתיב שלם (טעינת בסיס, הדבקה): pts מעוגלים ל-6 ספרות; hw — הרוחב (null = כפי שהוא); fit — קירוב המפה לנתיב
   function setRoute(pts, hw, fit) {
     S.route.pts = C.roundPts(pts);
@@ -779,19 +843,31 @@
   // מוחק את נקודות הנתיב בלי לשנות את הסוג ובלי לסמן ״ישן״ (טעינת בסיס של מעגל; איפוס)
   function dropRoute() { S.route.pts = []; if ($("rtText")) $("rtText").value = ""; routeMsg(""); drawRoute(); renderRouteList(); routeInfoLine(); }
   function editRoutePoint(i, el) {
+    if (routeBusy()) return;
     const c = C.parseCoordInput(el.value);
-    if (!c) { el.classList.add("bad"); routeMsg("P" + (i + 1) + ": הנ״צ אינו חוקי — הקלידו ״קו רוחב, קו אורך״ (למשל 32.099128, 34.816617)."); return; }
-    movePoint(i, c.lat, c.lon);
+    if (!c) { el.classList.add("bad"); routeLocal("P" + (i + 1) + ": הנ״צ אינו חוקי — הקלידו ״קו רוחב, קו אורך״ (למשל 32.099128, 34.816617)."); return; }
+    el.classList.remove("bad"); movePoint(i, c.lat, c.lon, true);
   }
-  // הדבקת רשימה: הכול או כלום — שורה לא תקינה או חריגה מהתקרה ← לא נטען דבר (ללא חיתוך שקט); תקין ← מחליף את הנתיב ומקרב אליו
+  // הדבקת רשימה: הכול או כלום — שורה לא תקינה או חריגה מהתקרה ← לא נטען דבר (ללא חיתוך שקט); תקין ← מחליף את הנתיב ומקרב אליו. ההודעות ליד הבקרים (#rtLocal)
   function applyRouteText() {
+    if (routeBusy()) return;
     const t = $("rtText").value, lim = routeLim();
-    if (!t.trim()) { routeMsg("הדביקו נקודות — נקודה בכל שורה, ״קו רוחב, קו אורך״."); return; }
+    $("rtText").classList.remove("bad");
+    if (!t.trim()) { routeLocal("הדביקו נקודות — נקודה בכל שורה, ״קו רוחב, קו אורך״."); return; }
     const r = C.parseCoordList(t);
-    if (r.bad.length) { routeMsg((r.bad.length === 1 ? "שורה " : "שורות ") + r.bad.join(", ") + " אינה נ״צ תקין — לא נטען דבר. הפורמט: ״קו רוחב, קו אורך״ בכל שורה."); return; }
-    if (r.pts.length > lim.maxPts) { routeMsg("הודבקו " + r.pts.length + " נקודות — הנתיב מוגבל ל-" + lim.maxPts + ". לא נטען דבר."); return; }
-    if (r.pts.length < 2) { routeMsg("יש להדביק לפחות שתי נקודות."); return; }
-    setRoute(r.pts, null, true); $("rtText").value = ""; routeMsg("נטענו " + r.pts.length + " נקודות.");
+    if (r.bad.length) { routeLocal((r.bad.length === 1 ? "שורה " : "שורות ") + r.bad.join(", ") + " אינה נ״צ תקין — לא נטען דבר. הפורמט: ״קו רוחב, קו אורך״ בכל שורה."); return; }
+    if (r.pts.length > lim.maxPts) { routeLocal("הודבקו " + r.pts.length + " נקודות — הנתיב מוגבל ל-" + lim.maxPts + ". לא נטען דבר."); return; }
+    if (r.pts.length < 2) { routeLocal("יש להדביק לפחות שתי נקודות."); return; }
+    setRoute(r.pts, null, true); $("rtText").value = ""; routeLocal("נטענו " + r.pts.length + " נקודות.");
+  }
+  // בהרצה על נתיב: טקסט שהוקלד בשורת נקודה ואינו נ״צ חוקי (השורה נשארת עם הטקסט והנתיב נשאר עם הנקודה הקודמת), או נקודות שהודבקו ולא נטענו — חוסמים את ההרצה (כמו נ״צ לא חוקי במעגל), אחרת הבדיקות היו רצות על נתיב שונה ממה שמוצג
+  function routePendingErr() {
+    const rows = [...document.querySelectorAll("#routeList [data-rt]")].map((r, i) => (r.querySelector("input") && !C.parseCoordInput(r.querySelector("input").value) ? i : -1)).filter(i => i >= 0), paste = !!($("rtText") && $("rtText").value.trim());
+    if (!rows.length && !paste) return null;
+    const parts = [];
+    if (rows.length) parts.push((rows.length === 1 ? "בנקודה " : "בנקודות ") + rows.map(i => "P" + (i + 1)).join(", ") + " הוקלד נ״צ שאינו חוקי — תקנו אותו (אחרת הבדיקות היו רצות על הנקודה הקודמת)");
+    if (paste) parts.push("הדבקתם נקודות ולא טענתם אותן — לחצו ״טען את הנקודות שהודבקו״ או מחקו את הטקסט מהתיבה (אחרת הבדיקות רצות על הנקודות שבמפה)");
+    return { field: "route", msg: parts.join(" · "), rows, paste };
   }
   // quiet: בלי סימון הניתוח כ״ישן״ ובלי עדכון הפס (אתחול, איפוס, טעינת בסיס — המתקשר אחראי)
   function setAreaKind(k, quiet) {
@@ -802,6 +878,7 @@
     ["hwBox", "routeBox", "routeBar"].forEach(id => { $(id).hidden = !route; });
     $("mapTitle").textContent = route ? "2 · מפה — לחצו כדי להוסיף נקודות לנתיב (עד " + routeLim().maxPts + ")" : "2 · מפה — לחצו כדי לסמן את מרכז הסגירה";
     $("lgGreen").textContent = route ? "רוחב הנתיב מכל צד" : "רדיוס הסגירה"; $("lgOrange").textContent = route ? "עד פי 2 מהרוחב" : "עד פי 2 מהרדיוס";
+    if ($("visitSec")) $("visitSec").textContent = route ? '"הנתיב"' : '"הנקודה"';   // רמז הערות המבקש: שם הסעיף הראשון בדף הבדיקות
     if (m) {
       m.getContainer().classList.toggle("routeMode", route);
       if (route) m.doubleClickZoom.disable(); else m.doubleClickZoom.enable();   // לחיצה כפולה לא תקרב ולא תוסיף שתי נקודות
@@ -1124,6 +1201,7 @@
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
     { const raw = $("coord").value.trim(); if (!inp0.area && raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
+    if (inp0.area) { locateRouteErrs(errs, inp0.area); const pend = routePendingErr(); if (pend) errs.push(pend); }   // נתיב: שגיאה עם מספר הנקודה (P) ושורה מסומנת; טקסט שהוקלד או הודבק ולא נקלט חוסם (כמו נ״צ לא חוקי במעגל)
     if (inp0.dateFrom && inp0.dateFrom < C.ilToday(new Date())) errs.push({ field: "dateFrom", msg: "תאריך ההתחלה כבר עבר" });
     showErrors(errs);
     if (errs.length) {
@@ -1137,7 +1215,7 @@
     S.analysisStamp = null;   // ניתוח חדש בדרך: 'הניתוח ישן' אינו אמור לחסום את ההרצה שמתקנת אותו
     await checkSync();
     for (const k of ["a17", "sync", "agri", "notam"]) if (!(S.statuses[k] && S.statuses[k].ok)) { $("e_run").textContent = "ההרצה נעצרה — " + ({ a17: "אזורי איסור וגנים", sync: "סנכרון עם מפת החברים", agri: "מנחתים חקלאיים", notam: "נוטמים" })[k] + " אינם תקינים: " + (S.statuses[k] ? statusMsg(S.statuses[k]) : "ממתין") + (k === "sync" ? "" : ". רעננו את הדף."); return; }
-    S.running = true; $("runBtn").disabled = true;
+    S.running = true; $("runBtn").disabled = true; syncRunLock();   // סוג האזור ועריכת הנתיב נעולים עד סוף ההרצה
     const steps = [
       { k: "osm_near", t: "מכשולים ותשתיות בסביבה (OpenStreetMap)" }, { k: "osm_far", t: "שדות תעופה, מנחתים וישובים (OpenStreetMap)" },
       { k: "osm_ext", t: "גבולות מדינה ושטחי טבע (OpenStreetMap)" }, { k: "reverse", t: "שם המקום (Nominatim)" },
@@ -1151,7 +1229,7 @@
     // ניתוח חדש בדרך: בנייה שרצה על הניתוח הקודם הופכת למיושנת (buildSeq), ועריכה רכה שממתינה לא תפעל על תוצאה שנמחקת (clearTimeout) — ואז אין טיימר שיזרוק על S.res=null
     S.buildSeq++; S.building = false; clearTimeout(rebuildTimer); rebuildTimer = null; S.pending = false;
     S.res = null; S.report = null; S.stale = false; S.staleWhy = ""; S.imgs = {}; S.imgSite = null; clearOutcome();
-    { const ck = areaKey(inp0); if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } }
+    { const ck = areaKey(inp0); if (S.manualKey !== ck) { S.manual = []; S.manualKey = ck; } renderManual(); }   // הרשימה שעל המסך תמיד כמו S.manual (וכמו res.inp.manualItems שייבנה ממנה): איפוס שקט בלי רינדור השאיר ברשימה פריטים שנמחקו מהניתוח
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: O.DECLARATION.gate };
     ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso };
@@ -1177,7 +1255,7 @@
       } catch (e) { data.reverse = null; st("reverse", "ok", "לא התקבל שם מ-Nominatim — השם נגזר משכבות OpenStreetMap או מהקלדה"); }
       // שדות הסריקה (נקודה, רדיוס, גובה, מועדים) נלקחים מרגע הלחיצה — עליהם נשלפו נתוני OSM; שדות "רכים" (שם, מטרה, אנשי קשר, משתתפים, הערות) עשויים להשתנות בזמן ההרצה
       const inp = Object.assign(readInputs(), { lat: inp0.lat, lon: inp0.lon, radius: inp0.radius, heightM: inp0.heightM, dateFrom: inp0.dateFrom, dateTo: inp0.dateTo, timeFrom: inp0.timeFrom, timeTo: inp0.timeTo, manualItems: S.manual });
-      if (inp0.area) { inp.area = inp0.area; delete inp.radius; }   // נתיב: האזור שנשלפו עליו נתוני OSM (לא מה שנקרא מחדש אחרי ההמתנות); אין radius
+      if (inp0.area) { inp.area = inp0.area; delete inp.radius; } else delete inp.area;   // נתיב: האזור שנשלפו עליו נתוני OSM (לא מה שנקרא מחדש אחרי ההמתנות); אין radius. מעגל: בלי area (גם אם הטופס הוחלף לנתיב בזמן ההמתנה — נעול כעת, אך נשאר כהגנה)
       const res = C.analyze(inp, data, S.cfg, new Date());
       S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };   // לפי הנתונים שהניתוח השתמש בהם, לא לפי מה שנטען בינתיים
       const prevAuto = S.autoSite;
@@ -1200,7 +1278,7 @@
     } catch (e) {
       lastFail = e; $("e_run").textContent = runFailText(e);
       if (S.res) { S.report = true; renderAll(); } else { $("resultsSec").style.display = "none"; }
-    } finally { S.running = false; $("runBtn").disabled = false; }
+    } finally { S.running = false; $("runBtn").disabled = false; syncRunLock(); }
   }
   // ארבע התמונות במקביל (aerial, street, overview, region); השער נסגר בהצלחה רק כשכולן עם רקע אמיתי ובלי קנבס "מזוהם".
   // "האחרון מנצח": כל בנייה לוכדת בתחילתה מספר רץ (S.buildSeq) ואת ניתוח הבקשה (res). תוצאה שהוחלפה — בבנייה חדשה יותר, בהרצה חדשה או בהוספה ידנית (res אחר) — נזרקת: היא אינה נוגעת
@@ -1297,7 +1375,7 @@
   function renderReport() {
     const res = S.res, cfg = S.cfg; if (!res || S.resetting) return;
     const data = reportData(), mdl = O.docxModel(res, data, cfg, modelOpts({})), draft = !S.ready;
-    const rowsHtml = mdl.rows.map(r => "<tr><td class='k'>" + r.n + ". " + esc(r.label) + (r.sub ? "<small>" + esc(r.sub) + "</small>" : "") + "</td><td>" + r.html + "</td></tr>").join("");
+    const rowsHtml = mdl.rows.map(r => "<tr" + (r.cls && /^[\w-]+$/.test(r.cls) ? " class='" + r.cls + "'" : "") + "><td class='k'>" + r.n + ". " + esc(r.label) + (r.sub ? "<small>" + esc(r.sub) + "</small>" : "") + "</td><td>" + r.html + "</td></tr>").join("");
     const draftBanner = draft ? "<div class='draft'>טיוטה — לא מוכן לשליחה: " + (S.stale ? "הנתונים השתנו מאז הרצת הבדיקות" : "יש בדיקות שלא הושלמו") + ".</div>" : "";
     const now = new Date();
     const p1 = "<div class='paper'>" + draftBanner + "<div class='hdr'><span>" + esc(mdl.title) + "</span><span>" + esc(mdl.subtitle) + "</span></div><table class='f'>" + rowsHtml + "</table>" +
@@ -1325,7 +1403,7 @@
     const dn = mdl.dayNight.map(r => "<tr>" + r.map(c => "<td>" + esc(c) + "</td>").join("") + "</tr>").join("");
     const rv = reviewText(), visitNote = O.visitNoteHtml(res);   // הערות המבקש / ממצאי סיור: HTML מוכן (escaped) או ""
     const p3 = "<div class='paper checks'><div class='hdr'><span>דף בדיקות</span><span>לא חלק מהטופס הרשמי</span></div>" +
-      secH(mdl.pointHeading || "הנקודה") + (res.area ? "<p>" + esc(mdl.checkPoint) + "</p>" : "<p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>") +
+      secH(mdl.pointHeading || "הנקודה") + (res.area ? "<p>" + esc(mdl.checkPoint).replace(/\n/g, "<br>") + "</p>" : "<p><span dir='ltr'>" + esc(C.dmsLat(res.inp.lat) + " " + C.dmsLon(res.inp.lon)) + "</span> · ירוק: " + res.R + " מ׳ · כתום: עד " + 2 * res.R + " מ׳ · גובה " + C.trimNum(res.inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)</p>") +
       (visitNote ? "<p>" + visitNote + "</p>" : "") +
       secH("הבדיקות שבוצעו") + "<table class='t ck'><tr><th>#</th><th>בדיקה</th><th>מקור</th><th>תוצאה</th></tr>" + chk + "</table>" + covHtml() +
       (dn ? secH("יום ולילה בחלון הפעילות") + "<table class='t'><tr>" + mdl.dayNightHead.map(h => "<th>" + esc(h) + "</th>").join("") + "</tr>" + dn + "</table>" : "") +
