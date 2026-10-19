@@ -1458,7 +1458,7 @@ test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך ה
   assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
   assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
   assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
-  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=8"><\/script>/, "גרסת המטמון של auth.js");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=9"><\/script>/, "גרסת המטמון של auth.js");
 });
 
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
@@ -1626,14 +1626,14 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=11/);
+  assert.match(html, /js\/ui\.js\?v=12/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
   const au = readReq("js/auth.js"), html = readReq("index.html");
   assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
   assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
-  assert.match(html, /js\/auth\.js\?v=8/);
+  assert.match(html, /js\/auth\.js\?v=9/);
 });
 
 /* ===== תצוגה מתקדמת (A2): סעיף 5 "הגשה" המלא רק למי שיש לו תצוגה מתקדמת; כל השאר מקבלים "סיכום והגשה" קצר בלי הפניות לפמ״ת ובלי הנחיות למודיעין טיס (החלטת בעל המערכת) ===== */
@@ -1800,7 +1800,7 @@ test("שער: ״הצהרה ואישור המבקש״ הוא התנאי האחר�
 test("ui.js: סטטוס ״review״ והודעות השער מה-DECLARATION; הרשומה בנתוני הבקשה; reviewText מה-output; הודעת #declGate נגזרת מהסטטוס; השער נשאר נכשל סגור", () => {
   const ui = readReq("js/ui.js");
   assert.ok(!/לא אושרה סקירה|הרשימה השתנתה — יש לאשר מחדש"/.test(ui), "הנוסחים הישנים הוסרו");
-  assert.equal((ui.match(/S\.statuses\.review = \{ ok: false, msg: O\.DECLARATION\.gate \}/g) || []).length, 2, "איפוס בהרצה ובאיפוס הדף");
+  assert.equal((ui.match(/S\.statuses\.review = \{ ok: false, msg: O\.DECLARATION\.gate \}/g) || []).length, 3, "איפוס בהרצה, באיפוס הדף ובטעינת בקשה כבסיס (״הבקשות שלי״, myreqLoadBase)");
   assert.match(ui, /S\.statuses\.review = \{ ok: false, msg: "הרשימה השתנתה — " \+ O\.DECLARATION\.gate \+ " מחדש" \}/);
   assert.match(ui, /setStatus\("review", \$\("reviewOk"\)\.checked, \$\("reviewOk"\)\.checked \? "" : O\.DECLARATION\.gate\)/);
   assert.match(ui, /S\.reviewAt = \$\("reviewOk"\)\.checked \? new Date\(\) : null;/, "מועד האישור נקבע בסימון");
@@ -1918,3 +1918,1175 @@ test("דף הבקשות בלי gate.js (כניסה לפי כרטיס האירו�
   const map = fs.readFileSync(path.join(ROOT, "members-k38p/index.html"), "utf8");
   assert.match(map, /<script src="gate\.js"><\/script>/, "המפה עדיין טוענת את השער");
 });
+
+/* ========================================================================================================================================================
+   שלב ב׳ — פלטים (O2): עמוד "דיווח לגורמים נוספים" (Word + מסך + שורת מייל), דוח "בדיקה חוזרת" (Word נפרד) ומייל עדכון. [בלוק O2 — סוף הקובץ]
+   כשהדגלים (features.parties / features.recheck) כבויים הפלט זהה לשלב א׳ (טביעות אצבע מ-HEAD לפני שלב ב׳); ה-Word החדש עומד בסדר האלמנטים של הסכמה (ECMA-376).
+   ======================================================================================================================================================== */
+const PB_P = require(path.join(ROOT, "members-k38p/requests/js/parties.js")), PB_RC = require(path.join(ROOT, "members-k38p/requests/js/recheck.js"));
+const PB_feat = f => Object.assign({}, cfg, { features: Object.assign({}, cfg.features, f) });
+const PB_ON = PB_feat({ parties: true, recheck: true }), PB_OFF = PB_feat({ parties: false, recheck: false });
+const PB_NOFEAT = (() => { const c = Object.assign({}, cfg); delete c.features; return c; })();   // מפתח חסר = פעיל
+const PB_data = mkData(fixture("yarkon")), PB_res = C.analyze(baseInput, PB_data, cfg, now), PB_rows = PB_P.build(PB_res, cfg, PB_data);
+const pbDocXml = async m => (await JSZipNode.loadAsync(await D.build(m))).file("word/document.xml").async("string");
+const pbPlain = xml => xml.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI_MARKS, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const pbTable = (xml, marker) => { const t = xml.split("<w:tbl>").slice(1).map(s => s.split("</w:tbl>")[0]).find(s => s.includes(marker)); assert.ok(t, "טבלה עם " + marker); return t; };
+// שורת גורם ידנית לבדיקות (המבנה ש-ReqParties מייצרת); over מחליף שדות
+const pbRow = over => {
+  const r = Object.assign({ key: "z:T1", src: "zone", title: "אזור בדיקה", tag: "", party: "", contacts: { phones: [], emails: [], urls: [], lines: [], pairs: null, general: null }, contactSrc: "", hasContact: false, dtype: "report", mark: {}, type: "report", status: "unmarked", note: "" }, over);
+  const c = r.contacts; r.hasContact = !!(c.phones.length || c.emails.length || c.urls.length || c.lines.length || c.general); return r;
+};
+const pbPhone = (display, kind) => ({ raw: display, display, text: display, kind: kind || "landline", tel: "", range: "" });
+
+/* ---------- Phase A זהה כשהדגלים כבויים: טביעת אצבע (מודל JSON, document.xml, מייל) שחושבה מהקוד שלפני שלב ב׳ (HEAD 0c82775) ---------- */
+// ה-footer של מודל ה-Word תלוי באזור הזמן/ICU — לכן toLocale* מוחלפות זמנית בפורמט קבוע; ההשוואה לא תלויה במכונה. שינוי מכוון בפלט של שלב א׳ מחייב לעדכן את PB_GOLD (הריצה מדפיסה את הערכים החדשים)
+const PB_GOLD = { checks: ["0e0b48183e5defa6", "da0adb25eb1994f4", 28], plain: ["e42154bb5d9aab35", "83d2e90a57a58386", 28], images: ["eb83fa6d9be01443", "4d795955d253fd7e", 28], mail: "7c4f9ff7ca158346" };
+async function pbFingerprint(c, extra) {
+  extra = extra || {};
+  const img = k => ({ bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9, k]), w: 800, h: 600 }), sha = s => crypto.createHash("sha256").update(s).digest("hex").slice(0, 16);
+  const L = Date.prototype.toLocaleString, LD = Date.prototype.toLocaleDateString;
+  Date.prototype.toLocaleString = function () { return this.toISOString(); }; Date.prototype.toLocaleDateString = function () { return this.toISOString().slice(0, 10); };
+  try {
+    const out = {}, res = C.analyze(baseInput, PB_data, c, now);
+    const variants = { checks: { includeChecks: true, adv: true }, plain: { includeChecks: false, adv: false, draft: "יש בדיקות שלא הושלמו" }, images: { includeChecks: true, adv: false, review: "אישור", providerName: "ספק", images: { aerial: img(1), street: img(2), overview: img(3), region: img(4) } } };
+    for (const [k, o] of Object.entries(variants)) {
+      const m = O.docxModel(res, PB_data, c, Object.assign({ now }, o, extra.docx)), z = await JSZipNode.loadAsync(await D.build(m));
+      out[k] = [sha(JSON.stringify(m, (_, v) => (v instanceof Uint8Array ? Array.from(v) : v))), sha(await z.file("word/document.xml").async("string")), Object.keys(m).length];
+    }
+    out.mail = sha(JSON.stringify(O.mail(res, c, extra.mail)));
+    return out;
+  } finally { Date.prototype.toLocaleString = L; Date.prototype.toLocaleDateString = LD; }
+}
+test("שלב ב׳ O2: בלי אפשרויות שלב ב׳ הפלט זהה לשלב א׳ — מודל, document.xml ומייל (טביעת אצבע מהקוד שלפני השינוי)", async () => {
+  for (const f of ["partiesPage", "partiesHtml", "partiesMailLine", "recheckDocxModel", "mailUpdate"]) assert.equal(typeof O[f], "function", "O." + f); assert.equal(typeof D.buildRecheck, "function");   // הבדיקה אינה ריקה: הקוד של שלב ב׳ קיים
+  assert.deepEqual(await pbFingerprint(cfg), PB_GOLD, "ברירת מחדל (בלי parties/update)");
+  assert.deepEqual(await pbFingerprint(PB_NOFEAT), PB_GOLD, "בלי features בכלל");
+  assert.deepEqual(await pbFingerprint(PB_ON), PB_GOLD, "דגלים פעילים אך המתקשר לא העביר parties/update — אין פלט חדש");
+  assert.deepEqual(await pbFingerprint(PB_ON, { docx: { parties: undefined }, mail: {} }), PB_GOLD);
+});
+test("שלב ב׳ O2: דגלים כבויים — גם כשמועברות שורות גורמים ועדכון הפלט זהה לשלב א׳ (בלי עמוד, בלי שורת מייל, בלי קידומת/משפט עדכון, בלי מפתח parties במודל)", async () => {
+  const extra = { docx: { parties: PB_rows, partiesDropped: 3, partiesFailed: true }, mail: { parties: PB_rows, update: { sentAt: now } } };
+  assert.deepEqual(await pbFingerprint(PB_OFF, extra), PB_GOLD);
+  const m = O.docxModel(PB_res, PB_data, PB_OFF, { now, parties: PB_rows });
+  assert.ok(!("parties" in m), "אין מפתח parties");
+  // דגל אחד כבוי אינו משפיע על השני
+  assert.ok("parties" in O.docxModel(PB_res, PB_data, PB_feat({ parties: true, recheck: false }), { now, parties: PB_rows }));
+  assert.ok(!("parties" in O.docxModel(PB_res, PB_data, PB_feat({ parties: false, recheck: true }), { now, parties: PB_rows })));
+  assert.equal(O.mail(PB_res, PB_feat({ parties: true, recheck: false }), { update: { sentAt: now } }).subject, O.mail(PB_res, cfg).subject);
+  assert.ok(!/מחליפה/.test(O.mail(PB_res, PB_feat({ parties: true, recheck: false }), { update: { sentAt: now } }).body), "recheck כבוי — אין משפט החלפה");
+  assert.ok(/דיווח לגורמים נוספים/.test(O.mail(PB_res, PB_feat({ parties: true, recheck: false }), { parties: PB_rows }).body));
+  assert.ok(!/דיווח לגורמים נוספים/.test(O.mail(PB_res, PB_feat({ parties: false, recheck: true }), { parties: PB_rows }).body));
+});
+
+/* ---------- עמוד "דיווח לגורמים נוספים" ב-Word ---------- */
+const PB_img = k => ({ bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9, k]), w: 800, h: 600 });
+const PB_imgs = { aerial: PB_img(1), street: PB_img(2), overview: PB_img(3), region: PB_img(4) };
+test("Word: עמוד הגורמים אחרי הטופס והתמונות ולפני דף הבדיקות, בעמוד חדש; טבלה של שש עמודות ברוחב התוכן, כותרת חוזרת ושורות שאינן נשברות", async () => {
+  let rows = PB_P.setField(PB_rows, PB_rows[0].key, "status", "done").rows; rows = PB_P.setField(rows, PB_rows[0].key, "note", "דווח לשב״ס").rows;
+  const m = O.docxModel(PB_res, PB_data, cfg, { now, includeChecks: true, images: PB_imgs, parties: rows }), xml = await pbDocXml(m), lines = pbPlain(xml).split("\n");
+  const T = PB_P.TEXT, sum = PB_P.summary(rows);
+  assert.equal(m.parties.head, T.title); assert.equal(m.parties.head, "דיווח לגורמים נוספים");
+  assert.equal(m.parties.sub, T.paperNote); assert.equal(m.parties.summary, PB_P.summaryText(sum)); assert.equal(m.parties.rows.length, rows.length);
+  assert.deepEqual(m.parties.rows.map(r => r.n), rows.map((_, i) => i + 1));
+  assert.equal(m.parties.footer, T.footer(now.toLocaleString("he-IL")), "תחתית: נוסח ReqParties + מועד");
+  const iImg = lines.findIndex(l => l.startsWith("הדמיה מצורפת — מפת אזור")), iPar = lines.indexOf(T.title), iChk = lines.findIndex(l => l.startsWith("דף בדיקות — לא חלק מהטופס הרשמי"));
+  assert.ok(iImg > 0 && iPar > iImg && iChk > iPar, `סדר העמודים: ${iImg} < ${iPar} < ${iChk}`);
+  assert.ok(lines.includes(T.paperNote) && lines.includes(m.parties.summary) && lines.includes(m.parties.footer.replace(/‏/g, "")), "משנה, סיכום ותחתית בעמוד");
+  const head = xml.split("</w:p>").find(p => pbPlain(p + "</w:p>").trim() === T.title);
+  assert.match(head, /<w:pageBreakBefore\/>/, "העמוד נפתח בעמוד חדש");
+  const tbl = pbTable(xml, ">גורם<");
+  assert.deepEqual([...tbl.matchAll(/<w:gridCol w:w="(\d+)"\/>/g)].map(x => +x[1]), [460, 2300, 900, 2900, 1200, 2146]);
+  assert.equal(460 + 2300 + 900 + 2900 + 1200 + 2146, D.helpers.CONTENT_W, "הרוחב = רוחב התוכן");
+  assert.deepEqual([...tbl.split("</w:tr>")[0].matchAll(/<w:t xml:space="preserve">([^<]*)<\/w:t>/g)].map(x => x[1]), ["#", "גורם", "סוג", "פרטי קשר", "סטטוס", "הערה"]);
+  assert.equal((tbl.match(/<w:tblHeader\/>/g) || []).length, 1, "שורת כותרת חוזרת"); assert.equal((tbl.match(/<w:tr>/g) || []).length, rows.length + 1); assert.equal((tbl.match(/<w:cantSplit\/>/g) || []).length, rows.length + 1);
+  assert.match(tbl, /w:fill="EEEEEE"/, "כותרת באפור");
+  const body = pbPlain(tbl);
+  assert.ok(body.includes("LLU20") && body.includes(PB_P.STATUS_LABEL.done) && body.includes("דווח לשב״ס") && body.includes(PB_P.STATUS_LABEL.nocontact) && body.includes(PB_P.TYPE_LABEL.update) && body.includes(PB_P.TYPE_LABEL.report), "תוכן: גורם, סטטוס, הערה וסוגים");
+  assert.ok(!/<w:tbl>/.test(tbl), "בלי טבלה מקוננת"); assert.ok(wellFormed(xml)); const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+});
+test("Word: העמוד נכלל גם בלי דף בדיקות ובלי תמונות; רשימה ריקה — משפט 'לא נמצאו גורמים' בלי טבלה; כשל בהכנה — נוסח הכשל; חיתוך בתקרה — הודעה", async () => {
+  const T = PB_P.TEXT;
+  const part = await pbDocXml(O.docxModel(PB_res, PB_data, cfg, { now, includeChecks: false, parties: PB_rows }));
+  assert.ok(pbPlain(part).split("\n").includes(T.title) && !/דף בדיקות — לא חלק/.test(pbPlain(part)), "includeChecks כבוי: עמוד הגורמים נשאר");
+  const emptyM = O.docxModel(PB_res, PB_data, cfg, { now, parties: [] }), ex = await pbDocXml(emptyM);
+  assert.equal(emptyM.parties.empty, T.empty); assert.equal(emptyM.parties.rows.length, 0); assert.equal(emptyM.parties.summary, "");
+  assert.ok(pbPlain(ex).split("\n").includes("לא נמצאו גורמים בסריקה, ולא נוספו גורמים ידנית.") && !ex.includes(">גורם<"), "ריק: משפט ובלי טבלה");
+  assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: [], partiesFailed: true }).parties.empty, T.failed, "ריק + נכשל");
+  assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows.slice(0, 2), partiesFailed: true }).parties.empty, "", "יש שורות — נכשל לא מחליף אותן");
+  assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows.slice(0, 2), partiesDropped: 3 }).parties.note, T.dropped(3));
+  assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows.slice(0, 2), partiesDropped: 0 }).parties.note, ""); assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: [], partiesDropped: 3 }).parties.note, "", "בלי שורות אין הודעת חיתוך"); assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows.slice(0, 2), partiesDropped: -4 }).parties.note, "");
+  // parties שאינו מערך (null, אובייקט, מחרוזת) — אין עמוד, והמודל זהה לשלב א׳
+  for (const bad of [null, undefined, {}, "x", 5, true]) assert.ok(!("parties" in O.docxModel(PB_res, PB_data, cfg, { now, parties: bad })), JSON.stringify(bad));
+  // שורות פגומות במערך (null, מספר, מחרוזת) נזרקות; שורה שבורה לא מפילה את העמוד
+  const mixed = O.docxModel(PB_res, PB_data, cfg, { now, parties: [null, 5, "x", pbRow({ title: "תקין" }), { title: "בלי כלום", contacts: 7 }] });
+  assert.equal(mixed.parties.rows.length, 2); assert.equal(mixed.parties.rows[0].party[0].t, "תקין"); assert.deepEqual(mixed.parties.rows[1].contact, [{ t: T.noContact, m: true }], "שורה שבורה: 'לא נמצא פרט קשר'");
+  // תקרת בטיחות: מערך ענק נחתך
+  assert.equal(O.docxModel(PB_res, PB_data, cfg, { now, parties: new Array(500).fill(0).map((_, i) => pbRow({ key: "z:" + i, title: "גורם " + i })) }).parties.rows.length, 120);
+});
+test("תא פרטי קשר: עד שלושה קטעים (זוג תווית–מספר = קטע אחד) ו-'ועוד N'; מקור הפרט בשורה קטנה; בלוק בלי קטעים מצוטטים — רשימה אחת; לא אומת מסומן; אין פרט קשר — 'לא נמצא פרט קשר' (+ משפט תיאום)", () => {
+  const T = PB_P.TEXT, contact = r => O.docxModel(PB_res, PB_data, cfg, { now, parties: [r] }).parties.rows[0].contact;
+  const five = pbRow({ contacts: { phones: [pbPhone("03-5038875")], emails: [], urls: [], lines: ["קטע א׳ 03-5038875", "קטע ב׳", "קטע ג׳", "קטע ד׳", "קטע ה׳"], pairs: null, general: null }, contactSrc: "פמ״ת א-17 (עמ׳ 6, עדכון 1/25)" });
+  assert.deepEqual(contact(five), [{ t: "קטע א׳ 03-5038875" }, { t: "קטע ב׳" }, { t: "קטע ג׳" }, { t: T.srcPrefix + "פמ״ת א-17 (עמ׳ 6, עדכון 1/25)", s: true, m: true }, { t: T.more(2), s: true, m: true }]);
+  const pairs = [{ label: "מטה ארצי", phone: pbPhone("074-7833333", "voip") }, { label: "מחוז צפון", phone: pbPhone("074-7834080", "voip") }];
+  const gen = { label: PB_P.GENERAL_LLU_LABEL, src: "פמ״ת א-17 עמ׳ 5", phones: pairs.map(p => p.phone), emails: [], lines: [], pairs };
+  assert.deepEqual(contact(pbRow({ contacts: { phones: [], emails: [], urls: [], lines: [], pairs: null, general: gen } })), [{ t: PB_P.GENERAL_LLU_LABEL + ":", b: true, s: true }, { t: "מטה ארצי 074-7833333 · מחוז צפון 074-7834080" }, { t: T.srcPrefix + "פמ״ת א-17 עמ׳ 5", s: true, m: true }]);
+  // הקטעים של הגורם עצמו תופסים את התקרה — ההנחיה הכללית (זוגות) נספרת ב"ועוד" ולא מוצגת, כך שלא יופיע מספר בלי התווית שלו
+  const full = contact(pbRow({ contacts: { phones: [], emails: [], urls: [], lines: ["א", "ב", "ג"], pairs: null, general: gen } }));
+  assert.deepEqual(full.map(l => l.t), ["א", "ב", "ג", T.more(1)]); assert.ok(!JSON.stringify(full).includes("074-7833333"));
+  assert.deepEqual(contact(pbRow({ contacts: { phones: [], emails: [], urls: [], lines: ["א", "ב"], pairs: null, general: gen } })).map(l => l.t), ["א", "ב", PB_P.GENERAL_LLU_LABEL + ":", "מטה ארצי 074-7833333 · מחוז צפון 074-7834080", T.srcPrefix + "פמ״ת א-17 עמ׳ 5"], "זוגות = קטע שלישי");
+  // OSM: בלי קטעים מצוטטים — טלפון, דוא״ל ואתר ברשימה אחת; טלפון שלא אומת מסומן
+  const osm = pbRow({ src: "osm", contacts: { phones: [pbPhone("03-6427080"), pbPhone("1-800-X", "unverified")], emails: ["a@b.co"], urls: ["https://www.lunapark.co.il/"], lines: [], pairs: null, general: null }, contactSrc: "OpenStreetMap (phone, website) — לא מאומת" });
+  assert.deepEqual(contact(osm), [{ t: "03-6427080 · 1-800-X (" + T.unverified + ") · a@b.co · https://www.lunapark.co.il/" }, { t: T.srcPrefix + "OpenStreetMap (phone, website) — לא מאומת", s: true, m: true }]);
+  assert.deepEqual(contact(pbRow({})), [{ t: T.noContact, m: true }]);
+  assert.deepEqual(contact(pbRow({ cue: "לתאם בטלפון המפורסם בפרק א׳ 07." })), [{ t: T.noContact, m: true }, { t: "לתאם בטלפון המפורסם בפרק א׳ 07.", s: true, m: true }]);
+  // שורה ידנית: מה שהוקלד, בלי "מקור"
+  assert.deepEqual(contact({ key: "m:1", src: "manual", manual: true, title: "בעל הקרקע", contact: "050-1234567", contacts: { phones: [], emails: [], urls: [], lines: [], pairs: null, general: null }, hasContact: false, mark: {}, type: "approval", status: "needed", note: "" }), [{ t: "050-1234567" }]);
+  assert.deepEqual(contact({ key: "m:2", src: "manual", manual: true, title: "x", contact: "", mark: {}, type: "approval", status: "needed", note: "" }), [{ t: T.noContact, m: true }]);
+});
+test("תא הגורם והסוג/סטטוס: כותרת מודגשת, מרחק/תג, גורם מוזכר, 'מחוץ לטווח'; סוג וסטטוס מהתוויות של ReqParties; ערך לא מוכר (גם שמות מאב-הטיפוס) לא מתפרש", () => {
+  const T = PB_P.TEXT, m = O.docxModel(PB_res, PB_data, cfg, { now, parties: [
+    pbRow({ title: "נוטם C1", tag: "בקרבה", party: "מוזכר בנוטם: קצין ביטחון", stale: true, type: "approval", status: "done", note: "הערה" }),
+    pbRow({ key: "z:2", type: "constructor", status: "toString" }), pbRow({ key: "z:3", type: "__proto__", status: "hasOwnProperty" }), pbRow({ key: "z:4", type: undefined, status: undefined })] }).parties.rows;
+  assert.deepEqual(m[0].party, [{ t: "נוטם C1", b: true }, { t: "בקרבה", s: true, m: true }, { t: "מוזכר בנוטם: קצין ביטחון", s: true }, { t: T.outOfRange, s: true, m: true }]);
+  assert.equal(m[0].type, PB_P.TYPE_LABEL.approval); assert.equal(m[0].status, PB_P.STATUS_LABEL.done); assert.equal(m[0].note, "הערה");
+  for (const r of m.slice(1)) { assert.equal(r.type, "", "סוג לא מוכר — ריק"); assert.equal(r.status, PB_P.STATUS_LABEL.unmarked, "סטטוס לא מוכר — טרם סומן"); }
+});
+
+/* ---------- שורת המייל ---------- */
+test("מייל: שורה אחת '• דיווח לגורמים נוספים: N גורמים — M דווחו/התקבל אישור' אחרי שורת הסגירה, בתוך אותו בלוק נקודות; בלי שמות/טלפונים; הנושא לא משתנה", () => {
+  const mk = st => PB_rows.map((r, i) => Object.assign({}, r, { status: st(i) })), base = O.mail(PB_res, cfg);
+  const rows = mk(i => (i < 2 ? "done" : "needed")), m = O.mail(PB_res, cfg, { parties: rows }), ls = m.body.split("\n");
+  const bullet = "• דיווח לגורמים נוספים: " + rows.length + " גורמים — 2 דווחו/התקבל אישור";
+  assert.equal(PB_P.mailLine(PB_P.summary(rows)), bullet.slice(2));
+  assert.equal(ls.filter(l => l.startsWith("• ")).length, 5, "ארבע הנקודות של שלב א׳ + אחת");
+  const i = ls.indexOf(bullet); assert.ok(i > 0, "הנקודה קיימת"); assert.ok(ls[i - 1].startsWith("• סגירה:") && ls[i + 1] === "" && ls[i + 2].startsWith("קבצים מצורפים"), "ממוקמת אחרי הסגירה, בתוך בלוק הנקודות");
+  assert.deepEqual(ls.slice(0, i).concat(ls.slice(i + 1)), base.body.split("\n"), "שאר הגוף זהה לשלב א׳");
+  assert.equal(m.subject, base.subject); assert.deepEqual(m.to, base.to); assert.ok(decodeURIComponent(m.mailto).includes(bullet), "גם ב-mailto");
+  assert.ok(!/LLU20|074-|03-|@/.test(bullet), "בלי שמות וטלפונים");
+  // ללא M: רק הסך; גורם אחד; אפס שורות או שורות לא תקינות — אין שורה; סיכום מוכן; מספרים עוינים
+  assert.ok(O.mail(PB_res, cfg, { parties: mk(() => "needed") }).body.includes("\n• דיווח לגורמים נוספים: " + rows.length + " גורמים\n"));
+  assert.ok(O.mail(PB_res, cfg, { parties: [Object.assign({}, rows[0], { status: "done" })] }).body.includes("\n• דיווח לגורמים נוספים: גורם אחד — 1 דווח/התקבל אישור\n"));
+  for (const none of [[], null, undefined, {}, "x", 7, [null, 3], { total: 0, done: 0 }, { total: -3, done: 2 }, { total: "x" }, { total: NaN }]) assert.equal(O.mail(PB_res, cfg, { parties: none }).body, base.body, JSON.stringify(none));
+  assert.ok(O.mail(PB_res, cfg, { parties: { total: 4, done: 2 } }).body.includes("\n• דיווח לגורמים נוספים: 4 גורמים — 2 דווחו/התקבל אישור\n"));
+  assert.ok(O.mail(PB_res, cfg, { parties: { total: 3, done: 99 } }).body.includes("3 גורמים — 3 דווחו/התקבל אישור"), "done מוגבל ל-total");
+  assert.ok(O.mail(PB_res, cfg, { parties: { total: 2.9, done: "1" } }).body.includes("2 גורמים — 1 דווח/התקבל אישור"));
+  assert.equal(O.partiesMailLine(rows, PB_OFF), ""); assert.equal(O.partiesMailLine(rows, PB_NOFEAT), bullet.slice(2));
+});
+
+/* ---------- מסך: אותו עמוד כ-HTML מוגן ---------- */
+// קלט עוין בכל השדות שמוצגים: אסור שיוזרק HTML/XML, והטקסט נשמר כלשונו
+const PB_HOSTILE = pbRow({ key: "o:x", src: "osm", title: '<img src=x onerror=alert(1)> "q" & \'a\' ' + fcc(0xb) + "ו" + fcc(0xfffe), tag: "</td><script>1</script>", party: "<b>x</b>", note: "<svg/onload=alert(2)>&amp;" + fcc(0xd800),
+  contacts: { phones: [pbPhone("03-1234567")], emails: ['a"><i>@b.co'], urls: ["https://x.il/?a=1&b=<2>"], lines: ["<script>alert(3)</script> 03-1111111"], pairs: null, general: null }, contactSrc: 'OpenStreetMap "<u>"', cue: "<em>" });
+test("HTML: עמוד הגורמים במסך — מבנה, כותרות עמודה, תוכן זהה למודל, ואסימונים לטיניים/מספרים ב-bdi ltr (טלפון: class ph)", () => {
+  const m = O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows }), h = O.partiesHtml(m.parties), txt = h.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
+  assert.ok(h.startsWith("<div class='paper parties'>") && !/class='paper checks'|class='checks'/.test(h), "עמוד נפרד שאינו מושפע מתיבת ״כולל דף בדיקות״");
+  assert.equal((h.match(/<tr>/g) || []).length, PB_rows.length + 1); assert.equal((h.match(/<th scope='col'>/g) || []).length, 6);
+  assert.deepEqual([...h.matchAll(/<th scope='col'>([^<]*)<\/th>/g)].map(x => x[1]), ["#", "גורם", "סוג", "פרטי קשר", "סטטוס", "הערה"]);
+  assert.ok(/aria-label="דיווח לגורמים נוספים"/.test(h), "שם נגיש לטבלה"); assert.ok(h.includes(PB_P.TEXT.paperNote) && h.includes(m.parties.summary) && h.includes(E(m.parties.footer)));
+  assert.ok(h.includes("<bdi dir='ltr' class='ph'>074-7833333</bdi>") && h.includes("<bdi dir='ltr'>LLU20</bdi>") && /<bdi dir='ltr'>https:\/\/www\.lunapark\.co\.il\/<\/bdi>/.test(h), "טלפון, מזהה וכתובת אתר ב-bdi");
+  assert.ok(!/<bdi dir='ltr' class='ph'>[^<]*[A-Za-z]/.test(h), "class ph רק למספרי טלפון");
+  // הטקסט שבתאים (בלי תגיות) זהה לשורות המודל
+  const rowsHtml = h.split("<tbody>")[1].split("</tbody>")[0].split("</tr>").filter(x => x.includes("<td"));
+  rowsHtml.forEach((tr, k) => { const cells = [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x => x[1]), r = m.parties.rows[k], flat = ls => ls.map(l => l.t).join("\n");
+    assert.equal(cells[1].replace(/<br>/g, "\n").replace(/<[^>]+>/g, ""), E(flat(r.party)).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"'));
+    assert.equal(cells[3].replace(/<br>/g, "\n").replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&"), flat(r.contact).replace(/&/g, "&"), "פרטי קשר שורה " + (k + 1)); });
+  // ריק / כשל / null
+  assert.ok(O.partiesHtml(O.docxModel(PB_res, PB_data, cfg, { now, parties: [] }).parties).includes("<p>" + PB_P.TEXT.empty + "</p>") && !O.partiesHtml(O.docxModel(PB_res, PB_data, cfg, { now, parties: [] }).parties).includes("<table"));
+  for (const bad of [null, undefined, 0, "x", []]) assert.equal(O.partiesHtml(bad), "", JSON.stringify(bad));
+  assert.equal(O.partiesHtml({}), ""); assert.equal(O.partiesHtml({ rows: [] }), "", "בלי כותרת אין עמוד"); assert.doesNotThrow(() => O.partiesHtml({ head: "x", rows: [null, 3, { party: "x", contact: null }] }));
+});
+test("קלט עוין (HTML/XML/בקרה/כיווניות) בשורות הגורמים: מוצג כטקסט בלבד ב-HTML וב-Word, ה-XML תקין, ואין כתובת/טלפון של הארגון בפלט", async () => {
+  const rows = [PB_HOSTILE, pbRow({ key: "m:1", src: "manual", manual: true, title: "בעל <b>הקרקע</b>", contact: "<i>050</i>", mark: {}, type: "approval", status: "needed", note: "x".repeat(10) })];
+  const m = O.docxModel(PB_res, PB_data, cfg, { now, parties: rows.concat(PB_rows) }), h = O.partiesHtml(m.parties), xml = await pbDocXml(m);
+  const injected = h.match(/<(?!\/?(?:bdi|small|span|b|td|tr|th|br|table|tbody|thead|colgroup|col|div|p)\b)[a-z][^>]*>/gi); assert.equal(injected, null, "תגיות שלא מהתבנית: " + injected);
+  const hText = h.replace(/<[^>]+>/g, "");   // בלי תגיות התבנית (bdi/small/b…): נשאר הטקסט עם ה-entities
+  assert.ok(hText.includes("&lt;img src=x onerror=alert(1)&gt;") && hText.includes("&lt;/td&gt;&lt;script&gt;1&lt;/script&gt;") && hText.includes("&lt;svg/onload=alert(2)&gt;&amp;amp;"), "הטקסט כלשונו, מוגן: " + hText.slice(0, 200));
+  assert.ok(!/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾�]/.test(m.parties.rows[0].party[0].t), "תווי בקרה מנוקים במודל");
+  assert.ok(wellFormed(xml) && !XML_BAD.test(xml) && !xml.includes("<script") && !xml.includes("<img"), "Word: XML מאוזן, בלי תו אסור, בלי תגית");
+  assert.ok(pbPlain(xml).includes("<img src=x onerror=alert(1)>") && pbPlain(xml).includes("<svg/onload=alert(2)>&amp;"), "Word: הטקסט כלשונו (esc)");
+  const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+  for (const out of [JSON.stringify(m.parties), h, pbPlain(xml), O.mail(PB_res, cfg, { parties: rows.concat(PB_rows) }).body]) assert.ok(!/icd\.org\.il|052-?5076677/i.test(out), "כתובת/טלפון של הארגון בפלט");
+  assert.ok(!new RegExp(ORG_ADDR.replace(".", "\\.")).test(JSON.stringify(m.parties)));
+  // הערה ארוכה, שם ארוך ופרטי קשר ארוכים נחתכים בתקרות של ReqParties (לא מנפחים את העמוד)
+  const long = O.docxModel(PB_res, PB_data, cfg, { now, parties: [pbRow({ title: "ת".repeat(5000), note: "נ".repeat(5000), contactSrc: "מ".repeat(5000), contacts: { phones: [], emails: [], urls: [], lines: ["ק".repeat(5000)], pairs: null, general: null } })] }).parties.rows[0];
+  assert.ok(long.party[0].t.length <= 120 && long.note.length <= 300 && long.contact[0].t.length <= 240 && long.contact[1].t.length <= 210, JSON.stringify([long.party[0].t.length, long.note.length, long.contact.map(l => l.t.length)]));
+});
+test("Word מול מסך: אותם טקסטים — כל שורת תא של המודל מופיעה גם ב-HTML וגם ב-Word", async () => {
+  const m = O.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows.slice(0, 8).concat([PB_HOSTILE]) }), xmlText = pbPlain(await pbDocXml(m)), h = O.partiesHtml(m.parties).replace(/<br>/g, "\n").replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  for (const r of m.parties.rows) for (const l of r.party.concat(r.contact, [{ t: r.type }, { t: r.status }, { t: r.note }])) if (l.t) {
+    assert.ok(xmlText.includes(l.t.replace(/[‏]/g, "")), "חסר ב-Word: " + l.t); assert.ok(h.includes(l.t), "חסר ב-HTML: " + l.t);
+  }
+});
+
+/* ---------- סדר האלמנטים של הסכמה (ECMA-376) בעמודים החדשים ---------- */
+// בודק את סדר הילדים באלמנטים שבהם Word קפדן (pPr, rPr, tblPr, tcPr, pBdr, tblBorders, tblCellMar) ואת המבנה: tc נפתח ב-tcPr ונסגר בפסקה, tbl = tblPr, tblGrid, tr…, sectPr אחרון בגוף. סדר הרצפים לפי wml.xsd
+const PB_SEQ = {
+  pPr: ["pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl", "numPr", "suppressLineNumbers", "pBdr", "shd", "tabs", "suppressAutoHyphens", "kinsoku", "wordWrap", "overflowPunct", "topLinePunct", "autoSpaceDE", "autoSpaceDN", "bidi", "adjustRightInd", "snapToGrid", "spacing", "ind", "contextualSpacing", "mirrorIndents", "suppressOverlap", "jc", "textDirection", "textAlignment", "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange"],
+  rPr: ["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath"],
+  tblPr: ["tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize", "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd", "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption", "tblDescription"],
+  tcPr: ["cnfStyle", "tcW", "gridSpan", "hMerge", "vMerge", "tcBorders", "shd", "noWrap", "tcMar", "textDirection", "tcFitText", "vAlign", "hideMark"],
+  pBdr: ["top", "left", "bottom", "right", "between", "bar"], tblBorders: ["top", "left", "bottom", "right", "insideH", "insideV"], tblCellMar: ["top", "left", "bottom", "right"]
+};
+function pbOrderErrors(xml) {
+  const errs = [], stack = [];
+  const closeEl = el => {
+    const seq = PB_SEQ[el.name]; if (seq) { let at = -1; for (const k of el.kids) { const i = seq.indexOf(k); if (i < 0) errs.push(el.name + ": אלמנט לא צפוי " + k); else if (i < at) errs.push(el.name + ": " + k + " אחרי " + seq[at]); else at = i; } }
+    if (el.name === "tc" && (el.kids[0] !== "tcPr" || el.kids[el.kids.length - 1] !== "p")) errs.push("tc: חייב להתחיל ב-tcPr ולהסתיים בפסקה: " + el.kids.join(","));
+    if (el.name === "tbl" && (el.kids[0] !== "tblPr" || el.kids[1] !== "tblGrid" || el.kids.slice(2).some(k => k !== "tr"))) errs.push("tbl: " + el.kids.join(","));
+    if (el.name === "tr" && el.kids.filter(k => k !== "trPr" && k !== "tc").length) errs.push("tr: " + el.kids.join(","));
+    if (el.name === "body" && el.kids.includes("sectPr") && el.kids[el.kids.length - 1] !== "sectPr") errs.push("body: sectPr לא אחרון");
+  };
+  for (const m of xml.matchAll(/<(\/?)w:([A-Za-z]+)\b[^>]*?(\/?)>/g)) {
+    const [, close, name, self] = m;
+    if (close) { closeEl(stack.pop()); continue; }
+    if (stack.length) stack[stack.length - 1].kids.push(name);
+    const el = { name, kids: [] }; if (self) closeEl(el); else stack.push(el);
+  }
+  if (stack.length) errs.push("תגיות לא סגורות: " + stack.map(s => s.name).join(","));
+  return errs;
+}
+test("בודק סדר הסכמה: מזהה סדר שגוי (בקרת-נגד), ומקבל את הבנאים החדשים", () => {
+  assert.deepEqual(pbOrderErrors('<w:p><w:pPr><w:bidi/><w:keepNext/></w:pPr></w:p>'), ["pPr: keepNext אחרי bidi"]);
+  assert.deepEqual(pbOrderErrors('<w:tbl><w:tblPr><w:tblW w:w="1" w:type="dxa"/><w:bidiVisual/></w:tblPr><w:tblGrid/></w:tbl>'), ["tblPr: bidiVisual אחרי tblW"]);
+  assert.deepEqual(pbOrderErrors('<w:tc><w:tcPr><w:vAlign w:val="top"/><w:tcW w:w="1" w:type="dxa"/></w:tcPr><w:p/></w:tc>'), ["tcPr: tcW אחרי vAlign"]);
+  assert.equal(pbOrderErrors('<w:tc><w:tcPr/></w:tc>').length, 1, "תא בלי פסקה");
+  assert.ok(pbOrderErrors("<w:p><w:pPr><w:keepNext/><w:pageBreakBefore/><w:pBdr><w:top/><w:left/><w:bottom/><w:right/></w:pBdr><w:shd/><w:bidi/><w:spacing/><w:jc/></w:pPr></w:p>").length === 0);
+  // שלב א׳ (para/tableXml הקיימות) מסדר אחרת — נקבע כאן כדי שלא ישתנה בטעות (הפלט ללא דגלים חייב להישאר זהה)
+  assert.ok(pbOrderErrors(D.helpers.para("", { keepNext: true })).length > 0 && pbOrderErrors(D.helpers.tableXml([100], [{ cells: [D.helpers.cell(D.helpers.para(""), 100)] }])).length > 0);
+  assert.deepEqual(pbOrderErrors(D.helpers.paraS("", { keepNext: true, pageBreakBefore: true, box: "E0A800", shade: "FFF3CD", center: true })), []);
+  assert.deepEqual(pbOrderErrors(D.helpers.tableXml([100], [{ header: true, cells: [D.helpers.cell(D.helpers.paraS(""), 100, { fill: "EEEEEE" })] }], { strict: true })), []);
+});
+test("Word: עמוד הגורמים ודוח הבדיקה החוזרת עומדים בסדר האלמנטים של הסכמה (כולל תוכן עוין, מסגרת הבאנר וטבלאות)", async () => {
+  const pm = O.docxModel(PB_res, PB_data, cfg, { now, parties: [PB_HOSTILE].concat(PB_rows) }).parties;
+  assert.deepEqual(pbOrderErrors(D.helpers.partiesBody(pm).join("")), [], "עמוד הגורמים");
+  assert.deepEqual(pbOrderErrors(D.helpers.partiesBody(O.docxModel(PB_res, PB_data, cfg, { now, parties: [] }).parties).join("")), [], "עמוד ריק");
+  const rm = await pbRecheckModel({ hostile: true });
+  assert.deepEqual(pbOrderErrors(D.helpers.recheckBody(rm.recheck).join("")), [], "פתיחת דוח הבדיקה החוזרת");
+  const full = await pbDocXml0(await D.buildRecheck(rm));
+  assert.deepEqual(pbOrderErrors(full), [], "הדוח המלא כולל דף הבדיקות");
+  assert.ok(wellFormed(full) && !XML_BAD.test(full));
+  // כל טבלה בעמודים החדשים: bidiVisual (טבלה מימין לשמאל) מיד לפני tblW
+  for (const xml of [D.helpers.partiesBody(pm).join(""), D.helpers.recheckBody(rm.recheck).join(""), full]) assert.equal((xml.match(/<w:tbl>/g) || []).length, (xml.match(/<w:tblPr><w:bidiVisual\/><w:tblW /g) || []).length, "bidiVisual בכל טבלה");
+});
+test("Word: צבעים וצללים נכנסים למאפייני XML רק כ-6 ספרות הקס (קלט עוין במודל לא מזריק מאפיינים/אלמנטים)", () => {
+  const evil = '"/><w:evil/><x a="', H = D.helpers;
+  const x = H.textParaS("t", { color: evil, shade: evil, box: evil, bold: true }); assert.ok(!x.includes("evil") && !x.includes("w:pBdr") && !x.includes("<w:shd") && !x.includes("<w:color"), x);
+  const ok = H.textParaS("t", { color: "aB12cD", shade: "ffe3e3", box: "e0a800" });   // צבע הקס תקין עובר, מנורמל לאותיות גדולות
+  assert.ok(ok.includes('w:fill="FFE3E3"') && ok.includes('w:val="AB12CD"') && ok.includes('w:color="E0A800"') && !ok.includes("aB12cD"), ok);
+  const body = H.partiesBody({ head: "h", sub: "s", summary: "", empty: "", note: "", footer: "f", rows: [{ n: 1, party: [{ t: "x", c: evil, b: true }], type: "t", contact: [{ t: "y", c: "12" }], status: "s", note: "n" }] }).join("");
+  assert.ok(!body.includes("evil") && wellFormed(body), "צבע עוין בשורת תא"); assert.deepEqual(pbOrderErrors(body), []);
+  const rc = H.recheckBody({ banner: [{ t: "b", b: true }], title: "t", identity: [], heading: "h", sections: [{ title: "x", head: ["a", "b", "c", "d"], rows: [{ status: evil, sev: evil, high: true, id: evil, title: evil, lines: [evil], dist: evil }] }] }).join("");
+  assert.ok(!rc.includes("<w:evil") && wellFormed(rc), "טקסט עוין בדוח: מוגן"); assert.deepEqual(pbOrderErrors(rc), []);
+});
+const pbDocXml0 = async bytes => (await JSZipNode.loadAsync(bytes)).file("word/document.xml").async("string");
+
+/* ---------- דוח "בדיקה חוזרת" (Word נפרד) ---------- */
+const PB_t2 = new Date(+now + 7 * 864e5), PB_proj = new C.Proj(PB_res.inp.lat, PB_res.inp.lon);
+async function pbRecheckScenario(o) {
+  o = o || {};
+  const stamp = x => Object.assign({}, x, { osm3s: Object.assign({}, x.osm3s, { timestamp_osm_base: "2026-10-23T05:00:00Z" }) });
+  const d2 = Object.assign({}, PB_data, { notamFetchedIso: "2026-10-23T08:00:00Z", near: stamp(PB_data.near), far: stamp(PB_data.far), ext: stamp(PB_data.ext) }), [la, lo] = PB_proj.ll(40, 30);
+  const name = o.hostile ? "תורן <script>alert(1)</script> & \"x\" " + fcc(0xb) + fcc(0xfffe) : "תורן חדש";
+  d2.near = Object.assign({}, d2.near, { elements: d2.near.elements.concat([{ type: "node", id: 99001, lat: la, lon: lo, tags: { man_made: "tower", "tower:type": "communication", name } }]) });
+  d2.notams = d2.notams.concat([{ id: "A9999/26", loc: "LLLL", name: "T", heb: o.hostile ? "נוטם <i>חדש</i> & A9999/26" : "נוטם חדש A9999/26", raw: "A9999/26 NOTAMN\nQ) LLLL/QRDCA/IV/NBO/AW/000/050/3205N03449E001\nA) LLLL B) 2610201400 C) 2610302100\nE) TEST" }]);
+  const site = o.hostile ? { siteName: '<b>אתר</b> & "q" ' + fcc(0xb) + fcc(0xfffe) + " </w:t><w:evil/>" } : {};   // שם האתר מהבקשה השמורה (קלט שאינו אמין)
+  const res2 = C.analyze(Object.assign({}, baseInput, site), d2, PB_ON, PB_t2), prev = PB_RC.snapshotOf(PB_res, PB_data, PB_ON, now), cur = PB_RC.snapshotOf(res2, d2, PB_ON, PB_t2);
+  return { res2, d2, diff: PB_RC.diffSnapshots(prev, cur) };
+}
+async function pbRecheckModel(o) {
+  o = o || {};
+  const s = await pbRecheckScenario(o), since = PB_RC.sinceModel(s.diff, { sentAt: now, checkedAt: PB_t2, activity: { dateFrom: "2026-10-27", dateTo: "2026-10-27", timeFrom: "17:00", timeTo: "20:00" }, maxRows: o.maxRows == null ? 5 : o.maxRows, cfg: PB_ON });
+  return O.recheckDocxModel(s.res2, s.d2, PB_ON, o.since || since, { now: PB_t2, includeChecks: o.includeChecks });
+}
+test("דוח בדיקה חוזרת: באנר 'לא צורף לבקשה שנשלחה למודיעין טיס' בראש, זהות הבקשה והתאריכים, סעיף 'שינויים מאז ההגשה' עם טבלאות, ובסוף דף הבדיקות העדכני בלי הגשה ואישור", async () => {
+  const s = await pbRecheckScenario(), since = PB_RC.sinceModel(s.diff, { sentAt: now, checkedAt: PB_t2, activity: { dateFrom: "2026-10-27", dateTo: "2026-10-27", timeFrom: "17:00", timeTo: "20:00" }, cfg: PB_ON });
+  assert.equal(since.kind, "changes", "תנאי המבחן: יש שינויים");
+  const m = O.recheckDocxModel(s.res2, s.d2, PB_ON, since, { now: PB_t2 }), bytes = await D.buildRecheck(m), z = await JSZipNode.loadAsync(bytes), xml = await z.file("word/document.xml").async("string"), lines = pbPlain(xml).split("\n");
+  assert.deepEqual([...Buffer.from(bytes).subarray(0, 2)], [0x50, 0x4b], "ZIP (PK)"); assert.ok(Buffer.from(bytes).toString("base64").startsWith("UEsD"), "מתחיל ב-UEsD כפי ש-saveRecheck דורש");
+  for (const f of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels", "word/styles.xml", "docProps/core.xml"]) assert.ok(z.file(f), f);
+  assert.ok(Math.ceil(bytes.length * 4 / 3) < 3 * 1024 * 1024, "מתחת ל-CFG.MAX_RECHECK_B64 בשרת");
+  assert.equal(lines[0], since.banner.text); assert.equal(lines[0], "דוח זה לא צורף לבקשה שנשלחה למודיעין טיס ב-" + PB_RC.fmtDate(now) + ".");
+  assert.equal(lines[1], since.banner.sub); assert.equal(lines[2], since.banner.resend);
+  assert.match(xml.split("</w:p>")[0], /<w:pBdr>.*<\/w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="FFF3CD"\/>/, "הבאנר בקופסה צהובה עם מסגרת");
+  assert.equal(lines[3], "בדיקה חוזרת — " + O.fileBase(s.res2), "כותרת: זהות הבקשה");
+  const idt = pbPlain(pbTable(xml, ">הבקשה<")); for (const t of [O.fileBase(s.res2), C.dmsLat(PB_res.inp.lat), "200 מ׳", ...since.dates.map(d => d.label), ...since.dates.map(d => d.value)]) assert.ok(idt.includes(t), "זהות/תאריכים: " + t);
+  assert.ok(lines.includes(since.title) && lines.includes(since.summary) && lines.includes(since.checkedLine) && lines.includes(since.limitation), "סעיף השינויים: כותרת, סיכום, נבדקו, הגבלה");
+  since.notes.forEach(n => assert.ok(lines.includes(n), n));
+  const srcT = pbPlain(pbTable(xml, ">" + PB_RC.STR.srcCols[1] + "<")); since.sources.forEach(sr => assert.ok(srcT.includes(sr.label) && srcT.includes(sr.after), sr.label));
+  since.sections.forEach(sc => { assert.ok(lines.includes(sc.title + " (" + sc.total + ")"), sc.title); const t = pbPlain(pbTable(xml, ">" + PB_RC.STR.cols[1] + "<")); assert.ok(t.length > 0); });
+  const all = pbPlain(xml); assert.ok(all.includes("A9999/26") && all.includes("תורן חדש"), "השורות עצמן");
+  assert.ok(all.includes(PB_RC.STR.status.notam.new) && all.includes(PB_RC.STR.sev.high), "תווית סטטוס וחומרה");
+  // דף הבדיקות העדכני בסוף, בלי סעיף הגשה ואישור סקירה; אין טופס ואין תמונות
+  const iChk = lines.findIndex(l => l.startsWith("דף הבדיקות העדכני")), iSince = lines.indexOf(since.title); assert.ok(iChk > iSince && iSince > 3, "דף הבדיקות אחרי הסעיף");
+  assert.ok(lines.includes("1. הנקודה") && lines.includes("2. הבדיקות שבוצעו"), "סעיפי דף הבדיקות");
+  assert.ok(!/סיכום והגשה|אישור סקירה אנושית|הגשה$/.test(all.split("\n").slice(iChk).join("\n")) && !/נספח ג׳|טופס בקשה לסגירה אווירית|הדמיה מצורפת/.test(all), "בלי הגשה, אישור, טופס ותמונות");
+  assert.ok(!xml.includes("<w:drawing>") && !z.file(/word\/media\//).length, "בלי תמונות");
+  assert.match(await z.file("docProps/core.xml").async("string"), /<dc:title>בדיקה חוזרת — /, "כותרת המסמך");
+  assert.ok(wellFormed(xml)); const lint = xmllint(xml); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+  // בלי דף בדיקות
+  const m2 = O.recheckDocxModel(s.res2, s.d2, PB_ON, since, { now: PB_t2, includeChecks: false }), x2 = await pbDocXml0(await D.buildRecheck(m2));
+  assert.ok(!/דף הבדיקות העדכני/.test(pbPlain(x2)) && pbPlain(x2).includes(since.summary)); assert.ok(x2.length < xml.length / 2);
+});
+test("דוח בדיקה חוזרת: מצבי 'אין שינוי', 'אין בסיס' ו'חסום' מוצגים עם הבאנר והסיבה; שורות מעבר לתקרת ה-Word מסוכמות ב'ועוד N'; קלט עוין מוגן", async () => {
+  const mk = since => O.recheckDocxModel(PB_res, PB_data, PB_ON, since, { now: PB_t2 });
+  const cur = PB_RC.snapshotOf(PB_res, PB_data, PB_ON, PB_t2), same = PB_RC.sinceModel(PB_RC.diffSnapshots(PB_RC.snapshotOf(PB_res, PB_data, PB_ON, now), cur), { sentAt: now, checkedAt: PB_t2, cfg: PB_ON });
+  const none = pbPlain(await pbDocXml0(await D.buildRecheck(mk(same))));
+  assert.equal(same.kind, "none"); assert.ok(none.includes(PB_RC.STR.none) && none.includes(PB_RC.STR.banner), "אין שינוי");
+  const nobase = PB_RC.sinceModel(null, { sentAt: now, checkedAt: PB_t2, cfg: PB_ON }); assert.equal(nobase.kind, "nobase");
+  const nb = pbPlain(await pbDocXml0(await D.buildRecheck(mk(nobase)))); assert.ok(nb.includes(PB_RC.STR.noBase) && nb.includes(PB_RC.STR.banner), "אין בסיס");
+  const blocked = PB_RC.sinceModel(PB_RC.diffSnapshots(PB_RC.snapshotOf(PB_res, PB_data, PB_ON, now), PB_RC.snapshotOf(C.analyze(Object.assign({}, baseInput, { radius: 300 }), PB_data, PB_ON, PB_t2), PB_data, PB_ON, PB_t2)), { sentAt: now, checkedAt: PB_t2, cfg: PB_ON }); assert.equal(blocked.kind, "blocked");
+  assert.ok(pbPlain(await pbDocXml0(await D.buildRecheck(mk(blocked)))).includes(blocked.summary), "חסום");
+  // תקרה: 105 שורות בסעיף (15 ב-rows + 90 ב-rest) — ב-Word עד rowsWord (100), והשאר "ועוד 5"
+  const row = i => ({ status: "added", cls: "added", sev: "low", statusLabel: "חדש", sevLabel: "", id: "", title: "פריט " + i, lines: ["שורה " + i], dist: i + " מ׳" });
+  const big = { kind: "changes", title: "שינויים מאז ההגשה", banner: { text: "דוח זה לא צורף לבקשה שנשלחה למודיעין טיס ב-1.1.2026.", sub: "x", resend: "" }, dates: [], summary: "נמצאו 105 שינויים", checkedLine: "", limitation: "", notes: [], sources: [],
+    sections: [{ key: "items", title: "מכשולים ותשתיות", total: 105, rows: new Array(15).fill(0).map((_, i) => row(i)), rest: new Array(90).fill(0).map((_, i) => row(i + 15)), hidden: 90 }], counts: null };
+  const bm = mk(big), bx = await pbDocXml0(await D.buildRecheck(bm));
+  assert.equal(bm.recheck.sections[0].rows.length, PB_RC.LIMITS.rowsWord); assert.equal(bm.recheck.sections[0].more, "ועוד 5 שורות אינן מוצגות בדוח זה"); assert.ok(pbPlain(bx).includes("פריט 99") && !pbPlain(bx).includes("פריט 100") && pbPlain(bx).split("\n").includes("ועוד 5 שורות אינן מוצגות בדוח זה"), "100 שורות + הודעת 'ועוד 5' ב-Word");
+  assert.equal(mk(Object.assign({}, big, { sections: [Object.assign({}, big.sections[0], { rows: big.sections[0].rows.slice(0, 2), rest: [] })] })).recheck.sections[0].more, "", "בלי עודף — בלי הודעה");
+  // עוין: באנר/שורות/מקורות עם HTML ובקרה; ה-XML תקין והטקסט כלשונו
+  const hx = await pbDocXml0(await D.buildRecheck(await pbRecheckModel({ hostile: true })));
+  assert.ok(wellFormed(hx) && !XML_BAD.test(hx) && !hx.includes("<script") && !hx.includes("<i>") && !hx.includes("<w:evil"), "עוין: XML תקין");
+  const hsc = await pbRecheckScenario({ hostile: true }); assert.ok(pbPlain(hx).includes("בדיקה חוזרת — " + C.xmlClean(O.fileBase(hsc.res2))) && !/<w:evil|<b>/.test(hx), "שם האתר העוין (אחרי safeName ו-xmlClean) מוצג כטקסט: " + O.fileBase(hsc.res2));
+  const hz = await JSZipNode.loadAsync(await D.buildRecheck(await pbRecheckModel({ hostile: true }))); assert.ok(wellFormed(await hz.file("docProps/core.xml").async("string")) && !(await hz.file("docProps/core.xml").async("string")).includes("<w:evil"), "core.xml של דוח עוין"); assert.ok(pbPlain(hx).includes("<script>alert(1)</script>") && pbPlain(hx).includes("<i>חדש</i>"), "עוין: כלשונו");
+  const lint = xmllint(hx); if (lint !== null) assert.equal(lint, "", "xmllint: " + lint);
+});
+test("דוח בדיקה חוזרת: דגל כבוי / מודל חסר / מודל לא תקין — אין מודל; buildRecheck בלי מודל נכשל במפורש; שדות הסריקה נלקחים מהניתוח", async () => {
+  const s = await pbRecheckScenario(), since = PB_RC.sinceModel(s.diff, { sentAt: now, checkedAt: PB_t2, cfg: PB_ON });
+  assert.equal(O.recheckDocxModel(s.res2, s.d2, PB_OFF, since, { now: PB_t2 }), null, "recheck כבוי");
+  assert.ok(O.recheckDocxModel(s.res2, s.d2, PB_NOFEAT, since, { now: PB_t2 }), "מפתח חסר = פעיל");
+  for (const bad of [null, undefined, 0, "x"]) assert.equal(O.recheckDocxModel(s.res2, s.d2, PB_ON, bad, { now: PB_t2 }), null, JSON.stringify(bad));
+  assert.equal(PB_RC.sinceModel(s.diff, { sentAt: now, cfg: PB_OFF }), null, "R1: דגל כבוי — אין מודל");
+  await assert.rejects(() => D.buildRecheck(null), /m\.recheck/); await assert.rejects(() => D.buildRecheck({}), /m\.recheck/);
+  assert.doesNotThrow(() => O.recheckDocxModel(s.res2, s.d2, PB_ON, {}, { now: PB_t2 }), "מודל ריק לא מפיל");
+  // דוח בלי הפרטים האישיים של המבקש (הם אינם נשמרים בבדיקה חוזרת): שם/טלפון/ארגון המבקש אינם בדוח
+  const x = pbPlain(await pbDocXml0(await D.buildRecheck(O.recheckDocxModel(s.res2, s.d2, PB_ON, since, { now: PB_t2 }))));
+  for (const t of [baseInput.requesterPhone, baseInput.requesterName, baseInput.requesterOrg, "050-0000001", ORG_ADDR]) assert.ok(!x.includes(t), "פרט מבקש בדוח: " + t);
+});
+
+/* ---------- מייל עדכון (שליחה מחדש אחרי בדיקה חוזרת) ---------- */
+test("מייל עדכון: משפט ההחלפה בגוף (ReqRecheck), הנושא ללא קידומת לשרת וקידומת מלאה ב-subjectFull/mailto; אידמפוטנטי; נקודת הגורמים נשמרת", () => {
+  const base = O.mail(PB_res, cfg), d = PB_RC.fmtDate(now), up = O.mail(PB_res, PB_ON, { parties: PB_rows, update: { sentAt: now } });
+  assert.equal(up.subject, base.subject, "subject — כפי שהשרת מצפה (הוא מוסיף את הקידומת)"); assert.equal(up.subjectFull, "[עדכון לבקשה מ-" + d + "] " + base.subject);
+  assert.equal(up.subjectFull, PB_RC.updateSubjectPrefix(now) + base.subject);
+  assert.ok(up.body.includes("מצורפת בקשה מעודכנת לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26). בקשה זו מחליפה את הבקשה שנשלחה ב-" + d + "."), up.body);
+  assert.ok(!/^מצורפת בקשה לסגירה/m.test(up.body)); assert.ok(up.body.includes("• דיווח לגורמים נוספים: " + PB_rows.length + " גורמים"), "נקודת הגורמים נשמרת");
+  assert.deepEqual(up.to, base.to);
+  assert.ok(decodeURIComponent(up.mailto).includes(up.subjectFull) && decodeURIComponent(up.mailto).includes("מחליפה את הבקשה שנשלחה ב-" + d) && up.mailto.startsWith("mailto:" + base.to.join(",") + "?subject="));
+  assert.deepEqual(Object.keys(base), ["to", "subject", "body", "mailto"], "בלי update — אין שדות חדשים"); assert.ok("subjectFull" in up);
+  const twice = O.mailUpdate(up, now, PB_ON); assert.equal(twice.body, up.body, "אידמפוטנטי: בלי משפט כפול"); assert.equal((twice.body.match(/מחליפה את הבקשה/g) || []).length, 1);
+  assert.equal(O.mailUpdate(base, now, PB_OFF), base, "דגל כבוי — אותו אובייקט"); assert.equal(O.mailUpdate(base, now, PB_NOFEAT).subjectFull, up.subjectFull, "מפתח חסר = פעיל");
+  assert.equal(O.mail(PB_res, PB_ON, { update: now }).subjectFull.startsWith("[עדכון לבקשה מ-" + d + "]"), true, "update כתאריך ישיר");
+  assert.ok(/הקודמת/.test(O.mail(PB_res, PB_ON, { update: { sentAt: "לא תאריך" } }).body), "תאריך לא תקין — נוסח כללי, בלי חריגה");
+  assert.equal(O.mail(PB_res, PB_ON, { update: null }).body, base.body); assert.ok(!/office@icd|info@icd/.test(up.body + up.mailto));
+});
+
+/* ---------- טעינה עצלנית: מודולים חסרים, וסדר טעינה בדפדפן ---------- */
+function pbLoadOut(env) {
+  const src = fs.readFileSync(path.join(ROOT, "members-k38p/requests/js/output.js"), "utf8");
+  if (env.requireFn) { const mod = { exports: {} }; new Function("module", "require", src)(mod, env.requireFn); return mod.exports; }
+  new Function("self", src)(env.self); return env.self.ReqOut;
+}
+test("טעינה: ReqParties/ReqRecheck חסרים או שזורקים בטעינה — אין עמוד, אין שורת מייל, אין עדכון (כמו שלב א׳); בדפדפן הסדר לא משנה (נטענים בעת הקריאה)", async () => {
+  const baseMail = O.mail(PB_res, cfg).body;
+  const noMods = pbLoadOut({ requireFn: n => { if (n === "./core.js") return C; throw new Error("Cannot find module " + n); } });
+  assert.ok(!("parties" in noMods.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows })));
+  assert.equal(noMods.mail(PB_res, cfg, { parties: PB_rows, update: { sentAt: now } }).body, baseMail); assert.equal(noMods.partiesMailLine(PB_rows, cfg), ""); assert.equal(noMods.partiesPage(PB_rows, cfg), null);
+  assert.equal(noMods.recheckDocxModel(PB_res, PB_data, cfg, {}, {}), null); assert.equal(noMods.mailUpdate({ subject: "s", body: "b" }, now, cfg).subject, "s");
+  // מודול שנטען אך חסר ממשק (אובייקט ריק) — כבוי
+  const stub = pbLoadOut({ requireFn: n => (n === "./core.js" ? C : {}) }); assert.ok(!("parties" in stub.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows })));
+  // ההגנה של output.js על דגל recheck כבוי אינה נשענת על ההגנה הפנימית של ReqRecheck.updateMail: מודול שמדווח enabled=false ועדיין "מעדכן" — לא נקרא
+  const rcStub = { enabled: () => false, updateMail: m => Object.assign({}, m, { subject: "X" + m.subject }) }, base0 = { to: ["a"], subject: "s", body: "b", mailto: "m" };
+  const gated = pbLoadOut({ requireFn: n => { if (n === "./core.js") return C; if (n === "./recheck.js") return rcStub; throw new Error("missing"); } });
+  assert.equal(gated.mailUpdate(base0, now, cfg), base0); assert.equal(gated.mail(PB_res, cfg, { update: { sentAt: now } }).subject, O.mail(PB_res, cfg).subject); assert.equal(gated.recheckDocxModel(PB_res, PB_data, cfg, {}, {}), null);
+  // דפדפן: self.ReqOut נוצר לפני ש-ReqParties/ReqRecheck נטענים, ועובד אחרי שנטענו
+  const self = { ReqCore: C }, out = pbLoadOut({ self });
+  assert.ok(out && out === self.ReqOut); assert.ok(!("parties" in out.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows })), "לפני טעינת parties.js");
+  self.ReqParties = PB_P; self.ReqRecheck = PB_RC;
+  assert.ok("parties" in out.docxModel(PB_res, PB_data, cfg, { now, parties: PB_rows }), "אחרי טעינת parties.js"); assert.ok(out.mail(PB_res, cfg, { parties: PB_rows }).body.includes("דיווח לגורמים נוספים"));
+  assert.ok(out.mail(PB_res, cfg, { update: { sentAt: now } }).subjectFull); assert.ok(out.recheckDocxModel(PB_res, PB_data, cfg, PB_RC.sinceModel(null, { sentAt: now, cfg }), { now }));
+  assert.equal(JSON.stringify(Object.keys(out).sort()), JSON.stringify(Object.keys(O).sort()), "אותו ממשק בדפדפן וב-Node");
+});
+
+/* ---------- הצגה בפועל (LibreOffice): מדלג בלי soffice/pdftotext ---------- */
+test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי הטופס, ופיסוק אחרי מילה לטינית לא מתהפך — '(LLU)' ו-'OpenStreetMap (…)' (מדלג בלי soffice/pdftotext)", async t => {
+  const has = (c, a) => { const r = spawnSync(c, a, { encoding: "utf8", timeout: 20000 }); return !r.error && r.status === 0; };
+  if (!has("soffice", ["--version"]) || !has("pdftotext", ["-v"])) return t.skip("soffice/pdftotext לא מותקנים");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reqparties-")), words = (pdf, page) => {   // מילות העמוד בסדר חזותי (שמאל לימין), לפי שורה
+    const html = spawnSync("pdftotext", ["-bbox", "-f", String(page), "-l", String(page), pdf, "-"], { encoding: "utf8" }).stdout, lines = {};
+    [...html.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)"[^>]*>([^<]*)<\/word>/g)].forEach(m => { const k = Math.round(+m[2] / 3); (lines[k] = lines[k] || []).push({ x: +m[1], t: m[3].replace(BIDI_MARKS, "").replace(/[\u202b]/g, "") }); });
+    return Object.values(lines).map(l => l.sort((a, b) => a.x - b.x).map(w => w.t));
+  }, convert = async (name, bytes) => {
+    fs.writeFileSync(path.join(tmp, name + ".docx"), bytes);
+    const cv = spawnSync("soffice", ["--headless", "-env:UserInstallation=file://" + path.join(tmp, "profile"), "--convert-to", "pdf", "--outdir", tmp, path.join(tmp, name + ".docx")], { encoding: "utf8", timeout: 170000 });
+    return fs.existsSync(path.join(tmp, name + ".pdf")) ? path.join(tmp, name + ".pdf") : (t.skip("LibreOffice לא הפיק PDF: " + (cv.error ? cv.error.message : String(cv.stderr).slice(0, 120))), null);
+  };
+  try {
+    // (א) סדר העמודים בבקשה שלמה: עמוד הגורמים אחרי עמוד הטופס ולפני דף הבדיקות
+    const full = await convert("full", await D.build(O.docxModel(PB_res, PB_data, cfg, { now, includeChecks: true, parties: [pbRow({ title: "גורם בדיקה" })] }))); if (!full) return;
+    const pageOf = n => spawnSync("pdftotext", ["-f", String(n), "-l", String(n), "-layout", full, "-"], { encoding: "utf8" }).stdout, total = +/Pages:\s+(\d+)/.exec(spawnSync("pdfinfo", [full], { encoding: "utf8" }).stdout)[1];
+    const has2 = (n, s) => pageOf(n).replace(BIDI_MARKS, "").includes(s);
+    let pp = 0, pc = 0; for (let n = 1; n <= total; n++) { if (!pp && has2(n, "עמוד נלווה לבקשה")) pp = n; if (!pc && has2(n, "הנקודה") && has2(n, "דף בדיקות") ) pc = n; }
+    assert.ok(pp > 1, "עמוד הגורמים אחרי עמוד הטופס (" + pp + ")"); assert.ok(!has2(pp, "שדה 8") && !has2(pp, "הבדיקות שבוצעו"), "העמוד נקי מתוכן עמודים אחרים"); assert.ok(pc === 0 || pc > pp, "דף הבדיקות אחרי עמוד הגורמים");
+    // (ב) פיסוק ליד לטינית: חזותית משמאל לימין "(" אחרי המילה ו-")" לפניה (קוד התו; הסוגרים מוחזרים בראי בכיוון RTL)
+    const pdf = await convert("bidi", await D.pack(["אזור אסור (LLU)", "OpenStreetMap (שדות תעופה) ב"].map(x => D.helpers.textParaS(x, { size: 22 })), [], {})); if (!pdf) return;
+    const ls = words(pdf, 1), l1 = ls.find(l => l.includes("LLU")), l2 = ls.find(l => l.includes("OpenStreetMap"));
+    assert.ok(l1 && l2, JSON.stringify(ls)); const i1 = l1.indexOf("LLU"), i2 = l2.indexOf("OpenStreetMap");
+    assert.ok(l1[i1 - 1] === ")" && l1[i1 + 1] === "(", "(LLU) — הסוגרים מחוץ למילה, כל אחד בצד הנכון: " + l1.join(" "));
+    assert.ok(l2[i2 + 1] === undefined || !/^\(/.test(l2[i2 + 1]), "הסוגר לא נדבק אחרי OpenStreetMap: " + l2.join(" ")); assert.ok(/\(/.test(l2[i2 - 1] || ""), "הסוגר הפותח בצד השמאלי של OpenStreetMap, לפני העברית: " + l2.join(" "));
+    // בקרת-נגד: ריצת שלב א׳ (בלי strictBidi) מדביקה את הסוגר לריצה הלטינית — הבדיקה הזו אכן מבחינה בין השניים
+    const old = await convert("bidi-old", await D.pack(["אזור אסור (LLU)"].map(x => D.helpers.textPara(x, { size: 22 })), [], {})); if (!old) return;
+    assert.ok(words(old, 1).find(l => l.includes("LLU)")), "ב-runsOf של שלב א׳ הסוגר דבוק ל-LLU");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+/* ======================================================================= סוף בלוק O2 ======================================================================= */
+
+/* MYREQ-UNIT-BEGIN */
+/* ===== ״הבקשות שלי״ (שלב ב׳, U2): js/myreq.js — ליבה טהורה (דגל וזמינות, שורה ורשימה מקלט עוין, HTML מוגן, הודעות שגיאה) וצילום תמונת המצב לקובץ נתוני הבקשה (withSnapshot: בלי פרטי מבקש, לא חוסם שמירה, נכשל סגור); ובדיקות מבנה לחיבורים ב-ui.js / auth.js / index.html ===== */
+{
+  const MR = require(path.join(ROOT, "members-k38p/requests/js/myreq.js")), RCK = require(path.join(ROOT, "members-k38p/requests/js/recheck.js"));
+  const RLO = String.fromCharCode(0x202e), ZW = String.fromCharCode(0x200b), NUL = String.fromCharCode(0);
+  const src = f => fs.readFileSync(path.join(ROOT, "members-k38p/requests", f), "utf8");
+  const analysis = (over, c) => { const d = mkData(fixture("yarkon")), inp = Object.assign({}, baseInput, over || {}); return { res: C.analyze(inp, d, c || cfg, now), data: d, inp }; };
+  const REC = () => ({ savedAt: "2026-10-18T10:00:00.000Z", site: "אתר", version: "1", edition: "e", declaration: null, inputs: { lat: exp.input.lat, lon: exp.input.lon }, zones: [], items: [] });
+  const PII = { requesterName: "פלוני אלמוני זהה", requesterPhone: "052-7654321", requesterOrg: "ארגון חשאי בע״מ", callsign: "CALL-9Z", registration: "REG-77", contacts: [{ name: "איש קשר סודי", phone: "053-1112223" }], participants: [{ first: "משתתף", last: "סודי", phone: "054-3332221" }] };
+
+  test("הבקשות שלי: דגל וזמינות — רק features.myreq === false מכבה (מפתח / features חסרים = פעיל); הכפתור זמין רק כשהשרת מדווח myRequests (מערך, בדיוק בשם הזה)", () => {
+    for (const c of [undefined, null, {}, { features: {} }, { features: null }, { features: { myreq: true } }, { features: { myreq: 0 } }, { features: { myreq: "false" } }, { features: { recheck: false } }, cfg]) assert.equal(MR.enabled(c), true, JSON.stringify(c));
+    assert.equal(MR.enabled({ features: { myreq: false } }), false);
+    assert.equal(cfg.features.myreq, true, "config.json: המפתח מוגדר במפורש (פעיל)");
+    assert.equal(MR.available(cfg, ["sendTarget", "myRequests"]), true);
+    assert.equal(MR.available(null, ["myRequests"]), true, "בלי הגדרות = פעיל");
+    for (const f of [[], ["sendTarget", "orgSplit", "advView"], ["MyRequests"], ["myrequests"], undefined, null, "myRequests", { 0: "myRequests", length: 1 }]) assert.equal(MR.available(cfg, f), false, "שרת בלי myRequests — לא זמין: " + JSON.stringify(f));
+    assert.equal(MR.available({ features: { myreq: false } }, ["myRequests"]), false, "הדגל כבוי גם כשהשרת מדווח");
+    assert.equal(MR.available(Object.assign({}, cfg, { features: { myreq: false, recheck: true } }), ["myRequests", "recheck"]), false, "דגל recheck לא מפעיל את הבקשות שלי");
+  });
+
+  test("הבקשות שלי: תוויות המצב — שלוש בדיוק לפי המצב מהשרת; כל מצב אחר (גם עם רווח או באותיות אחרות) ← ״מצב לא ידוע״", () => {
+    assert.deepEqual(MR.STATE_LABEL, { sent_live: "נשלחה למשרד נוטאם", sent_test: "נשלחה לבדיקה בלבד", draft: "נשמרה, לא נשלחה", unknown: "מצב לא ידוע" });
+    for (const [st, lbl] of [["sent_live", "נשלחה למשרד נוטאם"], ["sent_test", "נשלחה לבדיקה בלבד"], ["draft", "נשמרה, לא נשלחה"]]) assert.equal(MR.rowModel({ id: "a1", state: st }).stateLabel, lbl);
+    for (const st of ["sent_live ", "SENT_LIVE", "sent", "", null, undefined, 5, {}, "<script>", "__proto__", "constructor"]) { const r = MR.rowModel({ id: "a1", state: st }); assert.equal(r.stateLabel, "מצב לא ידוע", String(st)); assert.equal(r.state, ""); }
+    const auth = src("js/auth.js"), help = /myreq: "([^"]+)"/.exec(auth);
+    assert.ok(help, "יש הסבר HELP.myreq בשורת המשתמש");
+    for (const l of ["נשלחה למשרד נוטאם", "נשלחה לבדיקה בלבד", "נשמרה ולא נשלחה"]) assert.ok(help[1].includes(l), "ההסבר מזכיר: " + l);
+  });
+
+  test("הבקשות שלי: rowModel — מזהה לא תקין נזרק; שם מנוקה (כיווניות, רוחב-אפס, בקרה, אורך), זמנים בשעון ישראל וקלט זמן עוין נבלע; sentAt רק למצב ששלח", () => {
+    const ok = MR.rowModel({ id: "1AbC_-9", name: "חדרה — 02.11.2026", state: "sent_live", saved: Date.UTC(2026, 9, 18, 10, 3), sentAt: Date.UTC(2026, 9, 18, 10, 10) });
+    assert.deepEqual([ok.id, ok.name, ok.state, ok.savedText, ok.sentText], ["1AbC_-9", "חדרה — 02.11.2026", "sent_live", "18.10.2026 13:03", "18.10.2026 13:10"], "שעון ישראל (UTC+3 באוקטובר 2026)");
+    assert.equal(MR.rowModel({ id: "a1", state: "draft", saved: 1, sentAt: Date.UTC(2026, 9, 18) }).sentAt, 0, "טיוטה — בלי זמן שליחה");
+    assert.equal(MR.rowModel({ id: "a1", state: "sent_test", saved: "2026-10-18T10:03:00Z" }).savedText, "18.10.2026 13:03", "זמן כמחרוזת ISO");
+    for (const id of ["", null, undefined, 5, {}, [], "a b", 'a"b', "a<b>", "a'b", "a/b", "../x", "a\nb", "x".repeat(129), "א"]) assert.equal(MR.rowModel({ id, name: "n" }), null, "id נדחה: " + JSON.stringify(id));
+    assert.ok(MR.rowModel({ id: "x".repeat(128) }), "128 תווים — עדיין תקין");
+    for (const x of [null, undefined, 7, "x", [1], () => 1]) assert.equal(MR.rowModel(x), null);
+    assert.equal(MR.rowModel({ id: "a1", name: "<img src=x onerror=1>" + RLO + "אבג" + ZW + "דה" + NUL + "ו" }).name, "<img src=x onerror=1>אבגדהו", "כיווניות, רוחב-אפס ותווי בקרה מוסרים — הטקסט נשאר טקסט");
+    const long = MR.rowModel({ id: "a1", name: "א".repeat(500) }).name; assert.equal(long.length, 120);
+    for (const n of [42, null, undefined, {}, [], "", "   ", RLO + ZW]) assert.equal(MR.rowModel({ id: "a1", name: n }).name, "בקשה ללא שם", JSON.stringify(n));
+    for (const t of ["x", -1, 0, NaN, Infinity, 1e99, {}, [], null, "", "9999999999999999999999"]) { const r = MR.rowModel({ id: "a1", state: "sent_live", saved: t, sentAt: t }); assert.deepEqual([r.saved, r.savedText, r.sentAt, r.sentText], [0, "", 0, ""], "זמן עוין: " + String(t)); }
+    const p = MR.rowModel({ id: "__proto__", name: "x" }); assert.equal(p.id, "__proto__"); assert.equal(({}).id, undefined, "אין זיהום אב-טיפוס");
+  });
+
+  test("הבקשות שלי: listModel — לא ok / לא מערך ← null (נכשל סגור); שורות פגומות וכפולות נזרקות; תקרה 100; סך הכול לא קטן ממה שמוצג; הודעת הספירה", () => {
+    for (const r of [null, undefined, "x", 7, [], {}, { ok: false, requests: [] }, { ok: true }, { ok: true, requests: {} }, { ok: true, requests: "a" }, { ok: "true", requests: [] }]) assert.equal(MR.listModel(r), null, JSON.stringify(r));
+    const rows = n => Array.from({ length: n }, (_, i) => ({ id: "id" + i, name: "בקשה " + i, state: "draft", saved: 1e12 + i }));
+    const l1 = MR.listModel({ ok: true, total: 150, requests: rows(150) });
+    assert.deepEqual([l1.rows.length, l1.total, l1.dropped], [100, 150, 0]);
+    assert.equal(l1.rows[0].id, "id0", "סדר השרת נשמר");
+    const l2 = MR.listModel({ ok: true, requests: [{ id: "a", name: "ראשון" }, { id: "a", name: "כפילות" }, null, "x", { id: 'b"' }, { id: "c" }] });
+    assert.deepEqual([l2.rows.map(r => r.id + ":" + r.name).join(), l2.total, l2.dropped], ["a:ראשון,c:בקשה ללא שם", 2, 4]);
+    for (const t of [1, NaN, Infinity, "9", -5, null, {}]) assert.equal(MR.listModel({ ok: true, total: t, requests: rows(3) }).total, 3, "total לא תקין/קטן: " + String(t));
+    assert.equal(MR.listModel({ ok: true, total: 3.9e6, requests: rows(2) }).total, 3900000);
+    assert.equal(MR.statusText({ rows: rows(3), total: 3 }), "3 בקשות."); assert.equal(MR.statusText({ rows: rows(1), total: 1 }), "בקשה אחת.");
+    assert.equal(MR.statusText({ rows: [], total: 0 }), "עדיין אין בקשות שמורות בחשבון הזה.");
+    assert.equal(MR.statusText({ rows: rows(3), total: 999 }), "מוצגות 3 הבקשות האחרונות מתוך 999.");
+  });
+
+  test("הבקשות שלי: listHtml — כל ערך דינמי (שם, מזהה, מצב, תווית נגישות) עובר escaping; אין אלמנט או מאפיין שהוזרקו; לכל שורה בדיוק שני כפתורי פעולה (הצג / כבסיס)", () => {
+    const evil = '"><img src=x onerror=alert(1)><script>alert(2)</script> \' onmouseover=\'alert(3)';
+    const lm = MR.listModel({ ok: true, requests: [{ id: "a1", name: evil, state: "sent_live", saved: 1e12, sentAt: 1e12 }, { id: "b2", name: "רגיל", state: "x" }] });
+    const html = MR.listHtml(lm);
+    assert.ok(!/<img|<script|<svg|<iframe|<b>x/i.test(html), html);
+    assert.ok(html.includes("&lt;img src=x onerror=alert(1)&gt;") && html.includes("&lt;script&gt;") && html.includes("&quot;") && html.includes("&#39;"), "הטקסט נשמר אך מוגן");
+    assert.equal((html.match(/data-act="view"/g) || []).length, 2); assert.equal((html.match(/data-act="base"/g) || []).length, 2);
+    assert.equal((html.match(/<li class="mrRow"/g) || []).length, 2);
+    assert.ok(/aria-label="הצג: [^"]*&quot;/.test(html) && /aria-label="השתמש כבסיס לבקשה חדשה: /.test(html), "שם נגיש מתחיל בטקסט הנראה לעין");
+    assert.ok(html.includes('data-state="sent_live"') && html.includes('data-state="unknown"') && html.includes("מצב לא ידוע") && html.includes("נשלחה למשרד נוטאם"));
+    assert.ok(/נשמרה: \d\d\.\d\d\.\d{4} \d\d:\d\d · נשלחה: \d\d\.\d\d\.\d{4} \d\d:\d\d/.test(html));
+    // גם מודל שנבנה ידנית (בלי rowModel) מוגן: ה-HTML לא נסמך על המודל
+    const raw = MR.listHtml({ rows: [{ id: 'a"><i>', name: "<b>n</b>", state: "draft<u>", stateLabel: "<b>x</b>", savedText: "<s>t</s>", sentText: "" }] });
+    assert.ok(!/<i>|<b>|<u>|<s>/.test(raw), raw);
+    for (const e of [null, undefined, {}, { rows: [] }, { rows: "x" }]) assert.equal(MR.listHtml(e), "", "ריק — ההודעה מוצגת באזור הסטטוס, לא פעמיים");
+  });
+
+  test("הבקשות שלי: errText ו-noteText — הודעה בעברית לכל קוד, תשובה ״תקינה״ בלי נתונים או קלט לא תקין ← ״התשובה אינה תקינה״; בלי כתובות מייל בטקסטים של המודול", () => {
+    const S = MR.STR, A = { msg: r => "A:" + (r.message || r.error) };
+    for (const c of ["no_record", "bad_folder"]) assert.equal(MR.errText({ ok: false, error: c }, A), S.noRecord);
+    assert.equal(MR.errText({ ok: false, error: "bad_record" }, A), S.badRecord); assert.equal(MR.errText({ ok: false, error: "too_big" }, A), S.tooBig);
+    assert.equal(MR.errText({ ok: false, error: "forbidden" }, A), S.forbidden); assert.equal(MR.errText({ ok: false, error: "network" }, A), S.offline);
+    assert.equal(MR.errText({ ok: false, error: "rate", message: "M" }, A), "A:M", "שאר השגיאות — הניסוח המרכזי של auth.js (rate וכו׳)");
+    assert.equal(MR.errText({ ok: true }, A), S.badResp, "ok בלי הנתונים");
+    for (const x of [null, undefined, "x", 5, [], { ok: false }, { ok: false, error: 5 }]) assert.equal(typeof MR.errText(x, undefined), "string");
+    assert.equal(MR.errText({ ok: false, error: "weird" }), S.badResp, "בלי A ובקוד לא מוכר — ניסוח כללי");
+    assert.ok(/אפשר למלא בקשה חדשה ידנית/.test(S.noRecord) && /אפשר למלא בקשה חדשה ידנית/.test(S.badRecord) && /אפשר למלא בקשה חדשה ידנית/.test(S.unusable));
+    const all = JSON.stringify([MR.STR, MR.HELP, MR.STATE_LABEL]) + src("js/myreq.js");
+    assert.ok(!/@|icd\.org\.il|office@/i.test(JSON.stringify([MR.STR, MR.HELP])), "בטקסטי המודול אין כתובת מייל (גם לא של הארגון)");
+    assert.ok(!/icd\.org\.il|office@/i.test(all), "כתובת הארגון לא מופיעה בקוד המודול");
+    const n = MR.noteText("חדרה" + RLO + ZW, ["מהות הפעילות", "כלי טיס: א, ב ועוד 12"]);
+    assert.equal(n, "הבקשה ״חדרה״ נטענה כבסיס לבקשה חדשה (הבקשה השמורה לא משתנה). יש להזין תאריכים ושעות, להריץ את הבדיקות מחדש ולאשר שוב את ההצהרה. לא נטענו: מהות הפעילות, כלי טיס: א, ב ועוד 12.");
+    assert.ok(!MR.noteText("x", []).includes("לא נטענו") && !MR.noteText("x").includes("לא נטענו"));
+  });
+
+  test("הבקשות שלי, snapshot: withSnapshot מוסיף snapshot (גרסה 1, תקף, עם זמן) לרשומה בלי לשנות אותה — ובלי שום פרט מבקש (שם, טלפון, גורם מבקש, אות קריאה, רישום, אנשי קשר, משתתפים) בתמונת המצב או ברשומה; הקובץ (עם ההזחה) מתחת לתקרת הקריאה", () => {
+    const { res, data } = analysis(PII), rec = REC(), before = JSON.stringify(rec);
+    const out = MR.withSnapshot(rec, res, data, cfg, now);
+    assert.notEqual(out, rec); assert.equal(JSON.stringify(rec), before, "הרשומה המקורית לא שונתה"); assert.equal(rec.snapshot, undefined);
+    assert.deepEqual(Object.keys(out), Object.keys(rec).concat(["snapshot"]), "שדות שלב א׳ ללא שינוי ובאותו סדר, ו-snapshot בסוף");
+    assert.equal(out.inputs, rec.inputs); assert.equal(out.snapshot.v, 1); assert.equal(out.snapshot.at, now.toISOString());
+    assert.equal(RCK.cleanSnapshot(out.snapshot).ok, true, "תמונת מצב תקפה לפי ReqRecheck");
+    assert.equal(out.snapshot.scan.R, exp.input.radius); assert.ok(Math.abs(out.snapshot.scan.lat - exp.input.lat) < 1e-9);
+    const text = JSON.stringify(out);
+    for (const v of [PII.requesterName, PII.requesterPhone, PII.requesterOrg, PII.callsign, PII.registration, PII.contacts[0].name, PII.contacts[0].phone, PII.participants[0].first, PII.participants[0].last, PII.participants[0].phone, baseInput.requesterName, baseInput.requesterPhone, baseInput.requesterOrg, "050-0000001", "050-0000002"]) assert.ok(!text.includes(v), "פרט מבקש בתמונת המצב: " + v);
+    assert.ok(!/requester|participants|contacts|callsign|registration/i.test(JSON.stringify(out.snapshot)), "גם לא שמות שדות");
+    assert.ok(Buffer.byteLength(JSON.stringify(out, null, 1)) < RCK.LIMITS.record, "הקובץ כפי שנכתב (הזחה 1) קטן מתקרת getRequest בשרת");
+  });
+
+  test("הבקשות שלי, snapshot: דגל recheck כבוי ← אותה רשומה בדיוק (שלב א׳); דגל myreq כבוי לבדו לא מונע תמונת מצב; בלי נתוני ניתוח או נתונים שאינם אובייקט ← אותה רשומה", () => {
+    const { res, data } = analysis(), rec = REC();
+    const off = Object.assign({}, cfg, { features: { recheck: false } });
+    assert.equal(MR.withSnapshot(rec, res, data, off, now), rec, "אותו אובייקט — לא עותק, בלי מפתחות חדשים");
+    assert.deepEqual(Object.keys(rec), ["savedAt", "site", "version", "edition", "declaration", "inputs", "zones", "items"]);
+    assert.ok(MR.withSnapshot(rec, res, data, Object.assign({}, cfg, { features: { myreq: false } }), now).snapshot, "myreq כבוי, recheck פעיל: נשמר snapshot (P0 של הבדיקה החוזרת)");
+    assert.ok(MR.withSnapshot(rec, res, data, Object.assign({}, cfg, { features: { recheck: true, myreq: true } }), now).snapshot);
+    assert.ok(MR.withSnapshot(rec, res, data, undefined, now).snapshot, "בלי הגדרות = פעיל");
+    for (const d of [null, undefined, "x", 5, [], true]) assert.equal(MR.withSnapshot(rec, res, d, cfg, now), rec, "data לא תקין: " + JSON.stringify(d));
+  });
+
+  test("הבקשות שלי, snapshot: לעולם לא זורק ולא חוסם — ניתוח חסר/שבור ← הרשומה עם snapshotError (בלי snapshot); capture שזורק ← אותה רשומה; רשומה לא אובייקט ← כמות שהיא; תמונת מצב גדולה מהתקרה ← בלי snapshot ועם snapshotError", () => {
+    const { res, data } = analysis(), rec = REC();
+    for (const bad of [null, undefined, {}, { inp: {} }, "x", 5]) { const o = MR.withSnapshot(rec, bad, data, cfg, now); assert.equal(o.snapshot, undefined, JSON.stringify(bad)); assert.equal(typeof o.snapshotError, "string"); assert.ok(o.snapshotError.length > 0 && o.snapshotError.length <= 120); assert.equal(o.inputs, rec.inputs); }
+    const poor = Object.assign({}, data, { notams: "not-a-list", zones: {} });
+    assert.doesNotThrow(() => MR.withSnapshot(rec, res, poor, cfg, now));
+    for (const r of [null, undefined, 5, "x", [], true]) assert.equal(MR.withSnapshot(r, res, data, cfg, now), r);
+    const real = RCK.capture;
+    try {
+      RCK.capture = () => { throw new Error("boom"); };
+      assert.equal(MR.withSnapshot(rec, res, data, cfg, now), rec, "capture שזורק ← הרשומה כפי שהיא");
+      RCK.capture = () => ({ snapshot: { v: 1, pad: "x".repeat(RCK.LIMITS.record) } });
+      const big = MR.withSnapshot(rec, res, data, cfg, now);
+      assert.equal(big.snapshot, undefined); assert.equal(big.snapshotError, MR.STR.tooBigSnap);
+      assert.ok(Buffer.byteLength(JSON.stringify(big, null, 1)) < RCK.LIMITS.record, "הקובץ שנכתב נשאר קריא לשרת");
+      assert.deepEqual(Object.keys(big).sort(), Object.keys(rec).concat(["snapshotError"]).sort());
+      RCK.capture = () => ({ snapshot: { v: 1, pad: "x".repeat(RCK.LIMITS.record - 20000) } });
+      assert.ok(MR.withSnapshot(rec, res, data, cfg, now).snapshot, "מתחת לתקרה (גם עם ההזחה) — נשמר");
+    } finally { RCK.capture = real; }
+  });
+
+  test("הבקשות שלי: חיבורים — index.html טוען recheck.js לפני myreq.js ושניהם לפני ui.js (?v=1); inputsForRecord מחזיר דרך myreqSnapRecord (try/catch, רק לנתוני הניתוח הנוכחי); myreqLoadBase לא נוגע בפרטי מבקש/אנשי קשר/משתתפים ומאפס בקשה כמו הרצה חדשה; הכפתור בשורת המשתמש רק לפי myReqOn", () => {
+    const html = src("index.html"), ui = src("js/ui.js"), auth = src("js/auth.js"), my = src("js/myreq.js");
+    const at = f => html.indexOf('<script src="js/' + f + '?v=');
+    assert.ok(at("core.js") > 0 && at("core.js") < at("recheck.js") && at("recheck.js") < at("myreq.js") && at("myreq.js") < at("ui.js"), "סדר הטעינה");
+    assert.ok(html.includes('<script src="js/myreq.js?v=1"></script>'));
+    const rec = /function inputsForRecord\(\) \{[^]*?\n  \}\n/.exec(ui);
+    assert.ok(rec && /return myreqSnapRecord\(rec\);/.test(rec[0]), "inputsForRecord מעביר את הרשומה דרך myreqSnapRecord");
+    const sn = /function myreqSnapRecord\(rec\) \{[^]*?\n  \}\n/.exec(ui);
+    assert.ok(sn && /try \{/.test(sn[0]) && /catch \(e\) \{ return rec; \}/.test(sn[0]) && /a\.zonesHash !== d\.zones\.dataHash \|\| a\.notamIso !== d\.notamFetchedIso\) return rec;/.test(sn[0]) && /M\.withSnapshot\(rec, S\.res,/.test(sn[0]), "כל כשל ← הרשומה כמות שהיא; רק כשנתוני הדף הם של הניתוח");
+    const lb = /function myreqLoadBase\(inp\) \{[^]*?\n  \}\n/.exec(ui);
+    assert.ok(lb, "myreqLoadBase");
+    for (const must of ["S.res = null", "S.rid = newRid()", 'S.ridKey = ""', 'S.analysisStamp = null', '$("reviewOk").checked = false', "S.reviewAt = null", "clearOutcome();", "cancelAutoSave()", "S.sent = null", "S.saved", 'setCenter(inp.lat, inp.lon, true)', "S.manualKey = c.lat", '["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"', "S.statuses.review = { ok: false"]) assert.ok(lb[0].includes(must) || (must === "S.saved" && /clearOutcome/.test(lb[0])), "myreqLoadBase: " + must);
+    for (const never of ["reqName", "reqPhone", "reqOrg", "reqCallsign", "reqReg", "contactList", 'setRows("contacts"', "setRows(", "clearPersonFields", "savePerson", "PERSON_KEY", "partList"]) assert.ok(!lb[0].includes(never), "myreqLoadBase לא נוגע ב: " + never);
+    assert.ok(/window\.ReqMyReq\.hook\(\{ loadBase: myreqLoadBase, busy: myreqBusy, inProgress: myreqInProgress \}\)/.test(ui), "החיבור ב-init (בתוך try/catch)");
+    assert.ok(/const myreqBusy = \(\) => !!\(S\.resetting \|\| S\.running \|\| S\.sending \|\| S\.opening \|\| S\.zipping \|\| \$\("sendProg"\)\);/.test(ui));
+    assert.ok(/const myReqOn = \(\) => !!\(window\.ReqMyReq && window\.ReqMyReq\.available && window\.ReqMyReq\.available\(A\.cfg, A\.features\)\);/.test(auth) && /myReqBtn\(\) \+ withHelp\('<button type="button" id="ubPass">/.test(auth) && /const myReqBtn = \(\) => myReqOn\(\) \?/.test(auth), "הכפתור בשורת המשתמש רק לפי available(cfg, features)");
+    assert.ok(!/localStorage|sessionStorage|indexedDB/.test(my), "המודול לא שומר דבר בדפדפן");
+    assert.ok(/R\.restoreInputs\(rec, \{ cfg: libCfg\(A_\(\)\.cfg\) \}\)/.test(my) && !/keepDates/.test(my), "״כבסיס״ משחזר בלי תאריכים ושעות (restoreInputs בלי keepDates)");
+  });
+}
+/* MYREQ-UNIT-END */
+/* RECHECKUI-UNIT-BEGIN */
+/* ===== ״בדיקה חוזרת״ — ממשק (שלב ב׳, U3): js/recheckui.js — ליבה טהורה (זמינות, הכנת הקלט מהרשומה השמורה, השוואה, ממצאים, קלט נעול, HTML מוגן, Word, טקסטי בקשה מעודכנת), ההרחבה של ״הבקשות שלי״ (myreq.js: extraActs/listHtml) וחיבורי ui.js / index.html / config.json ===== */
+{
+  const RU = require(path.join(ROOT, "members-k38p/requests/js/recheckui.js")), RCK = require(path.join(ROOT, "members-k38p/requests/js/recheck.js")), MR = require(path.join(ROOT, "members-k38p/requests/js/myreq.js"));
+  const src = f => fs.readFileSync(path.join(ROOT, "members-k38p/requests", f), "utf8");
+  const RLO = String.fromCharCode(0x202e), ZW = String.fromCharCode(0x200b), NUL = String.fromCharCode(0);
+  const feat = f => Object.assign({}, cfg, { features: Object.assign({}, cfg.features, f) });
+  const sentAt = Date.UTC(2026, 9, 18, 10, 10), later = new Date(+now + 3600e3);
+  const D0 = mkData(fixture("yarkon"));
+  const inputsOnly = over => { const o = Object.assign({}, baseInput, over || {}); Object.keys(o).forEach(k => { if (/^(req|contact|requester|participant|callsign|registration)/i.test(k)) delete o[k]; }); return o; };
+  const savedRec = (over, noSnap) => {
+    const inputs = inputsOnly(over), res = C.analyze(Object.assign({}, baseInput, over || {}), D0, cfg, now);
+    const rec = { savedAt: "2026-10-10T09:00:00.000Z", site: "בדיקה — x", version: "1", edition: "e", declaration: null, inputs, zones: [], items: [] };
+    return noSnap ? rec : Object.assign(rec, RCK.capture(res, D0, cfg, now));
+  };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  // תמונת מצב שבה אזור, פריט ונוטם (שאינם בנתונים הנוכחיים) נושאים טקסט עוין ← שורות ״אינו מופיע עוד״ שמציגות אותו
+  const hostileRec = evil => { const rec = savedRec(), S = rec.snapshot; S.zones.push(Object.assign({}, S.zones[0], { id: "ZZ9", n: evil })); S.items.push(Object.assign({}, S.items[0], { k: "evil-k", t: evil, i: ["x1"] })); S.notams.hits.push(Object.assign({}, S.notams.hits[0], { id: "C9999/26", x: evil })); return rec; };
+  // השוואה מלאה כמו בדפדפן: prepare → ניתוח טרי (data זהה, שעה מאוחרת) → compare
+  const runCmp = (rec, c, dataNow) => {
+    const prep = RU.prepare(rec, { cfg: c || cfg, name: "בדיקה — x" }); assert.equal(prep.ok, true, JSON.stringify(prep));
+    const d = dataNow || D0, res = C.analyze(prep.inp, d, c || cfg, later);
+    return { prep, res, data: d, cmp: RU.compare({ raw: rec, inp: prep.inp, res, data: d, cfg: c || cfg, now: later, sentAt }) };
+  };
+
+  test("בדיקה חוזרת: זמינות — רק כשהמשתמש בתצוגה מתקדמת (בדיוק true), השרת מדווח recheck והדגל features.recheck לא כבוי (מפתח חסר = פעיל); ״נשלחה״ בלבד זכאית", () => {
+    const F = ["sendTarget", "myRequests", "recheck"];
+    assert.equal(cfg.features.recheck, true, "config.json: המפתח מוגדר במפורש (פעיל)");
+    assert.equal(RU.available(cfg, F, true), true);
+    for (const c of [undefined, null, {}, { features: {} }, { features: null }, { features: { recheck: true } }, { features: { recheck: 0 } }, { features: { recheck: "false" } }, { features: { myreq: false } }]) assert.equal(RU.available(c, F, true), true, "מפתח חסר/לא false = פעיל: " + JSON.stringify(c));
+    assert.equal(RU.available({ features: { recheck: false } }, F, true), false, "דגל כבוי");
+    for (const adv of [false, undefined, null, "true", 1, {}, [], "yes"]) assert.equal(RU.available(cfg, F, adv), false, "לא תצוגה מתקדמת: " + JSON.stringify(adv));
+    for (const f of [[], ["sendTarget", "orgSplit", "advView", "myRequests"], ["Recheck"], ["recheck "], ["myRequests"], undefined, null, "recheck", { 0: "recheck", length: 1 }]) assert.equal(RU.available(cfg, f, true), false, "שרת בלי recheck — לא זמין: " + JSON.stringify(f));
+    assert.equal(RU.available({ features: { recheck: false } }, F, false), false);
+    assert.equal(MR.available({ features: { recheck: false } }, ["myRequests"]), true, "דגל recheck לא מכבה את ״הבקשות שלי״");
+    assert.deepEqual(RU.STATES, ["sent_live", "sent_test"]);
+    for (const s of ["sent_live", "sent_test"]) assert.equal(RU.eligible(s), true);
+    for (const s of ["draft", "", "unknown", "sent", "SENT_LIVE", "sent_live ", null, undefined, 5, {}, "__proto__"]) assert.equal(RU.eligible(s), false, String(s));
+  });
+
+  test("בדיקה חוזרת: prepare — קלט הסריקה נלקח מהרשומה בלבד (נקודה, רדיוס, גובה, מועדים, תוספות ידניות), בלי פרטי מבקש, בלי הפניות לרשומה המקורית; כל סטייה (קלט עוין) ← ok:false בעברית", () => {
+    const rec = savedRec({ manualItems: [{ name: "עמוד", lat: 32.1, lon: 34.8, heightM: 12 }], knownObstacles: "מגדל\nאנטנה", visitNotes: "הערה" });
+    const p = RU.prepare(rec, { cfg, name: "שם" });
+    assert.equal(p.ok, true);
+    assert.deepEqual(RU.scanOf(p.inp), { lat: exp.input.lat, lon: exp.input.lon, radius: exp.input.radius, heightM: exp.input.heightM, dateFrom: exp.input.dateFrom, dateTo: exp.input.dateTo, timeFrom: exp.input.timeFrom, timeTo: exp.input.timeTo });
+    for (const k of ["requesterName", "requesterPhone", "requesterOrg", "callsign", "registration"]) assert.equal(p.inp[k], "", k);
+    assert.deepEqual([p.inp.contacts, p.inp.participants], [[], []]);
+    assert.equal(p.inp.siteName, "בדיקה", "שם האתר מהקלט השמור");
+    assert.deepEqual(p.inp.manualItems, [{ name: "עמוד", lat: 32.1, lon: 34.8, heightM: 12 }]);
+    p.inp.manualItems[0].name = "שונה"; p.inp.aircraft.push("x"); assert.equal(rec.inputs.manualItems[0].name, "עמוד"); assert.equal(rec.inputs.aircraft.length, 1, "עותק, לא הפניה");
+    assert.equal(p.raw, rec);
+    assert.equal(RU.prepare(Object.assign({}, rec, { inputs: Object.assign({}, rec.inputs, { siteName: "" }) }), { cfg }).inp.siteName, "בדיקה — x", "שם אתר חסר ← שם הבקשה מהרשומה");
+    const bad = x => { const r = RU.prepare(x, { cfg }); assert.equal(r.ok, false, String(JSON.stringify(x)).slice(0, 60)); assert.ok(r.text && /פגום|גדול/.test(r.text), r.text); return r; };
+    for (const x of [null, undefined, 5, "x", [], true]) bad(x);
+    const mod = (k, v) => Object.assign({}, rec, { inputs: Object.assign({}, rec.inputs, { [k]: v }) });
+    for (const [k, v] of [["lat", 10], ["lon", 80], ["lat", "32.1"], ["lat", NaN], ["radius", 5], ["radius", 99999], ["radius", "200"], ["heightM", 0], ["heightM", -3], ["heightM", 30000], ["dateFrom", ""], ["dateFrom", "2026-02-31"], ["dateTo", "2026-01-01"], ["dateTo", "2030-01-01"], ["timeFrom", "25:00"], ["timeTo", ""], ["manualItems", "x"], ["aircraft", "x"], ["vlos", "yes"]]) bad(mod(k, v));
+    bad(Object.assign({}, rec, { inputs: null })); bad(Object.assign({}, rec, { inputs: [] }));
+    const huge = Object.assign({}, rec, { pad: "x".repeat(RCK.LIMITS.record) }); assert.equal(bad(huge).reason, "too_big");
+    const hostile = RU.prepare(mod("siteName", "<img src=x onerror=alert(1)>" + RLO + "אבג" + ZW + "דה" + NUL + "ו"), { cfg });
+    assert.equal(hostile.inp.siteName, "<img src=x onerror=alert(1)>אבגדהו", "בקרה וכיווניות מוסרות; הטקסט נשאר טקסט (ה-HTML נעשה escape בתצוגה)");
+    const proto = JSON.parse('{"__proto__":{"polluted":1},"savedAt":"2026-10-10T09:00:00.000Z","inputs":' + JSON.stringify(rec.inputs) + '}');
+    RU.prepare(proto, { cfg }); assert.equal(({}).polluted, undefined, "אין זיהום אב-טיפוס");
+    const off = RU.prepare(rec, { cfg: feat({ recheck: false }) });
+    assert.equal(off.ok, true, "prepare טהורה — הדגל נאכף ב-compare / available");
+  });
+
+  test("בדיקה חוזרת: compare — אותם נתונים ← ״אין שינויים״ בלי ״הכן בקשה מעודכנת״; נתונים ששונו ← שינויים, ספירות לשרת (a/r/c) ו-canUpdate; הרשומה והנתונים לא משתנים", () => {
+    const rec = savedRec(), before = JSON.stringify(rec), dBefore = JSON.stringify(D0.near.elements.length + ":" + D0.notams.length);
+    const same = runCmp(rec);
+    assert.equal(same.cmp.ok, true); assert.equal(same.cmp.kind, "none"); assert.equal(same.cmp.comparable, true); assert.equal(same.cmp.anyChange, false); assert.equal(same.cmp.canUpdate, false);
+    assert.deepEqual(same.cmp.sum, { a: 0, r: 0, c: 0 });
+    assert.equal(same.cmp.since.summary, RCK.STR.none); assert.ok(same.cmp.cur && same.cmp.curError === "");
+    // תמונת מצב ישנה שבה חסר אזור ופריט נעלם ושינוי מרחק ונוטם: בנתונים הנוכחיים הם "חדשים"/"שונו"
+    const tam = clone(rec), S = tam.snapshot, zid = S.zones[0].id, nid = S.notams.hits[0].id;
+    S.zones.shift(); S.items.shift(); S.items[0].d += 120; S.notams.hits.shift();
+    const ch = runCmp(tam);
+    assert.equal(ch.cmp.kind, "changes"); assert.equal(ch.cmp.comparable, true); assert.equal(ch.cmp.anyChange, true); assert.equal(ch.cmp.canUpdate, true);
+    const c = ch.cmp.diff.counts;
+    assert.deepEqual(ch.cmp.sum, { a: c.added, r: c.removed, c: c.changed }); assert.ok(c.added >= 3 && c.total >= 4, JSON.stringify(c));
+    const ids = ch.cmp.diff.zones.rows.map(r => r.id).concat(ch.cmp.diff.notams.rows.map(r => r.id)); assert.ok(ids.includes(zid) && ids.includes(nid), ids.join());
+    assert.ok(Object.values(ch.cmp.sum).every(n => Number.isInteger(n) && n >= 0), "ספירות שלמות לשרת (saveRecheck מנקה כל דבר אחר)");
+    assert.equal(JSON.stringify(rec), before, "הרשומה המקורית לא שונתה"); assert.equal(JSON.stringify(D0.near.elements.length + ":" + D0.notams.length), dBefore);
+    assert.deepEqual(ch.cmp.since.dates.map(d => d.label), ["הוגשה", "נבדקה מחדש", "מועד הפעילות"]);
+  });
+
+  test("בדיקה חוזרת: compare — בלי תמונת מצב ← ״אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב״ (גם ב-Word); שגיאת צילום / תמונה פגומה / גרסה לא נתמכת ← הניסוח של ReqRecheck; אף אחד מהם אינו מאפשר ״הכן בקשה מעודכנת״", () => {
+    const NB = "אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב.";
+    assert.equal(RU.STR.noBase, NB);
+    const none = runCmp(savedRec({}, true)).cmp;
+    assert.equal(none.kind, "nobase"); assert.equal(none.since.reason, "no_baseline"); assert.ok(none.since.summary.startsWith(NB) && /הממצאים הנוכחיים/.test(none.since.summary), none.since.summary);
+    assert.equal(none.comparable, false); assert.equal(none.canUpdate, false); assert.deepEqual(none.sum, { a: 0, r: 0, c: 0 }); assert.ok(none.cur, "הממצאים הנוכחיים זמינים");
+    assert.equal(runCmp(Object.assign(savedRec({}, true), { snapshot: null })).cmp.since.reason, "no_baseline", "snapshot:null = חסר");
+    const err = runCmp(Object.assign(savedRec({}, true), { snapshotError: "תמונת המצב גדולה מדי לקובץ" })).cmp;
+    assert.equal(err.kind, "nobase"); assert.ok(!err.since.summary.includes(NB) && err.since.summary === RCK.STR.noBase, "הוגשה כשהמערכת כבר ניסתה לשמור — לא אומרים ״לפני שהמערכת שמרה״");
+    for (const bad of [{ v: 1 }, "x", 5, [], { v: 1, scan: {} }]) { const r = runCmp(Object.assign(savedRec({}, true), { snapshot: bad })).cmp; assert.equal(r.kind, "nobase"); assert.equal(r.since.reason, "bad_baseline", JSON.stringify(bad)); assert.equal(r.canUpdate, false); assert.ok(!r.since.summary.includes(NB)); }
+    const old = savedRec(); old.snapshot.v = 99;
+    const un = runCmp(old).cmp; assert.equal(un.since.reason, "baseline_unsupported"); assert.equal(un.canUpdate, false);
+  });
+
+  test("בדיקה חוזרת: compare — נכשל סגור: נוטמים/OSM ישנים מהשמור, הגדרות סריקה ששונו או תמונה נוכחית שנכשלה ← ״blocked״ (לא ״אין שינוי״), בלי עדכון; דגל כבוי ← off", () => {
+    const rec = savedRec();
+    const newerSaved = clone(rec); newerSaved.snapshot.src.ni = new Date(Date.parse(newerSaved.snapshot.src.ni) + 3600e3).toISOString();   // השמור חדש מהנוכחי
+    const st = runCmp(newerSaved).cmp; assert.equal(st.kind, "blocked"); assert.equal(st.since.reason, "stale_notams"); assert.equal(st.canUpdate, false); assert.equal(st.comparable, false);
+    const osm = clone(rec); osm.snapshot.src.ob = new Date(Date.parse(osm.snapshot.src.ob) + 3600e3).toISOString();
+    assert.equal(runCmp(osm).cmp.since.reason, "stale_osm");
+    const th = clone(rec); th.snapshot.th.near_zone_m += 500;
+    const t = runCmp(th).cmp; assert.equal(t.kind, "blocked"); assert.equal(t.since.reason, "thresholds_changed"); assert.equal(t.canUpdate, false);
+    const prep = RU.prepare(rec, { cfg }), res = C.analyze(prep.inp, D0, cfg, later), broken = Object.assign({}, res, { zones: null });
+    const cf = RU.compare({ raw: rec, inp: prep.inp, res: broken, data: D0, cfg, now: later, sentAt });
+    assert.equal(cf.ok, true); assert.equal(cf.cur, null); assert.ok(cf.curError.length > 0 && cf.curError.length <= 120); assert.equal(cf.since.reason, "bad_current"); assert.equal(cf.canUpdate, false); assert.equal(cf.kind, "blocked");
+    assert.deepEqual(RU.compare({ raw: rec, inp: prep.inp, res, data: D0, cfg: feat({ recheck: false }), now: later, sentAt }), { ok: false, error: "off" });
+    for (const x of [null, undefined, 5, "x"]) assert.equal(RU.compare(x).ok, false);
+  });
+
+  test("בדיקה חוזרת: sameScan — סריקה זהה רק בנקודה (עד מיקרון-מעלה), רדיוס, גובה, תאריכים ושעות; כל קלט לא תקין ← false (בקשה מעודכנת ״מחליפה״ רק אז)", () => {
+    const a = { lat: 32.099128, lon: 34.816617, radius: 200, heightM: 80, dateFrom: "2026-11-02", dateTo: "2026-11-03", timeFrom: "17:00", timeTo: "20:00" };
+    assert.equal(RU.sameScan(a, Object.assign({}, a)), true);
+    assert.equal(RU.sameScan(a, Object.assign({}, a, { lat: a.lat + 5e-7, lon: a.lon - 5e-7 })), true, "קיצוץ ל-6 ספרות");
+    for (const d of [{ lat: a.lat + 1e-5 }, { lon: a.lon + 1e-5 }, { radius: 201 }, { heightM: 81 }, { dateFrom: "2026-11-01" }, { dateTo: "2026-11-04" }, { timeFrom: "17:01" }, { timeTo: "20:01" }, { radius: "200" }, { dateFrom: "" }, { timeFrom: undefined }, { lat: NaN }, { lat: null }]) assert.equal(RU.sameScan(a, Object.assign({}, a, d)), false, JSON.stringify(d));
+    for (const x of [null, undefined, 5, "x", [], {}]) { assert.equal(RU.sameScan(a, x), false); assert.equal(RU.sameScan(x, a), false); }
+    assert.equal(RU.sameScan({}, {}), false, "אובייקטים ריקים אינם זהים");
+    assert.equal(RU.sameScan(a, Object.assign({}, a, { extra: 1 })), true, "שדות אחרים לא נבדקים (שם האתר, מהות — עריכה רכה)");
+  });
+
+  test("בדיקה חוזרת: resultHtml — הבאנר ״לא צורף״ והסעיף ״שינויים מאז ההגשה״ בראש; כל ערך עוין (שם אזור/פריט/נוטם, שם בקשה, שדות נעולים) עובר escaping ואין אלמנט או מאפיין שהוזרקו; ממצאים נוכחיים רק כשאין עם מה להשוות", () => {
+    const evil = '"><img src=x onerror=alert(1)>\'<b>x</b>';
+    const c = runCmp(hostileRec(evil)).cmp;
+    assert.equal(c.kind, "changes");
+    const view = { since: c.since, findings: RU.findingsModel(c.cur), locked: RU.lockedModel({ lat: 32.1, lon: 34.8, radius: 150, heightM: 60, dateFrom: "2026-11-02", dateTo: "2026-11-02", timeFrom: "14:30", timeTo: "17:30" }, evil), past: true, testOnly: true };
+    const h = RU.resultHtml(view);
+    assert.ok(!/<img|<script/i.test(h) && !/<[^>]*\sonerror=/i.test(h) && !/<b>x<\/b>/.test(h), h.slice(0, 300));
+    assert.ok(h.includes("&lt;img src=x onerror=alert(1)&gt;") && h.includes("&lt;b&gt;x&lt;/b&gt;") && h.includes("&quot;") && h.includes("&#39;"), "הטקסט נשמר אך מוגן");
+    assert.ok((h.match(/&lt;img src=x onerror=alert\(1\)&gt;/g) || []).length >= 4, "האזור, הפריט, הנוטם והשם הנעול — כולם מוצגים כטקסט");
+    assert.ok(h.startsWith('<div class="rcRes" id="rcRes" tabindex="-1" role="region" aria-label="תוצאות הבדיקה החוזרת"><div class="rcSince"><section class="rc-since"'), "הסעיף בראש, אזור נגיש עם שם");
+    assert.ok(h.indexOf("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס") > 0 && h.indexOf("דוח זה לא צורף") < h.indexOf("הוגשה") && h.indexOf("דוח זה לא צורף") < h.indexOf("<table"), "הבאנר לפני התאריכים והטבלאות");
+    assert.ok(h.includes("מועד הפעילות שנבדק כבר עבר") && h.includes("מה נבדק") && h.includes("נלקח מהבקשה השמורה ואי אפשר לשנותו"), "הערת מועד שעבר וקלט נעול");
+    assert.ok(/<dt>הבקשה<\/dt><dd dir="auto">&quot;&gt;&lt;img/.test(h), "שם הבקשה בקלט הנעול — מוגן");
+    assert.ok(!h.includes("הממצאים הנוכחיים"), "kind=changes — בלי ממצאים נוכחיים");
+    assert.ok(h.includes("הבקשה הזו נשלחה במצב בדיקה בלבד (לא נשלחה למודיעין טיס).") && h.indexOf("הבקשה הזו נשלחה במצב בדיקה בלבד") > h.indexOf("</section>"), "בקשה שנשלחה בבדיקה בלבד: הבהרה אחרי הסעיף (הבאנר אומר ״למודיעין טיס״)");
+    const nb = runCmp(savedRec({}, true)).cmp, hn = RU.resultHtml({ since: nb.since, findings: RU.findingsModel(nb.cur), locked: [], past: false });
+    assert.ok(hn.includes("הממצאים הנוכחיים") && hn.includes("אין בסיס להשוואה — הבקשה נשלחה לפני שהמערכת שמרה תמונת מצב.") && hn.includes("LLU20") && !hn.includes("מועד הפעילות שנבדק") && !hn.includes("נשלחה במצב בדיקה בלבד"), "בלי testOnly / past — בלי ההערות");
+    const evilNb = RU.findingsModel(clone(runCmp(savedRec()).cmp.cur)); evilNb.items.rows[0].text = evil; evilNb.items.rows[0].id = evil; evilNb.zones.rows[0].dist = evil;
+    const fh = RU.findingsHtml(evilNb); assert.ok(!/<img|<b>x/i.test(fh) && fh.includes("&lt;img src=x onerror=alert(1)&gt;"), "גם findingsHtml לא נסמך על המודל");
+    assert.equal(RU.resultHtml(null), ""); assert.equal(RU.resultHtml({}), ""); assert.equal(RU.resultHtml({ since: "x" }).includes("undefined"), false);
+    for (const x of [null, undefined, "x", 5, [], {}, { rows: "x" }]) assert.equal(typeof RU.findingsHtml(x), "string");
+    assert.equal(RU.lockedHtml(null), ""); assert.equal(RU.lockedHtml([]), "");
+  });
+
+  test("בדיקה חוזרת: updateState — ״הכן בקשה מעודכנת״ רק כשיש שינויים והפעילות עוד לא החלה (היום עצמו מותר — כמו אימות ״תאריך ההתחלה כבר עבר״ ב-run); פעילות שהחלה ← בלי כפתור, עם הסבר; בלי שינויים ← בלי כפתור וגם בלי הסבר", () => {
+    const U = RU.updateState, yes = { canUpdate: true };
+    assert.deepEqual(U(yes, { dateFrom: "2026-10-25" }, "2026-10-19"), { started: false, canUpdate: true, blockedByDate: false });
+    assert.deepEqual(U(yes, { dateFrom: "2026-10-19" }, "2026-10-19"), { started: false, canUpdate: true, blockedByDate: false }, "היום");
+    assert.deepEqual(U(yes, { dateFrom: "2026-10-18" }, "2026-10-19"), { started: true, canUpdate: false, blockedByDate: true }, "אתמול");
+    assert.deepEqual(U({ canUpdate: false }, { dateFrom: "2026-10-18" }, "2026-10-19"), { started: true, canUpdate: false, blockedByDate: false }, "בלי שינויים — בלי הסבר");
+    assert.deepEqual(U({ canUpdate: false }, { dateFrom: "2026-10-25" }, "2026-10-19"), { started: false, canUpdate: false, blockedByDate: false });
+    for (const [c, i, t] of [[null, {}, "x"], [undefined, null, undefined], [yes, null, "2026-10-19"], [yes, { dateFrom: 5 }, "2026-10-19"], [yes, { dateFrom: "2026-10-25" }, 5], [{ canUpdate: "yes" }, { dateFrom: "2026-10-25" }, "2026-10-19"]]) assert.equal(U(c, i, t).canUpdate, !!(c && c.canUpdate === true && i && typeof i.dateFrom === "string" && typeof t === "string"), "קלט לא תקין — לא מציעים: " + JSON.stringify([c, i, t]));
+    assert.ok(RU.STR.noUpdate === "אי אפשר להכין בקשה מעודכנת, כי מועד הפעילות כבר החל." && RU.STR.testOnly === "הבקשה הזו נשלחה במצב בדיקה בלבד (לא נשלחה למודיעין טיס).");
+    const ru = src("js/recheckui.js");
+    assert.ok(/us = updateState\(cmp, prep\.inp, todayYmd\)/.test(ru) && /buttonsHtml\(view\.canUpdate, view\.blockedByDate\)/.test(ru) && /if \(!v \|\| !v\.canUpdate\) return;/.test(ru) && /rcNoUpd[^]*E\(STR\.noUpdate\)/.test(ru), "החיבור ב-run: הכפתור, ההסבר ובדיקת ההרשאה ב-actUpdate לפי view.canUpdate");
+  });
+
+  test("בדיקה חוזרת: findingsModel — נגזר מתמונת המצב הנוכחית אחרי ניקוי; תקרת 25 שורות לקבוצה + ״ועוד N״; תמונה פגומה ← null; מרחקים בטקסט (בתוך השטח / ללא מיקום)", () => {
+    const res = C.analyze(Object.assign({}, baseInput), D0, cfg, now), snap = RCK.snapshotOf(res, D0, cfg, now), m = RU.findingsModel(snap);
+    assert.equal(m.items.rows.length, 20); assert.equal(m.items.more, 0); assert.equal(m.counts.items, snap.items.length); assert.equal(m.counts.zones, snap.zones.length);
+    assert.ok(m.zones.rows.some(r => r.id === "LLU20" && /525 מ׳/.test(r.dist)) && m.notams.rows.some(r => r.id === "C0431/26"));
+    const many = clone(snap); const it = many.items[0]; many.items = Array.from({ length: 60 }, (_, i) => Object.assign({}, it, { k: "k" + i, t: "פריט " + i, d: 10 + i }));
+    const mm = RU.findingsModel(many); assert.equal(mm.items.rows.length, 25); assert.equal(mm.items.more, 35);
+    const hm = RU.findingsHtml(mm); assert.ok(hm.includes("(60)") && hm.includes("ועוד 35") && (hm.match(/<li>/g) || []).length >= 25);
+    assert.equal(RU.findingsModel(null), null); assert.equal(RU.findingsModel({ v: 1 }), null); assert.equal(RU.findingsModel("x"), null);
+    const odd = clone(snap); odd.notams.hits[0].d = -1; odd.items[0].d = 0; const om = RU.findingsModel(odd);
+    assert.equal(om.notams.rows[0].dist, "ללא מיקום בנוטם"); assert.equal(om.items.rows[0].dist, "בתוך השטח");
+  });
+
+  test("בדיקה חוזרת: lockedModel — הקלט הנעול מוצג כפי ששמור (נקודה ב-DMS ובעשרוני, רדיוס, גובה ברגל, מועד בשעון מקומי; תאריך אחד / טווח)", () => {
+    const rows = RU.lockedModel({ lat: 32.099128, lon: 34.816617, radius: 200, heightM: 80, dateFrom: "2026-11-02", dateTo: "2026-11-03", timeFrom: "17:00", timeTo: "20:00" }, "חדרה — 02.11.2026");
+    assert.deepEqual(rows.map(r => r[0]), ["הבקשה", "נקודת מרכז", "רדיוס", "גובה", "מועד"]);
+    assert.ok(/32°.*N.*34°.*E \(32\.099128, 34\.816617\)/.test(rows[1][1]), rows[1][1]); assert.equal(rows[2][1], "200 מ׳"); assert.equal(rows[3][1], "80 מ׳ (262.5 רגל) מעפ״ש");
+    assert.equal(rows[4][1], "02.11.2026 עד 03.11.2026 · 17:00–20:00 (שעון מקומי)");
+    const one = RU.lockedModel({ lat: 32.1, lon: 34.8, radius: 150, heightM: 60, dateFrom: "2026-11-02", dateTo: "2026-11-02", timeFrom: "14:30", timeTo: "17:30" });
+    assert.equal(one.length, 4, "בלי שם בקשה — בלי שורת ״הבקשה״"); assert.equal(one[3][1], "02.11.2026 · 14:30–17:30 (שעון מקומי)", "יום אחד");
+  });
+
+  test("בדיקה חוזרת: wordBytes — דוח Word נפרד (באנר ״לא צורף״, השינויים, דף הבדיקות העדכני; בלי טופס ובלי תמונות), XML תקין, טקסט עוין מוגן; דגל כבוי או מודולים חסרים ← זורק", async () => {
+    const evil = "<w:p>&amp;</w:p><x/>", { res, data, cmp } = runCmp(hostileRec(evil));
+    const view = { res, data, cfg, now: later, since: cmp.since }, unesc = x => x.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const bytes = await RU.wordBytes({ O, D }, view), z = await JSZipNode.loadAsync(bytes), doc = await z.file("word/document.xml").async("string"), plain = unesc(doc.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "").replace(BIDI_MARKS, ""));
+    assert.equal(bytes[0], 0x50); assert.ok(wellFormed(doc)); const lint = xmllint(doc); if (lint !== null) assert.equal(lint, "", lint);
+    assert.ok(plain.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס") && plain.includes("שינויים מאז ההגשה") && plain.includes("דף הבדיקות העדכני") && plain.includes("מקורות הנתונים"), plain.slice(0, 200));
+    assert.ok(!plain.includes("נספח ג׳") && !Object.keys(z.files).some(f => /^word\/media\/./.test(f)), "בלי טופס ובלי תמונות");
+    assert.ok(!doc.includes("<x/>") && !/<w:p>&amp;<\/w:p>/.test(doc) && plain.includes("<w:p>&amp;</w:p><x/>"), "טקסט עוין מוצג כטקסט ולא נכנס כ-XML");
+    const nb = runCmp(savedRec({}, true)), b2 = await RU.wordBytes({ O, D }, { res: nb.res, data: nb.data, cfg, now: later, since: nb.cmp.since }), d2 = await (await JSZipNode.loadAsync(b2)).file("word/document.xml").async("string");
+    assert.ok(d2.includes("אין בסיס להשוואה") && d2.includes("דף הבדיקות העדכני") && wellFormed(d2), "בלי תמונת מצב — הניסוח גם ב-Word");
+    await assert.rejects(RU.wordBytes({ O, D }, Object.assign({}, view, { cfg: feat({ recheck: false }) })), /כבוי/);
+    await assert.rejects(RU.wordBytes({ O }, view), /חסרים/); await assert.rejects(RU.wordBytes(null, view), /חסרים/);
+  });
+
+  test("בדיקה חוזרת: בקשה מעודכנת — O.mail עם update מוסיף קידומת נושא (subjectFull) ומשפט החלפה; דגל כבוי / בלי update ← המייל כמו בשלב א׳; טקסטי הבאנר והודעת הטופס", () => {
+    const res = C.analyze(baseInput, D0, cfg, now), plain = O.mail(res, cfg), upd = O.mail(res, cfg, { update: { sentAt } });
+    assert.ok(!("subjectFull" in plain) && !/מחליפה את הבקשה/.test(plain.body), "ללא update — כמו בשלב א׳");
+    assert.equal(upd.subject, plain.subject, "subject נשאר הנושא הרגיל"); assert.equal(upd.subjectFull, "[עדכון לבקשה מ-18.10.2026] " + plain.subject);
+    assert.ok(upd.body.includes("בקשה זו מחליפה את הבקשה שנשלחה ב-18.10.2026.") && upd.body.includes("מצורפת בקשה מעודכנת"), upd.body);
+    assert.ok(decodeURIComponent(upd.mailto).includes("[עדכון לבקשה מ-18.10.2026] "), "mailto בנוי מהנושא המלא");
+    const off = O.mail(res, feat({ recheck: false }), { update: { sentAt } }); assert.deepEqual(off, O.mail(res, feat({ recheck: false })), "דגל כבוי — זהה לשלב א׳");
+    assert.ok(!("subjectFull" in off));
+    const noDate = O.mail(res, cfg, { update: { sentAt: null } }); assert.ok(noDate.subjectFull.startsWith("[עדכון לבקשה קודמת] ") && /מחליפה את הבקשה הקודמת שנשלחה/.test(noDate.body) && !/1970/.test(noDate.subjectFull + noDate.body), "בלי מועד — בלי תאריך שגוי");
+    assert.equal(RU.updateLine(sentAt), "בקשה זו מחליפה את הבקשה שנשלחה ב-18.10.2026.");
+    const live = RU.updateBanner(sentAt, true), test_ = RU.updateBanner(sentAt, false);
+    assert.ok(live.startsWith(RU.updateLine(sentAt)) && /מודיעין טיס/.test(live) && /ואין צורך לבטל/.test(live) && !/נוטאם/.test(live), live);
+    assert.ok(/במצב בדיקה/.test(test_) && /רק אליכם/.test(test_) && /לא למודיעין טיס/.test(test_), test_);
+    const note = RU.updateNote("חדרה" + RLO + ZW, sentAt); assert.ok(note.includes("״חדרה״") && !note.includes(RLO) && note.includes("18.10.2026") && /להריץ את הבדיקות מחדש/.test(note) && /ההצהרה/.test(note) && /תחליף/.test(note), note);
+    assert.ok(RU.updateNote("x", null).endsWith("השליחה תחליף את הבקשה שנשלחה."));
+  });
+
+  test("בדיקה חוזרת: errText ו-טקסטים — הודעה בעברית לכל קוד; בטקסטי המודול ובפלט אין כתובת מייל (גם לא של הארגון); טקסט חדש אומר ״מודיעין טיס״ ולא ״משרד נוטאם״", () => {
+    const S = RU.STR, A = { msg: r => "A:" + (r.message || r.error) };
+    for (const c of ["no_record", "bad_folder"]) assert.equal(RU.errText({ ok: false, error: c }, A), S.noRecord);
+    assert.equal(RU.errText({ ok: false, error: "bad_record" }, A), S.badRecord); assert.equal(RU.errText({ ok: false, error: "too_big" }, A), S.tooBig); assert.equal(RU.errText({ ok: false, error: "forbidden" }, A), S.forbidden); assert.equal(RU.errText({ ok: false, error: "network" }, A), S.offline);
+    for (const c of ["recheck_off", "recheck_limit", "recheck_full", "not_sent", "bad_file", "rate"]) assert.equal(RU.errText({ ok: false, error: c, message: "M" }, A), "A:M", "שאר השגיאות — הניסוח המרכזי של auth.js: " + c);
+    assert.equal(RU.errText({ ok: true }, A), S.badResp);
+    for (const c of ["no_record", "bad_folder", "bad_record", "too_big", "forbidden"]) assert.equal(RU.transient({ ok: false, error: c }), false, "ניסיון חוזר לא יעזור: " + c);
+    for (const x of [{ ok: false, error: "network" }, { ok: false, error: "rate" }, { ok: false, error: "weird" }, { ok: false }, null, undefined, "x", 5, []]) assert.equal(RU.transient(x), true, "זמני: " + JSON.stringify(x));
+    for (const x of [null, undefined, "x", 5, [], { ok: false }, { ok: false, error: 5 }]) assert.equal(typeof RU.errText(x, undefined), "string");
+    const all = JSON.stringify([RU.STR, RU.HELP]) + [RU.STR.saveOk(3), RU.STR.updateLoaded("x", sentAt), RU.updateBanner(sentAt, true), RU.updateBanner(sentAt, false)].join(" ");
+    assert.ok(!/@|icd\.org\.il|office@/i.test(all), "אין כתובת מייל בטקסטי המודול"); assert.ok(!/icd\.org\.il|office@/i.test(src("js/recheckui.js")), "כתובת הארגון לא בקוד");
+    assert.ok(!/נוטאם/.test(all), "בטקסט החדש — ״מודיעין טיס״"); assert.ok(/מודיעין טיס/.test(RU.HELP.list + RU.HELP.save + RU.HELP.update));
+    assert.equal(RU.STR.btn, "🔁 בדיקה חוזרת"); assert.equal(RU.STR.save, "שמור דוח בדרייב"); assert.equal(RU.STR.download, "הורד"); assert.equal(RU.STR.update, "הכן בקשה מעודכנת");
+    assert.ok(RU.STR.saveOk(2).includes("מס׳ 2") && RU.STR.saveOk(2).includes("לא צורף לבקשה שנשלחה") && !RU.STR.saveOk(0).includes("מס׳"));
+  });
+
+  test("הבקשות שלי, הרחבה: extraActs/listHtml — בלי הרחבה (או ריקה) הרשימה זהה לשלב א׳ (שני כפתורים לשורה); פעולה נוספת רק לשורות במצב שהוגדר, עם שם נגיש וescaping; שמות פעולה לא תקינים או כפולים לפעולה קיימת נזרקים", () => {
+    const lm = MR.listModel({ ok: true, requests: [{ id: "a1", name: "חי", state: "sent_live", saved: 1e12, sentAt: 1e12 }, { id: "b2", name: "בדיקה", state: "sent_test", saved: 1e12, sentAt: 1e12 }, { id: "c3", name: "טיוטה", state: "draft", saved: 1e12 }, { id: "d4", name: "?", state: "x" }] });
+    const base = MR.listHtml(lm);
+    for (const e of [undefined, null, [], "x", 5, {}, [null], [{}], [{ act: "recheck" }]]) assert.equal(MR.listHtml(Object.assign({}, lm, { extra: e })), base, "זהה לשלב א׳: " + JSON.stringify(e));
+    assert.equal((base.match(/<button/g) || []).length, 8, "שני כפתורים ל-4 שורות");
+    const ex = [{ act: "recheck", text: "🔁 בדיקה חוזרת", label: "בדיקה חוזרת", states: ["sent_live", "sent_test"] }];
+    const h = MR.listHtml(Object.assign({}, lm, { extra: ex }));
+    assert.equal((h.match(/data-act="recheck"/g) || []).length, 2, "רק לשורות שנשלחו (חי / בדיקה)");
+    assert.ok(/data-act="recheck" data-id="a1" aria-label="בדיקה חוזרת: חי">🔁 בדיקה חוזרת<\/button>/.test(h) && /data-act="recheck" data-id="b2"/.test(h) && !/data-act="recheck" data-id="c3"/.test(h) && !/data-act="recheck" data-id="d4"/.test(h));
+    const evil = MR.listHtml(Object.assign({}, lm, { extra: [{ act: "recheck", text: '<img src=x onerror=1>', label: '"><b>', states: ["sent_live"] }] }));
+    assert.ok(!/<img|<b>/.test(evil) && evil.includes("&lt;img src=x onerror=1&gt;") && evil.includes("&quot;&gt;&lt;b&gt;"), evil);
+    for (const act of ["view", "base", "back", "retry", "yes", "no", "A", "a b", "a", "x".repeat(17), "re-check", "re_check", "__proto__", '"><i>', 5, null, ""]) assert.deepEqual(MR.extraActs([{ act, text: "t", states: ["sent_live"] }]), [], "שם פעולה נזרק: " + String(act));
+    for (const bad of [{ act: "recheck", text: "", states: [] }, { act: "recheck", text: 5, states: [] }, { act: "recheck", text: "t", states: "sent_live" }, { act: "recheck", text: "t" }]) assert.deepEqual(MR.extraActs([bad]), [], JSON.stringify(bad));
+    assert.equal(MR.extraActs([1, 2, 3, 4, 5].map(i => ({ act: "act" + String.fromCharCode(96 + i), text: "t", states: [] }))).length, 3, "עד שלוש פעולות");
+    const my = src("js/myreq.js");
+    assert.ok(/function extend\(p\) \{ ST\.ext = isObj\(p\) \? p : null; \}/.test(my) && /extend, state:/.test(my) && /try \{ ST\.ext\.onAction\(/.test(my) && /catch \(e\) \{ return \[\]; \}/.test(my), "החיבור להרחבה (נכשל בשקט, לא פוגע ברשימה)");
+    assert.ok(/default: if \(extraNow\(\)\.some\(a => a\.act === b\.dataset\.act\)/.test(my), "פעולה נשלחת להרחבה רק אם היא ברשימה הנוכחית");
+  });
+
+  test("בדיקה חוזרת: חיבורים — index.html (recheckui.js אחרי recheck.js ו-myreq.js ולפני ui.js, ?v=1); ui.js — recheckAnalyze לא נוגע בבקשה שבטופס (S.res, S.data.near/far/ext, סטטוסים, אחסון), נתונים טריים; שליחה: נושא מלא, again רק בבקשה מעודכנת למשרד, באנר; הטעינה כבסיס מבטלת S.update", () => {
+    const html = src("index.html"), ui = src("js/ui.js"), ru = src("js/recheckui.js");
+    const at = f => html.indexOf('<script src="js/' + f + '?v=');
+    assert.ok(at("recheck.js") > 0 && at("recheck.js") < at("recheckui.js") && at("myreq.js") < at("recheckui.js") && at("recheckui.js") < at("ui.js"), "סדר הטעינה");
+    assert.ok(html.includes('<script src="js/recheckui.js?v=1"></script>'));
+    const an = /async function recheckAnalyze\(inp, step\) \{[^]*?\n  \}\n/.exec(ui);
+    assert.ok(an, "recheckAnalyze");
+    for (const must of ["S.running || S.resetting", "await checkSync();", '["a17", "sync", "agri", "notam"]', "C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg)", "C.overpass(q[k], fetchOpts)", "C.analyze(inp, data, S.cfg, now)", "age > S.cfg.thresholds.notam_max_age_h) return { ok: false", "Date.parse(data.notamFetchedIso)"]) assert.ok(an[0].includes(must), "recheckAnalyze: " + must);
+    for (const never of ["S.data.near", "S.data.far", "S.data.ext", "S.data.reverse", "setStatus(", "S.statuses[k] =", "S.statuses.", "S.analysisStamp", "S.scanKey", "S.imgs", "S.rid", "clearOutcome", "localStorage", "lsSet", "buildMapImage", "renderAll", "refreshGate", "M.render", "nominatim"]) assert.ok(!an[0].includes(never), "recheckAnalyze לא נוגע ב: " + never);
+    assert.ok(!/\bS\.res\b/.test(an[0]), "recheckAnalyze לא נוגע ב-S.res (הבקשה שבטופס)");
+    assert.ok(/data\.zones|zones: S\.data\.zones/.test(an[0]) && !/S\.data\.near/.test(an[0]), "נתוני OSM תמיד טריים — לא נקראים מ-S.data");
+    const lu = /function recheckLoadUpdate\(inp, meta\) \{[^]*?\n  \}\n/.exec(ui); assert.ok(lu, "recheckLoadUpdate");
+    assert.ok(/const r = myreqLoadBase\(inp\);/.test(lu[0]) && /\["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"\]\.forEach\(id => \{ \$\(id\)\.value = inp\[id\] \|\| ""; \}\);/.test(lu[0]) && /S\.update = U \? \{ sentAt, name: meta && meta\.name, scan: U\.scanOf\(inp\) \} : null;/.test(lu[0]), "טוען כבסיס ומחזיר תאריכים ושעות; S.update קשור לסריקה");
+    assert.ok(/clearUpdate\(\);/.test(/function myreqLoadBase\(inp\) \{[^]*?\n  \}\n/.exec(ui)[0]) && /function clearUpdate\(\) \{ S\.update = null; try \{ const U = RUI\(\); if \(U && U\.clearNote\) U\.clearNote\(\); \} catch \(e\) \{ \/\* ignore \*\/ \} \}/.test(ui), "טעינת בסיס אחרת מבטלת את הקשר לבקשה מעודכנת ואת ההודעה בדף");
+    const ui2 = /function updateInfo\(\) \{[^]*?\n  \}\n/.exec(ui); assert.ok(ui2 && /!U\.enabled\(S\.cfg\) \|\| !U\.sameScan\(u\.scan, S\.res\.inp\)\) return null;/.test(ui2[0]) && /catch \(e\) \{ return null; \}/.test(ui2[0]), "updateInfo: דגל, סריקה זהה, נכשל סגור");
+    assert.ok(/const withUpdate = o => \{ const u = updateInfo\(\); return u \? Object\.assign\(\{\}, o \|\| \{\}, \{ update: \{ sentAt: u\.sentAt \} \}\) : o; \};/.test(ui), "withUpdate: בלי update בתוקף — o כמות שהוא");
+    assert.ok((ui.match(/O\.mail\(S\.res, S\.cfg, withUpdate\(mailOpts\(\)\)\)/g) || []).length >= 3, "כל נקודות הקריאה ל-O.mail (תצוגה מקדימה, חלון שליחה, העתקה) עוברות withUpdate");
+    assert.ok(!/O\.mail\(S\.res, S\.cfg(?!, withUpdate)/.test(ui), "אין קריאה ל-O.mail בלי withUpdate");
+    assert.ok(/subject: mail\.subjectFull \|\| mail\.subject, body: mail\.body, again: !!again/.test(ui), "השרת אינו מוסיף את הקידומת — הלקוח שולח את הנושא המלא");
+    assert.ok(/await doSend\(target, !!upd && target === "office"\);/.test(ui) && /upd = updateInfo\(\);/.test(ui), "again רק לבקשה מעודכנת ורק ליעד משרד");
+    assert.ok(/'<div class="banner warn" id="sendUpdate"/.test(ui) && /updBanner \+ dlg\.to/.test(ui) && /\(mail\.subjectFull \|\| mail\.subject\)\)/.test(ui), "הבאנר בחלון והנושא עם הקידומת");
+    assert.ok(/window\.ReqRecheckUI\.hook\(\{ analyze: recheckAnalyze, loadUpdate: recheckLoadUpdate, busy: myreqBusy, inProgress: myreqInProgress \}\)/.test(ui) && /catch \(e\) \{ \/\* ״בדיקה חוזרת״ היא תוספת/.test(ui), "החיבור ב-init בתוך try/catch");
+    assert.ok(!/localStorage|sessionStorage|indexedDB/.test(ru), "המודול לא שומר דבר בדפדפן"); assert.equal((ru.match(/\.innerHTML\b/g) || []).length, 1, "innerHTML רק ב-setBody (תוכן שעבר escaping)");
+    assert.ok(/R\.restoreInputs\(v\.rec, \{ keepDates: true, cfg: A_\(\)\.cfg \}\)/.test(ru), "הבקשה המעודכנת שומרת את התאריכים והשעות");
+    assert.ok(/availNow\(\)/.test(/function actSave[^]*?\n  \}\n/.exec(ru)[0]) && /availNow\(\)/.test(/function actUpdate[^]*?\n  \}\n/.exec(ru)[0]), "ההרשאה נבדקת שוב לפני שמירה והכנת בקשה");
+    assert.ok(/A\.call\("getRequest", \{ folderId: row\.id \}\)/.test(ru) && /A\.call\("saveRecheck", \{ folderId: v\.row\.id, b64: bytesToB64\(bytes\), sum: v\.cmp\.sum \}\)/.test(ru) && !/saveBegin|saveFile|saveEnd|sendRequest/.test(ru), "הכתיבה היחידה לדרייב היא saveRecheck; אין נגיעה בפעולות השמירה והשליחה");
+    assert.ok(/ST\.hooks \? provider : null/.test(ru), "ההרחבה מנותקת כשאין hook");
+    assert.ok(/actions\(\) \{ return availNow\(\) \? \[\{ act: "recheck"[^]*?\] : \[\]; \}/.test(ru) && /const availNow = \(\) => \{ const A = A_\(\); return !!\(A && A\.loggedIn && A\.loggedIn\(\) && available\(A\.cfg, A\.getFeatures\(\), advNow\(\)\)\); \};/.test(ru) && /A\.isAdv\(\) === true/.test(ru), "הכפתור ב״הבקשות שלי״ וכל פעולה — רק כש-availNow (מחובר, תצוגה מתקדמת, שרת עם recheck, דגל)");
+  });
+}
+/* RECHECKUI-UNIT-END */
+
+/* PARTIES-UI-UNIT-BEGIN */
+/* ===== ״דיווח לגורמים נוספים״ — העורך (שלב ב׳, U4): js/partiesui.js — דגל וחיבור (כבוי = אין פלט כלל), בנייה ומיזוג בין הרצות (זיכרון ואחסון בדפדפן), עריכה שמעבירה hook.changed, גורמים ידניים, רשומת הדרייב, אחסון עוין ותקרות, HTML מוגן מקלט עוין (tel: רק למספר חד-משמעי), "הצג רק פתוחות" ובדיקות מבנה לחיבורים ב-ui.js / index.html / config.json ===== */
+{
+  let PU = null; try { PU = require(path.join(ROOT, "members-k38p/requests/js/partiesui.js")); } catch (e) { PU = null; }
+  const PP = require(path.join(ROOT, "members-k38p/requests/js/parties.js"));
+  const rdq = f => fs.readFileSync(path.join(ROOT, "members-k38p/requests", f), "utf8");
+  const mkAn = over => { const d = mkData(fixture("yarkon")), inp = Object.assign({}, baseInput, over || {}); return { res: C.analyze(inp, d, cfg, now), data: d }; };
+  const mkStore = init => { let v = init == null ? null : init; const st = { sets: 0, dels: 0, get: () => v, set: x => { v = x; st.sets++; }, del: () => { v = null; st.dels++; }, peek: () => v }; return st; };
+  const NOW = new Date(Date.UTC(2026, 9, 18, 10, 0));
+  // חיבור נקי של המודול (המצב שלו גלובלי): reset + hook חדש; מחזיר מונה לקריאות changed
+  const wire = (store, extra) => { PU.reset(); const calls = { n: 0 }; PU.hook(Object.assign({ changed: () => { calls.n++; }, store, now: () => NOW }, extra || {})); return calls; };
+  const on = { features: { parties: true } }, off = { features: { parties: false } };
+  const EVIL = "<img src=x onerror=alert(1)>\"'`&<script>alert(2)</script>";
+
+  test("דיווח לגורמים נוספים, עורך: דגל וחיבור — רק features.parties === false מכבה (מפתח / features חסרים = פעיל); בלי hook.changed אין בנייה; כבוי ← אין שורות, אין פלט (modelOpts / mailOpts / record), אין עריכה ואין כתיבה לאחסון", () => {
+    assert.ok(PU, "js/partiesui.js קיים וניתן לטעינה");
+    assert.equal(cfg.features.parties, true, "config.json: המפתח מוגדר במפורש (פעיל)");
+    const { res, data } = mkAn(), store = mkStore();
+    for (const c of [null, {}, { features: {} }, { features: null }, { features: { parties: true } }, { features: { parties: 0 } }, { features: { parties: "false" } }, { features: { recheck: false, myreq: false } }, cfg]) { wire(store); assert.equal(PU.rebuild(res, data, c), true, JSON.stringify(c)); }
+    const store0 = mkStore(); wire(store0); assert.equal(PU.rebuild(res, data, off), false); assert.equal(store0.sets + store0.dels, 0, "כבוי: לא נכתב דבר לאחסון");
+    assert.equal(PU.rows(res), null); assert.deepEqual(PU.modelOpts(res), {}); assert.equal(PU.mailOpts(res), null); assert.equal(PU.record(res), null);
+    assert.deepEqual(PU.setField("z:LLU20", "status", "done"), { ok: false, error: "" }); assert.equal(PU.addManual({ name: "x" }).ok, false); assert.equal(PU.removeManual("m:1").ok, false);
+    assert.equal(PU.state().built, false);
+    // הדגל כבה אחרי שנבנה: הכול מתרוקן
+    wire(store); PU.rebuild(res, data, cfg); assert.ok(PU.rows(res)); PU.rebuild(res, data, off); assert.equal(PU.rows(res), null); assert.deepEqual(PU.modelOpts(res), {});
+    // בלי hook, או hook בלי changed (ui.js לא חיבר): עריכה שלא תנקה את תוצאות השמירה היא מסוכנת — לכן אין בנייה בכלל
+    PU.reset(); PU.hook(null); assert.equal(PU.rebuild(res, data, cfg), false); assert.equal(PU.rows(res), null);
+    PU.hook({ store }); assert.equal(PU.rebuild(res, data, cfg), false); assert.equal(PU.modelOpts(res).parties, undefined);
+    PU.hook({ changed: "x" }); assert.equal(PU.rebuild(res, data, cfg), false);
+    // ללא DOM (Node): mount לא יוצר דבר ולא זורק
+    wire(store); assert.equal(PU.mount(cfg), false);
+    // ניתוח לא תקין
+    for (const bad of [null, undefined, {}, { zones: null }]) { wire(store); assert.equal(PU.rebuild(bad, data, cfg), false, JSON.stringify(bad)); }
+  });
+
+  test("דיווח לגורמים נוספים, עורך: דגל כבוי ← המודל ל-Word זהה לשלב א׳ (אין מפתח parties, גם כשהעורך הזין שורות), והמייל זהה; דגל פעיל ← model.parties ושורת מייל אחת בלי שמות וטלפונים", () => {
+    const { res, data } = mkAn(), store = mkStore();
+    const base = O.docxModel(res, data, cfg, { now, images: {} }), baseMail = O.mail(res, cfg), cfgOff = Object.assign({}, cfg, off);
+    wire(store); PU.rebuild(res, data, cfgOff);
+    const mOff = O.docxModel(res, data, cfgOff, Object.assign({ now, images: {} }, PU.modelOpts(res), { parties: [PP.build(res, cfg, data)[0]] }));
+    assert.equal(mOff.parties, undefined, "דגל כבוי: גם אם מועברות שורות — אין עמוד");
+    assert.equal(JSON.stringify(mOff), JSON.stringify(O.docxModel(res, data, cfgOff, { now, images: {} })), "כבוי: מודל זהה בדיוק");
+    assert.equal(JSON.stringify(mOff), JSON.stringify(base), "כבוי: זהה למודל שלב א׳ (בלי אפשרויות בכלל)");
+    assert.equal(O.mail(res, cfgOff, { parties: PP.build(res, cfg, data) }).body, baseMail.body, "כבוי: המייל זהה");
+    wire(store); PU.rebuild(res, data, cfg);
+    const o = PU.modelOpts(res), m = O.docxModel(res, data, cfg, Object.assign({ now, images: {} }, o));
+    assert.deepEqual(Object.keys(o).sort(), ["parties", "partiesDropped", "partiesFailed"]); assert.equal(o.partiesDropped, 0); assert.equal(o.partiesFailed, false);
+    assert.ok(m.parties && m.parties.rows.length === PU.rows(res).length && m.parties.rows.length > 0, "יש עמוד עם שורות");
+    assert.deepEqual(Object.keys(m).filter(k => k !== "parties"), Object.keys(base).filter(k => k !== "parties"), "כל שאר המודל כפי שהיה");
+    const mb = O.mail(res, cfg, PU.mailOpts(res)), ls = mb.body.split("\n"), i = ls.findIndex(l => l.startsWith("• דיווח לגורמים נוספים: "));
+    assert.ok(i > 0 && ls[i - 1].startsWith("• סגירה:") && ls[i + 1] === "", "השורה אחרי ״סגירה״");
+    assert.deepEqual(ls.slice(0, i).concat(ls.slice(i + 1)), baseMail.body.split("\n"), "שאר המייל זהה לשלב א׳");
+    assert.equal(ls[i], "• דיווח לגורמים נוספים: " + PU.rows(res).length + " גורמים"); assert.equal(mb.subject, baseMail.subject);
+    assert.ok(!/\d{2,3}-\d{6,7}|LLU|@|https?:/.test(ls[i]), "בלי שמות וטלפונים");
+    PU.setField(PU.rows(res)[0].key, "status", "done");
+    assert.ok(O.mail(res, cfg, PU.mailOpts(res)).body.includes("• דיווח לגורמים נוספים: " + PU.rows(res).length + " גורמים — 1 דווח/התקבל אישור"));
+  });
+
+  test("דיווח לגורמים נוספים, עורך: rebuild — שורות כמו P.build על הניתוח, קשורות לניתוח הזה בלבד (ניתוח אחר ← null), מסומנות ״טרם סומן״ / ״לא נמצא איש קשר״, והכול נשמר בדפדפן תחת המפתח של הבקשה", () => {
+    const { res, data } = mkAn(), store = mkStore(), calls = wire(store);
+    assert.equal(PU.rebuild(res, data, cfg), true);
+    const fresh = PP.build(res, cfg, data), rows = PU.rows(res);
+    assert.deepEqual(rows.map(r => r.key), fresh.map(r => r.key)); assert.equal(rows.length, 22);
+    assert.equal(PU.rows(Object.assign({}, res)), null, "אובייקט ניתוח אחר ← אין שורות (לא מציגים שורות של ניתוח קודם)"); assert.equal(PU.rows(null), null);
+    assert.ok(rows.every(r => r.status === "unmarked" || r.status === "nocontact") && !rows.some(r => r.isNew || r.stale), "הרצה ראשונה: בלי ״חדש״");
+    assert.equal(calls.n, 0, "בנייה אינה עריכה: לא נקרא changed");
+    const raw = store.peek(), fp = PP.fingerprint(res.inp), parsed = JSON.parse(raw);
+    assert.deepEqual(Object.keys(parsed), [fp]); assert.ok(raw.length < PU.STORE.bytes);
+    assert.equal(parsed[fp].t, NOW.getTime()); assert.deepEqual(parsed[fp].manual, []);
+    assert.match(fp, PU.FP_RE);
+    const crash = PP.buildResult; try {
+      PP.buildResult = () => { throw new Error("boom"); };
+      const r2 = mkAn(), c2 = wire(mkStore()); PU.rebuild(r2.res, r2.data, cfg);
+      assert.deepEqual(PU.rows(r2.res), [], "כשל כללי: אין שורות אוטומטיות, העורך נשאר"); assert.equal(PU.modelOpts(r2.res).partiesFailed, true); assert.equal(c2.n, 0);
+      const pg = O.partiesPage(PU.rows(r2.res), cfg, { failed: true }); assert.equal(pg.empty, PP.TEXT.failed, "ה-Word מציג את נוסח הכשל");
+      PP.buildResult = () => ({ rows: PP.build(res, cfg, data).slice(0, 3), dropped: 5, failed: ["notams"] });
+      wire(mkStore()); PU.rebuild(res, data, cfg); assert.equal(PU.rows(res).length, 3); assert.deepEqual([PU.modelOpts(res).partiesDropped, PU.modelOpts(res).partiesFailed], [5, true]);
+    } finally { PP.buildResult = crash; }
+  });
+
+  test("דיווח לגורמים נוספים, עורך: עריכה — setField מחזירה ok ונקראת hook.changed פעם אחת; ערך פגום (301 תווים, בקרה, בלתי נראה, סוג/סטטוס לא מוכר) ← ok:false עם הודעה, המצב לא משתנה ו-changed לא נקרא; כל עריכה נשמרת בדפדפן ובסיכום", () => {
+    const { res, data } = mkAn(), store = mkStore(), calls = wire(store);
+    PU.rebuild(res, data, cfg);
+    const k0 = PU.rows(res)[0].key, k1 = PU.rows(res)[1].key, snap = () => JSON.stringify(PU.rows(res)), s0 = snap(), sets0 = store.sets;
+    for (const [f, v] of [["note", "א".repeat(301)], ["note", "ab\u0007c"], ["note", "​"], ["note", 5], ["note", null], ["type", "other"], ["status", "weird"], ["status", "__proto__"], ["name", "x"], ["contact", "x"], ["nope", "x"]]) {
+      const r = PU.setField(k0, f, v); assert.equal(r.ok, false, f + "=" + String(v).slice(0, 10)); assert.ok(typeof r.error === "string" && r.error.length > 0, "יש הודעת שגיאה לשדה " + f);
+    }
+    assert.equal(PU.setField("z:לא-קיים", "note", "x").ok, false);
+    assert.match(PU.setField(k0, "note", "א".repeat(301)).error, /300/);
+    assert.equal(snap(), s0, "ערכים פגומים לא שינו דבר"); assert.equal(calls.n, 0, "changed לא נקרא"); assert.equal(store.sets, sets0, "לא נכתב לאחסון");
+    assert.deepEqual(PU.setField(k0, "status", "needed"), { ok: true, error: "" }); assert.equal(calls.n, 1);
+    assert.equal(PU.setField(k0, "note", "  התקשרתי, ממתין לאישור  ").ok, true); assert.equal(calls.n, 2);
+    assert.equal(PU.setField(k1, "type", "update").ok, true); assert.equal(PU.setField(k1, "status", "notneeded").ok, true); assert.equal(calls.n, 4);
+    const r0 = PU.rows(res)[0]; assert.deepEqual([r0.status, r0.note], ["needed", "התקשרתי, ממתין לאישור"], "ההערה נשמרת ללא רווחי קצה");
+    assert.equal(PU.setField(k0, "note", "א".repeat(300)).ok, true, "300 בדיוק — תקין");
+    const fp = PP.fingerprint(res.inp), saved = JSON.parse(store.peek())[fp];
+    assert.equal(saved.marks[k0].status, "needed"); assert.equal(saved.marks[k1].status, "notneeded"); assert.equal(saved.marks[k1].type, "update");
+    assert.match(O.mail(res, cfg, PU.mailOpts(res)).body, /• דיווח לגורמים נוספים: 22 גורמים — 1 דווח\/התקבל אישור|• דיווח לגורמים נוספים: 22 גורמים\n/, "המייל מבוסס על המצב העדכני");
+    // changed שזורק / אחסון שזורק לא מפילים את העריכה
+    const boom = { changed: () => { throw new Error("x"); }, store: { get: () => { throw new Error("g"); }, set: () => { throw new Error("s"); }, del: () => { throw new Error("d"); } }, now: () => { throw new Error("n"); } };
+    PU.reset(); PU.hook(boom); assert.doesNotThrow(() => PU.rebuild(res, data, cfg)); assert.equal(PU.rows(res).length, 22);
+    assert.equal(PU.setField(PU.rows(res)[0].key, "status", "done").ok, true); assert.ok(PU.record(res), "record עם שעון שזורק ← שעון ברירת מחדל"); assert.doesNotThrow(() => PU.wipe());
+  });
+
+  test("דיווח לגורמים נוספים, עורך: מיזוג בין הרצות — אותה בקשה (זיכרון) שומרת סימונים וגורמים ידניים; בקשה אחרת מתחילה נקי; חזרה לראשונה משחזרת מהאחסון; דף שנטען מחדש משחזר; גורם חדש מסומן ״חדש״; שורה שדווחה ונעלמה נשארת ״מחוץ לטווח״", () => {
+    const A = mkAn(), store = mkStore(), calls = wire(store);
+    PU.rebuild(A.res, A.data, cfg);
+    const k0 = PU.rows(A.res)[0].key, k1 = PU.rows(A.res)[1].key;
+    PU.setField(k0, "status", "done"); PU.setField(k0, "note", "אושר טלפונית"); PU.setField(k1, "type", "approval");
+    const man = PU.addManual({ name: "מנהל האתר", contact: "050-7654321", type: "report", status: "needed", note: "להתקשר ביום לפני" }); assert.equal(man.ok, true);
+    const before = calls.n;
+    // הרצה חוזרת (תוספת ידנית / הרצה מחדש): ניתוח חדש, אותו fp
+    const A2 = mkAn(); PU.rebuild(A2.res, A2.data, cfg);
+    const r2 = PU.rows(A2.res), by = k => r2.find(r => r.key === k);
+    assert.deepEqual([by(k0).status, by(k0).note, by(k1).type], ["done", "אושר טלפונית", "approval"], "סימונים נשמרו"); assert.equal(r2.filter(r => r.manual).length, 1); assert.equal(r2.find(r => r.manual).title, "מנהל האתר");
+    assert.equal(r2.filter(r => r.isNew).length, 0); assert.equal(PU.state().news, 0); assert.equal(calls.n, before, "בנייה מחדש אינה עריכה");
+    assert.equal(PU.rows(A.res), null, "השורות הן של הניתוח החדש בלבד");
+    // בקשה אחרת (תאריכים אחרים): נקי
+    const B = mkAn({ dateFrom: "2026-11-02", dateTo: "2026-11-03" }); PU.rebuild(B.res, B.data, cfg);
+    assert.notEqual(PP.fingerprint(B.res.inp), PP.fingerprint(A.res.inp));
+    assert.ok(PU.rows(B.res).every(r => r.status !== "done" && !r.note && !r.manual), "בקשה אחרת: בלי סימונים ובלי ידניים");
+    assert.deepEqual(Object.keys(JSON.parse(store.peek())).length, 2, "שתי בקשות באחסון");
+    // חזרה לבקשה הראשונה: מהאחסון
+    const A3 = mkAn(); PU.rebuild(A3.res, A3.data, cfg);
+    assert.equal(PU.rows(A3.res).find(r => r.key === k0).status, "done"); assert.equal(PU.rows(A3.res).filter(r => r.manual).length, 1);
+    // דף שנטען מחדש: reset + חיבור מחדש לאותו אחסון
+    PU.reset(); assert.equal(PU.rows(A3.res), null); PU.hook({ changed: () => {}, store, now: () => NOW });
+    const A4 = mkAn(); PU.rebuild(A4.res, A4.data, cfg);
+    assert.deepEqual([PU.rows(A4.res).find(r => r.key === k0).note, PU.rows(A4.res).find(r => r.manual).note], ["אושר טלפונית", "להתקשר ביום לפני"]); assert.equal(PU.state().news, 0);
+    // אחסון שבו חסר מפתח (גורם שלא היה בסריקה הקודמת) ← ״חדש״; ושורה שדווחה ונעלמה מהסריקה ← ״מחוץ לטווח״ (מה שסומן נשאר)
+    const fp = PP.fingerprint(A4.res.inp), obj = JSON.parse(store.peek()), gone = PU.rows(A4.res)[5].key;
+    obj[fp].keys = obj[fp].keys.filter(k => k !== gone); obj[fp].keys.push("z:GONE-1"); obj[fp].marks["z:GONE-1"] = { status: "done", title: "אזור שנעלם", src: "zone" }; store.set(JSON.stringify(obj));
+    PU.reset(); PU.hook({ changed: () => {}, store, now: () => NOW }); const A5 = mkAn(); PU.rebuild(A5.res, A5.data, cfg);
+    const r5 = PU.rows(A5.res);
+    assert.equal(r5.filter(r => r.isNew).map(r => r.key).join(), gone); assert.equal(PU.state().news, 1);
+    const st = r5.find(r => r.key === "z:GONE-1"); assert.ok(st && st.stale && st.status === "done" && st.title === "אזור שנעלם", "נשאר ״מחוץ לטווח״");
+    const html = PU.listHtml(r5); assert.ok(html.includes(PP.TEXT.outOfRange) && html.includes("חדש"));
+  });
+
+  test("דיווח לגורמים נוספים, עורך: אחסון חסום / פגום — הסימונים והגורמים הידניים עדיין נשמרים בזיכרון בין הרצות של אותה בקשה (האחסון הוא נוחות בלבד), ואחסון עם תוכן פגום פשוט מתעלמים ממנו", () => {
+    const blocked = { get: () => null, set: () => {}, del: () => {} }, A = mkAn();
+    PU.reset(); PU.hook({ changed: () => {}, store: blocked, now: () => NOW }); PU.rebuild(A.res, A.data, cfg);
+    const k0 = PU.rows(A.res)[0].key; PU.setField(k0, "status", "done"); PU.setField(k0, "note", "בזיכרון"); PU.addManual({ name: "ידני בזיכרון" });
+    const A2 = mkAn(); PU.rebuild(A2.res, A2.data, cfg);
+    assert.deepEqual([PU.rows(A2.res)[0].status, PU.rows(A2.res)[0].note, PU.rows(A2.res).filter(r => r.manual).map(r => r.title)], ["done", "בזיכרון", ["ידני בזיכרון"]], "בלי אחסון — הזיכרון משמר");
+    for (const junk of ["{", "[]", "null", '{"x":1}', '{"32.099128,34.816617,2026-10-20,2026-10-23":{"t":1,"keys":[1,2],"marks":{"z:LLU20":{"status":"nope","note":5,"type":{}}},"manual":[1,"x",{"key":"m:1"}]}}']) {
+      PU.reset(); PU.hook({ changed: () => {}, store: mkStore(junk), now: () => NOW }); const B = mkAn(); assert.doesNotThrow(() => PU.rebuild(B.res, B.data, cfg), junk.slice(0, 20));
+      assert.equal(PU.rows(B.res).length, 22, "נבנה כרגיל"); assert.ok(PU.rows(B.res).every(r => !r.manual && r.status !== "done"), "תוכן פגום לא יצר סימונים");
+    }
+  });
+
+  test("דיווח לגורמים נוספים, עורך: גורמים ידניים — הוספה (הטקסט נשמר כטקסט), ״changed״, תקרה 20, שם חובה, הסרה (ידני בלבד); אוטומטיים לא ניתנים להסרה", () => {
+    const { res, data } = mkAn(), store = mkStore(), calls = wire(store);
+    PU.rebuild(res, data, cfg); const n0 = PU.rows(res).length;
+    const a = PU.addManual({ name: EVIL, contact: EVIL, note: EVIL, type: "update", status: "needed" });
+    assert.deepEqual([a.ok, a.error, a.key], [true, "", "m:1"]); assert.equal(calls.n, 1); assert.equal(PU.rows(res).length, n0 + 1);
+    const row = PU.rows(res).find(r => r.key === "m:1"); assert.deepEqual([row.title, row.contact, row.note, row.type, row.status], [EVIL, EVIL, EVIL.slice(0, 300), "update", "needed"]);
+    assert.ok(!/<img|<script/i.test(PU.cardHtml(row, n0 + 1)), "ה-HTML של הגורם הידני מוגן");
+    const rec = PU.record(res), ms = rec.manual[0]; assert.deepEqual([ms.title, ms.contact], [EVIL, EVIL]); assert.doesNotThrow(() => JSON.parse(JSON.stringify(rec)));
+    for (const bad of [{ name: "" }, { name: "   " }, { name: "​​" }, { name: "a".repeat(81) }, { name: "ok", contact: "c".repeat(121) }, { name: "ok", note: "n".repeat(301) }, { name: "ok\u0007" }, { name: 5 }, null, undefined]) {
+      const r = PU.addManual(bad); assert.equal(r.ok, false, JSON.stringify(bad)); assert.ok(r.error.length > 0 && r.key === "");
+    }
+    assert.equal(PU.rows(res).length, n0 + 1, "הפגומים לא נוספו");
+    for (let i = 2; i <= 20; i++) assert.equal(PU.addManual({ name: "גורם " + i }).ok, true, "" + i);
+    const over = PU.addManual({ name: "עודף" }); assert.equal(over.ok, false); assert.match(over.error, /20/);
+    const nBefore = calls.n; assert.equal(PU.removeManual("m:1").ok, true); assert.equal(calls.n, nBefore + 1); assert.equal(PU.rows(res).filter(r => r.manual).length, 19);
+    assert.equal(PU.addManual({ name: "אחרי הסרה" }).key, "m:21", "מספור חדש לא חוזר על מפתח שהוסר");
+    const auto = PU.rows(res)[0].key, nn = calls.n; assert.equal(PU.removeManual(auto).ok, false); assert.equal(PU.removeManual("m:999").ok, false); assert.equal(PU.removeManual("").ok, false); assert.equal(calls.n, nn, "הסרה שנכשלה אינה עריכה");
+    assert.equal(PU.rows(res)[0].key, auto);
+  });
+
+  test("דיווח לגורמים נוספים, עורך: record — בלוק parties לקובץ נתוני הבקשה (גרסה, זמן, סיכום, שורות וידניות), JSON תקין עד 24KB, וחוזר דרך P.restore עם אותם סימונים; אין בו פרטי מבקש", () => {
+    const { res, data } = mkAn(PII_LIKE()), store = mkStore(); wire(store); PU.rebuild(res, data, cfg);
+    PU.setField(PU.rows(res)[0].key, "status", "needed"); PU.setField(PU.rows(res)[0].key, "note", "הערה"); PU.addManual({ name: "ידני", contact: "03-1234567", note: "x" });
+    const rec = PU.record(res), txt = JSON.stringify(rec);
+    assert.deepEqual(Object.keys(rec), ["v", "builtAt", "summary", "rows", "manual"]); assert.equal(rec.v, 1); assert.equal(rec.builtAt, NOW.toISOString());
+    assert.deepEqual(rec.summary, PP.summary(PU.rows(res))); assert.equal(rec.summary.total, 23); assert.equal(rec.summary.needed, 1);
+    assert.ok(txt.length < 24 * 1024, "עד 24KB: " + txt.length);
+    const back = PP.restore(JSON.parse(txt), cfg); assert.equal(back.length, 23); assert.equal(back[0].status, "needed"); assert.equal(back[0].note, "הערה"); assert.equal(back.find(r => r.manual).title, "ידני");
+    for (const v of ["בודק ראשון", "050-7654321", "פלוני אלמוני", "חברת הבדיקה"]) assert.ok(!txt.includes(v), "פרט מבקש בבלוק: " + v);
+    assert.ok(!/icd\.org\.il|office@|052-5076677/.test(txt), "בלי כתובת הארגון וטלפון התמיכה");
+    function PII_LIKE() { return { requesterName: "פלוני אלמוני", requesterPhone: "050-7654321", requesterOrg: "חברת הבדיקה" }; }
+  });
+
+  test("דיווח לגורמים נוספים, עורך: אחסון בדפדפן — storeParse/storeWrite: קלט עוין (__proto__, מערכים, מפתח לא חוקי, ענק, JSON שבור) נבלע; תקרות 20 בקשות ו-60KB (הנוכחית נשארת; לבדה מעל התקרה ← נמחקת); סדר לפי זמן", () => {
+    const map = PU.storeParse('{"__proto__":{"x":1},"constructor":1,"a":1,"32.1,34.8,2026-10-20,2026-10-21":{"t":5,"keys":"x","marks":[],"manual":{}},"32.2,34.8,2026-10-20,2026-10-21":[1],"32.3,34.8,2026-10-20,2026-10-21":{"t":"zz","keys":["z:1"],"marks":{"z:1":{"status":"done"}},"manual":[]}}');
+    assert.deepEqual(Object.keys(map).sort(), ["32.1,34.8,2026-10-20,2026-10-21", "32.3,34.8,2026-10-20,2026-10-21"]); assert.equal(({}).x, undefined, "אין זיהום אב-טיפוס");
+    assert.deepEqual(map["32.1,34.8,2026-10-20,2026-10-21"], { t: 5, keys: [], marks: {}, manual: [] }); assert.equal(map["32.3,34.8,2026-10-20,2026-10-21"].t, 0);
+    for (const bad of [null, undefined, 5, {}, [], "", "{", "[]", "null", '"x"', "x".repeat(PU.STORE.raw + 1), JSON.stringify([1, 2])]) assert.deepEqual(Object.keys(PU.storeParse(bad)), [], String(bad).slice(0, 20));
+    assert.equal(PU.storeRead("{}", "32.1,34.8,2026-10-20,2026-10-21"), null); assert.equal(PU.storeRead('{"__proto__":{"t":1}}', "__proto__"), null);
+    // תקרת 20 בקשות
+    const fpOf = i => "32." + String(100000 + i) + ",34.800000,2026-10-20,2026-10-21", mkRows = (n, note, tl) => Array.from({ length: n }, (_, i) => PP.setField([{ key: "z:r" + i, src: "zone", title: ("שורה " + i + " ").padEnd(tl || 8, "ש"), tag: "", party: "", contacts: { phones: [], emails: [], urls: [], lines: [], pairs: null, general: null }, contactSrc: "", hasContact: false, dtype: "report", mark: {} }], "z:r" + i, "note", note).rows[0]);
+    let raw = ""; for (let i = 0; i < 25; i++) raw = PU.storeWrite(raw, fpOf(i), mkRows(1, "n"), 1000 + i);
+    let keys = Object.keys(JSON.parse(raw)); assert.equal(keys.length, 20); assert.ok(!keys.includes(fpOf(0)) && !keys.includes(fpOf(4)) && keys.includes(fpOf(5)) && keys.includes(fpOf(24)), "הישנות נמחקו");
+    raw = PU.storeWrite(raw, fpOf(5), mkRows(1, "מעודכן"), 99999); keys = Object.keys(JSON.parse(raw)); assert.equal(keys.length, 20, "עדכון בקשה קיימת לא מוסיף"); assert.equal(JSON.parse(raw)[fpOf(5)].t, 99999);
+    raw = PU.storeWrite(raw, fpOf(30), mkRows(1, "x"), 100000); assert.ok(!Object.keys(JSON.parse(raw)).includes(fpOf(6)), "הכי ישנה אחרי העדכון (fp 6) נמחקה"); assert.ok(Object.keys(JSON.parse(raw)).includes(fpOf(5)));
+    // תקרת 60KB: ערימה של רשומות גדולות — הישנות נמחקות, הנוכחית נשארת
+    const note = "א".repeat(300), bigRows = mkRows(60, note); let big = "";
+    for (let i = 0; i < 12; i++) big = PU.storeWrite(big, fpOf(i), bigRows, 2000 + i);
+    assert.ok(big.length <= PU.STORE.bytes, "עד 60KB: " + big.length); assert.ok(Object.keys(JSON.parse(big)).includes(fpOf(11)), "הנוכחית נשארה"); assert.ok(!Object.keys(JSON.parse(big)).includes(fpOf(0)), "הישנה נמחקה");
+    // רשומה אחת מעל התקרה (120 שורות עם הערות) ← לא נכתבת, והאחרות נשארות
+    let hugeRows = mkRows(120, note, 120); for (let i = 0; i < 20; i++) hugeRows = PP.addManual(hugeRows, { name: "ש".repeat(80), contact: "ג".repeat(120), note }).rows;
+    assert.ok(JSON.stringify(PP.marks(hugeRows)).length > PU.STORE.bytes, "הרשומה המלאכותית באמת מעל התקרה: " + JSON.stringify(PP.marks(hugeRows)).length);
+    const huge = PU.storeWrite(PU.storeWrite("", fpOf(1), mkRows(2, "x"), 5), fpOf(2), hugeRows, 6);
+    assert.deepEqual(Object.keys(JSON.parse(huge)), [fpOf(1)], "רשומה לבדה מעל 60KB נמחקת"); assert.equal(PU.storeWrite("", fpOf(2), hugeRows, 6), "", "ואם היא היחידה — מחרוזת ריקה (מחיקת המפתח)");
+    assert.equal(PU.storeWrite("{}", "not-a-fp", mkRows(1, "x"), 1), "", "fp לא חוקי לא נכתב");
+    // חזרה: storeRead מחזיר את מה שנכתב (בצורה שמתאימה ל-P.merge)
+    const rd1 = PU.storeRead(PU.storeWrite("", fpOf(3), mkRows(2, "נ"), 7), fpOf(3)); assert.equal(rd1.marks["z:r0"].note, "נ"); assert.equal(rd1.t, 7);
+  });
+
+  test("דיווח לגורמים נוספים, עורך: HTML מוגן מקלט עוין — כותרת, תג, גורם, קטעים, תוויות, מקור, טלפונים, דוא״ל, אתרים, זוגות, הערה ושם/פרטי קשר ידניים; tel: רק למספר חד-משמעי; אתר רק http(s) נקי; בלי אלמנט או מאפיין שהוזרקו", () => {
+    const ph = (text, kind, tel, range) => ({ raw: text, display: text, text, kind, tel, range: range || "" });
+    const row = { key: 'z:"><b>' + EVIL, src: "zone", title: EVIL, tag: EVIL, party: EVIL, count: 5, isNew: true, updated: true, stale: true,
+      contacts: { phones: [ph("03-1234567", "landline", "tel:+97231234567"), ph(EVIL, "landline", "javascript:alert(1)"), ph("073-3636954/5", "voip", "tel:+97233636954", "/5"), ph("+1 555 0100", "unverified", "tel:+15550100"), ph("1-700-123-456", "tollfree", "tel:1700123456"), ph("050-1111111", "mobile", 'tel:+972501111111"onclick="x'), ph("052-2222222", "mobile", "TEL:+972522222222")],
+        emails: [EVIL, "a@b.co"], urls: ["javascript:alert(1)", "data:text/html,<script>x</script>", "https://example.com/a?b=1&c=2", "https://example.com/x<y>", "//evil.com", "ftp://x.org/a", "https://icd.org.il/x"], lines: [EVIL, "שורה עם 03-1234567 בתוכה"], pairs: null,
+        general: { label: EVIL, src: EVIL, phones: [], emails: [EVIL], lines: [EVIL], pairs: [{ label: EVIL, phone: ph("03-1111111", "landline", "tel:+97231111111") }, { label: "x", phone: ph("04-2222222", "landline", "tel:+97242222222") }] } },
+      contactSrc: EVIL, hasContact: true, dtype: "report", mark: { note: EVIL }, type: "report", status: "needed", note: EVIL, cue: EVIL };
+    const html = PU.cardHtml(row, 3), tags = [...html.matchAll(/<([a-z0-9]+)\b/gi)].map(m => m[1].toLowerCase());
+    assert.deepEqual([...new Set(tags)].filter(t => !["li", "div", "span", "b", "bdi", "p", "a", "ul", "label", "select", "option", "input", "button"].includes(t)), [], "רק תגיות העורך: " + [...new Set(tags)].join());
+    // כל "<" בפלט הוא תגית תקינה (שם + מאפיינים במרכאות כפולות בלי "<>" בערכים) — אין "<" גולמי בתוכן או בערכים; ואין מאפיין on* (שמות המאפיינים נבדקים בלי הערכים)
+    const tagRe = /<\/?([a-z0-9]+)((?:\s+[a-z][a-z0-9\-]*(?:="[^"<>]*")?)*)\s*\/?>/gi, toks = [...html.matchAll(tagRe)];
+    assert.equal(toks.length, (html.match(/</g) || []).length, "אין '<' גולמי בפלט");
+    const attrNames = toks.flatMap(t => [...t[2].replace(/="[^"]*"/g, "").matchAll(/\s([a-z][a-z0-9\-]*)/gi)].map(m => m[1].toLowerCase()));
+    assert.ok(attrNames.length > 10 && !attrNames.some(n => /^on/.test(n) || n === "style" || n === "srcdoc"), "אין מטפל on* / style שהוזרק: " + [...new Set(attrNames)].join());
+    assert.ok(!/<(img|script|svg|iframe|style)\b/i.test(html));
+    assert.ok(html.includes("&lt;img src=x onerror=alert(1)&gt;") && html.includes("&quot;") && html.includes("&#39;") && html.includes("&amp;"), "הטקסט נשמר, מוגן");
+    const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map(m => m[1]);
+    assert.deepEqual(hrefs.filter(h => h.startsWith("tel:")).sort(), ["tel:+97231111111", "tel:+97231234567", "tel:+97242222222", "tel:1700123456"].sort(), "tel: רק למספרים חד-משמעיים (לא סיומת, לא ״לא אומת״, לא ערך חשוד)");
+    assert.deepEqual(hrefs.filter(h => !h.startsWith("tel:")), ["https://example.com/a?b=1&amp;c=2"], "קישור אתר אחד בלבד — נקי; כל השאר טקסט");
+    assert.ok(!/javascript:|data:text|ftp:|\/\/evil|icd\.org\.il(?!.*<\/)/.test(hrefs.join(" ")), "אין סכמות מסוכנות בקישורים");
+    assert.ok(/<a class="pty-url" href="https:\/\/example\.com\/a\?b=1&amp;c=2" target="_blank" rel="noopener noreferrer" dir="ltr">/.test(html), "קישור חיצוני עם rel=noopener noreferrer");
+    assert.equal((html.match(/target="_blank"/g) || []).length, 1); assert.ok(!/href="(?!tel:|https:\/\/example)/.test(html));
+    assert.ok(/<bdi dir="ltr">03-1234567<\/bdi>/.test(html) && html.includes("(לא אומת)") && /<bdi class="pty-em" dir="ltr">a@b\.co<\/bdi>/.test(html), "מספרים ודוא״ל ב-bdi ltr");
+    assert.ok(!html.includes('tel:+15550100') && !html.includes("+97233636954") && !html.includes("onclick="), "בלי tel: לסיומת / ללא אימות / לערך עם מרכאה");
+    assert.match(html, /aria-labelledby="ptyT3"/); assert.match(html, /id="ptyT3"/); assert.match(html, /data-key="z:&quot;&gt;&lt;b&gt;&lt;img/); assert.match(html, /aria-describedby="ptyE3"/); assert.match(html, /id="ptyE3"/);
+    assert.ok(html.includes(PP.TEXT.updated) && html.includes(PP.TEXT.outOfRange) && html.includes(">חדש<"), "תגי ״חדש״, ״עודכנו״ ו״מחוץ לטווח״");
+    // ידני: ערכי השדות (name / contact / note) במאפיין value מוגנים
+    const man = PU.cardHtml({ key: "m:1", src: "manual", manual: true, title: EVIL, contact: EVIL, note: EVIL, type: "report", status: "needed", contacts: {}, mark: {} }, 7);
+    assert.ok(![...man.matchAll(/value="([^"]*)"/g)].some(m => /[<>]/.test(m[1])) && !/<(img|script)\b/i.test(man) && /data-f="name"/.test(man) && /data-f="contact"/.test(man) && /data-act="rm"/.test(man), "שדות הידני מוגנים, יש כפתור הסרה");
+    assert.ok(/<span class="vh" id="ptyT7">גורם ידני 7<\/span>/.test(man) && /aria-label="הסר גורם ידני 7"/.test(man), "שם נגיש לקבוצה ולכפתור ההסרה");
+    // שורה פגומה לא זורקת
+    for (const bad of [{}, { key: "z:1" }, { key: "z:1", contacts: null }, { key: "z:1", contacts: { phones: [null, 5, "x"], emails: [5], urls: [{}], lines: [null], pairs: [null] }, status: 5, type: {} }, null, undefined]) assert.doesNotThrow(() => PU.cardHtml(bad, 1), JSON.stringify(bad));
+    assert.doesNotThrow(() => PU.listHtml(null)); assert.equal(PU.listHtml(null), "");
+    // tel: — הטבלה של telHref
+    for (const [p, want] of [[ph("1", "landline", "tel:+972312345678"), "tel:+972312345678"], [ph("1", "mobile", "tel:+972501234567"), "tel:+972501234567"], [ph("1", "voip", "tel:+972312345"), ""], [ph("1", "landline", "tel:+9723123456789"), ""], [ph("1", "tollfree", "tel:1599123456"), "tel:1599123456"], [ph("1", "tollfree", "tel:1599123"), ""], [ph("1", "landline", " tel:+972312345678"), ""], [ph("1", "landline", "tel:+972312345678\n"), ""], [ph("1", "landline", "tel:+972312345678", "/5"), ""], [{ tel: "tel:+972312345678", kind: "unverified" }, ""], [null, ""], [undefined, ""], ["tel:+972312345678", ""], [{ tel: 5 }, ""], [{}, ""]]) assert.equal(PU.telHref(p), want, JSON.stringify(p));
+  });
+
+  test("דיווח לגורמים נוספים, עורך: ״הצג רק פתוחות״ — isOpen (ידני, נדרש, דווח, טרם סומן, או הערה ← פתוח; אין צורך / לא נמצא איש קשר בלי הערה ← מוסתר); המספור קבוע; הכרטיסים הם <li> עם מבנה נגיש ותוויות גלויות (סוג, סטטוס, הערה) וסמל סטטוס בטקסט", () => {
+    const base = { contacts: { phones: [], emails: [], urls: [], lines: [], pairs: null, general: null }, src: "zone", title: "t", tag: "", party: "", contactSrc: "", mark: {} };
+    const mk = (key, status, extra) => Object.assign({ key, status, type: "report", note: "" }, base, extra || {});
+    const rows = [mk("z:1", "unmarked"), mk("z:2", "nocontact"), mk("z:3", "notneeded"), mk("z:4", "needed"), mk("z:5", "done"), mk("z:6", "nocontact", { note: "כתבתי" }), mk("z:7", "notneeded"), mk("m:1", "notneeded", { manual: true, src: "manual", title: "ידני", contact: "" })];
+    assert.deepEqual(rows.map(PU.isOpen), [true, false, false, true, true, true, false, true]); assert.equal(PU.isOpen(null), false); assert.equal(PU.isOpen({ status: "weird" }), true);
+    const all = PU.listHtml(rows), open = PU.listHtml(rows, { onlyOpen: true }), ids = h => [...h.matchAll(/id="ptyT(\d+)"/g)].map(m => +m[1]);
+    assert.deepEqual(ids(all), [1, 2, 3, 4, 5, 6, 7, 8]); assert.deepEqual(ids(open), [1, 4, 5, 6, 8], "המספור קבוע גם כשהסינון מסתיר");
+    assert.equal((all.match(/<li class="pty"/g) || []).length, 8); assert.ok(/<li class="pty" role="group" aria-labelledby="ptyT1" data-key="z:1" data-st="unmarked">/.test(all));
+    const c1 = PU.cardHtml(rows[3], 4);
+    assert.ok(/<label class="pty-l"><span>סוג<\/span><select data-f="type">/.test(c1) && /<span>סטטוס <span class="pty-ic" aria-hidden="true">!<\/span><\/span><select data-f="status">/.test(c1) && /<span>הערה<\/span><input type="text" data-f="note" maxlength="300"/.test(c1), "תוויות גלויות לכל בקר, ולא placeholder");
+    assert.ok(!/placeholder/.test(c1), "אין placeholder בכרטיס");
+    for (const [s, ic] of [["needed", "!"], ["done", "✓"], ["nocontact", "—"], ["notneeded", "○"], ["unmarked", "·"]]) assert.ok(PU.cardHtml(mk("z:9", s), 1).includes('<option value="' + s + '" selected>' + ic + " "), "סמל + טקסט לסטטוס " + s);
+    assert.deepEqual([...c1.matchAll(/<option value="([a-z]+)"/g)].map(m => m[1]), ["approval", "report", "update", "unmarked", "needed", "done", "nocontact", "notneeded"], "שלושת הסוגים וחמשת הסטטוסים, טרם סומן ראשון");
+    assert.ok(/<p class="err pty-e" id="ptyE4"><\/p>/.test(c1), "מקום להודעת שגיאה ליד השדה");
+  });
+
+  test("דיווח לגורמים נוספים, עורך: חיבורים — index.html טוען parties.js ואחריו partiesui.js ושניהם לפני ui.js (?v=1); ui.js: כל החיבורים (בנייה אחרי run ו-reanalyze, modelOpts, העמוד בדוח, שלושת קוראי O.mail, בלוק parties ברשומה לפני תמונת המצב, איפוס, מחיקת פרטים, hook ו-mount) — ולא נוגעים בשער; config.json: features.parties", () => {
+    const html = rdq("index.html"), ui = rdq("js/ui.js"), pui = rdq("js/partiesui.js");
+    const at = f => html.indexOf('<script src="js/' + f + '?v=');
+    assert.ok(at("output.js") > 0 && at("parties.js") > at("output.js") && at("partiesui.js") > at("parties.js") && at("ui.js") > at("partiesui.js"), "סדר הטעינה");
+    assert.ok(html.includes('<script src="js/parties.js?v=1"></script>') && html.includes('<script src="js/partiesui.js?v=1"></script>'));
+    assert.ok(!/id="partiesBox"|ptyList|partiesStyle/.test(html), "אין DOM של העורך ב-index.html (נוצר רק כשהדגל פעיל)");
+    assert.ok(/function partiesRebuild\(data\) \{ try \{ const U = PUI\(\); if \(U && S\.res\) U\.rebuild\(S\.res, data, S\.cfg\); \} catch \(e\)/.test(ui), "partiesRebuild: try/catch, רק עם ניתוח");
+    const run = /async function run\(\) \{[^]*?\n  \}\n/.exec(ui)[0], rea = /async function reanalyze\(\) \{[^]*?\n  \}\n/.exec(ui)[0];
+    assert.ok(/S\.res = res; S\.scanKey = scanKeyOf\(inp0\);[^]*?partiesRebuild\(data\);[^]*?await buildMapImage\(steps, st\);/.test(run), "run: הבנייה אחרי S.res ולפני תמונות המפה והדוח");
+    assert.ok(/S\.res = C\.analyze\(inp, data, S\.cfg, new Date\(\)\);[^]*?partiesRebuild\(data\);[^]*?clearOutcome\(\);/.test(rea), "reanalyze: הבנייה אחרי הניתוח החדש");
+    assert.ok(/const mo = \{ images: images \|\| \{\}, providerName:[^]*?adv: isAdv\(\) \};[^]*?return Object\.assign\(mo, partiesOpts\(\)\);/.test(ui), "modelOpts מוסיף partiesOpts");
+    assert.ok(/\$\("report"\)\.innerHTML = p1 \+ pImgs \+ \(mdl\.parties \? O\.partiesHtml\(mdl\.parties\) : ""\) \+ p3;/.test(ui), "העמוד בדוח: אחרי התמונות ולפני דף הבדיקות");
+    assert.equal((ui.match(/O\.mail\(S\.res, S\.cfg, (?:withUpdate\()?mailOpts\(\)/g) || []).length, 3, "שלושת הקוראים: renderAll, sendToNotamOpen, copyMail (אפשר לעטוף ב-withUpdate של הבדיקה החוזרת)"); assert.ok(!/O\.mail\(S\.res, S\.cfg\)/.test(ui), "אין קורא ישן");
+    const rec = /function inputsForRecord\(\) \{[^]*?\n  \}\n/.exec(ui)[0];
+    assert.ok(/const pr = partiesRecord\(\); if \(pr\) rec\.parties = pr;[^]*?return myreqSnapRecord\(rec\);/.test(rec) && rec.indexOf("rec.parties") < rec.indexOf("myreqSnapRecord(rec)"), "הבלוק נכנס לרשומה לפני תמונת המצב (הגודל נבדק עם הבלוק)");
+    const rp = ui.slice(ui.indexOf("function resetPage()"), ui.indexOf("function onPageShow"));
+    assert.ok(/step\(partiesReset\);/.test(rp) && /function enterUser\(u\) \{\n    S\.uk = C\.userHash\(u\);\n    partiesReset\(\);/.test(ui), "איפוס בהתנתקות / החלפת משתמש");
+    assert.ok(/function wipePerson\(\) \{\n    if \(!authed\(\)\) return;\n    lsDel\(PERSON_KEY\);[^]*?U\.wipe\(\)/.test(ui), "״מחק פרטים שמורים״ מוחק גם את הסימונים");
+    assert.ok(/U\.hook\(\{ changed: onSoftInputChange, store: \{ get: \(\) => lsGet\(PARTIES_KEY\), set: v => lsSet\(PARTIES_KEY, v\), del: \(\) => lsDel\(PARTIES_KEY\) \}, now: \(\) => new Date\(\) \}\); U\.mount\(S\.cfg\);/.test(ui), "hook: changed = onSoftInputChange (אותו תזמון של שדה רך), אחסון לפי המשתמש");
+    assert.ok(/const PARTIES_KEY = "icd_req_parties_v1";/.test(ui));
+    const body = ui.slice(ui.indexOf("/* ---------- דיווח לגורמים נוספים"), ui.indexOf("/* ---------- הדוח ----------")).replace(/\/\/.*$/gm, "");   // בלי הערות
+    assert.ok(body.length > 200 && !/S\.ready|S\.statuses|setStatus|REQUIRED_CHECKS|refreshGate/.test(body), "בלוק החיבור לא נוגע במוכנות");
+    assert.ok(!/setStatus\(\s*"parties|statuses\.parties|statuses\["parties|S\.ready\s*=[^;\n]*partie/i.test(ui) && !/partie/i.test(rdq("js/core.js")), "הגורמים אינם בדיקת שער: לא ב-ui.js ולא ב-C.gate (core.js)");
+    const puiCode = pui.replace(/\/\*[^]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");   // בלי הערות
+    assert.ok(!/S\.ready|setStatus|refreshGate|clearOutcome|S\.statuses/.test(puiCode), "partiesui.js אינו נוגע בשער ובתוצאות — כל עריכה עוברת רק hook.changed");
+    assert.ok(!/localStorage|sessionStorage|indexedDB|fetch\(|XMLHttpRequest|setInterval|navigator\./.test(puiCode), "אין אחסון ישיר, רשת או טיימר חוזר במודול (האחסון דרך hook.store, ללא טיימר)");
+    const rhs = [...pui.matchAll(/(?:\.innerHTML = |insertAdjacentHTML\("afterend", )([^;]{0,40})/g)].map(m => m[1]);
+    assert.equal(rhs.length, 7, "שבעה מקומות כתיבת HTML בלבד"); assert.ok(rhs.every(x => /^(""|total \? listHtml\(|chipsHtml\(\)|typeOpts\(|statusOpts\(|'<h3 id="ptyTitle">|'<span class="small" id="ptyChkNote">)/.test(x)), "כל כתיבה ל-HTML היא ממבנה מוגן: " + rhs.join(" | "));
+    assert.equal(JSON.parse(rdq("config.json")).features.parties, true);
+    const feat = JSON.parse(rdq("config.json")).features; for (const k of ["myreq", "parties"]) assert.equal(feat[k], true, "config.features." + k);
+  });
+
+  test("דיווח לגורמים נוספים, עורך: נוסחים — הסבר ה-״!״ ומחרוזות העורך: בלי כתובת הארגון ובלי ״מנהל המערכת״; מודיעין טיס בטקסט החדש ולא ״משרד נוטאם״; ההסבר מתאר את מה שנעשה בפועל (עמוד בלי תלות בדף בדיקות, שורת מייל בלי שמות, נשמר בדפדפן, לא חוסם)", () => {
+    const all = JSON.stringify([PU.HELP, PU.STR, PP.TEXT]) + rdq("js/partiesui.js").replace(/\/\*[^]*?\*\//, "");
+    assert.ok(!/office@|icd\.org\.il|מנהל המערכת|info@|052-5076677/.test(JSON.stringify([PU.HELP, PU.STR])) && !/icd\.org\.il|office@/.test(rdq("js/partiesui.js")), "בלי כתובת הארגון ובלי ״מנהל המערכת״");
+    assert.ok(/מודיעין טיס/.test(PU.HELP) && !/משרד נוטאם/.test(PU.HELP + JSON.stringify(PU.STR)), "ה-״!״ ו-STR: מודיעין טיס, לא ״משרד נוטאם״");
+    for (const must of ["אינם מאומתים", "הסימונים הם שלכם", "עמוד נפרד", "גם כשסימון ״כולל דף בדיקות״ כבוי", "שורה אחת עם ספירה בלבד, בלי שמות וטלפונים", "אינה מונעת שמירה או שליחה", "נשמרים בדפדפן הזה בלבד", "עד 20"]) assert.ok(PU.HELP.includes(must), "ההסבר מזכיר: " + must);
+    assert.ok(PU.HELP.length > 400 && PU.HELP.length < 1800, "אורך סביר: " + PU.HELP.length);
+    assert.ok(all.length > 1000);
+    // העובדות שההסבר מתאר — נבדקות מול הקוד: העמוד נכנס ל-Word גם כש-includeChecks כבוי; המייל בלי שמות
+    const { res, data } = mkAn(), store = mkStore(); wire(store); PU.rebuild(res, data, cfg);
+    const m = O.docxModel(res, data, cfg, Object.assign({ now, images: {}, includeChecks: false }, PU.modelOpts(res))); assert.ok(m.parties && m.includeChecks === false);
+    assert.equal(PP.LIMITS.manual, 20);
+  });
+}
+/* PARTIES-UI-UNIT-END */

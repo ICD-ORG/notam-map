@@ -116,7 +116,7 @@
       if (!badCode(c)) o += ch;
     }
     o = multi ? o.split("\n").map(l => l.replace(/[ \u00a0]+/g, " ").trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim() : o.replace(/\s+/g, " ").trim();
-    return max && o.length > max ? Array.from(o).slice(0, max).join("") : o;
+    return max && o.length > max ? Array.from(o).slice(0, max).join("").trim() : o;   // trim אחרי החיתוך: אידמפוטנטי (clean(clean(x)) === clean(x)) — תמונת מצב שנוקתה שוב אינה משתנה
   }
 
   let tzFmt = null;
@@ -206,10 +206,11 @@
     if (items.length > LIMITS.items) { capped.items = items.length - LIMITS.items; items = items.slice(0, LIMITS.items); }
 
     const aNear = x => x.d - R <= (th.agri_near_m || 3000);
+    const uniq = (list, kf) => { const sn = new Set(); return list.filter(x => kf(x) && !sn.has(kf(x)) && sn.add(kf(x))); };   // מזהה כפול (לא אמור) — הראשון/הקרוב
     const oth = {
-      borders: (res.borders || []).slice(0, LIMITS.borders).map(b => ({ iso: clean(b.iso, 8), d: r1(b.d), v: b.violates ? 1 : 0 })).sort((a, b) => cmp(a.iso, b.iso)),
-      air: (res.airfields || []).filter(a => a.d - R <= (th.airfield_near_m || 1000)).slice(0, LIMITS.air).map(a => ({ id: clean(a.id, 40), d: r1(a.d), t: clean(a.type, 20), n: clean(a.name, 60) })).sort((a, b) => cmp(a.id, b.id)),
-      agri: (res.agri || []).filter(aNear).slice(0, LIMITS.agri).map(a => ({ n: clean(a.name, 80), d: r1(a.d) })).sort((a, b) => cmp(a.n, b.n))
+      borders: uniq((res.borders || []).slice(0, LIMITS.borders).map(b => ({ iso: clean(b.iso, 8), d: r1(b.d), v: b.violates ? 1 : 0 })), b => b.iso).sort((a, b) => cmp(a.iso, b.iso)),
+      air: uniq((res.airfields || []).filter(a => a.d - R <= (th.airfield_near_m || 1000)).map(a => ({ id: clean(a.id, 40), d: r1(a.d), t: clean(a.type, 20), n: clean(a.name, 60) })), a => a.id).slice(0, LIMITS.air).sort((a, b) => cmp(a.id, b.id)),
+      agri: uniq((res.agri || []).filter(aNear).map(a => ({ n: clean(a.name, 80), d: r1(a.d) })), a => a.n).slice(0, LIMITS.agri).sort((a, b) => cmp(a.n, b.n))
     };
 
     const snap = {
@@ -668,7 +669,7 @@
     if (diff.excessive) m.notes.push(STR.excessive);
     if (diff.reliability.items === "capped") m.notes.push(STR.capped);
     if (diff.reliability.notams === "capped") m.notes.push(STR.cappedKnown);
-    if (diff.items.rows.length || diff.items.checked) m.notes.push(STR.osm);
+    if (diff.items.rows.length) m.notes.push(STR.osm);
     m.sources = diff.sources.map(s => ({ label: s.label, before: s.before, after: s.after, changed: s.changed }));
     cats.forEach(k => {
       const rs = diff[k].rows.map(rowModel);
@@ -681,35 +682,38 @@
   /* ================= HTML (כל ערך דינמי עובר E) ================= */
   const S_BANNER = "background:#fff3cd;color:#4a3500;border:2px solid #e0a800;border-radius:10px;padding:10px 14px;margin:8px 0;font-weight:700;line-height:1.7";
   const S_TBL = "width:100%;border-collapse:collapse;margin:4px 0 10px", S_CELL = "border:1px solid #999;padding:5px 7px;text-align:right;vertical-align:top";
-  const bannerBox = (text, sub, resend) => '<div class="rc-banner" role="note" style="' + S_BANNER + '">' + E(text) + " " + E(sub) + (resend ? '<div style="font-weight:400;margin-top:4px">' + E(resend) + "</div>" : "") + "</div>";
+  const bannerBox = (text, sub, resend) => '<div class="rc-banner" role="note" style="' + S_BANNER + '">' + E(text == null ? STR.banner : text) + (sub ? " " + E(sub) : "") + (resend ? '<div style="font-weight:400;margin-top:4px">' + E(resend) + "</div>" : "") + "</div>";
   const bannerHtml = (sentAt, opts) => bannerBox(bannerText(sentAt), STR.bannerSub, opts && opts.resendNote === false ? "" : STR.resend);
+  const L = v => (Array.isArray(v) ? v : []);   // המודל נבנה כאן, אך ה-HTML לא נסמך עליו: חסר/שגוי ← ריק, לא חריגה
   function rowsHtml(rows) {
     return '<table class="rc-table" style="' + S_TBL + '"><thead><tr>' + STR.cols.map(h => '<th scope="col" style="' + S_CELL + ';background:#eee;color:#222">' + E(h) + "</th>").join("") + "</tr></thead><tbody>" +
-      rows.map(r => {
-        const hi = r.sev === "high";
-        return '<tr data-sev="' + E(r.sev) + '"><td style="' + S_CELL + (hi ? ";font-weight:700;color:#b00020" : "") + '">' + E(r.statusLabel) + (r.sevLabel ? '<br><span style="font-weight:700">' + E(r.sevLabel) + "</span>" : "") + "</td>" +
+      L(rows).map(r => {
+        r = r || {};
+        return '<tr data-sev="' + E(r.sev) + '"><td style="' + S_CELL + (r.sev === "high" ? ";font-weight:700;color:#b00020" : "") + '">' + E(r.statusLabel) + (r.sevLabel ? '<br><span style="font-weight:700">' + E(r.sevLabel) + "</span>" : "") + "</td>" +
           '<td style="' + S_CELL + '">' + (r.id ? "<b>" + E(r.id) + "</b> " : "") + E(r.title) + "</td>" +
-          '<td style="' + S_CELL + '">' + r.lines.map(E).join("<br>") + "</td>" +
+          '<td style="' + S_CELL + '">' + L(r.lines).map(l => E(l)).join("<br>") + "</td>" +
           '<td style="' + S_CELL + '">' + E(r.dist) + "</td></tr>";
       }).join("") + "</tbody></table>";
   }
   function sinceHtml(m) {
     if (!m || typeof m !== "object") return "";
+    const b = m.banner || {}, sources = L(m.sources);
     let h = '<section class="rc-since" dir="rtl" aria-label="' + E(STR.title) + '"><h3 style="margin:4px 0">' + E(m.title) + "</h3>";
-    h += bannerBox(m.banner.text, m.banner.sub, m.banner.resend);
-    if (m.dates.length) h += '<p class="rc-dates" style="margin:6px 0">' + m.dates.map(d => E(d.label) + ": <b>" + E(d.value) + "</b>").join(" · ") + "</p>";
+    h += bannerBox(b.text, b.sub, b.resend);
+    if (L(m.dates).length) h += '<p class="rc-dates" style="margin:6px 0">' + L(m.dates).map(d => E((d || {}).label) + ": <b>" + E((d || {}).value) + "</b>").join(" · ") + "</p>";
     h += '<p class="rc-summary" role="status" style="margin:6px 0;font-weight:700">' + E(m.summary) + "</p>";
     if (m.checkedLine) h += '<p class="rc-checked" style="margin:4px 0">' + E(m.checkedLine) + "</p>";
-    m.notes.forEach(n => { h += '<p class="rc-note" style="margin:4px 0;font-size:90%">' + E(n) + "</p>"; });
-    if (m.sources.length) {
+    L(m.notes).forEach(n => { h += '<p class="rc-note" style="margin:4px 0;font-size:90%">' + E(n) + "</p>"; });
+    if (sources.length) {
       h += '<table class="rc-sources" style="' + S_TBL + '"><caption style="text-align:right;font-weight:700">' + E(STR.sources) + "</caption><thead><tr>" + STR.srcCols.map(c => '<th scope="col" style="' + S_CELL + ';background:#eee;color:#222">' + E(c) + "</th>").join("") + "</tr></thead><tbody>" +
-        m.sources.map(s => '<tr><td style="' + S_CELL + '">' + E(s.label) + '</td><td style="' + S_CELL + '">' + E(s.before) + '</td><td style="' + S_CELL + (s.changed ? ";font-weight:700" : "") + '">' + E(s.after) + "</td></tr>").join("") + "</tbody></table>";
+        sources.map(s => { s = s || {}; return '<tr><td style="' + S_CELL + '">' + E(s.label) + '</td><td style="' + S_CELL + '">' + E(s.before) + '</td><td style="' + S_CELL + (s.changed ? ";font-weight:700" : "") + '">' + E(s.after) + "</td></tr>"; }).join("") + "</tbody></table>";
     }
-    m.sections.forEach(s => {
-      h += '<h4 style="margin:10px 0 2px">' + E(s.title) + " (" + s.total + ")</h4>" + rowsHtml(s.rows);
-      if (s.rest.length) h += '<details class="rc-more"><summary>' + E(STR.more) + " (" + s.rest.length + ")</summary>" + rowsHtml(s.rest) + "</details>";
+    L(m.sections).forEach(s => {
+      s = s || {};
+      h += '<h4 style="margin:10px 0 2px">' + E(s.title) + " (" + E(s.total) + ")</h4>" + rowsHtml(s.rows);
+      if (L(s.rest).length) h += '<details class="rc-more"><summary>' + E(STR.more) + " (" + L(s.rest).length + ")</summary>" + rowsHtml(s.rest) + "</details>";
     });
-    h += '<p class="rc-limit" style="margin:8px 0;font-size:90%">' + E(m.limitation) + "</p></section>";
+    h += '<p class="rc-limit" style="margin:8px 0;font-size:90%">' + E(m.limitation == null ? STR.limit : m.limitation) + "</p></section>";
     return h;
   }
 
@@ -748,8 +752,8 @@
     if (!m || typeof m !== "object") return "";
     if (!m.ok) return '<p class="rc-request" role="alert">' + E(m.text) + "</p>";
     let h = '<section class="rc-request" dir="rtl"><h3 style="margin:4px 0">' + E(m.title) + '</h3><table style="' + S_TBL + '"><tbody>' +
-      m.rows.map(r => '<tr><th scope="row" style="' + S_CELL + ';width:32%;background:#eee;color:#222">' + E(r.label) + '</th><td style="' + S_CELL + ';white-space:pre-line">' + E(r.value) + "</td></tr>").join("") + "</tbody></table>";
-    const list = (t, a) => a.length ? "<h4 style=\"margin:8px 0 2px\">" + E(t) + " (" + a.length + ")</h4><ul style=\"margin:0 18px\">" + a.map(x => "<li>" + E(x) + "</li>").join("") + "</ul>" : "";
+      L(m.rows).map(r => { r = r || {}; return '<tr><th scope="row" style="' + S_CELL + ';width:32%;background:#eee;color:#222">' + E(r.label) + '</th><td style="' + S_CELL + ';white-space:pre-line">' + E(r.value) + "</td></tr>"; }).join("") + "</tbody></table>";
+    const list = (t, a) => L(a).length ? "<h4 style=\"margin:8px 0 2px\">" + E(t) + " (" + L(a).length + ")</h4><ul style=\"margin:0 18px\">" + L(a).map(x => "<li>" + E(x) + "</li>").join("") + "</ul>" : "";
     h += list("תוספות שהוזנו ידנית", m.manual) + list("אזורים שנמצאו", m.zones) + list("מכשולים ותשתיות שנמצאו", m.items);
     return h + '<p class="rc-note" style="margin:8px 0;font-size:90%">' + E(m.note) + "</p></section>";
   }

@@ -391,9 +391,100 @@
   function wipePerson() {
     if (!authed()) return;
     lsDel(PERSON_KEY);   // רק של המשתמש המחובר
+    try { const U = PUI(); if (U) U.wipe(); } catch (e) { /* תוספת: הסימונים השמורים של ״דיווח לגורמים נוספים״ */ }
     clearPersonFields();
     onSoftInputChange();
   }
+  /* ---------- הבקשות שלי: בקשה חדשה על בסיס בקשה שמורה (js/myreq.js; הטעינה מהשרת והאישור שם — כאן רק הטופס) ---------- */
+  // בקשה בעבודה = יש ניתוח, או שהוזן משהו בשדות הבקשה (נקודה, מועד, אתר, מכשולים, הערות, תוספת ידנית). פרטי המבקש ואנשי הקשר אינם נחשבים: הם שמורים במכשיר ואינם נמחקים.
+  // הרצה / שמירה / שליחה בעיצומן חוסמות את הטעינה (לא מחליפים בקשה מתחת לידיים)
+  const MYREQ_FIELDS = ["coord", "dateFrom", "dateTo", "siteName", "knownObs", "visitNotes", "mName", "mCoord"];
+  const myreqInProgress = () => !!S.res || S.manual.length > 0 || MYREQ_FIELDS.some(id => { const e = $(id); return !!(e && e.value.trim()); });
+  const myreqBusy = () => !!(S.resetting || S.running || S.sending || S.opening || S.zipping || $("sendProg"));
+  // inp = ReqRecheck.restoreInputs: נקודה, רדיוס, גובה, מהות, כלי טיס, קשר עין, שם האתר, מכשולים שידועים, הערות סיור ותוספות ידניות — כבר מאומתים (טיפוסים, תחומים, תקרות); תאריכים ושעות ריקים.
+  // מוחק את מצב הבקשה והתוצאות כמו תחילת הרצה חדשה (run): ניתוח, דוח, תמונות, הצהרה, שמירה ושליחה — הבדיקות חייבות לרוץ מחדש וההצהרה תאושר שוב; מזהה בקשה חדש (אחרת השמירה הייתה דורסת את הבקשה המקורית בדרייב).
+  // לא נוגע בפרטי המבקש, באנשי הקשר ובמשתתפים (פרטי המבקש ואנשי הקשר נטענים מהמכשיר כרגיל; המשתתפים אינם נשמרים בקובץ ולכן נשארים כפי שהוקלדו). מחזיר {ok, notes: מה לא נטען} או {ok:false, error:"busy"}
+  function myreqLoadBase(inp) {
+    if (myreqBusy()) return { ok: false, error: "busy" };
+    const notes = [];
+    clearTimeout(rebuildTimer); rebuildTimer = null; cancelAutoSave();
+    S.buildSeq++; S.building = false; S.pending = false; S.ready = false; S.pick = false;
+    S.res = null; S.report = null; S.reportHtml = false; S.reportDraft = false; S.stale = false; S.staleWhy = ""; S.imgs = {}; S.imgSite = null; S.scanKey = null; S.analysisStamp = null;
+    S.sent = null; S.sendFolder = null; S.rid = newRid(); S.ridKey = ""; S.driveUrl = ""; S.autoSite = ""; S.reviewAt = null; $("reviewOk").checked = false; clearUpdate();
+    S.data.near = S.data.far = S.data.ext = S.data.reverse = undefined;
+    S.statuses.review = { ok: false, msg: O.DECLARATION.gate }; S.statuses.input = { ok: false, msg: "" };
+    ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });
+    clearOutcome();   // מקדם את S.rev: שמירה או שליחה שהתחילו קודם נעצרות בבדיקת הגרסה
+    document.body.classList.remove("pendDraft");
+    ["report", "gate", "staleBox", "progress", "limits", "mailInfo", "e_manual"].forEach(id => { const e = $(id); if (e) { e.innerHTML = ""; e._html = undefined; e._k = ""; } });
+    document.querySelectorAll(".err[id^=e_]").forEach(e => { e.textContent = ""; });
+    document.querySelectorAll("input.bad,select.bad,textarea.bad").forEach(e => e.classList.remove("bad"));
+    $("resultsSec").style.display = "none"; $("btnMail").href = "#"; $("mPick").textContent = "בחר מיקום מהמפה";
+    ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = true; });
+    ["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate", "mName", "mCoord", "mHeight"].forEach(id => { $(id).value = ""; });
+    $("radius").value = inp.radius; $("height").value = inp.heightM; $("vlos").value = inp.vlos ? "yes" : "no";
+    $("siteName").value = inp.siteName; $("knownObs").value = inp.knownObstacles; $("visitNotes").value = inp.visitNotes;
+    // מהות וכלי טיס שאינם ברשימות (למשל נמחקו מהרשימה השמורה): נוספים לרשימה השמורה כמו בהוספה ידנית, בתקרות הרגילות; מה שלא נכנס — לא נבחר ומדווח
+    if (inp.purpose) {
+      const name = cleanPurpose(inp.purpose), have = S.cfg.purposes.concat(extraPu).find(p => puKey(p) === puKey(name));
+      if (!have && name && C.purposeHasVisible(name) && C.purposeLen(name) <= PURPOSE_MAX && extraPu.length < MAX_EXTRA_PURPOSES) { extraPu.push(name); saveExtraPurposes(); }
+      renderPurposes(have || name);
+      if (!$("purpose").value) notes.push("מהות הפעילות");
+    } else renderPurposes("");
+    const keep = new Set(), lost = [];
+    inp.aircraft.forEach(a => {
+      const n = cleanAircraft(a), k = acKey(n);
+      if (!n) return;
+      if (!S.cfg.aircraft.concat(S.extraAc).some(x => acKey(x) === k)) { if (S.extraAc.length >= MAX_EXTRA_AC) { lost.push(n); return; } S.extraAc.push(n); }
+      keep.add(k);
+    });
+    saveExtraAircraft(); renderAircraft(keep);
+    if (lost.length) notes.push("כלי טיס: " + lost.slice(0, 3).join(", ") + (lost.length > 3 ? " ועוד " + (lost.length - 3) : ""));
+    $("coord").value = inp.lat + ", " + inp.lon; setCenter(inp.lat, inp.lon, true);   // הערכים המדויקים שנשמרו (לא toFixed(6)): אותה נקודה בדיוק בכל בקשה בסדרה. אחרי הרדיוס והגובה: העיגולים ורמז הרגל נגזרים מהם
+    S.manual = inp.manualItems.map(m => ({ name: m.name, lat: m.lat, lon: m.lon, heightM: m.heightM })); renderManual();
+    const c = readInputs(); S.manualKey = c.lat + "," + c.lon;   // כמו ב-run: הנקודה שנקראת מהשדה (6 ספרות), אחרת ההרצה הייתה מוחקת את התוספות הידניות
+    refreshGate(); scheduleLayerUpdate();
+    return { ok: true, notes };
+  }
+  /* ---------- בדיקה חוזרת (שלב ב׳, features.recheck; הלוגיקה והחלון ב-js/recheckui.js) ---------- */
+  // בקשה שנשלחה נבדקת מחדש בלי לגעת בבקשה שבטופס: recheckAnalyze מושך נתונים טריים (כמו run, אך בלי תמונות, הצהרה ואימות מבקש) ואינו כותב ל-S.res, ל-S.data.near/far/ext, לסטטוסים, לשער או לאחסון.
+  // ״הכן בקשה מעודכנת״ (recheckLoadUpdate) טוענת את הטופס כבסיס (myreqLoadBase) ומחזירה את התאריכים והשעות; S.update קושר אותה לבקשה שנשלחה, אך היא ״מחליפה״ אותה רק כל עוד הסריקה
+  // (נקודה, רדיוס, גובה, תאריכים ושעות) זהה (updateInfo) — אז הנושא והמייל מציינים עדכון, חלון השליחה מסביר שהיא מחליפה, והשליחה למשרד עוברת דרך again (בלי השאלה ״שלח שוב בכל זאת״). דגל כבוי / מודול חסר ← הכול ריק וזהה לשלב א׳
+  const RUI = () => window.ReqRecheckUI || null;
+  async function recheckAnalyze(inp, step) {
+    if (S.running || S.resetting) return { ok: false, error: "busy" };
+    const say = t => { try { if (step) step(t); } catch (e) { /* ignore */ } };
+    await checkSync();   // טוען מחדש נתונים ישנים (אזורים, נוטמים, מנחתים) ובודק סנכרון מול מפת החברים — כמו בתחילת run
+    for (const k of ["a17", "sync", "agri", "notam"]) if (!(S.statuses[k] && S.statuses[k].ok)) return { ok: false, message: "הבדיקה נעצרה — " + ({ a17: "אזורי איסור וגנים", sync: "סנכרון עם מפת החברים", agri: "מנחתים חקלאיים", notam: "נוטמים" })[k] + " אינם תקינים: " + (S.statuses[k] ? statusMsg(S.statuses[k]) : "ממתין") + (k === "sync" ? "" : ". רעננו את הדף.") };
+    const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso };
+    const nf = data.notamFetchedIso ? Date.parse(data.notamFetchedIso) : NaN, age = isFinite(nf) ? (Date.now() - nf) / 3600000 : null;   // נוטמים ישנים מדי — כמו ב-run, לא משווים (ובלי למשוך לחינם נתוני OSM)
+    if (age == null || age > S.cfg.thresholds.notam_max_age_h) return { ok: false, message: age == null ? "לא ידוע מתי נמשכו הנוטמים, ולכן אי אפשר לבדוק מחדש." : "נתוני הנוטמים ישנים (" + Math.round(age) + " שעות; מרבי " + S.cfg.thresholds.notam_max_age_h + "), ולכן אי אפשר לבדוק מחדש. " + sup("נסו שוב מאוחר יותר, ואם הבעיה נמשכת פנו לתמיכה.") };
+    const q = C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg), fetchOpts = { log: () => {}, maxAgeH: S.cfg.thresholds.osm_max_age_h };
+    say("בודק מחדש מול אזורי האיסור, הנוטמים ו-OpenStreetMap…");
+    const results = await Promise.allSettled(["near", "far", "ext"].map((k, i) => (async () => { await wait(i * 1500); const r = await C.overpass(q[k], fetchOpts); data[k] = r.data; })()));   // מושכים תמיד מחדש (אין שימוש בנתוני OSM של הבקשה שבטופס) ומשאירים ב-data המקומי בלבד
+    const failed = results.find(r => r.status === "rejected");
+    if (failed) return { ok: false, message: "נתוני OpenStreetMap לא נטענו: " + ((failed.reason && failed.reason.message) || failed.reason) + ". אפשר לנסות שוב." };
+    const now = new Date();
+    return { ok: true, res: C.analyze(inp, data, S.cfg, now), data, now };
+  }
+  function recheckLoadUpdate(inp, meta) {
+    const r = myreqLoadBase(inp);   // מאפס את הבקשה שבטופס וטוען אותה כבסיס (מזהה בקשה חדש, בלי תוצאות); התאריכים והשעות חוזרים מיד אחר כך
+    if (!r.ok) return r;
+    ["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"].forEach(id => { $(id).value = inp[id] || ""; });
+    const U = RUI(), sentAt = meta && typeof meta.sentAt === "number" && meta.sentAt > 0 ? meta.sentAt : null;
+    S.update = U ? { sentAt, name: meta && meta.name, scan: U.scanOf(inp) } : null;
+    onScanInputChange(); scheduleLayerUpdate();
+    return r;
+  }
+  function clearUpdate() { S.update = null; try { const U = RUI(); if (U && U.clearNote) U.clearNote(); } catch (e) { /* ignore */ } }   // טעינת בסיס אחרת (או איפוס): הבקשה כבר אינה מחליפה את זו שנשלחה — גם ההודעה בדף נעלמת
+  function updateInfo() {
+    try {
+      const u = S.update, U = RUI();
+      if (!u || !U || !S.res || !U.enabled(S.cfg) || !U.sameScan(u.scan, S.res.inp)) return null;
+      return { sentAt: u.sentAt, name: u.name };
+    } catch (e) { return null; }
+  }
+  const withUpdate = o => { const u = updateInfo(); return u ? Object.assign({}, o || {}, { update: { sentAt: u.sentAt } }) : o; };   // opts למייל (O.mail): מוסיף update רק לבקשה מעודכנת בתוקף; אחרת מחזיר את o כמות שהוא
   /* ---------- בידוד בין חשבונות באותו דפדפן ---------- */
   // מיגרציה חד-פעמית: נתונים שנשמרו לפני שהאחסון הפך לפי משתמש (מפתחות גלובליים) עוברים למשתמש הראשון שמתחבר בדפדפן הזה אחרי העדכון, והמפתחות הגלובליים נמחקים — כך משתמש אחר באותו מכשיר לא יורש אותם.
   // מי שכבר יש לו נתונים משלו לא נדרס (הגלובלי נמחק בלי אימוץ); ואם הכתיבה נכשלה (אחסון חסום/מלא) הוא נמחק בכל זאת — עדיף לאבד נוחות מלהשאיר פרטי מבקש פתוחים לכל משתמש
@@ -415,6 +506,7 @@
   // (ניווט היסטוריה, שחזור לשונית) מנוקה — שלא ייכנס לבקשה של המטיס שנכנס עכשיו (שכבת הגנה נוספת על autocomplete="off" ב-index.html). כניסה חוזרת של אותו משתמש באותו דף (למשל בלי התנתקות) לא מגיעה לכאן
   function enterUser(u) {
     S.uk = C.userHash(u);
+    partiesReset();   // ״דיווח לגורמים נוספים״: לא נשאר מצב ממשתמש קודם
     resetFormFields();
     adoptLegacyStorage();
     extraPu = loadExtraPurposes(); renderPurposes("");
@@ -441,6 +533,7 @@
       S.statuses.review = { ok: false, msg: O.DECLARATION.gate }; S.statuses.input = { ok: false, msg: "" };
       ["osm_near", "osm_far", "osm_ext", "map"].forEach(k => { S.statuses[k] = { ok: false, msg: "לא הושלם" }; });   // סטטוסי ההרצה האחרונה
       step(clearOutcome);   // מקדם את S.rev: שמירה או שליחה של הקודם שעדיין באוויר נעצרת בבדיקת הגרסה
+      step(partiesReset);   // ״דיווח לגורמים נוספים״: הרשימה והסימונים נמחקים מהזיכרון ומהדף (האחסון בדפדפן נשאר שמור לכניסה הבאה של המשתמש)
       step(() => window.ReqAuth.closeModal());
       step(clearPersonFields);
       step(resetFormFields);
@@ -916,6 +1009,7 @@
       S.data.near = data.near; S.data.far = data.far; S.data.ext = data.ext; S.data.reverse = data.reverse;
       S.res = res; S.scanKey = scanKeyOf(inp0);
       if (scanKey() !== S.scanKey) { S.stale = true; S.staleWhy = ""; }   // הטופס שונה בזמן ההרצה — הבקשה לא תסומן מוכנה
+      partiesRebuild(data);   // ״דיווח לגורמים נוספים״: הרשימה מהניתוח הזה, ממוזגת עם הסימונים הקודמים של אותה בקשה (לא חוסמת דבר)
       st("calc", "ok", "נמצאו " + res.nearScan.items.length + " מכשולים/תשתיות עד פי 2 מהרדיוס · " + (res.zones.inside.length + res.zones.near.length) + " אזורי איסור בקרבה");
       await buildMapImage(steps, st);
       S.report = true;
@@ -995,8 +1089,18 @@
     syncPending(); refreshGate({ quiet: true });
   }
 
+  /* ---------- דיווח לגורמים נוספים (שלב ב׳, features.parties; הלוגיקה והעורך ב-js/partiesui.js) ---------- */
+  // הוספה בלבד: דגל כבוי / מודול לא נטען / אין ניתוח עדכני ← כל הפונקציות כאן מחזירות ריק, והדף, ה-Word, המייל וקובץ נתוני הבקשה זהים לשלב א׳. כל כשל בתוספת נבלע — לעולם לא עוצר הרצה, שמירה או שליחה, ולעולם לא נוגע בשער (S.ready).
+  // עריכה בעורך עוברת onSoftInputChange (clearOutcome, נעילת הלחצנים עד הרינדור מחדש, שמירה אוטומטית) — כמו כל שדה רך אחר; האחסון בדפדפן לפי המשתמש (PARTIES_KEY) כנוחות בלבד
+  const PARTIES_KEY = "icd_req_parties_v1";
+  const PUI = () => window.ReqPartiesUI || null;
+  function partiesRebuild(data) { try { const U = PUI(); if (U && S.res) U.rebuild(S.res, data, S.cfg); } catch (e) { /* תוספת */ } }
+  const partiesOpts = () => { try { const U = PUI(); return (U && S.res && U.modelOpts(S.res)) || {}; } catch (e) { return {}; } };
+  const mailOpts = () => { try { const U = PUI(); return (U && S.res && U.mailOpts(S.res)) || undefined; } catch (e) { return undefined; } };
+  const partiesRecord = () => { try { const U = PUI(); return (U && S.res && U.record(S.res)) || null; } catch (e) { return null; } };
+  const partiesReset = () => { try { const U = PUI(); if (U) U.reset(); } catch (e) { /* תוספת */ } };
   /* ---------- הדוח ---------- */
-  function renderAll() { if (!S.res || S.resetting) return; S.report = true; refreshGate(); renderLimits(); const m = O.mail(S.res, S.cfg); $("btnMail").href = m.mailto; $("mailInfo").textContent = "נושא: " + m.subject; }
+  function renderAll() { if (!S.res || S.resetting) return; S.report = true; refreshGate(); renderLimits(); const m = O.mail(S.res, S.cfg, withUpdate(mailOpts())); $("btnMail").href = m.mailto; $("mailInfo").textContent = "נושא: " + (m.subjectFull || m.subject); }
   // מגבלות המקורות הן כלי פנימי (תצוגה מתקדמת): למי שאין לו — התיבה מוסתרת (applyRole) וגם ריקה
   function renderLimits() { if (!isAdv()) { $("limits").innerHTML = ""; return; } $("limits").innerHTML = O.sourceNotes(S.res, S.data.zones ? { zones: S.data.zones, inpa: S.data.inpa } : {}, S.cfg).concat("זריחה ושקיעה לפי חישוב אסטרונומי לנקודה, לא לוח רשמי. ההתייחסות לגובה ולתנאים זהה ביום ובלילה.").map(x => "<li>" + esc(x) + "</li>").join(""); }
   const reportData = () => ({ zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near });
@@ -1004,7 +1108,8 @@
   // אפשרויות משותפות למסך ול-Word: שם ספק הרקע בכל תמונה (לכותרות), טקסט אישור הסקירה, והאם לכלול דף בדיקות
   function modelOpts(images) {
     const pn = {}; IMGS.forEach(m => { const x = S.imgs[m.k]; pn[m.k] = x ? ((M.PROVIDERS[x.provider] || {}).name || "") : ""; });
-    return { images: images || {}, providerName: (M.PROVIDERS.esri || {}).name || "", providerNames: pn, includeChecks: $("incChecks").checked, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו", adv: isAdv() };   // adv: סעיף ההגשה במסך וב-Word לפי תצוגת המבקש (מלא / סיכום)
+    const mo = { images: images || {}, providerName: (M.PROVIDERS.esri || {}).name || "", providerNames: pn, includeChecks: $("incChecks").checked, review: reviewText(), draft: S.ready ? "" : "יש בדיקות שלא הושלמו", adv: isAdv() };   // adv: סעיף ההגשה במסך וב-Word לפי תצוגת המבקש (מלא / סיכום)
+    return Object.assign(mo, partiesOpts());   // partiesOpts: עמוד ״דיווח לגורמים נוספים״ (ריק כשהדגל כבוי)
   }
   // מבנה הדוח על המסך זהה לזה שב-Word: הכול נבנה מאותו מודל (O.docxModel) — טופס, ארבעה עמודי תמונה, ודף בדיקות עם כותרות סעיף ממוספרות ברצף
   function renderReport() {
@@ -1047,7 +1152,7 @@
       "<div class='foot'><span>" + esc(mdl.footer) + "</span></div></div>";
     $("report").className = $("incChecks").checked ? "" : "nochecks";
     S.reportDraft = draft;   // הדוח נבנה עכשיו מהמצב הנוכחי: markReportDraft (בסוף refreshGate) מסיר את pendDraft
-    $("report").innerHTML = p1 + pImgs + p3;
+    $("report").innerHTML = p1 + pImgs + (mdl.parties ? O.partiesHtml(mdl.parties) : "") + p3;   // עמוד ״דיווח לגורמים נוספים״ אחרי התמונות ולפני דף הבדיקות; אינו מושפע מ-nochecks
     const style = document.getElementById("nochecksStyle") || Object.assign(document.createElement("style"), { id: "nochecksStyle" });
     style.textContent = ".nochecks .paper.checks{display:none !important}"; document.head.appendChild(style);
     S.reportHtml = true;
@@ -1066,6 +1171,7 @@
     const data = { zones: S.data.zones, inpa: S.data.inpa, agri: S.data.agri, notams: S.data.notams, notamFetchedIso: S.data.notamFetchedIso, near: S.data.near, far: S.data.far, ext: S.data.ext, reverse: S.data.reverse };
     const prev = S.res; S.res = C.analyze(inp, data, S.cfg, new Date());
     S.analysisStamp = { zonesHash: data.zones.dataHash, notamIso: data.notamFetchedIso };
+    partiesRebuild(data);   // אותה בקשה (אותה נקודה ואותם מועדים): הסימונים והגורמים הידניים נשמרים
     S.reviewAt = null; $("reviewOk").checked = false; S.statuses.review = { ok: false, msg: "הרשימה השתנתה — " + O.DECLARATION.gate + " מחדש" }; clearOutcome();
     const building = buildMapImage(null, null);   // מתחילה מיד ומסמנת "ממתין" (נגזר מהבנייה הרצה ומטיימר עריכה, לא מדגל שבנייה מיושנת מאפסת)
     refreshGate();
@@ -1123,8 +1229,19 @@
   function inputsForRecord() {
     const o = {}; Object.keys(S.res.inp).forEach(k => { if (!/^(req|contact|requester|participant|callsign|registration)/i.test(k)) o[k] = S.res.inp[k]; });
     // declaration: הצהרת המבקש (גרסת הנוסח, מועד האישור והטקסט) — ללא שם או טלפון; בקשה שנשמרת מוכנה תמיד נושאת אותה (השער S.ready דורש את הסימון), null רק כרשת ביטחון
-    return { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", declaration: O.declarationRecord(S.reviewAt), inputs: o,
+    const rec = { savedAt: new Date().toISOString(), site: baseName(), version: (S.data.zones && S.data.zones.mapVersion) || "", edition: (S.data.zones && S.data.zones.edition) || "", declaration: O.declarationRecord(S.reviewAt), inputs: o,
       zones: [...S.res.zones.inside, ...S.res.zones.near].map(z => ({ id: z.id, d: Math.round(z.d) })), items: S.res.nearScan.items.map(i => ({ n: i.n, title: i.title, d: Math.round(i.d) })) };
+    const pr = partiesRecord(); if (pr) rec.parties = pr;   // ״דיווח לגורמים נוספים״ (features.parties): בלוק parties בקובץ הנתונים — הרשימה והסימונים כפי שנשלחו; לפני תמונת המצב, כדי שבדיקת הגודל שלה תכלול אותו
+    return myreqSnapRecord(rec);
+  }
+  // תמונת מצב של הניתוח בקובץ נתוני הבקשה (לבדיקה חוזרת, js/recheck.js). הוספה בלבד: כל כשל — או נתוני דף שאינם של הניתוח הנוכחי, או דגל features.recheck כבוי — מחזיר את הרשומה כפי שהיא (כמו בשלב א׳), ולעולם לא חוסם שמירה או שליחה.
+  // בלי פרטי מבקש: ReqRecheck.snapshotOf לא מקבל אותם (בדוק ב-core.test.mjs וב-e2e)
+  function myreqSnapRecord(rec) {
+    try {
+      const M = window.ReqMyReq, a = S.analysisStamp, d = S.data;
+      if (!M || !M.withSnapshot || !a || !d.zones || a.zonesHash !== d.zones.dataHash || a.notamIso !== d.notamFetchedIso) return rec;
+      return M.withSnapshot(rec, S.res, { zones: d.zones, inpa: d.inpa, agri: d.agri, notams: d.notams, notamFetchedIso: d.notamFetchedIso, near: d.near, far: d.far, ext: d.ext }, S.cfg, new Date());
+    } catch (e) { return rec; }
   }
   function imageFile(m, label) {
     if (!m) return null;
@@ -1315,7 +1432,7 @@
     if (!S.ready) { out.className = "small err"; out.textContent = "לא נשלח: הנתונים השתנו מאז הרצת הבדיקות — יש להריץ אותן שוב."; return; }
     // נוסח המייל, האזהרות והאישור שיסומן בחלון הם של גרסת הבקשה הזו (rev0, באותו רגע של בדיקת S.ready). כל שינוי בבקשה מקדם את S.rev (clearOutcome): preflight ולפני כל sendRequest בודקים שהיא לא השתנתה, ואחרי השליחה לא מסמנים S.sent אם השתנתה
     const rev0 = S.rev;
-    const mail = O.mail(S.res, S.cfg), shown = A.getMailMode() === "live" ? "live" : "test", live = shown === "live";
+    const mail = O.mail(S.res, S.cfg, withUpdate(mailOpts())), shown = A.getMailMode() === "live" ? "live" : "test", live = shown === "live", upd = updateInfo();   // upd: בקשה מעודכנת בתוקף (נושא עם קידומת, הסבר בחלון, again) — נקבע ברגע פתיחת החלון, כמו הנוסח שמוצג בו
     const serverTo = (A.getMailTo() || []).slice().sort().join(","), cfgTo = mail.to.slice().sort().join(",");
     // כתובות היעד קבועות בשרת; מוודאים שהן זהות לכתובות שמצוינות בנוהל (config.json) — אחרת לא שולחים
     if (serverTo !== cfgTo) { out.className = "small err"; out.textContent = isAdmin() ? "לא נשלח: כתובות היעד בשרת (" + serverTo + ") שונות מהכתובות בנוהל א-11 סעיף 6(א) שבהגדרות (" + cfgTo + "). יש לעדכן את השרת." : sup("לא נשלח: כתובות היעד בשרת אינן תואמות את הנוהל (א-11 סעיף 6(א)) — השליחה אינה זמינה כרגע, פנו לתמיכה."); return; }
@@ -1330,7 +1447,7 @@
     if (newSrv && !addr) { out.className = "small err"; out.textContent = "לא נשלח: השרת לא החזיר את כתובת העותק — אי אפשר להציג למי יישלח המייל."; return; }
     const adr = '<span dir="ltr">' + esc(addr) + "</span>", officeTo = '<span dir="ltr">' + esc(mail.to.join(", ")) + "</span>";
     const noAddr = "אין כתובת מייל רשומה בחשבון שלך — העותק יישלח לבעל המערכת (" + adr + ")";
-    const subjOf = t => esc((t === "self" ? SUBJ_SELF : t === "test" ? SUBJ_TEST : "") + mail.subject);
+    const subjOf = t => esc((t === "self" ? SUBJ_SELF : t === "test" ? SUBJ_TEST : "") + (mail.subjectFull || mail.subject));   // subjectFull: נושא בקשה מעודכנת, כולל הקידומת (השרת אינו מוסיף אותה)
     // שרת ישן: ההוראה לעדכן את השרת (README) מופנית למנהל בלבד; מטיס רגיל אינו יכול ואינו אמור לעדכן שרת — הוא מקבל הודעה ניטרלית
     const adm = isAdmin();
     const oldNote = adm ? '<div class="banner warn" style="margin:8px 0 0"><b>שרת ה-Apps Script עדיין בגרסה הישנה — יש לעדכן אותו (ראו README).</b> עד שיעודכן אי אפשר לשלוח רק לעצמי, והשליחה ממשיכה כמו קודם.</div>'
@@ -1380,7 +1497,8 @@
       to: '<p><b>אל:</b> ' + adr + '</p><p><b>נושא:</b> ' + subjOf("test") + '</p>',
       archive: ARCHIVE_NOTE, go: "שלח בדיקה אליי", self: ""
     };
-    const m = A.modal('<div class="sendBox"><h2>' + dlg.title + '</h2>' + dlg.banner + dlg.to +
+    const updBanner = upd ? '<div class="banner warn" id="sendUpdate" style="margin:0 0 8px"><b>בקשה מעודכנת.</b> ' + esc(RUI().updateBanner(upd.sentAt, live)) + "</div>" : "";   // בקשה שמחליפה בקשה שנשלחה (בדיקה חוזרת): נאמר במפורש, בלי שאלות נוספות
+    const m = A.modal('<div class="sendBox"><h2>' + dlg.title + '</h2>' + dlg.banner + updBanner + dlg.to +
       '<p><b>קבצים שיצורפו:</b> ' + esc(names.join(" · ")) + '</p><details><summary>נוסח המייל</summary><pre>' + esc(mail.body) + '</pre></details>' +
       warn.map(w => '<div class="banner warn" style="margin:8px 0 0">' + w + '</div>').join("") +
       '<label class="checks" style="margin-top:10px"><span style="display:flex;gap:8px;align-items:flex-start;font-size:14px"><input type="checkbox" id="sendOk" style="margin-top:4px"> עברתי על הבקשה (הטופס, התצ״א והמצאי) והיא מוכנה לשליחה' + (live ? " — שליחה למשרד נוטאם אינה ניתנת לביטול" : "") + '</span></label>' + dlg.archive +
@@ -1400,7 +1518,7 @@
     };
     // target: "office" | "self" (נשלח רק לשרת חדש; expectMode רק ל-office, כמו בחוזה); again: "שלח שוב בכל זאת" — רק ל-office
     const doSend = async (target, again) => {
-      const req = { folderId: S.sendFolder.folderId, subject: mail.subject, body: mail.body, again: !!again };
+      const req = { folderId: S.sendFolder.folderId, subject: mail.subjectFull || mail.subject, body: mail.body, again: !!again };
       if (newSrv) req.target = target;
       if (split) req.fromName = fromName;   // שם השולח של מטיס עצמאי (השרת מנקה ומוסיף את הסיומת הקבועה); לחשבון ארגוני השרת משתמש בשם הארגון ומתעלם ממנו
       if (target === "office") req.expectMode = shown;
@@ -1469,7 +1587,7 @@
       if (!S.ready) throw new Error("הנתונים השתנו בזמן השמירה — לא נשלח. הרצו את הבדיקות שוב");
       if (S.rev !== rev0) { const e = new Error("הבקשה שונתה בזמן שהחלון היה פתוח"); e.code = "request_changed"; throw e; }
       prog.textContent = "שולח…";
-      await doSend(target, false);
+      await doSend(target, !!upd && target === "office");   // בקשה מעודכנת מחליפה את הקודמת: שליחה למשרד עוברת ב-again (ללא ״כבר שלחתם…״); שליחה לעצמי לא צריכה
     });
     go.onclick = () => startSend("office");
     if (selfBtn) selfBtn.onclick = () => startSend("self");
@@ -1477,7 +1595,7 @@
   }
   async function copyMail() {
     if (!authed() || !S.res) return;
-    const m = O.mail(S.res, S.cfg), txt = "אל: " + m.to.join(", ") + "\nנושא: " + m.subject + "\n\n" + m.body;
+    const m = O.mail(S.res, S.cfg, withUpdate(mailOpts())), txt = "אל: " + m.to.join(", ") + "\nנושא: " + m.subject + "\n\n" + m.body;
     try { await navigator.clipboard.writeText(txt); } catch (e) { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); } catch (e2) { /* ignore */ } t.remove(); }
     $("btnCopy").textContent = "הועתק ✔"; setTimeout(() => { $("btnCopy").textContent = "העתק טקסט מייל"; }, 2000);
   }
@@ -1543,6 +1661,10 @@
       applyRole();
       if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
     });
+    try { if (window.ReqMyReq) window.ReqMyReq.hook({ loadBase: myreqLoadBase, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״הבקשות שלי״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }
+    try { if (window.ReqRecheckUI) window.ReqRecheckUI.hook({ analyze: recheckAnalyze, loadUpdate: recheckLoadUpdate, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״בדיקה חוזרת״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }
+    // ״דיווח לגורמים נוספים״ (js/partiesui.js): דגל features.parties כבוי / מודול לא נטען ← לא נוצר דבר בדף. changed = onSoftInputChange (אותו תזמון של כל שדה רך), store = אחסון לפי המשתמש
+    try { const U = PUI(); if (U && okCfg) { U.hook({ changed: onSoftInputChange, store: { get: () => lsGet(PARTIES_KEY), set: v => lsSet(PARTIES_KEY, v), del: () => lsDel(PARTIES_KEY) }, now: () => new Date() }); U.mount(S.cfg); } } catch (e) { /* תוספת: כשל בחיבור לא עוצר את האתחול */ }
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); else scheduleLayerUpdate(); });   // טקסט שאינו נ״צ: הפס מתעדכן להנחיה (layerPoint), ולא ממשיך להציג את הנקודה הקודמת

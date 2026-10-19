@@ -1,9 +1,14 @@
 /* הפקת הטופס (נספח ג׳), דף הבדיקות, KML וטקסט המייל מתוצאת הניתוח (request/core.js). בלי DOM — נבדק ב-Node. */
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./core.js"));
-  else root.ReqOut = factory(root.ReqCore);
-})(typeof self !== "undefined" ? self : this, function (C) {
+  // lazy(name): מודולי שלב ב׳ (parties, recheck) נטענים עצלנית ובאופן רופף — סקריפט חסר/שגוי = הפיצ׳ר כבוי (null), והפלט כמו בשלב א׳
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./core.js"), n => { try { return require("./" + n + ".js"); } catch (e) { return null; } });
+  else root.ReqOut = factory(root.ReqCore, n => (n === "parties" ? root.ReqParties : n === "recheck" ? root.ReqRecheck : null) || null);
+})(typeof self !== "undefined" ? self : this, function (C, lazy) {
   "use strict";
+  /* שלב ב׳ — ממשק (כל התוספות כבויות כשהדגל כבוי, כשהמודול לא נטען או כשהמתקשר לא מעביר את האפשרות: הפלט זהה לשלב א׳):
+     docxModel(res, data, cfg, {…, parties: שורות ReqParties, partiesDropped, partiesFailed}) ← model.parties (טקסט רגיל) ← ReqDocx.build מוסיף את העמוד; partiesHtml(model.parties) ← עמוד המסך (div.paper.parties)
+     mail(res, cfg, {parties: שורות | {total, done}, update: {sentAt}}) ← שורת "• דיווח לגורמים נוספים: …" ו/או מייל עדכון (subject = הנושא הרגיל לשרת; subjectFull = עם קידומת העדכון, ל-mailto/העתקה)
+     recheckDocxModel(res, data, cfg, ReqRecheck.sinceModel(…), {now, includeChecks}) ← ReqDocx.buildRecheck(model) = קובץ ה-Word של הבדיקה החוזרת (ZIP); null כשהדגל כבוי */
   const E = C.esc;
   const dLabel = d => (d < 1 ? "בתוך השטח" : C.fmtDist(d));
 
@@ -351,12 +356,13 @@
     if (!notes) return d ? "<b>סיור באתר ב-" + C.ddmmyyyy(d) + "</b>" : "";
     return "<b>הערות המבקש" + (d ? " (סיור באתר ב-" + C.ddmmyyyy(d) + ")" : "") + ":</b> " + E(notes).replace(/\r?\n/g, "<br>");
   }
-  // o: {images:{aerial,street,overview,region} (כל אחד {bytes,w,h} או null), providerName, providerNames:{aerial,street,overview,region}, includeChecks, draft, review (טקסט), creator, adv (תצוגה מתקדמת של המבקש: true = סעיף ההגשה המלא; אחרת סיכום קצר)}
+  // o: {images:{aerial,street,overview,region} (כל אחד {bytes,w,h} או null), providerName, providerNames:{aerial,street,overview,region}, includeChecks, draft, review (טקסט), creator, adv (תצוגה מתקדמת של המבקש: true = סעיף ההגשה המלא; אחרת סיכום קצר),
+  //     parties (שלב ב׳: מערך שורות ReqParties — עמוד "דיווח לגורמים נוספים" אחרי התמונות ולפני דף הבדיקות; [] = עמוד עם "לא נמצאו גורמים"), partiesDropped (מספר שורות שנחתכו בתקרה), partiesFailed (בניית הרשימה נכשלה)}
   function docxModel(res, data, cfg, o) {
     o = o || {};
     const inp = res.inp, now = o.now || new Date(), pn = o.providerNames || {}, sub = submissionSection(res, cfg, data, o.adv);
     const prov = (k, dflt) => { const p = pn[k] != null ? pn[k] : dflt; return p ? " — " + p : ""; };
-    return {
+    const model = {
       docTitle: "בקשה לסגירה אווירית — " + fileBase(res), creator: o.creator || orgName(inp),
       title: "פמ״ת פנים ארצי א-11 — נספח ג׳", subtitle: "טופס בקשה לסגירה אווירית",
       draftText: o.draft ? "טיוטה — לא מוכן לשליחה: " + o.draft : "",
@@ -382,6 +388,102 @@
       review: o.review || "",
       footer: "הופק " + now.toLocaleString("he-IL")
     };
+    // דיווח לגורמים נוספים (שלב ב׳, features.parties): o.parties = מערך השורות (גם ריק). דגל כבוי / מודול לא נטען / o.parties חסר ← אין מפתח parties בכלל, והמודל זהה לשלב א׳
+    if (Array.isArray(o.parties)) { const pm = partiesPage(o.parties, cfg, { now, dropped: o.partiesDropped, failed: o.partiesFailed }); if (pm) model.parties = pm; }
+    return model;
+  }
+
+  /* ---------- דיווח לגורמים נוספים (שלב ב׳, features.parties): עמוד נלווה ב-Word/מסך + שורה במייל ---------- */
+  // כל הנוסחים והתוויות מ-ReqParties (TEXT, TYPE_LABEL, STATUS_LABEL) — מקור אחד. המודל הוא טקסט רגיל (לא HTML): ה-Word עובר esc ב-docx.js, והמסך (partiesHtml) עובר E. פרטי הקשר הועתקו כלשונם מהמקור ואינם מאומתים (נאמר בעמוד)
+  const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const partiesOn = cfg => { const P = lazy("parties"); return P && typeof P.enabled === "function" && typeof P.describe === "function" && P.enabled(cfg) ? P : null; };
+  const PARTY_SEG_MAX = 3, PARTY_ROWS_MAX = 120;   // קטעים מצוטטים בתא פרטי הקשר (כמו describe({max:3}) ב-Word); תקרת בטיחות לשורות
+  // תא "פרטי קשר": שורות {t, b (מודגש), s (קטן), m (אפור)}. עד PARTY_SEG_MAX קטעים (זוגות תווית–מספר נספרים כקטע אחד) בכל השורה, אחריהם "ועוד N"; מקור הפרט — שורה קטנה אחרי הקטעים; אין פרט קשר — "לא נמצא פרט קשר"
+  // בלוק בלי קטעים מצוטטים (למשל OSM: טלפון/אתר מתגיות) מוצג כרשימה אחת מופרדת ב-" · ". בלוק שכל קטעיו נחתכו בתקרה לא מוצג כלל (נספר ב"ועוד N") — כך לא מופיע מספר בלי התווית שלו
+  function partyContact(P, r) {
+    const T = P.TEXT, d = P.describe(r), out = [], none = () => [{ t: T.noContact, m: true }].concat(d.cue ? [{ t: P.txt(d.cue, 240), s: true, m: true }] : []);
+    if (d.none) return none();
+    const ph = p => P.txt(p.text, 60) + (p.kind === "unverified" ? " (" + T.unverified + ")" : "");
+    let left = PARTY_SEG_MAX, more = 0;
+    d.blocks.forEach(b => {
+      const seg = [];
+      if (b.pairs) { if (left > 0) { left--; seg.push(b.pairs.map(x => P.txt(x.label, 40) + " " + ph(x.phone)).join(" · ")); } else more++; }
+      else { const k = Math.min(left, b.lines.length); left -= k; more += b.lines.length - k; b.lines.slice(0, k).forEach(l => seg.push(P.txt(l, 240))); }
+      const flat = b.pairs || b.lines.length ? [] : [].concat(b.phones.map(ph), b.emails.map(e => P.txt(e, 120)), b.urls.map(u => P.txt(u, 200)));
+      if (flat.length) seg.push(flat.join(" · "));
+      if (!seg.length) return;
+      if (b.label) out.push({ t: P.txt(b.label, 120) + ":", b: true, s: true });
+      seg.forEach(t => out.push({ t }));
+      if (b.src) out.push({ t: T.srcPrefix + P.txt(b.src, 200), s: true, m: true });
+    });
+    if (more) out.push({ t: T.more(more), s: true, m: true });
+    return out.length ? out : none();
+  }
+  function partyRow(P, r, i) {
+    const T = P.TEXT, party = [{ t: P.txt(r.title, 120), b: true }];
+    if (r.tag) party.push({ t: P.txt(r.tag, 60), s: true, m: true });
+    if (r.party) party.push({ t: P.txt(r.party, 80), s: true });
+    if (r.stale) party.push({ t: T.outOfRange, s: true, m: true });
+    let contact; try { contact = partyContact(P, r); } catch (e) { contact = [{ t: T.noContact, m: true }]; }   // שורה פגומה לא מפילה את העמוד (ולא את השליחה)
+    return { n: i + 1, party, type: hasOwn(P.TYPE_LABEL, r.type) ? P.TYPE_LABEL[r.type] : "", contact, status: hasOwn(P.STATUS_LABEL, r.status) ? P.STATUS_LABEL[r.status] : P.STATUS_LABEL.unmarked, note: P.txt(r.note, 300) };
+  }
+  // מעטפת העמוד: {head, sub, summary, rows, empty, note, footer, count}; empty = משפט במקום הטבלה (אין שורות / הכנת הרשימה נכשלה)
+  function partiesShell(P, o, rows, empty) {
+    const T = P.TEXT, now = o.now instanceof Date && isFinite(+o.now) ? o.now : new Date(), dropped = Math.floor(+o.dropped) > 0 ? Math.floor(+o.dropped) : 0;
+    return { head: T.title, sub: T.paperNote, summary: rows.length ? P.summaryText(P.summary(o.list || [])) : "", rows, empty, note: rows.length && dropped ? T.dropped(dropped) : "", footer: T.footer(now.toLocaleString("he-IL")), count: rows.length };
+  }
+  // המודל לעמוד (Word + מסך). rows = מערך שורות ReqParties; o: {now, dropped, failed}. מחזיר null כשהדגל כבוי / המודול לא נטען. כשל פנימי ← עמוד עם נוסח הכשל (לא חריגה: docxModel נמצא בנתיב השליחה)
+  function partiesPage(rows, cfg, o) {
+    const P = partiesOn(cfg); if (!P) return null;
+    o = o || {};
+    try {
+      const list = (Array.isArray(rows) ? rows : []).filter(r => r && typeof r === "object").slice(0, PARTY_ROWS_MAX);
+      return partiesShell(P, Object.assign({}, o, { list }), list.map((r, i) => partyRow(P, r, i)), list.length ? "" : o.failed ? P.TEXT.failed : P.TEXT.empty);
+    } catch (e) { return partiesShell(P, o, [], P.TEXT.failed); }
+  }
+  // טקסט ל-HTML: escape, ואסימונים לטיניים/ספרתיים (טלפון, דוא״ל, אתר, מזהה) בתוך <bdi dir='ltr'> כדי שלא יתהפכו בפסקה מימין לשמאל (מספר טלפון נושא גם class='ph' — לא נשבר באמצע, ראו index.html). אסימון = אות/ספרה לטינית (+ מפרידים בין אותיות/ספרות, ו-"/" סוגר); פיסוק סוגר (נקודה, פסיק, סוגריים) נשאר מחוץ לו
+  const LTR_TOK = /[A-Za-z0-9]+(?:(?:[-.\/:@_%+=&?#~]|:\/\/)[A-Za-z0-9]+)*\/?/g;
+  const ltrHtml = t => { t = String(t == null ? "" : t); let o = "", i = 0; t.replace(LTR_TOK, (m, at) => { o += E(t.slice(i, at)) + "<bdi dir='ltr'" + (/^[0-9+\/-]+$/.test(m) ? " class='ph'" : "") + ">" + E(m) + "</bdi>"; i = at + m.length; return m; }); return o + E(t.slice(i)); };
+  const partyLineHtml = l => { l = l || {}; let h = ltrHtml(l.t); if (l.s) h = "<small>" + h + "</small>"; if (l.b) h = "<b>" + h + "</b>"; if (l.m) h = "<span class='muted'>" + h + "</span>"; return h; };
+  // עמוד הקריאה בדוח שעל המסך: זהה בתוכן לעמוד ה-Word (אותו מודל). בלי class='checks' — הוא אינו מושפע מתיבת "כולל דף בדיקות"
+  function partiesHtml(m) {
+    if (!m || typeof m !== "object" || Array.isArray(m) || typeof m.head !== "string") return "";
+    const cell = ls => (Array.isArray(ls) ? ls : []).map(partyLineHtml).join("<br>");
+    const rows = Array.isArray(m.rows) ? m.rows : [], W = [4.6, 23.2, 9.1, 29.3, 12.1, 21.7], cols = ["#", "גורם", "סוג", "פרטי קשר", "סטטוס", "הערה"];
+    return "<div class='paper parties'><div class='hdr'><span>" + E(m.head) + "</span></div><p class='muted'>" + E(m.sub) + "</p>" +
+      (m.summary ? "<p><b>" + E(m.summary) + "</b></p>" : "") +
+      (rows.length ? "<table class='t' style='table-layout:fixed' aria-label=\"" + E(m.head) + "\"><colgroup>" + W.map(w => "<col style='width:" + w + "%'>").join("") + "</colgroup><thead><tr>" + cols.map(c => "<th scope='col'>" + E(c) + "</th>").join("") + "</tr></thead><tbody>" +
+        rows.map(r => { r = r || {}; return "<tr><td>" + E(r.n) + "</td><td style='overflow-wrap:anywhere'>" + cell(r.party) + "</td><td>" + E(r.type) + "</td><td style='overflow-wrap:anywhere'>" + cell(r.contact) + "</td><td>" + E(r.status) + "</td><td style='overflow-wrap:anywhere'>" + E(r.note) + "</td></tr>"; }).join("") + "</tbody></table>" : "<p>" + E(m.empty) + "</p>") +
+      (m.note ? "<p class='muted'>" + E(m.note) + "</p>" : "") + "<div class='foot'><span>" + E(m.footer) + "</span></div></div>";
+  }
+  // שורת המייל: "דיווח לגורמים נוספים: N גורמים — M דווחו/התקבל אישור" (נוסח ReqParties.mailLine; בלי שמות ובלי טלפונים). parties = מערך שורות או סיכום {total, done}. אין שורות / דגל כבוי ← "" (המייל זהה לשלב א׳)
+  function partiesMailLine(parties, cfg) {
+    const P = partiesOn(cfg); if (!P) return "";
+    const sum = Array.isArray(parties) ? P.summary(parties.filter(r => r && typeof r === "object")) : parties && typeof parties === "object" ? parties : null;
+    const int = v => (isFinite(+v) && +v > 0 ? Math.floor(+v) : 0), total = sum ? int(sum.total) : 0;
+    return total ? P.mailLine({ total, done: Math.min(total, int(sum.done)) }) : "";
+  }
+
+  /* ---------- דוח "בדיקה חוזרת" (Word נפרד; לא מצורף לבקשה שנשלחה למודיעין טיס) ---------- */
+  // since = ReqRecheck.sinceModel(diff, ctx) (טקסט רגיל; שורות עודפות ב-rest). מחזיר מודל ל-ReqDocx.buildRecheck, או null כשהדגל כבוי / המודול לא נטען / אין מודל.
+  // דף הבדיקות העדכני מצורף (o.includeChecks !== false) בלי סעיף ההגשה ובלי אישור הסקירה — הם שייכים לבקשה עצמה. o: {now, includeChecks, creator}
+  function recheckDocxModel(res, data, cfg, since, o) {
+    const RC = lazy("recheck"); if (!RC || typeof RC.enabled !== "function" || !RC.enabled(cfg) || !since || typeof since !== "object") return null;
+    o = o || {};
+    const inp = res.inp, now = o.now || new Date(), STR = RC.STR || {}, name = fileBase(res), b = since.banner || {}, cap = (RC.LIMITS && RC.LIMITS.rowsWord) || 100;
+    const base = docxModel(res, data, cfg, { now, includeChecks: true, creator: o.creator });   // שדות דף הבדיקות (לא כולל parties: לא הועבר)
+    const rc = {
+      banner: [{ t: b.text, b: true, size: 26 }].concat(b.sub ? [{ t: b.sub, b: true, size: 22 }] : [], b.resend ? [{ t: b.resend, size: 20 }] : []),
+      title: "בדיקה חוזרת — " + name,
+      identity: [["הבקשה", name], ["נקודת מרכז", C.dmsLat(inp.lat) + " " + C.dmsLon(inp.lon)], ["רדיוס וגובה", res.R + " מ׳ · גובה " + C.trimNum(inp.heightM, 2) + " מ׳ (" + res.ft.toFixed(1) + " רגל)"]].concat((since.dates || []).map(d => [d.label, d.value])),
+      heading: since.title || STR.title || "שינויים מאז ההגשה", summary: since.summary || "", checkedLine: since.checkedLine || "", notes: since.notes || [],
+      sourcesTitle: STR.sources || "מקורות הנתונים", sourcesHead: STR.srcCols || ["מקור", "בהגשה", "כעת"], sources: (since.sources || []).map(s => [s.label, s.before, s.after, !!s.changed]),
+      sections: (since.sections || []).map(sc => { const all = (sc.rows || []).concat(sc.rest || []), shown = all.slice(0, cap), hid = all.length - shown.length;
+        return { title: sc.title + " (" + sc.total + ")", head: STR.cols || ["סטטוס", "פריט", "פירוט", "מרחק מהנקודה"], rows: shown.map(r => ({ status: r.statusLabel, sev: r.sevLabel, high: r.sev === "high", id: r.id, title: r.title, lines: r.lines || [], dist: r.dist })), more: hid > 0 ? "ועוד " + hid + " שורות אינן מוצגות בדוח זה" : "" }; }),
+      limitation: since.limitation || ""
+    };
+    return { recheck: rc, docTitle: "בדיקה חוזרת — " + name, creator: base.creator, includeChecks: o.includeChecks !== false, checksTitle: "דף הבדיקות העדכני — נכון למועד הבדיקה החוזרת",
+      checkPoint: base.checkPoint, visitNote: base.visitNote, checks: base.checks, coverage: base.coverage, dayNightHead: base.dayNightHead, dayNight: base.dayNight, footer: base.footer };
   }
 
   /* ---------- KML ---------- */
@@ -430,27 +532,40 @@
 
   /* ---------- מייל ---------- */
   // נוסח קצר בנקודות: כל הפרטים כבר בטופס ה-Word המצורף, ולכן במייל רק העיקר. שורות הנקודות פותחות ב-"• " (חוזה מול השרת: הוא בונה מהן רשימה ב-htmlBody RTL; בלי שורות כאלה הגוף מוצג כפסקאות)
-  function mail(res, cfg) {
+  // opts (שלב ב׳, אופציונלי): parties = שורות הגורמים (או סיכום {total, done}) — שורת "• דיווח לגורמים נוספים: …" אחרי שורת הסגירה, רק כשיש גורמים והדגל פעיל;
+  // update = {sentAt} — שליחה מחדש כעדכון אחרי בדיקה חוזרת (mailUpdate). בלי opts (או עם דגלים כבויים) המייל זהה לשלב א׳
+  function mail(res, cfg, opts) {
+    opts = opts || {};
     const inp = res.inp, a = C.parseDate(inp.dateFrom), b = C.parseDate(inp.dateTo);
     const dates = inp.dateFrom === inp.dateTo ? "יום " + C.dayName(a) + " " + C.ddmmyyyy(a) : "יום " + C.dayName(a) + " " + C.ddmmyyyy(a) + " עד יום " + C.dayName(b) + " " + C.ddmmyyyy(b);
     const subject = "בקשה לסגירה אווירית — " + inp.siteName + " — " + dates;
     const win = res.sun.length ? res.sun[0].start + "–" + res.sun[0].end : inp.timeFrom + "–" + inp.timeTo;
     const phone = String(inp.requesterPhone == null ? "" : inp.requesterPhone).trim();   // הטלפון אופציונלי בחתימה: ריק — בלי שורה ריקה בסוף
+    const partiesBullet = partiesMailLine(opts.parties, cfg);
     const lines = [
       "שלום רב,", "",
       "מצורפת בקשה לסגירה אווירית על גבי הטופס שבנספח ג׳ לפמ״ת א-11 (עדכון 1/26).", "",
       "• גורם מבקש: " + orgName(inp),
       "• מיקום: " + inp.siteName,
       "• מועד: " + dates + (inp.dateFrom === inp.dateTo ? "" : ", בכל יום") + " " + win + " (שעון מקומי)",
-      "• סגירה: מעגל ברדיוס " + res.R + " מטר · גובה " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)", "",
+      "• סגירה: מעגל ברדיוס " + res.R + " מטר · גובה " + res.ft.toFixed(1) + " רגל (" + C.trimNum(inp.heightM, 2) + " מטר) מעפ״ש (AGL)"].concat(partiesBullet ? ["• " + partiesBullet] : [], [""], [
       "קבצים מצורפים: טופס הבקשה (Word), קובץ KML וארבע תמונות מפה — תצ״א ומפת רחובות בתקריב, הדמיה וסימונים במבט כללי ומפת אזור מרוחקת.",
       "כל הפרטים — בטופס המצורף.", "",
       "בברכה,", inp.requesterName, orgName(inp)
-    ];
+    ]);
     if (phone) lines.push(phone);
     const body = lines.join("\n");
-    return { to: cfg.mail.to, subject, body, mailto: "mailto:" + cfg.mail.to.join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body) };
+    const out = { to: cfg.mail.to, subject, body, mailto: "mailto:" + cfg.mail.to.join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body) };
+    return opts.update ? mailUpdate(out, opts.update && opts.update.sentAt != null ? opts.update.sentAt : opts.update, cfg) : out;
+  }
+  // עדכון בקשה אחרי בדיקה חוזרת (features.recheck): הגוף מקבל "מצורפת בקשה מעודכנת… בקשה זו מחליפה את הבקשה שנשלחה ב-dd.mm.yyyy." (ReqRecheck.updateMail).
+  // subject נשאר הנושא הרגיל, כי השרת מוסיף בעצמו את הקידומת "[עדכון לבקשה מ-…] " בשליחה (updateOf); subjectFull = הנושא עם הקידומת — ל-mailto ולהעתקה ידנית (mailto כבר בנוי ממנו). דגל כבוי / מודול חסר ← המייל כמות שהוא
+  function mailUpdate(m, sentAt, cfg) {
+    const RC = lazy("recheck"); if (!RC || typeof RC.updateMail !== "function" || !RC.enabled(cfg)) return m;
+    const u = RC.updateMail(m, sentAt, { cfg });
+    return u === m ? m : Object.assign({}, u, { subject: m.subject, subjectFull: u.subject });
   }
 
-  return { fileBase, safeName, submissionHtml, submissionSection, summaryModel, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel, DECLARATION, declarationRecord, reviewText };
+  return { fileBase, safeName, submissionHtml, submissionSection, summaryModel, whereOf, attachmentsLine, visitNoteHtml, docxModel, buildForm, buildChecks, buildCoverage, sourceNotes, kml, mail, matchUnmapped, itemText, airInfraLines, toText, dLabel, DECLARATION, declarationRecord, reviewText,
+    partiesPage, partiesHtml, partiesMailLine, recheckDocxModel, mailUpdate };
 });

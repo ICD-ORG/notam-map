@@ -23,19 +23,20 @@ const now = new Date(exp.now), t2 = new Date(+now + 7 * 86400000);
 const clone = o => JSON.parse(JSON.stringify(o));
 const P0 = { lat: exp.input.lat, lon: exp.input.lon };
 const proj = new C.Proj(P0.lat, P0.lon);
-const baseInput = (R = 200) => Object.assign({}, exp.input, { radius: R, purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", requesterOrg: "חברה", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
+const metaOf = n => J(`members-k38p/requests/selftest/${n}/meta.json`);   // נקודת המרכז של כל fixture (lat/lon שבהם נאספו נתוני ה-OSM)
+const baseInput = (R = 200, name = "yarkon") => Object.assign({}, exp.input, { lat: metaOf(name).lat, lon: metaOf(name).lon, radius: R, purpose: cfg.purposes[0], aircraft: [cfg.aircraft[0]], vlos: true, siteName: "בדיקה", requesterName: "בודק", requesterPhone: "050-0000000", requesterOrg: "חברה", contacts: [{ name: "א", phone: "050-0000001" }, { name: "ב", phone: "050-0000002" }] });
 const baseData = (name = "yarkon") => Object.assign({ zones, inpa, agri, notams: snap.notams, notamFetchedIso: snap.fetched_iso }, fixture(name));
 // נתונים "טריים יותר" (אחרי ההגשה): כל מקורות הזמן מתקדמים. שינוי תוכן מתבצע בנפרד, בעותקים רדודים
 const fresher = d => {
   const stamp = x => Object.assign({}, x, { osm3s: Object.assign({}, x.osm3s, { timestamp_osm_base: "2026-10-23T05:00:00Z" }) });
   return Object.assign({}, d, { notamFetchedIso: "2026-10-23T08:00:00Z", near: stamp(d.near), far: stamp(d.far), ext: stamp(d.ext) });
 };
-const analyze = (d, R = 200, at = now) => C.analyze(baseInput(R), d, cfg, at);
-const snapOf = (d, R = 200, at = now, c = cfg) => RC.snapshotOf(C.analyze(baseInput(R), d, c, at), d, c, at);
+const analyze = (d, R = 200, at = now, name = "yarkon") => C.analyze(baseInput(R, name), d, cfg, at);
+const snapOf = (d, R = 200, at = now, c = cfg, name = "yarkon") => RC.snapshotOf(C.analyze(baseInput(R, name), d, c, at), d, c, at);
 // השוואה: ההגשה = נתוני הבסיס ברגע now; הבדיקה החוזרת = נתונים טריים (עם השינוי mut) שבוע אחרי
 const scenario = (mut, { R = 200, name = "yarkon", cfg2 = cfg } = {}) => {
   const d1 = baseData(name), d2 = (mut || (x => x))(fresher(baseData(name)));
-  const prev = snapOf(d1, R), cur = RC.snapshotOf(C.analyze(baseInput(R), d2, cfg2, t2), d2, cfg2, t2);
+  const prev = snapOf(d1, R, now, cfg, name), cur = RC.snapshotOf(C.analyze(baseInput(R, name), d2, cfg2, t2), d2, cfg2, t2);
   return { prev, cur, diff: RC.diffSnapshots(prev, cur), d1, d2 };
 };
 const rowsOf = d => [].concat(d.notams.rows, d.zones.rows, d.items.rows, d.other.rows);
@@ -94,12 +95,38 @@ test("קבוצה מאוחדת (כביש/אזור): הרכב או שם של הא�
 
 test("תמונת מצב: גודל קטן על נתוני האמת (כל מקרי selftest), הרבה מתחת לתקרה", () => {
   for (const [name, R] of [["yarkon", 200], ["yarkon", 1000], ["yarkon", 5000], ["hula", 300], ["nitzana", 300], ["metula", 500]]) {
-    const s = snapOf(baseData(name), R), bytes = Buffer.byteLength(JSON.stringify(s));
+    const s = snapOf(baseData(name), R, now, cfg, name), bytes = Buffer.byteLength(JSON.stringify(s));
     assert.ok(bytes < 60000, `${name} R=${R}: ${bytes} בייט`);
     assert.ok(bytes < RC.LIMITS.bytes);
     assert.equal(s.capped.items, 0); assert.equal(s.capped.known, 0);
   }
   assert.ok(Buffer.byteLength(JSON.stringify(snapOf(baseData("yarkon"), 200))) < 12000, "ירקון R=200 קטן מ-12KB");
+});
+
+test("תמונת מצב: כל תמונה אמיתית עוברת אימות מבני (cleanSnapshot) ללא שינוי; מזהים כפולים בשדות תעופה/מנחתים נאספים פעם אחת", () => {
+  for (const [name, R] of [["yarkon", 200], ["yarkon", 5000], ["hula", 300], ["hula", 3000], ["nitzana", 300], ["metula", 500], ["metula", 5000]]) {
+    const s = snapOf(baseData(name), R, now, cfg, name), v = RC.cleanSnapshot(JSON.parse(JSON.stringify(s)));
+    assert.equal(v.ok, true, `${name} ${R}: ${v.detail}`); assert.deepEqual(v.snapshot, s);
+  }
+  const d = baseData("hula"), res = analyze(d, 3000, now, "hula");
+  assert.ok(res.airfields.some(a => a.d - 3000 <= cfg.thresholds.airfield_near_m) && res.agri.some(a => a.d - 3000 <= cfg.thresholds.agri_near_m), "יש שדה תעופה ומנחת חקלאי בטווח");
+  const dup = Object.assign({}, res, { airfields: res.airfields.concat(res.airfields).map(a => Object.assign({}, a, { d: 100 })), agri: res.agri.concat(res.agri).map(a => Object.assign({}, a, { d: 100 })) });
+  const s = RC.snapshotOf(dup, d, cfg, now);
+  assert.ok(s.oth.air.length >= 1 && s.oth.agri.length >= 1);
+  assert.equal(s.oth.air.length, new Set(s.oth.air.map(a => a.id)).size); assert.equal(s.oth.agri.length, new Set(s.oth.agri.map(a => a.n)).size);
+  assert.equal(RC.cleanSnapshot(s).ok, true);
+});
+
+test("clean: אידמפוטנטי (גם אחרי חיתוך שנגמר ברווח), מסיר בקרה/כיווניות/סרוגייט בודד, ושומר סרוגייט תקין (אימוג׳י)", () => {
+  const samples = ["אזור מ-LEBANON BOUNDRAY ל-8 ק\"מ SB סגור ל-ALL טיסות פנים-ארציות, למעט POLICE, FIREFIGHTING, MEDEVAC xx", "א ".repeat(80), " \t\n x \u00a0 y ", "😀".repeat(70), "ab\ud800cd", "\u202eevil\u202c", "x".repeat(300)];
+  for (const sx of samples) for (const max of [0, 10, 50, 100]) {
+    const once = RC.clean(sx, max), twice = RC.clean(once, max);
+    assert.equal(twice, once, JSON.stringify([sx.slice(0, 20), max]));
+    for (const m of [false, true]) assert.equal(RC.clean(RC.clean(sx, max, m), max, m), RC.clean(sx, max, m));
+  }
+  assert.equal(RC.clean("ab\ud800cd"), "abcd"); assert.equal(RC.clean("😀x"), "😀x"); assert.equal(RC.clean("😀".repeat(70), 10), "😀".repeat(10), "חיתוך לפי תווי יוניקוד שלמים");
+  assert.equal(RC.clean("\u202eevil\u202c"), "evil"); assert.equal(RC.clean(null), ""); assert.equal(RC.clean(undefined, 5), ""); assert.equal(RC.clean(12345, 3), "123");
+  assert.equal(RC.clean("a\r\nb\n\n\n\nc", 0, true), "a\nb\n\nc"); assert.equal(RC.clean("a\r\nb\tc"), "a b c");
 });
 
 test("תמונת מצב: בלי שום פרט אישי — לא מבקש, לא טלפון, לא אנשי קשר, לא משתתפים, לא הערות או פריטים ידניים", () => {
@@ -197,6 +224,27 @@ test("השוואה: נתונים זהים (גם שבוע אחרי, מקורות 
   }
   const { diff } = scenario(null, { R: 1000 });
   assert.ok(diff.items.checked > 50 && diff.items.unchanged === diff.items.checked);
+  for (const [name, R] of [["hula", 3000], ["metula", 5000], ["nitzana", 5000]]) {
+    const r = scenario(null, { R, name }).diff;
+    assert.equal(r.counts.total, 0, `${name} ${R}`); assert.ok(r.other.checked >= 1 && r.other.unchanged === r.other.checked, `${name}: גבולות/שדות תעופה/מנחתים נבדקו (${r.other.checked})`);
+  }
+  assert.ok(scenario(null, { R: 300, name: "hula" }).diff.notams.checked >= 9, "ב-hula יש 9 נוטמים בטווח");
+});
+
+test("נתוני אמת (hula): כל 9 הנוטמים שנספרו — הסרה מהפיד ← 'אינו מופיע עוד…' / 'פג תוקפו' לפי סיום התוקף; החלפה וביטול מזוהים לפי הפניה", () => {
+  const { prev } = scenario(null, { R: 300, name: "hula" });
+  assert.ok(prev.notams.hits.length >= 9);
+  const ids = prev.notams.hits.map(h => h.id), gone = (drop, extra = []) => fresher(Object.assign({}, baseData("hula"), { notams: baseData("hula").notams.filter(n => drop.indexOf(n.id) < 0).concat(extra) }));
+  const run = d => RC.diffSnapshots(prev, RC.snapshotOf(analyze(d, 300, t2, "hula"), d, cfg, t2));
+  const all = run(gone(ids));
+  assert.equal(all.notams.rows.length, ids.length); assert.ok(all.notams.rows.every(r => r.cls === "removed" && ["withdrawn", "expired"].includes(r.status)));
+  all.notams.rows.forEach(r => assert.equal(r.status, (r.before.t === 0 || r.before.t > +t2) ? "withdrawn" : "expired", r.id));
+  const one = ids[0], c1 = run(gone([one], [mkNotam("C0001/26", { type: "C", ref: one, pos: "330000N0354000E" })]));
+  assert.equal(c1.notams.rows.length, 1); assert.equal(c1.notams.rows[0].status, "cancelled"); assert.equal(c1.notams.rows[0].id, one);
+  const pos = prev.notams.hits.find(h => h.id === one);
+  const r1 = run(gone([one], [mkNotam("A0001/26", { type: "R", ref: one, pos: "330500N0353600E", radius: "2NM" })]));
+  assert.equal(r1.notams.rows.length, 1, JSON.stringify(r1.notams.rows.map(r => r.id + r.status))); assert.equal(r1.notams.rows[0].status, "replaced"); assert.equal(r1.notams.rows[0].replaces, one);
+  assert.ok(pos);
 });
 
 test("השוואה: הקלט של כל קריאה לא משתנה והתוצאה דטרמיניסטית", () => {
@@ -731,6 +779,11 @@ test("HTML: מאפיין בתוך תא נשאר סגור (data-sev מגיע מר
   const h2 = RC.sinceHtml(hostileModel);
   assert.ok(!h2.includes("<img") && !h2.includes("<script") && !h2.includes("<u>") && !h2.includes("<i>"));
   assert.equal(RC.sinceHtml(null), ""); assert.equal(RC.sinceHtml(5), ""); assert.equal(RC.requestHtml(null), "");
+  // מודל שגוי/חלקי/עוין לא זורק ולא מחדיר HTML
+  for (const weird of [{}, { sections: [null, {}, { rows: [null, { lines: "x" }], total: "<img src=x onerror=1>", rest: 5 }], dates: [null], sources: [null, 5], notes: "x", banner: null }]) {
+    const out = RC.sinceHtml(weird); assert.ok(typeof out === "string" && !out.includes("<img") && out.includes("דוח זה לא צורף לבקשה שנשלחה למודיעין טיס"), out.slice(0, 200));
+  }
+  for (const weird of [{ ok: true }, { ok: true, rows: [null, { label: "<i>" }], manual: "x", zones: [{}], items: 5 }, {}]) assert.ok(!RC.requestHtml(weird).includes("<i>"));
 });
 
 test("סעיף השינויים: באנר בולט עם התאריך, שורת תאריכים, סיכום ממוספר עם חומרה גבוהה, טבלאות לפי קטגוריה ומשפט הגבלה", () => {
@@ -769,6 +822,7 @@ test("אין שינוי: המשפט + ספירות (נבדקו/לא השתנו) 
   assert.match(m.checkedLine, /^נבדקו — נוטמים: 1 · אזורים: 1 · פריטים: \d+\. לא השתנו — נוטמים: 1 · אזורים: 1 · פריטים: \d+\.$/);
   const html = RC.sinceHtml(m);
   assert.ok(html.includes("לא נמצאו שינויים מאז ההגשה.") && html.includes(RC.STR.limit) && !html.includes("<h4"));
+  assert.ok(!html.includes(RC.STR.osm), "הערת OpenStreetMap רק כשיש שינוי בפריטים");
   assert.ok(!/אין שינוי|מותר|אסור|בטוח/.test(m.summary + m.checkedLine), "אין הכרעה");
 });
 
@@ -870,6 +924,38 @@ test("דגל features.recheck: מפתח חסר = פעיל; false = כבוי; opt
   assert.deepEqual(RC.optsFromCfg({ recheck: { dist_eps_m: 25, dist_eps_pct: 8, rows_screen: 5, rows_word: 50 } }), { eps: 25, epsPct: 8, rowsScreen: 5, rowsWord: 50 });
   assert.equal(RC.optsFromCfg({ recheck: { dist_eps_m: "x" } }).eps, 10);
   assert.ok(!("recheck" in cfg) || typeof cfg.recheck === "object", "אם הלידר הוסיף recheck ל-config — אובייקט");
+});
+
+test("דגל כבוי (features.recheck=false): הרשומה השמורה, המייל, הסעיף והסיכום זהים לשלב א׳ — אין snapshot, אין שורת עדכון, אין פלט חדש", () => {
+  const off = Object.assign({}, cfg, { features: { recheck: false } }), on = Object.assign({}, cfg, { features: { recheck: true } });
+  const d = baseData(), res = analyze(d);
+  const phaseA = { savedAt: now.toISOString(), site: "אתר", inputs: { lat: 1 }, zones: [], items: [] };
+  assert.deepEqual(RC.capture(res, d, off, now), {});
+  assert.equal(JSON.stringify(Object.assign({}, phaseA, RC.capture(res, d, off, now))), JSON.stringify(phaseA), "הרשומה זהה בייט לבייט");
+  assert.equal(RC.capture(res, d, cfg, now).snapshot.v, 1, "מפתח חסר = פעיל");
+  assert.deepEqual(Object.keys(RC.capture(res, d, on, now)), ["snapshot"]);
+  assert.deepEqual(RC.capture(res, d, on, now).snapshot, RC.snapshotOf(res, d, on, now));
+  const mail = O.mail(res, cfg), orig = JSON.stringify(mail);
+  assert.equal(RC.updateMail(mail, "2026-10-18T11:05:00Z", { cfg: off }), mail, "אותו אובייקט — ללא שורה או קידומת");
+  assert.equal(JSON.stringify(mail), orig); assert.ok(!mail.body.includes("מחליפה") && !mail.subject.includes("עדכון"));
+  assert.notEqual(RC.updateMail(mail, "2026-10-18T11:05:00Z", { cfg: on }), mail);
+  const { diff } = scenario(null);
+  assert.equal(RC.sinceModel(diff, { cfg: off }), null); assert.equal(RC.sinceHtml(RC.sinceModel(diff, { cfg: off })), "");
+  assert.equal(RC.requestModel(savedRecord(), { cfg: off }), null); assert.equal(RC.requestHtml(RC.requestModel(savedRecord(), { cfg: off })), "");
+  assert.notEqual(RC.sinceModel(diff, { cfg: on }), null); assert.equal(RC.requestModel(savedRecord(), { cfg: on }).ok, true);
+  assert.equal(RC.enabled(off), false);
+});
+
+test("capture: כשל בצילום (ניתוח חסר או חריגה מהתקרות) לא זורק — {snapshotError} קצר ומנוקה, והשמירה ממשיכה בלי תמונת מצב", () => {
+  const d = baseData();
+  const r = RC.capture(null, d, cfg, now);
+  assert.deepEqual(Object.keys(r), ["snapshotError"]); assert.match(r.snapshotError, /ניתוח/);
+  const hits = Array.from({ length: 310 }, (_, i) => mkNotam("A" + String(7000 + i) + "/26")), d2 = withNotams(hits)(baseData());
+  const r2 = RC.capture(analyze(d2), d2, cfg, now);
+  assert.match(r2.snapshotError, /נוטמים/); assert.ok(r2.snapshotError.length <= 120);
+  const res = analyze(d); res.nearScan = null;
+  assert.ok(RC.capture(res, d, cfg, now).snapshotError);
+  assert.equal(RC.validateRecord(Object.assign(savedRecord(), r2, { snapshot: undefined })).rec.snapshotStatus, "none", "הרשומה עם snapshotError נקלטת בלי בסיס השוואה");
 });
 
 test("תאריכים: שעון ישראל, פורמט dd.mm.yyyy [HH:MM]; קלט פגום ← מחרוזת ריקה", () => {

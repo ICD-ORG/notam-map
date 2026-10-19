@@ -63,6 +63,7 @@
 
   /* ---------- הסברים ללחצני "!" (js/help.js): כל טקסט מתאר את מה שהפעולה עושה בפועל בקוד (Code.gs ובקובץ הזה) ---------- */
   const HELP = {
+    myreq: "פותח רשימה של הבקשות ששמרתם או שלחתם מהחשבון הזה, מהחדשה לישנה, ולכל בקשה את מצבה: נשלחה למשרד נוטאם, נשלחה לבדיקה בלבד, או נשמרה ולא נשלחה. מכל בקשה אפשר לראות סיכום לקריאה בלבד, או להשתמש בה כבסיס לבקשה חדשה — הנתונים נטענים לטופס, והבדיקות והאישור של ההצהרה נעשים מחדש. הפעולה לא שולחת ולא משנה בקשה שמורה.",
     pass: "פותח חלון להחלפת הסיסמה שלך: מקלידים את הסיסמה הנוכחית ואת החדשה פעמיים (לפחות 10 תווים). אחרי ההחלפה כל ההתחברויות האחרות של המשתמש שלך מתבטלות, וההתחברות הנוכחית נשארת.",
     admin: "פותח את חלון ניהול המשתמשים (למנהל בלבד): סיכום הבקשות לפי סוג (הארגון / מטיסים), מצב השליחה, רשימת המשתמשים וסוג החשבון של כל אחד (ארגוני / עצמאי), התצוגה המתקדמת שלו והפעולות עליהם, יומן הבקשות עם סינון לפי סוג, הוספת משתמש, איפוס סיסמה ובדיקת כרטיס.",
     out: "מוחק את ההתחברות השמורה בחלון הדפדפן הזה, מנקה מהדף את הבקשה, הדוח והפרטים שעל המסך (הדף נטען מחדש) ומחזיר למסך הכניסה. פרטי המבקש, אנשי הקשר וכלי הטיס ששמרתם בדפדפן נשארים שמורים לכניסה הבאה שלכם; אין בכך מחיקה של קבצים שכבר נשמרו או נשלחו.",
@@ -232,6 +233,9 @@
   const isAdv = () => A.loggedIn() && (A.role === "admin" || (A.advKnown ? A.adv : isOrg()));
   // רענון של משתמש שכבר מחובר (me, החלפת סיסמה): אם התצוגה המתקדמת השתנתה מאז (המנהל החליף אותה) — מודיעים ל-ui.js (req-adv) להציג מחדש. בכניסה עצמה אין צורך: req-auth בא אחריה
   const notifyAdv = was => { if (isAdv() !== was) document.dispatchEvent(new CustomEvent("req-adv", { detail: { adv: isAdv() } })); };
+  // ״הבקשות שלי״ (js/myreq.js): לכל משתמש מחובר, רק כשהשרת מדווח myRequests והדגל features.myreq לא כבוי; שרת ישן — בלי כפתור (נכשל סגור)
+  const myReqOn = () => !!(window.ReqMyReq && window.ReqMyReq.available && window.ReqMyReq.available(A.cfg, A.features));
+  const myReqBtn = () => myReqOn() ? withHelp('<button type="button" id="ubMyReq">הבקשות שלי</button>', HELP.myreq, "הבקשות שלי") + " " : "";
   function renderBar() {
     let bar = $("userBar");
     if (!bar) { bar = document.createElement("div"); bar.id = "userBar"; bar.className = "userBar"; const w = document.querySelector("header .wrap"); (w || document.body).appendChild(bar); }
@@ -239,15 +243,16 @@
     const daysLeft = A.until ? Math.ceil((A.until - Date.now()) / 86400000) : null;
     bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : isOrg() ? " (חשבון ארגוני)" : "") + '</span> ' +
       (A.until ? '<span id="ubSub">מנוי עד ' + esc(fmtD(A.until)) + (daysLeft <= 30 ? ' — <b>מסתיים בעוד ' + daysLeft + ' ימים</b>' + renewLink() : "") + '</span> ' : "") +
-      withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
+      myReqBtn() + withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
     $("ubPass").onclick = openPassword; $("ubOut").onclick = () => logout();
+    if ($("ubMyReq")) $("ubMyReq").onclick = () => { try { window.ReqMyReq.open(); } catch (e) { /* תוספת: כשל בה לא פוגע בשאר הדף */ } };
     if (A.role === "admin") $("ubAdmin").onclick = openAdmin;
   }
-  function modal(html) {
+  function modal(html, cls) {   // cls (אופציונלי): מחלקה נוספת על תיבת החלון כבר ביצירתה (ללא היסט פריסה/מעבר עיצוב אחרי ההוספה) — js/myreq.js
     if (A.busy) return null;     // באמצע שמירה/שליחה לא מחליפים את החלון הפתוח
     closeModal();
     const m = document.createElement("div"); m.id = "authModal"; m.className = "authCover2"; m.dir = "rtl"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
-    m.innerHTML = '<div class="authBox wide">' + html + '<div style="margin-top:12px"><button type="button" id="mdClose">סגור</button></div></div>';
+    m.innerHTML = '<div class="authBox wide' + (cls ? " " + esc(cls) : "") + '">' + html + '<div style="margin-top:12px"><button type="button" id="mdClose">סגור</button></div></div>';
     lastFocus = document.activeElement;   // ההתמקדות חוזרת לשם כשהחלון נסגר (הכפתור שפתח אותו)
     document.body.appendChild(m); $("mdClose").onclick = closeModal;
     setBackdropInert(true);
@@ -435,7 +440,7 @@
       return r;
     } catch (e) { return { ok: false, error: "network", message: "אין חיבור לשרת" }; }
   };
-  A.modal = html => modal(html);
+  A.modal = (html, cls) => modal(html, cls);
   A.closeModal = closeModal;
   A.user_ = () => A.user;
   A.call = call;

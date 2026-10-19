@@ -143,7 +143,7 @@
   // keepExc: כתובת בקשת חריגה נשארת (ברמת הרשומה היא מסומנת role:"exception"; רק הבנייה והשחזור מסירים גם אותה)
   function scrub(str, blk, keepExc) {
     if (typeof str !== "string" || !str) return str;
-    let t = clean(str).replace(/[^\s"'<>()]*icd\.org\.il[^\s"'<>()]*/gi, "…");
+    let t = clean(str).replace(/[^\s"'<>(),;]*icd\.org\.il[^\s"'<>(),;]*/gi, "…");
     t = t.replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+/g, m => { const a = m.replace(/[.\-_]+$/, ""), r = roleOfEmail(a, blk); return r && !(keepExc && r === "exception") ? "…" + m.slice(a.length) : m; });
     const bad = scanPhones(t, blk, true).filter(p => p.role === "internal");
     for (let i = bad.length - 1; i >= 0; i--) t = t.slice(0, bad[i].idx) + "…" + t.slice(bad[i].end);
@@ -850,6 +850,6 @@
     enabled, fingerprint,
     extract, scanPhones, scanEmails, pairs, cueOf, cleanUrl, phonesFromTag, osmContact, quoteEntries, notamContacts, notamE, segments, validate, srcLabel, generalLabel,
     build, buildResult, merge, setField, addManual, removeManual, summary, summaryText, mailLine, record, restore, marks, SUGGESTIONS, localAuthority, describe, cueOf, notamContacts,
-    txt, hasBadChar, hasVisible
+    txt, hasBadChar, hasVisible, scrub
   };
 });

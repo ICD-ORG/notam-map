@@ -165,6 +165,7 @@ test("פורמטים של OSM: נקודות/מקפים/רווחים/+972/(0)/ס�
   assert.deepEqual(norm("(03) 5487211"), ["03-5487211"]);
   assert.deepEqual(norm("03-5487211; 054-2479323"), ["03-5487211", "054-2479323"]);
   assert.deepEqual(norm("tel: 03-5487211"), ["03-5487211"], "תווית לפני המספר אינה פוסלת");
+  assert.deepEqual(norm("+972 (0) - 3-5589722"), ["03-5589722"], "כמה מפרידים בין הקידומת הבינלאומית למספר");
   assert.deepEqual(P.phonesFromTag("+44 20 7946 0958, 03-5487211").map(p => p.kind), ["unverified", "landline"], "פסיק מפריד בין ערכים");
   const bad = P.phonesFromTag("+44 20 7946 0958")[0];
   assert.equal(bad.kind, "unverified"); assert.equal(bad.valid, false); assert.equal(bad.tel, "", "לא ישראלי: גולמי, בלי קישור"); assert.equal(bad.display, "+44 20 7946 0958");
@@ -219,6 +220,13 @@ test("הקטע המצוטט: יחידה ארוכה מתפצלת לפי פסיק 
   const one = P.extract(words + " בטלפון 03-5487211 " + words).excerpts;
   assert.equal(one.length, 1); assert.ok(one[0].startsWith("…") && one[0].endsWith("…") && one[0].includes("03-5487211"));
   assert.ok(Array.from(one[0]).length <= 221);
+});
+
+test("scrub: מסיר כתובות/טלפונים חסומים מטקסט חופשי — גם כשיש בו תווי כיווניות/NBSP לפניהם (המיקומים נמדדים אחרי הניקוי)", () => {
+  assert.equal(P.scrub("\u200f\u200fחייגו \u202b052-5076677\u202c או office@icd.org.il, אחר 03-5487211"), "חייגו … או …, אחר 03-5487211");
+  assert.equal(P.scrub("a\u00a0\u200f x notamoffice@iaa.gov.il y"), "a  x … y", "NBSP הופך לרווח, כיווניות מוסרת, והכתובת מוחלפת במיקום הנכון");
+  assert.equal(P.scrub("caai-charigot@mot.gov.il"), "…"); assert.equal(P.scrub("caai-charigot@mot.gov.il", null, true), "caai-charigot@mot.gov.il", "keepExc: ברמת הרשומה הכתובת נשארת עם role");
+  assert.equal(P.scrub("שום דבר חשוד"), "שום דבר חשוד"); assert.equal(P.scrub(5), 5); assert.equal(P.scrub(""), "");
 });
 
 test("חסימות: כתובות/טלפון הארגון, נמעני נוטאם ובקשת חריגה לעולם אינם בפלט — גם כשנזרקים לטקסט אזור מלאכותי", () => {

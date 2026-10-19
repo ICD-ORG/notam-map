@@ -86,6 +86,11 @@
    ]
   }
  },
+ "features": {
+  "myreq": true,
+  "parties": true,
+  "recheck": true
+ },
  "sync_retry_ms": 30000,
  "sync_interval_ms": 900000
 }
