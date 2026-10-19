@@ -1626,7 +1626,7 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=14/);
+  assert.match(html, /js\/ui\.js\?v=15/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
@@ -3122,7 +3122,8 @@ test("recheck.js: תאריכי NOTAM מחוץ לטווח בקובץ פגום ל�
 test("סעיף 3 (רשימת ההתקדמות): מבקש רגיל מקבל ניסוח פשוט בלי מקורות; מנהל ותצוגה מתקדמת — הפירוט הקיים", () => {
   const ui = readReq("js/ui.js");
   // upd בוחרת לפי isAdv: הפירוט הטכני כמו שהיה למתקדם, plainSteps לשאר
-  assert.match(ui, /const upd = \(\) => progress\(steps\.flatMap\(x => isAdv\(\) \? \[\{ s: x\.s, t: x\.t, m: x\.m \}\] : plainSteps\(x\)\)\);/);
+  assert.match(ui, /const planned = steps => steps\.flatMap\(x => isAdv\(\) \? \[\{ s: x\.s, t: x\.t, m: x\.m \}\] : plainSteps\(x\)\);/);
+  assert.match(ui, /const upd = \(\) => progress\(planned\(steps\)\);/);
   // הכותרות והפירוט הטכני של המתקדם לא השתנו
   for (const t of ["מכשולים ותשתיות בסביבה (OpenStreetMap)", "שדות תעופה, מנחתים וישובים (OpenStreetMap)", "גבולות מדינה ושטחי טבע (OpenStreetMap)", "שם המקום (Nominatim)", "ארבע תמונות מפה עם רקע (תצ״א, מפת רחובות, הדמיה, מפת אזור)"]) assert.ok(ui.includes('t: "' + t + '"'), t);
   assert.ok(ui.includes('" אלמנטים"') && ui.includes('"הרקע נטען ("'));
@@ -3135,4 +3136,9 @@ test("סעיף 3 (רשימת ההתקדמות): מבקש רגיל מקבל ני�
   assert.match(ui, /setStatus\(sk, false, e\.message, \{ maint: true, adv: true, user: NOT_LOADED \}\);[^\n]*e\.net = true/);
   assert.match(ui, /\(e\.net && !isAdv\(\) \? NOT_LOADED : e\.message\)/);
   assert.match(ui, /isAdv\(\) \? f\.label : f\.label\.replace\(" \(OpenStreetMap\)", ""\)/);
+  // כשל תמונות המפה: אותו ניסוח ניטרלי בבאנר השער (למנהל ולמתקדם — ההודעה המקורית)
+  assert.match(ui, /const MAP_FAIL = \{ maint: true, adv: true, user: NOT_LOADED \};/);
+  assert.ok(ui.includes('setStatus("map", false, why, MAP_FAIL)') && ui.includes('setStatus("map", false, e.message, MAP_FAIL)'));
+  // שינוי תצוגה מתקדמת אחרי הרצה (req-adv): הרשימה וההודעה ליד הכפתור מצוירות מחדש לפי התפקיד
+  assert.match(ui, /document\.addEventListener\("req-adv", \(\) => \{\s*applyRole\(\);\s*if \(lastSteps && !S\.running\) progress\(planned\(lastSteps\)\);[^\n]*\n\s*if \(lastFail && !S\.running && \$\("e_run"\)\.textContent\) \$\("e_run"\)\.textContent = runFailText\(lastFail\);/);
 });

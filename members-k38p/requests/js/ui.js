@@ -941,6 +941,10 @@
     } catch (e) { /* גלילה/מיקוד הם נוחות בלבד — לעולם לא מפילים את ההרצה */ }
   }
   const NOT_LOADED = "הנתונים לא נטענו, נסו שוב בעוד מספר דקות";
+  const MAP_FAIL = { maint: true, adv: true, user: NOT_LOADED };   // כשל תמונות המפה (אריחים, ייצוא): הפירוט הטכני במנהל ובתצוגה מתקדמת; מבקש רגיל מקבל את הניסוח הניטרלי גם בבאנר השער
+  let lastSteps = null, lastFail = null;   // ההרצה האחרונה: אם התצוגה המתקדמת של המשתמש משתנה אחריה (req-adv), הרשימה וההודעה ליד הכפתור מצוירות מחדש לפי התפקיד החדש
+  const planned = steps => steps.flatMap(x => isAdv() ? [{ s: x.s, t: x.t, m: x.m }] : plainSteps(x));
+  const runFailText = e => "הבדיקות לא הושלמו: " + (e.net && !isAdv() ? NOT_LOADED : e.message) + ". הבקשה אינה מסומנת כמוכנה לשליחה — אפשר להריץ שוב.";
   // רשימת ההתקדמות למבקש רגיל: שורה לכל נושא שנבדק, בלי שמות מקורות, שרתים או אריחים; כשל — ניסוח ניטרלי (הפירוט הטכני נשאר למנהל ולתצוגה מתקדמת)
   function plainSteps(x) {
     const one = (waitT, okT, noT) => [{ s: x.s, t: x.s === "ok" ? okT : x.s === "wait" ? waitT : noT, m: x.s === "no" ? NOT_LOADED : "" }];
@@ -960,7 +964,7 @@
   async function run() {
     if (S.running) return;
     if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
-    $("e_run").textContent = "";
+    $("e_run").textContent = ""; lastFail = null;
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
     { const raw = $("coord").value.trim(); if (raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
@@ -984,7 +988,8 @@
       { k: "calc", t: "חישוב מרחקים ובדיקת א-17, רט״ג, מנחתים ונוטמים" }, { k: "map", t: "ארבע תמונות מפה עם רקע (תצ״א, מפת רחובות, הדמיה, מפת אזור)" }
     ].map(x => Object.assign(x, { s: "wait", m: "" }));
     // מנהל ומשתמש עם תצוגה מתקדמת רואים את הפירוט הטכני (שרתים, מקורות, אריחים); מבקש רגיל — ניסוח פשוט: מה נבדק ומה נמצא, בלי שמות מקורות
-    const upd = () => progress(steps.flatMap(x => isAdv() ? [{ s: x.s, t: x.t, m: x.m }] : plainSteps(x)));
+    const upd = () => progress(planned(steps));
+    lastSteps = steps; lastFail = null;
     const st = (k, s, m, v) => { const x = steps.find(y => y.k === k); x.s = s; x.m = m || ""; x.v = v; upd(); };
     upd();
     // ניתוח חדש בדרך: בנייה שרצה על הניתוח הקודם הופכת למיושנת (buildSeq), ועריכה רכה שממתינה לא תפעל על תוצאה שנמחקת (clearTimeout) — ואז אין טיימר שיזרוק על S.res=null
@@ -1036,7 +1041,7 @@
       renderAll();
       $("resultsSec").scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
-      $("e_run").textContent = "הבדיקות לא הושלמו: " + (e.net && !isAdv() ? NOT_LOADED : e.message) + ". הבקשה אינה מסומנת כמוכנה לשליחה — אפשר להריץ שוב.";
+      lastFail = e; $("e_run").textContent = runFailText(e);
       if (S.res) { S.report = true; renderAll(); } else { $("resultsSec").style.display = "none"; }
     } finally { S.running = false; $("runBtn").disabled = false; }
   }
@@ -1056,11 +1061,11 @@
         const sites = [...new Set(out.map(x => x.site))];   // יותר משם אחד = השם שונה באמצע הציור; לא אמור לקרות (עריכה כזו מחליפה את הבנייה), ואם קרה — נכשל סגור
         S.imgs = imgs; S.imgSite = sites.length === 1 ? sites[0] : null;
         if (sites.length === 1 && out.every(x => x.background && !x.tainted)) { st && st("map", "ok", "הרקע נטען (" + imgs.aerial.tiles + " אריחים לתקריב)"); setStatus("map", true, ""); }
-        else { const why = sites.length > 1 ? "שם האתר שונה בזמן ציור התמונות" : out.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : out.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why); }
+        else { const why = sites.length > 1 ? "שם האתר שונה בזמן ציור התמונות" : out.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : out.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why, MAP_FAIL); }
         return true;
       } catch (e) {
         if (stale()) return false;
-        S.imgs = {}; S.imgSite = null; st && st("map", "no", e.message); setStatus("map", false, e.message);
+        S.imgs = {}; S.imgSite = null; st && st("map", "no", e.message); setStatus("map", false, e.message, MAP_FAIL);
         return true;
       } finally { if (seq === S.buildSeq) { S.building = false; syncPending(); } }
     })();
@@ -1683,6 +1688,8 @@
     // התצוגה המתקדמת של המשתמש המחובר השתנתה (המנהל החליף אותה; נקלטה ברענון me): הכלים הפנימיים מוצגים / מוסתרים, ואם יש בקשה — סעיף ההגשה בדף ובקובץ ה-Word משתנה איתה, ולכן התוצאות שנשמרו או נשלחו אינן הגרסה הנוכחית (clearOutcome; נשמרת שוב אוטומטית)
     document.addEventListener("req-adv", () => {
       applyRole();
+      if (lastSteps && !S.running) progress(planned(lastSteps));   // סעיף 3 לפי התפקיד החדש (נשלל — בלי הפירוט הטכני שנשאר מהרצה קודמת)
+      if (lastFail && !S.running && $("e_run").textContent) $("e_run").textContent = runFailText(lastFail);
       if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
     });
     try { if (window.ReqMyReq) window.ReqMyReq.hook({ loadBase: myreqLoadBase, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״הבקשות שלי״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }

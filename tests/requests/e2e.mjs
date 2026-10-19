@@ -362,6 +362,7 @@ try {
     const g = await page.textContent("#gate");
     check("בלי תצלום אוויר: לא מוכן לשליחה", /אינה מוכנה/.test(g) && /תמונת מפה/.test(g), g.replace(/\s+/g, " ").slice(0, 200));
     check("כפתורי ההפקה חסומים", (await page.isDisabled("#btnPrint")) && (await page.isDisabled("#btnCopy")), "");
+    check("כשל אריחים אצל מנהל: הפירוט הטכני נשאר — בבאנר השער וברשימת ההתקדמות (מספר אריחי רקע שלא נטענו)", /תמונת מפה[^:]*: \d+ אריחי רקע לא נטענו/.test(g.replace(/\s+/g, " ")) && /\d+ אריחי רקע לא נטענו/.test(await page.innerText("#progress")), g.replace(/\s+/g, " ").slice(0, 240));
     await ctx.close();
   }
 
@@ -3410,6 +3411,15 @@ try {
       check("תרחיש 20, מטיס עצמאי: כשל בטעינת נתוני המפה — בשורה ״גבולות ושטחי טבע באזור ההטסה — הנתונים לא נטענו, נסו שוב בעוד מספר דקות״, ובהודעה ליד הכפתור אותו ניסוח, בלי Overpass/HTTP/שרת, והבקשה לא מוכנה",
         ext === "✖ גבולות ושטחי טבע באזור ההטסה הנתונים לא נטענו, נסו שוב בעוד מספר דקות" && o.run.startsWith("הבדיקות לא הושלמו: הנתונים לא נטענו, נסו שוב בעוד מספר דקות.") && !/overpass|HTTP|https?:|שרתי/i.test(o.run + o.lis.join(" ")) && o.results === "none", JSON.stringify(o).slice(0, 500));
       await fp.ctx.close(); }
+    { // כשל באריחי המפה אצל מטיס רגיל: גם בבאנר השער (לא רק ברשימת ההתקדמות) ניסוח ניטרלי — בלי מספר אריחים ובלי הודעת שגיאה טכנית
+      const fp = await openAs("pal.pilot", "pal-pass-12345", { failTiles: true });
+      await fillExample(fp.page, { org: "פל צילום" }); await fp.page.click("#runBtn");
+      await fp.page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await fp.page.waitForFunction(() => !window.__REQ.S.running && !window.__REQ.S.building, null, { timeout: 90000 });
+      const g = (await fp.page.textContent("#gate")).replace(/\s+/g, " "), pr = (await fp.page.innerText("#progress")).replace(/\s+/g, " ");
+      check("תרחיש 20, מטיס עצמאי: כשל באריחי המפה — בבאנר השער ״תמונת מפה ותצ״א עם רקע: הנתונים לא נטענו, נסו שוב בעוד מספר דקות״ וברשימת ההתקדמות ״תמונות המפה״ באותו ניסוח, בלי מספר אריחים",
+        /אינה מוכנה/.test(g) && /תמונת מפה ותצ״א עם רקע: הנתונים לא נטענו, נסו שוב בעוד מספר דקות/.test(g) && !/אריח|חסם|Error|HTTP/i.test(g) && /✖ תמונות המפה הנתונים לא נטענו, נסו שוב בעוד מספר דקות/.test(pr) && !/אריח/.test(pr), g.slice(0, 260) + " | " + pr.slice(0, 300));
+      await fp.ctx.close(); }
     { // כשל בבדיקה העצמית: הבקשה כבר אינה מוכנה, הפקדים נעולים, הבאנר ניטרלי (בלי פירוט טכני ובלי הוראות), והתיבה נשארת מוסתרת
       pst.fail = true; const okSelf = await pal.page.evaluate(() => window.__REQ.selfTest());
       const b = await banner(pal.page), gate = (await pal.page.textContent("#gate")).replace(/\s+/g, " "), t = await tools(pal.page), NEUTRAL = "הנתונים מתעדכנים כעת; נסו שוב בעוד מספר דקות, ואם זה נמשך פנו לתמיכה: " + SUPPORT + ".";
@@ -3501,6 +3511,8 @@ try {
       await avi.page.waitForFunction(() => document.getElementById("stBox").hidden, null, { timeout: 15000 }); await autoDone(avi.page);
       const t = await tools(avi.page), s = await sec5(avi.page), r = await res0(avi.page), w = wordSec5(await docxLines(aviFolder()));
       check("תרחיש 20, עובד ארגון שכובתה לו התצוגה: ברענון הכלים מוסתרים, סעיף 5 הופך לסיכום (מסך ו-Word) — אבל חשבונו נשאר ארגוני (ברירות המחדל והשמירה בתיקיית ״הארגון״)", concealed(t) && summaryOk(s, r) && !!w && w.head === "5. סיכום והגשה" && n(avi.page, "saveBegin") === sb + 1 && (await avi.page.evaluate(() => window.ReqAuth.isOrg())) === true, JSON.stringify([t.isAdv, s && s.head, w && w.head])); }
+      { const pr = (await avi.page.innerText("#progress")).replace(/\s+/g, " ");
+        check("תרחיש 20, עובד ארגון שכובתה לו התצוגה: אחרי הרענון סעיף 3 מצויר מחדש בניסוח הפשוט — בלי שמות מקורות, שרתים, אלמנטים ואריחים שנשארו מההרצה שלפני השינוי", /נבדקו \d+ מכשולים ותשתיות בסביבה/.test(pr) && /נוצרו ארבע תמונות מפה/.test(pr) && !/OpenStreetMap|Nominatim|overpass|אלמנט|אריח/i.test(pr), pr.slice(0, 300)); }
     await avi.ctx.close();
 
     /* ---- ו. שרת בלי תצוגה מתקדמת (noAdv) ושרת ישן לגמרי (oldServer): בלי adv מהשרת הלקוח נשאר עם ברירת המחדל לפי סוג החשבון (מנהל כן; ארגוני כן; מטיס לא) — גם כשהמנהל כבר הכריע אחרת בשרת הקיים; חלון הניהול בלי עמודה ---- */
