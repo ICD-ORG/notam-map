@@ -1458,7 +1458,7 @@ test("הסבר הכרטיס: מבנה — תיבת ההסבר בראש מסך ה
   assert.ok(/\$\("rgInfo"\)\.innerHTML = esc\(regSentMessage\(\)\) \+ buyBtn\("rgBuy"\);/.test(send), "ההודעה והכפתור אחרי regStart");
   assert.equal((send.match(/\br\.[A-Za-z_]+/g) || []).join(","), "r.ok", "מתשובת השרת נקרא רק ok — אף שדה אחר (מי רכש, מי רשום) לא משפיע על המסך");
   assert.ok(!/renew_url/.test(readReq("js/ui.js")) && !readReq("js/auth.js").includes("window.open"), "אין פתיחת חלון בקוד; הקישור הוא a רגיל");
-  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=10"><\/script>/, "גרסת המטמון של auth.js");
+  assert.match(readReq("index.html"), /<script src="js\/auth\.js\?v=11"><\/script>/, "גרסת המטמון של auth.js");
 });
 
 test("n=11: sync.js מסווג כל בעיה — maint (תחזוקה: רק המנהל מטפל) מול user (הודעה שמטיס יכול לפעול לפיה) — ומשאיר את problems כמות שהיא", async () => {
@@ -1633,7 +1633,7 @@ test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (
   const au = readReq("js/auth.js"), html = readReq("index.html");
   assert.match(au, /\$\("auUser"\); if \(u\) u\.focus\(\{ preventScroll: true \}\);/);
   assert.match(au, /\$\("rgEmail"\)\.focus\(\{ preventScroll: true \}\);/);
-  assert.match(html, /js\/auth\.js\?v=10/);
+  assert.match(html, /js\/auth\.js\?v=11/);
 });
 
 /* ===== תצוגה מתקדמת (A2): סעיף 5 "הגשה" המלא רק למי שיש לו תצוגה מתקדמת; כל השאר מקבלים "סיכום והגשה" קצר בלי הפניות לפמ״ת ובלי הנחיות למודיעין טיס (החלטת בעל המערכת) ===== */
@@ -3157,4 +3157,13 @@ test("הצג כנרשם רגיל (מנהל): auth.js — מצב בזיכרון �
   assert.match(html, /\.userBar \.prevTag \{/);
   // ui.js מצייר מחדש בשינוי תצוגה (req-adv) — גם הודעת הסנכרון, שנבחרת לפי תפקיד
   assert.match(ui, /document\.addEventListener\("req-adv", \(\) => \{\s*applyRole\(\); renderSyncBanner\(\);/);
+});
+
+test("אבחון כרטיס באתר (מנהל): הזמנה חינם בקופון מסומנת בפלט, והשרת מחזיר coupon", () => {
+  const au = readReq("js/auth.js"), gs = fs.readFileSync(path.join(ROOT, "apps-script/Code.gs"), "utf8");
+  assert.ok(au.includes('(o.coupon ? " · הזמנה חינם בקופון" : "")'));
+  assert.match(gs, /function couponFree_\(o\) \{\s*if \(!o \|\| o\.status !== 'FREE'\) return false;/);
+  assert.match(gs, /if \(!o \|\| !o\.orderNumber \|\| !\(o\.status === 'PAID' \|\| couponFree_\(o\)\)\) return;/);
+  assert.ok(!/&status=PAID&/.test(gs), "הסינון לפי סטטוס בקוד, לא בשאילתה");
+  assert.ok(gs.includes("coupon: !!o.coupon, used:"));
 });
