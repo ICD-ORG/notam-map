@@ -138,3 +138,28 @@ test("נתיב: parseCoordList — שורה לכל נקודה, סדר הפוך �
   assert.equal(r.pts.length, 3); assert.deepEqual(r.bad, [4]);
   assert.deepEqual(r.pts[1], [32.1, 34.82], "הוחלף (אורך, רוחב) → (רוחב, אורך)");
 });
+
+test("נתיב: מקרי הסקירה — קטע קצר בקצה אחרי פנייה חדה, וקטע אמצעי קצר בפניות הפוכות (S): הטבעת נדחית (לא מכילה את הקפסולה)", () => {
+  const bad = (xy, W) => { const a = route(xy, W); return [C.corridorRing(a, 1).simple, C.validateRoute({ area: a }, cfg).length]; };
+  assert.deepEqual(bad([[0, 0], [10, 0], [10 + 400 * Math.cos(130 * Math.PI / 180), 400 * Math.sin(130 * Math.PI / 180)]], 50).map(Boolean), [false, true], "קצה של 10 מ׳ ואז פנייה של 130°");
+  assert.deepEqual(bad([[0, 0], [10, 0], [10 + 400 * Math.cos(150 * Math.PI / 180), 400 * Math.sin(150 * Math.PI / 180)]], 50).map(Boolean), [false, true]);
+  assert.deepEqual(bad([[0, 0], [1500, 0], [1500 + 60 * Math.cos(0.7), 60 * Math.sin(0.7)], [1500 + 60 * Math.cos(0.7) + 800 * Math.cos(-0.7), 60 * Math.sin(0.7) + 800 * Math.sin(-0.7)]], 500).map(Boolean), [false, true], "S עם קטע אמצעי 60 מ׳ ו-W=500");
+  assert.deepEqual(bad([[0, 0], [600, 0], [1200, 150], [1800, 0]], 50).map(Boolean), [true, false], "דרך רגילה עם קטעים ארוכים נשארת תקינה");
+});
+
+test("נתיב: תכונה — לכל נתיב שהטבעת שלו תקינה, כל נקודה במרחק ≤ W מהקו נמצאת בתוך הטבעת (3,000 נתיבים אקראיים, כולל קטעים קצרים ופניות חדות)", () => {
+  let seed = 20261019; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  let valid = 0, rejected = 0;
+  for (let k = 0; k < 3000; k++) {
+    const n = 2 + Math.floor(rnd() * 6), W = [20, 50, 100, 300][Math.floor(rnd() * 4)], xy = [[0, 0]]; let ang = rnd() * 6.28;
+    for (let i = 1; i < n; i++) { ang += (rnd() - 0.5) * (rnd() < 0.4 ? 3.0 : 1.2); const len = rnd() < 0.3 ? 2 + rnd() * 60 : 80 + rnd() * 500; xy.push([xy[i - 1][0] + len * Math.cos(ang), xy[i - 1][1] + len * Math.sin(ang)]); }
+    const a = route(xy, W), r = C.corridorRing(a, 1); if (!r.simple) { rejected++; continue; } valid++;
+    const rx = ringXY(r.ring), segs = xy.length - 1;
+    for (let i = 0; i < 400; i++) {
+      const sIdx = Math.floor(rnd() * segs), t = rnd(), bx = xy[sIdx][0] + (xy[sIdx + 1][0] - xy[sIdx][0]) * t, by = xy[sIdx][1] + (xy[sIdx + 1][1] - xy[sIdx][1]) * t, an = rnd() * 6.2832, rad = rnd() * (W - 1.5);
+      const x = bx + rad * Math.cos(an), y = by + rad * Math.sin(an);
+      if (oracleD(x, y, xy) <= W - 1 && !inRing(x, y, rx)) assert.fail("נתיב " + k + " (W=" + W + "): נקודה בקפסולה מחוץ לטבעת התקינה: " + JSON.stringify(xy.map(q => q.map(Math.round))));
+    }
+  }
+  assert.ok(valid > 500 && rejected > 100, "גם תקינים (" + valid + ") וגם נדחים (" + rejected + ")");
+});

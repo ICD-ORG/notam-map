@@ -160,33 +160,38 @@
   // נקודות הנתיב כפי שמוקלדות: עיגול ל-6 ספרות (כ-0.1 מ׳), כך שהשוואות ושמירה יציבות
   const roundPts = pts => (pts || []).map(q => [Math.round(q[0] * 1e6) / 1e6, Math.round(q[1] * 1e6) / 1e6]);
   // טבעת האזור הסביב לנתיב ברוחב mult×halfWidth מכל צד, כרשימת [lat,lon] סגורה: היסט מקביל לשני צדי הקו, פינות חדות במיטר (clip ב-2×W) וקצוות מרובעים (הקו מורחב ב-W בכל קצה) —
-  // כך הטבעת תמיד מכילה את הקפסולה (כל הנקודות במרחק עד W מהקו). simple=false כשהטבעת חותכת את עצמה (פנייה חדה או קטעים קצרים מדי ביחס לרוחב)
+  // כך הטבעת תמיד מכילה את הקפסולה (כל הנקודות במרחק עד W מהקו). simple=false (טבעת לא תקינה) כשהטבעת חותכת את עצמה, או כשפינה פנימית חולפת על פני קטע קצר מדי ביחס לרוחב ואז הפוליגון חותך את האזור (פנייה חדה או קטעים קצרים) — אז אין ערובה שהטבעת מכילה את הקפסולה
   function corridorRing(area, mult) {
     const W = area.halfWidth * (mult || 1), P = projFor({ area }), r0 = P.route;
     const r = [r0[0]];
     for (let i = 1; i < r0.length; i++) if (Math.hypot(r0[i][0] - r[r.length - 1][0], r0[i][1] - r[r.length - 1][1]) >= 0.5) r.push(r0[i]);
     if (r.length < 2) return { ring: [], simple: false };
-    const n = r.length, u = [], nl = [];
-    for (let i = 0; i < n - 1; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], L = Math.hypot(dx, dy); u.push([dx / L, dy / L]); nl.push([-dy / L, dx / L]); }
+    const n = r.length, u = [], nl = [], Ls = [];
+    for (let i = 0; i < n - 1; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], L = Math.hypot(dx, dy); Ls.push(L); u.push([dx / L, dy / L]); nl.push([-dy / L, dx / L]); }
+    let monotone = true;   // כל קטע של קו ההיסט נע קדימה לאורך הקטע (המקום שבו מתחיל <= המקום שבו נגמר): אחרת פינה פנימית "חולפת" על פני הקטע הקצר והפוליגון חותך את האזור (ראו הערה למעלה)
     const side = sg => {
       const out = [[r[0][0] + sg * W * nl[0][0] - W * u[0][0], r[0][1] + sg * W * nl[0][1] - W * u[0][1]]];
+      const ps = new Array(n - 1).fill(0), pe = new Array(n - 1).fill(0);   // מיקום (מ׳ לאורך הקטע, מתחילתו) של תחילת קו ההיסט וסופו
+      ps[0] = -W; pe[n - 2] = Ls[n - 2] + W;
       for (let i = 1; i < n - 1; i++) {
         const a = u[i - 1], b = u[i], na = [sg * nl[i - 1][0], sg * nl[i - 1][1]], nb = [sg * nl[i][0], sg * nl[i][1]], pp = r[i];
         const den = 1 + na[0] * nb[0] + na[1] * nb[1], cross = a[0] * b[1] - a[1] * b[0], outer = sg * cross < 0;
-        if (den < 1e-6) { out.push([pp[0] + W * na[0], pp[1] + W * na[1]], [pp[0] + W * nb[0], pp[1] + W * nb[1]]); continue; }   // היפוך כיוון: קפיצה (הטבעת תיחתך — נדחה באימות)
+        if (den < 1e-6) { monotone = false; out.push([pp[0] + W * na[0], pp[1] + W * na[1]], [pp[0] + W * nb[0], pp[1] + W * nb[1]]); continue; }   // היפוך כיוון: קפיצה (נדחה באימות)
         const mx = (na[0] + nb[0]) / den, my = (na[1] + nb[1]) / den;
-        if (!outer || Math.hypot(mx, my) <= 2) { out.push([pp[0] + W * mx, pp[1] + W * my]); continue; }
-        // צד חיצוני בפנייה חדה: חותכים את קצה הפינה במרחק 2×W מהקודקוד, לאורך הציר החוצה (שני נקודות על שתי הישרים)
+        if (!outer || Math.hypot(mx, my) <= 2) { out.push([pp[0] + W * mx, pp[1] + W * my]); pe[i - 1] = Ls[i - 1] + W * (mx * a[0] + my * a[1]); ps[i] = W * (mx * b[0] + my * b[1]); continue; }
+        // צד חיצוני בפנייה חדה: חותכים את קצה הפינה במרחק 2×W מהקודקוד, לאורך הציר החוצה (שתי נקודות על שני הישרים)
         const bl = Math.hypot(na[0] + nb[0], na[1] + nb[1]), bx = (na[0] + nb[0]) / bl, by = (na[1] + nb[1]) / bl, D = 2 * W;
         const oa = [pp[0] + W * na[0], pp[1] + W * na[1]], ob = [pp[0] + W * nb[0], pp[1] + W * nb[1]];
         const sa = (D - ((oa[0] - pp[0]) * bx + (oa[1] - pp[1]) * by)) / (a[0] * bx + a[1] * by), sb = (D - ((ob[0] - pp[0]) * bx + (ob[1] - pp[1]) * by)) / (-b[0] * bx - b[1] * by);
         out.push([oa[0] + sa * a[0], oa[1] + sa * a[1]], [ob[0] - sb * b[0], ob[1] - sb * b[1]]);
+        pe[i - 1] = Ls[i - 1] + sa; ps[i] = -sb;
       }
       out.push([r[n - 1][0] + sg * W * nl[n - 2][0] + W * u[n - 2][0], r[n - 1][1] + sg * W * nl[n - 2][1] + W * u[n - 2][1]]);
+      for (let k = 0; k < n - 1; k++) if (ps[k] > pe[k] + 1e-6) monotone = false;
       return out;
     };
     const xy = side(1).concat(side(-1).reverse());
-    return { ring: xy.map(q => P.ll(q[0], q[1])).concat([P.ll(xy[0][0], xy[0][1])]), simple: ringSimple(xy) };
+    return { ring: xy.map(q => P.ll(q[0], q[1])).concat([P.ll(xy[0][0], xy[0][1])]), simple: monotone && ringSimple(xy) };
   }
   function ringSimple(xy) { // אף שני קטעים לא-סמוכים בטבעת אינם נחתכים
     const n = xy.length, o = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
