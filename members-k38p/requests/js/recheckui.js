@@ -362,7 +362,7 @@
     const A = A_(), h = ST.hooks, v = ST.view; if (!v || !h || typeof h.loadUpdate !== "function") return;
     if (typeof h.busy === "function" && h.busy()) { setMsg(STR.busy); return; }
     let r;
-    try { r = h.loadUpdate(inputs, { sentAt: v.sentAt, name: v.row.name }); } catch (e) { r = null; }
+    try { r = h.loadUpdate(inputs, { sentAt: v.sentAt, name: v.row.name, live: v.row.state === "sent_live" }); } catch (e) { r = null; }
     if (!r || !r.ok) { setMsg(r && r.error === "busy" ? STR.busy : STR.failed); return; }
     ST.seq++; ST.modal = null; ST.pending = null; ST.view = null;
     A.closeModal();

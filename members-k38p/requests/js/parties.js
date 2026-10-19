@@ -378,7 +378,7 @@
     return e.replace(/\)\s*$/, "").replace(/\s+/g, " ").trim();
   }
   const NOTAM_CUE = /\b(?:PHONE|TELEPHONE|CTC|CONTACT|CALL|MOBILE|MOB)\b|\bTEL\b(?!\s+AVIV)/;   // "TEL AVIV" אינו רמז לטלפון
-  const COORD_RE = /\b(?:COORD(?:INATE)?|COOR)\s+WITH\s+([A-Z0-9][A-Z0-9 ,&\/\-()']{1,80}?)\s*(?:[.;]|$)/;
+  const COORD_RE = /\b(?:COORD(?:INATE)?|COOR)\s+WITH\s+([A-Z0-9](?:[A-Z0-9 ,&\/\-()']|\.(?=\d)){1,80}?)\s*(?:\.(?!\d)|;|$)/;   // נקודה בין ספרות (תדר 119.35) היא חלק מהגורם ולא סוף המשפט
   // מחזיר {phones, lines, coordWith}: טלפון רק במשפט שיש בו מילת רמז (PHONE NR / TEL / CTC…), וגורם מתאם רק מ-"COORD WITH <X>" (X כלשונו באנגלית)
   function notamContacts(raw, blk) {
     const e = notamE(raw), phones = [], lines = [], seen = new Set(); let coordWith = "";
@@ -477,7 +477,7 @@
   }
   // משפט תיאום בלי מספר: המשפט שבו מופיעה מילת תיאום, מתחיל בסעיף הקטן שמכיל אותה ("לתיאום טיסה במרחב זה יש ליצור קשר עם מגדל רמת דוד בטלפון המפורסם בפרק א׳ 07."). לא משלימים כלום
   const NOTAM_OFFICE = /משרד\s+נוטאם/;
-  const CUE_RE = /[^.\n]*?(לתיאום|ליצור קשר|יש לתאם|מחייב תיאום|תיאום מיוחד|יש לפנות)[^.\n]*\.?/;
+  const CUE_RE = /(?:[^.\n]|\.(?=\d))*?(לתיאום|ליצור קשר|יש לתאם|מחייב תיאום|תיאום מיוחד|יש לפנות)(?:[^.\n]|\.(?=\d))*\.?/;
   function cueOf(text) {
     const m = CUE_RE.exec(clean(text)); if (!m) return "";
     let s = m[0]; const k = s.indexOf(m[1]), pre = s.slice(0, k), j = Math.max(pre.lastIndexOf(", "), pre.lastIndexOf(": "), pre.lastIndexOf("; "));
@@ -717,7 +717,7 @@
   }
 
   /* ================= מיזוג בין הרצות ================= */
-  const sig = r => JSON.stringify([r.title, r.party, r.contacts]);
+  const sig = r => JSON.stringify([r.contacts]);   // ״פרטי הקשר עודכנו״ — לפי פרטי הקשר בלבד: כותרות עם ספירות (נוטמים בקרבה (7), מסילת ברזל (38)) משתנות בין הרצות בלי שפרטי הקשר השתנו
   function fromMarks(m) {
     const out = [];
     if (!m || typeof m !== "object") return out;

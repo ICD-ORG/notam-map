@@ -126,7 +126,7 @@
   }
   const fmtDate = ms => { ms = toMs(ms); if (isNaN(ms)) return ""; const o = ilParts(ms); return o.day + "." + o.month + "." + o.year; };
   const fmtDateTime = ms => { ms = toMs(ms); if (isNaN(ms)) return ""; const o = ilParts(ms); return o.day + "." + o.month + "." + o.year + " " + o.hour + ":" + o.minute; };
-  const fmtZ = ms => new Date(ms).toISOString().slice(0, 16).replace("T", " ") + "Z";   // כמו דף הבדיקות: UTC
+  const fmtZ = ms => { const d = new Date(ms); return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 16).replace("T", " ") + "Z"; };   // ערך מחוץ לטווח בקובץ פגום לא זורק (RangeError)   // כמו דף הבדיקות: UTC
   const ymd = s => { const d = C.parseDate(s); return d ? C.ddmmyyyy(d) : ""; };
 
   const enabled = cfg => !(cfg && cfg.features && cfg.features.recheck === false);

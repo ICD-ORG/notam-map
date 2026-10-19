@@ -443,7 +443,14 @@
   }
   // טקסט ל-HTML: escape, ואסימונים לטיניים/ספרתיים (טלפון, דוא״ל, אתר, מזהה) בתוך <bdi dir='ltr'> כדי שלא יתהפכו בפסקה מימין לשמאל (מספר טלפון נושא גם class='ph' — לא נשבר באמצע, ראו index.html). אסימון = אות/ספרה לטינית (+ מפרידים בין אותיות/ספרות, ו-"/" סוגר); פיסוק סוגר (נקודה, פסיק, סוגריים) נשאר מחוץ לו
   const LTR_TOK = /[A-Za-z0-9]+(?:(?:[-.\/:@_%+=&?#~]|:\/\/)[A-Za-z0-9]+)*\/?/g;
-  const ltrHtml = t => { t = String(t == null ? "" : t); let o = "", i = 0; t.replace(LTR_TOK, (m, at) => { o += E(t.slice(i, at)) + "<bdi dir='ltr'" + (/^[0-9+\/-]+$/.test(m) ? " class='ph'" : "") + ">" + E(m) + "</bdi>"; i = at + m.length; return m; }); return o + E(t.slice(i)); };
+  const ltrHtml = t => {
+    t = String(t == null ? "" : t); const toks = [];
+    t.replace(LTR_TOK, (m, at) => { toks.push({ m, at }); return m; });
+    // רצף אסימונים לטיניים המופרדים ברווח בלבד (ביטוי באנגלית: ״TLV APP ON 119.35״) הוא bdi אחד — אחרת כל מילה בנפרד והסדר מתהפך בפסקה מימין לשמאל. שני מספרי טלפון סמוכים נשארים נפרדים (כל אחד nowrap)
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && /^\s+$/.test(t.slice(last.end, k.at)) && (/[A-Za-z]/.test(last.text) || /[A-Za-z]/.test(k.m))) { last.text = t.slice(last.at, k.at + k.m.length); last.end = k.at + k.m.length; } else runs.push({ at: k.at, end: k.at + k.m.length, text: k.m }); });
+    let o = "", i = 0; runs.forEach(r => { o += E(t.slice(i, r.at)) + "<bdi dir='ltr'" + (/^[0-9+\/-]+$/.test(r.text) ? " class='ph'" : "") + ">" + E(r.text) + "</bdi>"; i = r.end; }); return o + E(t.slice(i));
+  };
   const partyLineHtml = l => { l = l || {}; let h = ltrHtml(l.t); if (l.s) h = "<small>" + h + "</small>"; if (l.b) h = "<b>" + h + "</b>"; if (l.m) h = "<span class='muted'>" + h + "</span>"; return h; };
   // עמוד הקריאה בדוח שעל המסך: זהה בתוכן לעמוד ה-Word (אותו מודל). בלי class='checks' — הוא אינו מושפע מתיבת "כולל דף בדיקות"
   function partiesHtml(m) {

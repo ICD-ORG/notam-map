@@ -1174,9 +1174,9 @@ var ACTIONS = {
     if (hasUser && typeof r.user !== 'string') return { ok: false, error: 'bad_user' };
     if (readRateHit_('myreq', a.name, CFG.MAX_MYREQ_PER_HOUR)) return readRateErr_();
     var who = hasUser ? r.user : a.name, cap = admin ? CFG.MAX_MYREQ_ROWS_ADMIN : CFG.MAX_MYREQ_ROWS;
-    var mine = readLog_().filter(function (e) { return e && typeof e === 'object' && (wantAll || e.user === who); })
+    var log = readLog_(), mine = log.filter(function (e) { return e && typeof e === 'object' && (wantAll || e.user === who); })
       .sort(function (x, y) { return (Number(y.saved) || 0) - (Number(x.saved) || 0) || (Number(y.created) || 0) - (Number(x.created) || 0); });
-    return { ok: true, requests: mine.slice(0, cap).map(function (e) { return myReqRow_(e, admin); }), total: mine.length };
+    return { ok: true, requests: mine.slice(0, cap).map(function (e) { return myReqRow_(e, admin, log); }), total: mine.length };
   },
 
   // בקשה אחת במלואה (נתוני הבקשה ששמר הדפדפן, JSON) — לטעינת בקשה לבדיקה חוזרת. בעלים או מנהל. התיקייה חייבת להיות תיקיית בקשה תקפה ורשומה ביומן ולא בפח; הקובץ נבחר בשרת
@@ -1202,7 +1202,7 @@ var ACTIONS = {
       JSON.stringify(rec);      // קינון עמוק מאוד (שהפענוח עוד עובר) היה מפיל את בניית התשובה; רשומה אמיתית רדודה — כאן הוא נדחה כפגום
     } catch (err) { rec = null; }
     if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return { ok: false, error: 'bad_record', message: 'קובץ נתוני הבקשה פגום' };
-    return { ok: true, meta: myReqRow_(e, admin), rec: rec };
+    return { ok: true, meta: myReqRow_(e, admin, log), rec: rec };
   },
 
   // שמירת דוח "בדיקה חוזרת" (Word) לבקשה שכבר נשלחה (חי או בדיקה). בעלים או מנהל, ורק מי שיש לו תצוגה מתקדמת (advOf_; אחרת recheck_off).
@@ -1267,8 +1267,11 @@ function sentSummary_(e) {
 }
 // שורה ל"הבקשות שלי" (גם meta של getRequest). state: draft = לא נשלחה למשרד (גם לא בבדיקה), sent_test = נשלחה רק במצב בדיקה, sent_live = נשלחה חי.
 // folderUrl ו-user — למנהל בלבד (למטיס אין גישה לדרייב, ושם בעלים אחר לא רלוונטי לו)
-function myReqRow_(e, admin) {
-  var s = sentSummary_(e), row = { id: e.id, name: e.name, kind: kindOf_(e), created: Number(e.created) || 0, saved: Number(e.saved) || 0, ready: !!e.ready,
+// log: לשם תצוגה למי שאינו מנהל — השם מחושב כמו ב-saveBegin, לפי בקשות אותו משתמש בלבד: סיומת "(2)" שנגרמה מבקשה של מישהו אחר (עמית בארגון, או בעל קודם של אותו שם משתמש שנמחק) הייתה מגלה שקיימת בקשה כזו
+function myReqRow_(e, admin, log) {
+  var shown = e.name;
+  if (!admin && Array.isArray(log)) { try { shown = uniqueName_(log, e.base || e.name, e.rid, e.parent || CFG.ROOT_FOLDER_ID, e.user); } catch (err) { shown = e.name; } }
+  var s = sentSummary_(e), row = { id: e.id, name: shown, kind: kindOf_(e), created: Number(e.created) || 0, saved: Number(e.saved) || 0, ready: !!e.ready,
     state: s.live ? 'sent_live' : s.test ? 'sent_test' : 'draft', sentAt: s.at, sentMode: s.mode, sentLive: s.live, sentTest: s.test, rechecks: Array.isArray(e.rc) ? e.rc.length : 0 };
   if (admin) { row.folderUrl = 'https://drive.google.com/drive/folders/' + e.id; row.user = e.user; }
   return row;

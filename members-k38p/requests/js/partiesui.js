@@ -38,7 +38,14 @@
   const own = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
     // טקסט ל-HTML: escape, ואסימונים לטיניים/ספרתיים (טלפון, דוא״ל, אתר, מזהה) בתוך <bdi dir="ltr"> כדי שלא יתהפכו בפסקה מימין לשמאל (אותו עיקרון כמו ב-output.js ltrHtml)
   const LTR_TOK = /[A-Za-z0-9]+(?:(?:[-.\/:@_%+=&?#~]|:\/\/)[A-Za-z0-9]+)*\/?/g;
-  const ltrHtml = t => { t = String(t == null ? "" : t); let o = "", i = 0; t.replace(LTR_TOK, (m, at) => { o += E(t.slice(i, at)) + '<bdi dir="ltr">' + E(m) + "</bdi>"; i = at + m.length; return m; }); return o + E(t.slice(i)); };
+  const ltrHtml = t => {
+    t = String(t == null ? "" : t); const toks = [];
+    t.replace(LTR_TOK, (m, at) => { toks.push({ m, at }); return m; });
+    // רצף אסימונים לטיניים המופרדים ברווח בלבד (ביטוי באנגלית: ״TLV APP ON 119.35״) הוא bdi אחד — אחרת כל מילה בנפרד והסדר מתהפך בפסקה מימין לשמאל. שני מספרי טלפון סמוכים נשארים נפרדים (כל אחד nowrap)
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && /^\s+$/.test(t.slice(last.end, k.at)) && (/[A-Za-z]/.test(last.text) || /[A-Za-z]/.test(k.m))) { last.text = t.slice(last.at, k.at + k.m.length); last.end = k.at + k.m.length; } else runs.push({ at: k.at, end: k.at + k.m.length, text: k.m }); });
+    let o = "", i = 0; runs.forEach(r => { o += E(t.slice(i, r.at)) + '<bdi dir="ltr">' + E(r.text) + "</bdi>"; i = r.end; }); return o + E(t.slice(i));
+  };
   // קישור tel: רק למספר חד-משמעי: ישראלי מלא (+972 ו-8–9 ספרות) או קו שירות (1-700/800/599); לא סיומת מקוצרת ("073-3636954/5"), לא "לא אומת" ולא כל ערך אחר שהגיע מהנתונים
   const TEL_RE = /^tel:(?:\+972\d{8,9}|1(?:700|800|599)\d{6})$/;
   const telHref = p => (p && typeof p === "object" && typeof p.tel === "string" && p.kind !== "unverified" && !p.range && TEL_RE.test(p.tel) ? p.tel : "");

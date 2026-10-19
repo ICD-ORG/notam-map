@@ -693,3 +693,25 @@ test("המודול טהור: אין גישה ל-DOM/רשת/אחסון/שעון �
   assert.deepEqual(siteRows("yarkon"), siteRows("yarkon"));
   assert.equal(typeof globalThis.window, "undefined");
 });
+
+/* ===== תיקוני סקירה: תדר עשרוני אחרי COORD WITH אינו נחתך; ״פרטי הקשר עודכנו״ לא מופעל מכותרת עם ספירה שהשתנתה ===== */
+test("notamContacts / cueOf: נקודה בין ספרות (תדר 119.35 / 118.7) היא חלק מהמשפט ולא סוף שלו", () => {
+  const n1 = P.notamContacts("Q) LLLL/QRDCA/IV/BO/W/000/999/3200N03450E005\nE) UAS OPS ONLY WITH COORD WITH TLV APP ON 119.35 BEFORE ENTRY.\nF) SFC G) 500FT AGL", {});
+  assert.equal(n1.coordWith, "TLV APP ON 119.35 BEFORE ENTRY");
+  assert.equal(P.notamContacts("E) COORD WITH TWR 118.7.", {}).coordWith, "TWR 118.7");
+  assert.equal(P.notamContacts("E) COORD WITH TWR 118.7", {}).coordWith, "TWR 118.7", "בלי נקודה בסוף");
+  assert.equal(P.notamContacts("E) COORD WITH RAMAT DAVID TWR; THANKS", {}).coordWith, "RAMAT DAVID TWR", "נקודה-פסיק עדיין מסיימת");
+  assert.equal(P.notamContacts("E) PLEASE COORD WITH TWR. THEN 118.7 ON FREQ", {}).coordWith, "TWR", "נקודה לפני רווח עדיין מסיימת");
+  assert.equal(P.cueOf("לתיאום יש ליצור קשר בתדר 118.7 עם המגדל. משפט נוסף."), "לתיאום יש ליצור קשר בתדר 118.7 עם המגדל.");
+  assert.equal(P.cueOf("לתיאום עם 118.7"), "לתיאום עם 118.7");
+});
+
+test("merge: שינוי כותרת בלבד (ספירת נוטמים / פריטים שהשתנתה) לא מסמן ״עודכן״, ושינוי בפרטי הקשר כן", () => {
+  const first = P.setField(base3(), "z:LLX1", "status", "done").rows;
+  const retitled = base3().map(r => Object.assign({}, r, { title: r.title + " (7): C1835/26", party: (r.party || "") + " (38)" }));
+  const same = P.merge(first, retitled);
+  assert.ok(same.every(r => !r.updated), "כותרת/שם גורם שונים בלבד: אין updated");
+  assert.equal(same[0].status, "done", "הסימון נשמר");
+  const changed = P.merge(first, P.build(mkRes({ zones: { inside: [zrec({ id: "LLX1", pmt: "בטלפון 03-5487299." }), zrec({ id: "LLX2", label: "LLX2" })], near: [zrec({ id: "LLX3", label: "LLX3", edge: 200 })], excluded: [] } }), cfg, {}));
+  assert.equal(changed[0].updated, true);
+});

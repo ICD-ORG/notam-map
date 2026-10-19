@@ -3872,3 +3872,17 @@ test("saveEnd: בלי הצהרה תקינה הבקשה אינה מוכנה (דף
   for (const [n, mime] of STD_FILES) env.call({ action: "saveFile", token, folderId: b.folderId, name: n, mime, b64: b64("x" + n) });
   assert.equal(end(undefined).ready, false); assert.equal(logOf(env).find(e => e.id === b.folderId).decl, null);
 });
+
+/* ===== תיקון סקירה: myRequests מציג למי שאינו מנהל את השם כפי שחושב לו ב-saveBegin (בלי סיומת ״(2)״ מבקשת עמית); המנהל רואה את השם המלא ===== */
+test("myRequests: עובד ארגון שני עם אותו מקום ותאריך לא רואה (2) — המנהל כן", () => {
+  const { env, token } = bootstrapped();
+  const mk = name => { assert.ok(env.call({ action: "addUser", token, newUser: name, newPass: "pass-12345678", org: true }).ok); return env.call({ action: "login", user: name, pass: "pass-12345678" }); };
+  const o1 = mk("org.one"), o2 = mk("org.two");
+  const b1 = savedRequest(env, o1.token, "אתר — 01.01.2027"), b2 = savedRequest(env, o2.token, "אתר — 01.01.2027");
+  assert.equal(env.call({ action: "saveBegin", token: o2.token, folderName: "אתר — 01.01.2027", rid: b2.rid }).name, "אתר — 01.01.2027", "saveBegin מחזיר לעמית את השם בלי (2)");
+  const mine = env.call({ action: "myRequests", token: o2.token });
+  assert.deepEqual(mine.requests.map(r => r.name), ["אתר — 01.01.2027"], "אותו שם ברשימה (בלי (2))");
+  const adm = env.call({ action: "myRequests", token, all: true });
+  assert.deepEqual(adm.requests.map(r => r.name).sort(), ["אתר — 01.01.2027", "אתר — 01.01.2027 (2)"], "המנהל רואה את השמות המלאים בדרייב");
+  assert.equal(env.call({ action: "myRequests", token: o1.token }).requests[0].name, "אתר — 01.01.2027");
+});

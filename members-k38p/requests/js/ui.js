@@ -472,7 +472,7 @@
     if (!r.ok) return r;
     ["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"].forEach(id => { $(id).value = inp[id] || ""; });
     const U = RUI(), sentAt = meta && typeof meta.sentAt === "number" && meta.sentAt > 0 ? meta.sentAt : null;
-    S.update = U ? { sentAt, name: meta && meta.name, scan: U.scanOf(inp) } : null;
+    S.update = U ? { sentAt, name: meta && meta.name, live: !(meta && meta.live === false), scan: U.scanOf(inp) } : null;
     onScanInputChange(); scheduleLayerUpdate();
     return r;
   }
@@ -481,6 +481,8 @@
     try {
       const u = S.update, U = RUI();
       if (!u || !U || !S.res || !U.enabled(S.cfg) || !U.sameScan(u.scan, S.res.inp)) return null;
+      // מצב חי: בקשה מעודכנת ״מחליפה״ רק בקשה שנשלחה בפועל למשרד נוטאם (חי). מקור שנשלח רק במצב בדיקה לא הגיע למשרד — אז אין ניסוח החלפה ואין עקיפת ״כבר שלחתם״ (במצב בדיקה הכול נשלח רק למבקש, ולכן אפשר לנסות את הזרימה)
+      if (u.live === false && window.ReqAuth && window.ReqAuth.getMailMode && window.ReqAuth.getMailMode() === "live") return null;
       return { sentAt: u.sentAt, name: u.name };
     } catch (e) { return null; }
   }
@@ -1373,7 +1375,9 @@
   // כשכל הבדיקות הושלמו, הכול סומן והסקירה אושרה (S.ready) הבקשה נשמרת בדרייב מעצמה, לכל סוג חשבון, כמו לחיצה על ״שמור בדרייב״: פעם אחת לכל גרסה (S.rev) של הבקשה, כ-1.5 שנ׳ אחרי שנהייתה מוכנה
   // (קריאות חוזרות לא דוחות; הפיכה ללא-מוכנה מבטלת). אחרי עריכה שהפכה אותה ללא-מוכנה ושוב למוכנה — נשמרת שוב לאותה תיקייה (אותו rid, הקבצים מוחלפים). שמירה/שליחה בעיצומה (או חלון שליחה פתוח) נדחית, לא מתחרה.
   // כשל מוצג בשורת הסטטוס (הודעת השרת) ואינו חוזר על עצמו (S.driveTry): הכפתור ״שמור בדרייב״ נשאר זמין לניסיון ידני, ועריכה חדשה מתחילה מחזור חדש. הטיימר מבוטל באיפוס הדף (resetPage). config.json → autosave_ms: 1500 כברירת מחדל, 0 = כבוי
-  function autoDelay() { const d = S.cfg && S.cfg.autosave_ms; return typeof d === "number" && d >= 0 ? d : 1500; }
+  // עריכה ב״דיווח לגורמים נוספים״ משנה את ה-Word, אבל כל שמירה אוטומטית מעלה מחדש את כל הקבצים (כ-10 עד 15MB; תקרת העלאה לשעה): בעריכת גורמים ממתינים עד 20 שניות של שקט (debounce), כדי שסימון של כמה שורות ברצף יישמר פעם אחת
+  const AUTO_SLOW_MS = 20000;
+  function autoDelay() { const d = S.cfg && S.cfg.autosave_ms, base = typeof d === "number" && d >= 0 ? d : 1500; return base > 0 && S.autoSlowUntil && Date.now() < S.autoSlowUntil ? Math.max(base, AUTO_SLOW_MS) : base; }
   function cancelAutoSave() { clearTimeout(autoTimer); autoTimer = null; autoFor = -1; }
   function autoDue(rev) { return !S.resetting && !!S.res && !S.running && S.ready && S.rev === rev && S.driveTry !== rev && autoDelay() > 0 && !!(window.ReqAuth && window.ReqAuth.loggedIn()); }
   function scheduleAutoSave() {
@@ -1525,6 +1529,8 @@
       const r = await A.call("sendRequest", req);
       if (!r.ok && r.error === "mode_changed") { A.setMailModeValue(r.mailMode); const e = new Error("מצב השליחה השתנה בשרת"); e.code = "mode_changed"; throw e; }
       if (!r.ok && r.error === "already_sent") {
+        // בקשה מעודכנת מחליפה את הקודמת: רק כשהשרת מזהה את הקודמת כ״דומה״ (אותו מקום ותאריך של אותו משתמש) עוברים אוטומטית ל-again. כל כפילות אחרת (אותה תיקייה כבר נשלחה: לחיצה כפולה, ניסיון חוזר) מציגה את ״שלח שוב בכל זאת״ כרגיל
+        if (upd && target === "office" && !again && r.similar === true) { prog.textContent = "שולח את הבקשה המעודכנת…"; return doSend(target, true); }
         // similar: השרת מזהה בקשה קודמת של אותו משתמש בלבד על אותו מקום ותאריך (בקשה של מטיס אחר לעולם לא נספרת ולא מדווחת) — לכן הניסוח בגוף שני. השעה מוצגת רק כשהשרת מסר זמן תקין
         const when = r.sentAt != null && r.sentAt !== "" && !isNaN(new Date(r.sentAt).getTime()) ? ' ב-<b>' + esc(fmtTime(r.sentAt)) + '</b>' : "";
         prog.innerHTML = (r.similar ? 'כבר שלחתם למשרד נוטאם בקשה על אותו מקום ותאריך' : 'הבקשה כבר נשלחה למשרד נוטאם') + when + '. <button type="button" id="sendAgain">שלח שוב בכל זאת</button>';
@@ -1587,7 +1593,7 @@
       if (!S.ready) throw new Error("הנתונים השתנו בזמן השמירה — לא נשלח. הרצו את הבדיקות שוב");
       if (S.rev !== rev0) { const e = new Error("הבקשה שונתה בזמן שהחלון היה פתוח"); e.code = "request_changed"; throw e; }
       prog.textContent = "שולח…";
-      await doSend(target, !!upd && target === "office");   // בקשה מעודכנת מחליפה את הקודמת: שליחה למשרד עוברת ב-again (ללא ״כבר שלחתם…״); שליחה לעצמי לא צריכה
+      await doSend(target, false);   // תמיד קודם בלי again: ההגנה מפני כפילות בשרת פעילה גם לבקשה מעודכנת (ראו doSend: מעבר אוטומטי ל-again רק מול הבקשה שמוחלפת)
     });
     go.onclick = () => startSend("office");
     if (selfBtn) selfBtn.onclick = () => startSend("self");
@@ -1595,7 +1601,7 @@
   }
   async function copyMail() {
     if (!authed() || !S.res) return;
-    const m = O.mail(S.res, S.cfg, withUpdate(mailOpts())), txt = "אל: " + m.to.join(", ") + "\nנושא: " + m.subject + "\n\n" + m.body;
+    const m = O.mail(S.res, S.cfg, withUpdate(mailOpts())), txt = "אל: " + m.to.join(", ") + "\nנושא: " + (m.subjectFull || m.subject) + "\n\n" + m.body;
     try { await navigator.clipboard.writeText(txt); } catch (e) { const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); } catch (e2) { /* ignore */ } t.remove(); }
     $("btnCopy").textContent = "הועתק ✔"; setTimeout(() => { $("btnCopy").textContent = "העתק טקסט מייל"; }, 2000);
   }
@@ -1664,7 +1670,7 @@
     try { if (window.ReqMyReq) window.ReqMyReq.hook({ loadBase: myreqLoadBase, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״הבקשות שלי״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }
     try { if (window.ReqRecheckUI) window.ReqRecheckUI.hook({ analyze: recheckAnalyze, loadUpdate: recheckLoadUpdate, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״בדיקה חוזרת״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }
     // ״דיווח לגורמים נוספים״ (js/partiesui.js): דגל features.parties כבוי / מודול לא נטען ← לא נוצר דבר בדף. changed = onSoftInputChange (אותו תזמון של כל שדה רך), store = אחסון לפי המשתמש
-    try { const U = PUI(); if (U && okCfg) { U.hook({ changed: onSoftInputChange, store: { get: () => lsGet(PARTIES_KEY), set: v => lsSet(PARTIES_KEY, v), del: () => lsDel(PARTIES_KEY) }, now: () => new Date() }); U.mount(S.cfg); } } catch (e) { /* תוספת: כשל בחיבור לא עוצר את האתחול */ }
+    try { const U = PUI(); if (U && okCfg) { U.hook({ changed: () => { S.autoSlowUntil = Date.now() + AUTO_SLOW_MS + 5000; onSoftInputChange(); }, store: { get: () => lsGet(PARTIES_KEY), set: v => lsSet(PARTIES_KEY, v), del: () => lsDel(PARTIES_KEY) }, now: () => new Date() }); U.mount(S.cfg); } } catch (e) { /* תוספת: כשל בחיבור לא עוצר את האתחול */ }
     window.ReqAuth.init(S.cfg);
     ["radius", "height", "dateFrom", "dateTo", "timeFrom", "timeTo"].forEach(id => $(id).addEventListener("input", () => { if (id === "radius") drawCircles(); onScanInputChange(); }));
     $("coord").addEventListener("change", () => { const c = C.parseCoordInput($("coord").value); if (c) setCenter(c.lat, c.lon, true); else scheduleLayerUpdate(); });   // טקסט שאינו נ״צ: הפס מתעדכן להנחיה (layerPoint), ולא ממשיך להציג את הנקודה הקודמת

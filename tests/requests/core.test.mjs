@@ -1626,7 +1626,7 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=12/);
+  assert.match(html, /js\/ui\.js\?v=13/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
@@ -2753,7 +2753,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const html = src("index.html"), ui = src("js/ui.js"), ru = src("js/recheckui.js");
     const at = f => html.indexOf('<script src="js/' + f + '?v=');
     assert.ok(at("recheck.js") > 0 && at("recheck.js") < at("recheckui.js") && at("myreq.js") < at("recheckui.js") && at("recheckui.js") < at("ui.js"), "סדר הטעינה");
-    assert.ok(html.includes('<script src="js/recheckui.js?v=1"></script>'));
+    assert.ok(html.includes('<script src="js/recheckui.js?v=2"></script>'));
     const an = /async function recheckAnalyze\(inp, step\) \{[^]*?\n  \}\n/.exec(ui);
     assert.ok(an, "recheckAnalyze");
     for (const must of ["S.running || S.resetting", "await checkSync();", '["a17", "sync", "agri", "notam"]', "C.buildQueries(inp.lat, inp.lon, inp.radius, S.cfg)", "C.overpass(q[k], fetchOpts)", "C.analyze(inp, data, S.cfg, now)", "age > S.cfg.thresholds.notam_max_age_h) return { ok: false", "Date.parse(data.notamFetchedIso)"]) assert.ok(an[0].includes(must), "recheckAnalyze: " + must);
@@ -2761,14 +2761,14 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     assert.ok(!/\bS\.res\b/.test(an[0]), "recheckAnalyze לא נוגע ב-S.res (הבקשה שבטופס)");
     assert.ok(/data\.zones|zones: S\.data\.zones/.test(an[0]) && !/S\.data\.near/.test(an[0]), "נתוני OSM תמיד טריים — לא נקראים מ-S.data");
     const lu = /function recheckLoadUpdate\(inp, meta\) \{[^]*?\n  \}\n/.exec(ui); assert.ok(lu, "recheckLoadUpdate");
-    assert.ok(/const r = myreqLoadBase\(inp\);/.test(lu[0]) && /\["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"\]\.forEach\(id => \{ \$\(id\)\.value = inp\[id\] \|\| ""; \}\);/.test(lu[0]) && /S\.update = U \? \{ sentAt, name: meta && meta\.name, scan: U\.scanOf\(inp\) \} : null;/.test(lu[0]), "טוען כבסיס ומחזיר תאריכים ושעות; S.update קשור לסריקה");
+    assert.ok(/const r = myreqLoadBase\(inp\);/.test(lu[0]) && /\["dateFrom", "dateTo", "timeFrom", "timeTo", "visitDate"\]\.forEach\(id => \{ \$\(id\)\.value = inp\[id\] \|\| ""; \}\);/.test(lu[0]) && /S\.update = U \? \{ sentAt, name: meta && meta\.name, live: !\(meta && meta\.live === false\), scan: U\.scanOf\(inp\) \} : null;/.test(lu[0]), "טוען כבסיס ומחזיר תאריכים ושעות; S.update קשור לסריקה");
     assert.ok(/clearUpdate\(\);/.test(/function myreqLoadBase\(inp\) \{[^]*?\n  \}\n/.exec(ui)[0]) && /function clearUpdate\(\) \{ S\.update = null; try \{ const U = RUI\(\); if \(U && U\.clearNote\) U\.clearNote\(\); \} catch \(e\) \{ \/\* ignore \*\/ \} \}/.test(ui), "טעינת בסיס אחרת מבטלת את הקשר לבקשה מעודכנת ואת ההודעה בדף");
     const ui2 = /function updateInfo\(\) \{[^]*?\n  \}\n/.exec(ui); assert.ok(ui2 && /!U\.enabled\(S\.cfg\) \|\| !U\.sameScan\(u\.scan, S\.res\.inp\)\) return null;/.test(ui2[0]) && /catch \(e\) \{ return null; \}/.test(ui2[0]), "updateInfo: דגל, סריקה זהה, נכשל סגור");
     assert.ok(/const withUpdate = o => \{ const u = updateInfo\(\); return u \? Object\.assign\(\{\}, o \|\| \{\}, \{ update: \{ sentAt: u\.sentAt \} \}\) : o; \};/.test(ui), "withUpdate: בלי update בתוקף — o כמות שהוא");
     assert.ok((ui.match(/O\.mail\(S\.res, S\.cfg, withUpdate\(mailOpts\(\)\)\)/g) || []).length >= 3, "כל נקודות הקריאה ל-O.mail (תצוגה מקדימה, חלון שליחה, העתקה) עוברות withUpdate");
     assert.ok(!/O\.mail\(S\.res, S\.cfg(?!, withUpdate)/.test(ui), "אין קריאה ל-O.mail בלי withUpdate");
     assert.ok(/subject: mail\.subjectFull \|\| mail\.subject, body: mail\.body, again: !!again/.test(ui), "השרת אינו מוסיף את הקידומת — הלקוח שולח את הנושא המלא");
-    assert.ok(/await doSend\(target, !!upd && target === "office"\);/.test(ui) && /upd = updateInfo\(\);/.test(ui), "again רק לבקשה מעודכנת ורק ליעד משרד");
+    assert.ok(/await doSend\(target, false\);/.test(ui) && /upd = updateInfo\(\);/.test(ui) && /if \(upd && target === "office" && !again && r\.similar === true\)/.test(ui), "again רק במעבר אוטומטי לבקשה מעודכנת מול הבקשה שמוחלפת, ורק ליעד משרד");
     assert.ok(/'<div class="banner warn" id="sendUpdate"/.test(ui) && /updBanner \+ dlg\.to/.test(ui) && /\(mail\.subjectFull \|\| mail\.subject\)\)/.test(ui), "הבאנר בחלון והנושא עם הקידומת");
     assert.ok(/window\.ReqRecheckUI\.hook\(\{ analyze: recheckAnalyze, loadUpdate: recheckLoadUpdate, busy: myreqBusy, inProgress: myreqInProgress \}\)/.test(ui) && /catch \(e\) \{ \/\* ״בדיקה חוזרת״ היא תוספת/.test(ui), "החיבור ב-init בתוך try/catch");
     assert.ok(!/localStorage|sessionStorage|indexedDB/.test(ru), "המודול לא שומר דבר בדפדפן"); assert.equal((ru.match(/\.innerHTML\b/g) || []).length, 1, "innerHTML רק ב-setBody (תוכן שעבר escaping)");
@@ -3048,7 +3048,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const html = rdq("index.html"), ui = rdq("js/ui.js"), pui = rdq("js/partiesui.js");
     const at = f => html.indexOf('<script src="js/' + f + '?v=');
     assert.ok(at("output.js") > 0 && at("parties.js") > at("output.js") && at("partiesui.js") > at("parties.js") && at("ui.js") > at("partiesui.js"), "סדר הטעינה");
-    assert.ok(html.includes('<script src="js/parties.js?v=1"></script>') && html.includes('<script src="js/partiesui.js?v=1"></script>'));
+    assert.ok(html.includes('<script src="js/parties.js?v=2"></script>') && html.includes('<script src="js/partiesui.js?v=2"></script>'));
     assert.ok(!/id="partiesBox"|ptyList|partiesStyle/.test(html), "אין DOM של העורך ב-index.html (נוצר רק כשהדגל פעיל)");
     assert.ok(/function partiesRebuild\(data\) \{ try \{ const U = PUI\(\); if \(U && S\.res\) U\.rebuild\(S\.res, data, S\.cfg\); \} catch \(e\)/.test(ui), "partiesRebuild: try/catch, רק עם ניתוח");
     const run = /async function run\(\) \{[^]*?\n  \}\n/.exec(ui)[0], rea = /async function reanalyze\(\) \{[^]*?\n  \}\n/.exec(ui)[0];
@@ -3062,7 +3062,7 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
     const rp = ui.slice(ui.indexOf("function resetPage()"), ui.indexOf("function onPageShow"));
     assert.ok(/step\(partiesReset\);/.test(rp) && /function enterUser\(u\) \{\n    S\.uk = C\.userHash\(u\);\n    partiesReset\(\);/.test(ui), "איפוס בהתנתקות / החלפת משתמש");
     assert.ok(/function wipePerson\(\) \{\n    if \(!authed\(\)\) return;\n    lsDel\(PERSON_KEY\);[^]*?U\.wipe\(\)/.test(ui), "״מחק פרטים שמורים״ מוחק גם את הסימונים");
-    assert.ok(/U\.hook\(\{ changed: onSoftInputChange, store: \{ get: \(\) => lsGet\(PARTIES_KEY\), set: v => lsSet\(PARTIES_KEY, v\), del: \(\) => lsDel\(PARTIES_KEY\) \}, now: \(\) => new Date\(\) \}\); U\.mount\(S\.cfg\);/.test(ui), "hook: changed = onSoftInputChange (אותו תזמון של שדה רך), אחסון לפי המשתמש");
+    assert.ok(/U\.hook\(\{ changed: \(\) => \{ S\.autoSlowUntil = Date\.now\(\) \+ AUTO_SLOW_MS \+ 5000; onSoftInputChange\(\); \}, store: \{ get: \(\) => lsGet\(PARTIES_KEY\), set: v => lsSet\(PARTIES_KEY, v\), del: \(\) => lsDel\(PARTIES_KEY\) \}, now: \(\) => new Date\(\) \}\); U\.mount\(S\.cfg\);/.test(ui), "hook: changed = onSoftInputChange (אותו תזמון של שדה רך, עם שמירה אוטומטית איטית), אחסון לפי המשתמש");
     assert.ok(/const PARTIES_KEY = "icd_req_parties_v1";/.test(ui));
     const body = ui.slice(ui.indexOf("/* ---------- דיווח לגורמים נוספים"), ui.indexOf("/* ---------- הדוח ----------")).replace(/\/\/.*$/gm, "");   // בלי הערות
     assert.ok(body.length > 200 && !/S\.ready|S\.statuses|setStatus|REQUIRED_CHECKS|refreshGate/.test(body), "בלוק החיבור לא נוגע במוכנות");
@@ -3090,3 +3090,31 @@ test("Word + LibreOffice: עמוד הגורמים בעמוד נפרד אחרי �
   });
 }
 /* PARTIES-UI-UNIT-END */
+
+/* ===== תיקוני סקירה שלב ב׳: ביטוי באנגלית ב-bdi אחד, בקשה מעודכנת (הגנת כפילות, חי בלבד, נושא מלא בהעתקה), שמירה אוטומטית איטית בעריכת גורמים, fmtZ בטוח ===== */
+test("עמוד הגורמים: ביטוי באנגלית (TLV APP ON 119.35) נשאר bdi אחד — אחרת הסדר מתהפך בפסקה מימין לשמאל; שני טלפונים סמוכים נשארים נפרדים (nowrap)", () => {
+  const row = pbRow({ key: "o:eng", src: "notam", title: "נוטם", party: "מוזכר בנוטם: TLV APP ON 119.35 לפני כניסה", contacts: { phones: [pbPhone("03-1234567"), pbPhone("052-9265944")], emails: [], urls: [], lines: ["03-1234567 052-9265944"], pairs: null, general: null }, contactSrc: "" });
+  const h = O.partiesHtml(O.docxModel(PB_res, PB_data, cfg, { now, parties: [row] }).parties);
+  assert.ok(h.includes("<bdi dir='ltr'>TLV APP ON 119.35</bdi>"), h.slice(0, 600));
+  assert.ok(!/<bdi dir='ltr'>TLV<\/bdi>\s*<bdi/.test(h), "לא bdi נפרד לכל מילה");
+  assert.ok(h.includes("<bdi dir='ltr' class='ph'>03-1234567</bdi>") && h.includes("<bdi dir='ltr' class='ph'>052-9265944</bdi>"), "טלפונים נפרדים עם nowrap");
+  const pu = readReq("js/partiesui.js");
+  assert.match(pu, /runs\.push\(\{ at: k\.at, end: k\.at \+ k\.m\.length, text: k\.m \}\)/, "אותו איחוד בעורך שבמסך");
+});
+
+test("ui.js: בקשה מעודכנת — doSend קודם בלי again; מעבר אוטומטי ל-again רק כשהשרת מזהה את הבקשה המוחלפת (similar); ניסוח ״מחליפה״ רק למקור שנשלח חי במצב חי; copyMail עם הנושא המלא; שמירה אוטומטית איטית בעריכת גורמים", () => {
+  const ui = readReq("js/ui.js"), rc = readReq("js/recheckui.js");
+  assert.match(ui, /await doSend\(target, false\);/, "תמיד קודם בלי again");
+  assert.ok(!/await doSend\(target, !!upd/.test(ui), "אין again שנקבע מראש לבקשה מעודכנת");
+  assert.match(ui, /if \(upd && target === "office" && !again && r\.similar === true\) \{[^}]*return doSend\(target, true\);/, "מעבר אוטומטי רק מול similar");
+  assert.match(ui, /if \(u\.live === false && window\.ReqAuth && window\.ReqAuth\.getMailMode && window\.ReqAuth\.getMailMode\(\) === "live"\) return null;/, "מקור שנשלח רק בבדיקה אינו מוחלף במצב חי");
+  assert.match(ui, /live: !\(meta && meta\.live === false\)/); assert.match(rc, /live: v\.row\.state === "sent_live"/);
+  assert.match(ui, /"\\nנושא: " \+ \(m\.subjectFull \|\| m\.subject\) \+ "\\n\\n" \+ m\.body;/, "copyMail: הנושא המלא");
+  assert.match(ui, /function autoDelay\(\) \{[^}]*Math\.max\(base, AUTO_SLOW_MS\)/); assert.match(ui, /const AUTO_SLOW_MS = 20000;/);
+  assert.match(ui, /U\.hook\(\{ changed: \(\) => \{ S\.autoSlowUntil = Date\.now\(\) \+ AUTO_SLOW_MS \+ 5000; onSoftInputChange\(\); \}/, "עריכת גורמים מאטה את השמירה האוטומטית");
+});
+
+test("recheck.js: תאריכי NOTAM מחוץ לטווח בקובץ פגום לא זורקים RangeError בהצגה (fmtZ)", () => {
+  const rc = readReq("js/recheck.js");
+  assert.match(rc, /const fmtZ = ms => \{ const d = new Date\(ms\); return isNaN\(d\.getTime\(\)\) \? "" : /);
+});
