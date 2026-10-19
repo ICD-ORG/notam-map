@@ -20,6 +20,8 @@
   }
   Proj.prototype.xy = function (la, lo) { return [(lo - this.lon) * this.kx, (la - this.lat) * this.ky]; };
   Proj.prototype.ll = function (x, y) { return [this.lat + y / this.ky, this.lon + x / this.kx]; };
+  // מרחק נקודה (x,y) מציר האזור: במעגל — מהמרכז (הראשית); בנתיב (P.route = הקו השבור במטרים, ראו projFor) — מהקו השבור
+  Proj.prototype.dPt = function (x, y) { return this.route ? routeNearest(this.route, x, y).d : Math.hypot(x, y); };
 
   function segNearest(ax, ay, bx, by) { // הנקודה הקרובה לראשית על הקטע
     const dx = bx - ax, dy = by - ay;
@@ -36,7 +38,8 @@
     return c;
   }
   // קו שבור: מרחק + הנקודה הקרובה. סגור=true מוסיף בדיקת "בתוך"
-  function polyNearest(pts, closed) {
+  function polyNearest(pts, closed, route) {
+    if (route) return polyNearestRoute(pts, closed, route);   // נתיב: מרחק מהקו השבור (ראו polyNearestRoute); בלי route — מרחק מהראשית (מעגל), בדיוק כמו קודם
     // closed=true: הטבעת נסגרת אוטומטית (אם הנקודה האחרונה אינה הראשונה) — אחרת הקטע האחרון נעדר, והנקודה בתוך הצורה נחשבת "מחוץ" לה
     if (closed && pts.length >= 3 && (pts[0][0] !== pts[pts.length - 1][0] || pts[0][1] !== pts[pts.length - 1][1])) pts = pts.concat([pts[0]]);
     if (pts.length === 1) return { d: Math.hypot(pts[0][0], pts[0][1]), p: pts[0], inside: false };
@@ -49,6 +52,69 @@
     const inside = isClosed && pointInRing(pts);
     return inside ? { d: 0, p: [0, 0], inside: true } : { d: best.d, p: best.p, inside: false };
   }
+  /* ----- נתיב: מרחקים מקו שבור (כל החישובים במטרים, בהיטל המקומי P) ----- */
+  function ptSeg(px, py, ax, ay, bx, by) { // הנקודה הקרובה ל-(px,py) על הקטע AB
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2));
+    const x = ax + t * dx, y = ay + t * dy;
+    return { d: Math.hypot(px - x, py - y), x, y, t };
+  }
+  function routeNearest(route, px, py) { // הנקודה הקרובה על הקו השבור: {d, x, y, i (הקטע)}
+    let best = { d: Infinity, x: route[0][0], y: route[0][1], i: 0 };
+    for (let i = 0; i < route.length - 1; i++) {
+      const r = ptSeg(px, py, route[i][0], route[i][1], route[i + 1][0], route[i + 1][1]);
+      if (r.d < best.d) best = { d: r.d, x: r.x, y: r.y, i };
+    }
+    if (route.length === 1) best = { d: Math.hypot(px - route[0][0], py - route[0][1]), x: route[0][0], y: route[0][1], i: 0 };
+    return best;
+  }
+  function segCross(ax, ay, bx, by, cx, cy, dx, dy) { // נקודת חיתוך של שני קטעים, או null
+    const rx = bx - ax, ry = by - ay, sx = dx - cx, sy = dy - cy, den = rx * sy - ry * sx;
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((cx - ax) * sy - (cy - ay) * sx) / den, u = ((cx - ax) * ry - (cy - ay) * rx) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [ax + t * rx, ay + t * ry] : null;
+  }
+  function segSegDist(ax, ay, bx, by, cx, cy, dx, dy) { // המרחק בין שני קטעים והנקודה הקרובה על הראשון (AB)
+    const x = segCross(ax, ay, bx, by, cx, cy, dx, dy);
+    if (x) return { d: 0, p: x };
+    const cands = [{ r: ptSeg(ax, ay, cx, cy, dx, dy), p: [ax, ay] }, { r: ptSeg(bx, by, cx, cy, dx, dy), p: [bx, by] }, { r: ptSeg(cx, cy, ax, ay, bx, by), p: null }, { r: ptSeg(dx, dy, ax, ay, bx, by), p: null }];
+    let best = null;
+    cands.forEach(c => { if (!best || c.r.d < best.r.d) best = c; });
+    return { d: best.r.d, p: best.p || [best.r.x, best.r.y] };
+  }
+  function pointInRingXY(px, py, pts) { // (px,py) בתוך הטבעת
+    let c = false;
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % n];
+      if ((y1 > py) !== (y2 > py) && px < ((x2 - x1) * (py - y1)) / (y2 - y1) + x1) c = !c;
+    }
+    return c;
+  }
+  // כמו polyNearest, אבל המרחק הוא מהנתיב (הקו השבור route) ולא מהראשית: הקטע הקרוב ביותר בין הצורה לנתיב, וטבעת שמכילה את הנתיב (או חוצה אותו) — מרחק 0
+  function polyNearestRoute(pts, closed, route) {
+    if (closed && pts.length >= 3 && (pts[0][0] !== pts[pts.length - 1][0] || pts[0][1] !== pts[pts.length - 1][1])) pts = pts.concat([pts[0]]);
+    if (pts.length === 1) { const r = routeNearest(route, pts[0][0], pts[0][1]); return { d: r.d, p: pts[0], inside: false }; }
+    const rb = [];
+    for (let j = 0; j < route.length - 1; j++) rb.push([Math.min(route[j][0], route[j + 1][0]), Math.min(route[j][1], route[j + 1][1]), Math.max(route[j][0], route[j + 1][0]), Math.max(route[j][1], route[j + 1][1])]);
+    let best = { d: Infinity, p: pts[0] };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0], ay = pts[i][1], bx = pts[i + 1][0], by = pts[i + 1][1];
+      const gx0 = Math.min(ax, bx), gy0 = Math.min(ay, by), gx1 = Math.max(ax, bx), gy1 = Math.max(ay, by);
+      for (let j = 0; j < route.length - 1; j++) {
+        const q = rb[j], m = best.d;
+        if (gx0 - q[2] > m || q[0] - gx1 > m || gy0 - q[3] > m || q[1] - gy1 > m) continue;
+        const r = segSegDist(ax, ay, bx, by, route[j][0], route[j][1], route[j + 1][0], route[j + 1][1]);
+        if (r.d < best.d) best = { d: r.d, p: r.p };
+      }
+    }
+    const isClosed = closed && pts.length > 3 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1];
+    if (isClosed) {
+      if (best.d === 0) return { d: 0, p: best.p, inside: true };
+      const v = route.find(r => pointInRingXY(r[0], r[1], pts));   // הנתיב כולו בתוך הטבעת
+      if (v) return { d: 0, p: [v[0], v[1]], inside: true };
+    }
+    return { d: best.d, p: best.p, inside: false };
+  }
   function circlePoints(P, r, n) { // מעגל סביב מרכז ההיטל, כרשימת [lat,lon]
     n = n || 72; const out = [];
     for (let i = 0; i <= n; i++) {
@@ -57,6 +123,105 @@
     }
     out[out.length - 1] = out[0].slice();
     return out;
+  }
+
+  /* ================= אזור הפעילות: מעגל (ברירת מחדל) או נתיב =================
+     מעגל: inp.lat / inp.lon / inp.radius (בלי inp.area). נתיב: inp.area = {kind:"route", pts:[[lat,lon],...2..20], halfWidth} — קו שבור שמסומן במפה לאורך הכביש, ו-halfWidth = המרחק מהקו לכל צד.
+     בנתיב inp.lat/inp.lon הם נקודת עוגן על הקו (אמצע האורך): לשעות זריחה ושקיעה ולהצעת שם המקום — ו-inp.radius אינו קיים. כל החישובים שמוגדרים "מרחק מהמרכז פחות R" הופכים ל"מרחק מהקו פחות halfWidth"
+     (res.R = halfWidth, והמרחק d של כל פריט הוא מציר הנתיב): כך כל מה שבנוי על d ו-R (אזורי איסור, נוטמים, מכשולים, הטבעת עד פי 2) ממשיך לעבוד בלי שינוי. אזור הסגירה לניתוח הוא "קפסולה": כל נקודה במרחק עד halfWidth מהקו. */
+  const isRoute = inp => !!(inp && inp.area && inp.area.kind === "route");
+  const routeLim = cfg => { const d = (cfg && cfg.defaults) || {}; return { maxPts: d.route_max_points || 20, minW: d.route_min_half_width_m || 10, maxW: d.route_max_half_width_m || 1000, maxLen: d.route_max_length_m || 25000 }; };
+  function segLenM(a, b) { // אורך קטע במטרים, בהיטל מקומי סביב אמצעו (שגיאה זניחה גם בקטעים ארוכים)
+    const P = new Proj((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), u = P.xy(a[0], a[1]), v = P.xy(b[0], b[1]);
+    return Math.hypot(v[0] - u[0], v[1] - u[1]);
+  }
+  // אורך, תיבה ונקודת עוגן (אמצע האורך, 6 ספרות) של קו שבור pts = [[lat,lon],...]
+  function routeInfo(pts) {
+    const segs = []; let L = 0, mnLa = Infinity, mnLo = Infinity, mxLa = -Infinity, mxLo = -Infinity;
+    pts.forEach((q, i) => {
+      mnLa = Math.min(mnLa, q[0]); mxLa = Math.max(mxLa, q[0]); mnLo = Math.min(mnLo, q[1]); mxLo = Math.max(mxLo, q[1]);
+      if (i) { const l = segLenM(pts[i - 1], q); segs.push(l); L += l; }
+    });
+    let anchor = pts[0].slice(), acc = 0;
+    for (let i = 0; i < segs.length; i++) {
+      if (acc + segs[i] >= L / 2) { const t = segs[i] ? (L / 2 - acc) / segs[i] : 0; anchor = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t]; break; }
+      acc += segs[i];
+    }
+    return { lengthM: L, segs, bbox: [mnLa, mnLo, mxLa, mxLo], anchor: [Math.round(anchor[0] * 1e6) / 1e6, Math.round(anchor[1] * 1e6) / 1e6] };
+  }
+  // ההיטל לניתוח: מעגל — סביב המרכז (כמו תמיד); נתיב — סביב מרכז התיבה של הנתיב, כשהקו השבור נושא את ההיטל (P.route, במטרים) וכל מרחק נמדד ממנו (ראו Proj.dPt)
+  function projFor(inp) {
+    if (!isRoute(inp)) return new Proj(inp.lat, inp.lon);
+    const pts = inp.area.pts, bb = routeInfo(pts).bbox, P = new Proj((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2);
+    P.route = pts.map(q => P.xy(q[0], q[1]));
+    return P;
+  }
+  const areaWidth = inp => (isRoute(inp) ? inp.area.halfWidth : inp.radius);   // R של מעגל / halfWidth של נתיב
+  // נקודות הנתיב כפי שמוקלדות: עיגול ל-6 ספרות (כ-0.1 מ׳), כך שהשוואות ושמירה יציבות
+  const roundPts = pts => (pts || []).map(q => [Math.round(q[0] * 1e6) / 1e6, Math.round(q[1] * 1e6) / 1e6]);
+  // טבעת האזור הסביב לנתיב ברוחב mult×halfWidth מכל צד, כרשימת [lat,lon] סגורה: היסט מקביל לשני צדי הקו, פינות חדות במיטר (clip ב-2×W) וקצוות מרובעים (הקו מורחב ב-W בכל קצה) —
+  // כך הטבעת תמיד מכילה את הקפסולה (כל הנקודות במרחק עד W מהקו). simple=false כשהטבעת חותכת את עצמה (פנייה חדה או קטעים קצרים מדי ביחס לרוחב)
+  function corridorRing(area, mult) {
+    const W = area.halfWidth * (mult || 1), P = projFor({ area }), r0 = P.route;
+    const r = [r0[0]];
+    for (let i = 1; i < r0.length; i++) if (Math.hypot(r0[i][0] - r[r.length - 1][0], r0[i][1] - r[r.length - 1][1]) >= 0.5) r.push(r0[i]);
+    if (r.length < 2) return { ring: [], simple: false };
+    const n = r.length, u = [], nl = [];
+    for (let i = 0; i < n - 1; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], L = Math.hypot(dx, dy); u.push([dx / L, dy / L]); nl.push([-dy / L, dx / L]); }
+    const side = sg => {
+      const out = [[r[0][0] + sg * W * nl[0][0] - W * u[0][0], r[0][1] + sg * W * nl[0][1] - W * u[0][1]]];
+      for (let i = 1; i < n - 1; i++) {
+        const a = u[i - 1], b = u[i], na = [sg * nl[i - 1][0], sg * nl[i - 1][1]], nb = [sg * nl[i][0], sg * nl[i][1]], pp = r[i];
+        const den = 1 + na[0] * nb[0] + na[1] * nb[1], cross = a[0] * b[1] - a[1] * b[0], outer = sg * cross < 0;
+        if (den < 1e-6) { out.push([pp[0] + W * na[0], pp[1] + W * na[1]], [pp[0] + W * nb[0], pp[1] + W * nb[1]]); continue; }   // היפוך כיוון: קפיצה (הטבעת תיחתך — נדחה באימות)
+        const mx = (na[0] + nb[0]) / den, my = (na[1] + nb[1]) / den;
+        if (!outer || Math.hypot(mx, my) <= 2) { out.push([pp[0] + W * mx, pp[1] + W * my]); continue; }
+        // צד חיצוני בפנייה חדה: חותכים את קצה הפינה במרחק 2×W מהקודקוד, לאורך הציר החוצה (שני נקודות על שתי הישרים)
+        const bl = Math.hypot(na[0] + nb[0], na[1] + nb[1]), bx = (na[0] + nb[0]) / bl, by = (na[1] + nb[1]) / bl, D = 2 * W;
+        const oa = [pp[0] + W * na[0], pp[1] + W * na[1]], ob = [pp[0] + W * nb[0], pp[1] + W * nb[1]];
+        const sa = (D - ((oa[0] - pp[0]) * bx + (oa[1] - pp[1]) * by)) / (a[0] * bx + a[1] * by), sb = (D - ((ob[0] - pp[0]) * bx + (ob[1] - pp[1]) * by)) / (-b[0] * bx - b[1] * by);
+        out.push([oa[0] + sa * a[0], oa[1] + sa * a[1]], [ob[0] - sb * b[0], ob[1] - sb * b[1]]);
+      }
+      out.push([r[n - 1][0] + sg * W * nl[n - 2][0] + W * u[n - 2][0], r[n - 1][1] + sg * W * nl[n - 2][1] + W * u[n - 2][1]]);
+      return out;
+    };
+    const xy = side(1).concat(side(-1).reverse());
+    return { ring: xy.map(q => P.ll(q[0], q[1])).concat([P.ll(xy[0][0], xy[0][1])]), simple: ringSimple(xy) };
+  }
+  function ringSimple(xy) { // אף שני קטעים לא-סמוכים בטבעת אינם נחתכים
+    const n = xy.length, o = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    for (let i = 0; i < n; i++) {
+      const a = xy[i], b = xy[(i + 1) % n];
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue;
+        const c = xy[j], d = xy[(j + 1) % n], o1 = o(a, b, c), o2 = o(a, b, d), o3 = o(c, d, a), o4 = o(c, d, b);
+        if (((o1 > 1e-6 && o2 < -1e-6) || (o1 < -1e-6 && o2 > 1e-6)) && ((o3 > 1e-6 && o4 < -1e-6) || (o3 < -1e-6 && o4 > 1e-6))) return false;
+      }
+    }
+    return true;
+  }
+  // אימות נתיב: 2..maxPts נקודות בתחום ישראל, בלי נקודות עוקבות קרובות מדי, אורך עד maxLen, רוחב בטווח, והטבעת פשוטה. מחזיר [{field, msg}] (field: route / halfWidth)
+  function validateRoute(inp, cfg) {
+    const a = inp.area, lim = routeLim(cfg), errs = [], pts = Array.isArray(a.pts) ? a.pts : [];
+    const push = (k, m) => errs.push({ field: k, msg: m });
+    if (pts.length < 2) push("route", "נתיב דורש לפחות שתי נקודות — לחצו על המפה לאורך הכביש");
+    else if (pts.length > lim.maxPts) push("route", "נתיב: עד " + lim.maxPts + " נקודות");
+    else if (pts.some(q => !Array.isArray(q) || !isFinite(q[0]) || !isFinite(q[1]))) push("route", "נקודה בנתיב אינה תקינה");
+    else if (pts.some(q => !(q[0] >= 29 && q[0] <= 34 && q[1] >= 34 && q[1] <= 36.5))) push("route", "נקודה בנתיב מחוץ לתחום ישראל והסביבה");
+    else {
+      const info = routeInfo(pts);
+      if (info.segs.some(l => l < 1)) push("route", "שתי נקודות עוקבות בנתיב זהות או קרובות מדי (פחות ממטר) — יש למחוק אחת מהן");
+      else if (info.lengthM > lim.maxLen) push("route", "אורך הנתיב " + fmtInt(Math.round(info.lengthM)) + " מ׳ — מעל המותר (עד " + fmtInt(lim.maxLen) + " מ׳)");
+    }
+    if (!(a.halfWidth >= lim.minW && a.halfWidth <= lim.maxW)) push("halfWidth", "מרחק מהקו לכל צד בין " + lim.minW + " ל-" + fmtInt(lim.maxW) + " מטר");
+    else if (!errs.length && !corridorRing(a, 1).simple) push("route", "הנתיב חד או צפוף מדי ביחס לרוחב שנבחר (האזור סביבו נחתך בעצמו) — הגדילו את המרחק בין הנקודות, החליקו פניות חדות או הקטינו את המרחק מהקו");
+    return errs;
+  }
+  // רשימת נקודות מטקסט (שורה לכל נקודה, או מופרדות בנקודה-פסיק): {pts, bad:[מספרי שורה (מ-1) שלא פוענחו]}
+  function parseCoordList(text) {
+    const pts = [], bad = [];
+    String(text == null ? "" : text).split(/[\n;]/).map(x => x.trim()).forEach((ln, i) => { if (!ln) return; const c = parseCoordInput(ln); if (c) pts.push([c.lat, c.lon]); else bad.push(i + 1); });
+    return { pts: roundPts(pts), bad };
   }
 
   /* ================= המרות ותצוגה ================= */
@@ -101,12 +266,15 @@
   };
 
   /* ================= שאילתות OpenStreetMap (משותפות לאפליקציה ולבדיקות) ================= */
-  function buildQueries(lat, lon, R, cfg) {
+  function buildQueries(lat, lon, R, cfg, area) {
     const th = (cfg && cfg.thresholds) || {};
     // מכשולים (מגדלים, חשמל, מבנים גבוהים): עד פי 2 מהרדיוס; אתרים ותשתיות קרקעיות/אוויריות: עד km מקצה הסגירה
     const siteM = th.site_near_m || 1000;
     const A = Math.ceil(2 * R + 150), B = Math.ceil(R + siteM + 50), nearR = Math.max(A, B);
-    const c = lat + "," + lon, a = "(around:" + A + "," + c + ")", b = "(around:" + B + "," + c + ")";
+    // נתיב (area = {kind:"route", pts}): Overpass מקבל ב-around גם רשימת נקודות (קו שבור) — "עד R מהקו"; lat/lon הם נקודת העוגן (למקום ולשם האתר)
+    const route = !!(area && area.kind === "route"), rbb = route ? routeInfo(area.pts).bbox : null;
+    const c = lat + "," + lon, pl = route ? area.pts.map(q => q[0].toFixed(6) + "," + q[1].toFixed(6)).join(",") : c;
+    const a = "(around:" + A + "," + pl + ")", b = "(around:" + B + "," + pl + ")";
     const near =
       "[out:json][timeout:120];(" +
       "nwr" + a + '[man_made~"^(tower|mast|chimney|crane|water_tower|silo|storage_tank|flare|lighthouse|communications_tower|antenna|windmill)$"];' +
@@ -140,7 +308,7 @@
       "nwr" + b + '[railway~"^(station|halt)$"];' +
       ");out geom tags;";
     const farR = th.airfield_scan_m || 15000, placeR = th.place_scan_m || 3000;
-    const box = km => { const dLa = km / 111000, dLo = km / (111000 * Math.cos((lat * Math.PI) / 180)); return [lat - dLa, lon - dLo, lat + dLa, lon + dLo].map(v => v.toFixed(5)).join(","); };
+    const box = km => { const dLa = km / 111000, dLo = km / (111000 * Math.cos((lat * Math.PI) / 180)); return (route ? [rbb[0] - dLa, rbb[1] - dLo, rbb[2] + dLa, rbb[3] + dLo] : [lat - dLa, lon - dLo, lat + dLa, lon + dLo]).map(v => v.toFixed(5)).join(","); };
     // תיבה במקום around: מהיר בהרבה בשרתים העמוסים; המרחק המדויק מחושב בדפדפן
     const far =
       "[out:json][timeout:90];" +
@@ -149,15 +317,15 @@
       "node[place](" + box(placeR) + ");out body;";
     const bR = Math.max(th.border_scan_m || 7000, R + 7000), pR = Math.ceil(2 * R + (th.near_zone_m || 1000));
     const dLat = bR / 111000, dLon = bR / (111000 * Math.cos((lat * Math.PI) / 180));
-    const bbox = [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map(v => v.toFixed(5)).join(",");
+    const bbox = (route ? [rbb[0] - dLat, rbb[1] - dLon, rbb[2] + dLat, rbb[3] + dLon] : [lat - dLat, lon - dLon, lat + dLat, lon + dLon]).map(v => v.toFixed(5)).join(",");
     const ext =
       "[out:json][timeout:90];(" +
-      "nwr(around:" + pR + "," + c + ")[leisure=nature_reserve];" +
-      "nwr(around:" + pR + "," + c + ")[boundary=national_park];" +
-      "nwr(around:" + pR + "," + c + ")[boundary=protected_area];" +
+      "nwr(around:" + pR + "," + pl + ")[leisure=nature_reserve];" +
+      "nwr(around:" + pR + "," + pl + ")[boundary=national_park];" +
+      "nwr(around:" + pR + "," + pl + ")[boundary=protected_area];" +
       ");out center tags;" +
-      "rel(around:" + bR + "," + c + ')["boundary"="administrative"]["admin_level"="2"]["ISO3166-1"~"^(IL|EG|SY|LB)$"]->.cr;' +
-      "way(r.cr)(around:" + bR + "," + c + ")->.bw;" +
+      "rel(around:" + bR + "," + pl + ')["boundary"="administrative"]["admin_level"="2"]["ISO3166-1"~"^(IL|EG|SY|LB)$"]->.cr;' +
+      "way(r.cr)(around:" + bR + "," + pl + ")->.bw;" +
       ".bw out geom(" + bbox + ") tags;" +
       ".cr out body;";
     return { near, far, ext, nearR };
@@ -232,8 +400,8 @@
     return out;
   }
   function geomDist(P, g) {
-    if (g.pt) { const xy = P.xy(g.pt[0], g.pt[1]); return { d: Math.hypot(xy[0], xy[1]), p: xy, inside: false }; }
-    return polyNearest(g.pts.map(p => P.xy(p[0], p[1])), g.closed);
+    if (g.pt) { const xy = P.xy(g.pt[0], g.pt[1]); return { d: P.dPt(xy[0], xy[1]), p: xy, inside: false }; }
+    return polyNearest(g.pts.map(p => P.xy(p[0], p[1])), g.closed, P.route);
   }
   function elemDist(P, e) { // מחזיר {d, p:[x,y]} או null
     let best = null;
@@ -372,11 +540,15 @@
     let best = null;
     if (z.rings && z.rings.length) {
       z.rings.forEach(rg => {
-        const r = polyNearest(rg.map(p => P.xy(p[0], p[1])), true);
+        const r = polyNearest(rg.map(p => P.xy(p[0], p[1])), true, P.route);
         if (!best || r.d < best.d) best = r;
       });
     }
-    if (z.c && z.r) {
+    if (z.c && z.r && P.route) {   // נתיב: מרחק מרכז העיגול מהקו השבור פחות רדיוס העיגול; הנקודה הקרובה — על שפת העיגול, בכיוון הציר
+      const c = P.xy(z.c[0], z.c[1]), q = routeNearest(P.route, c[0], c[1]), dc = q.d, d = Math.max(0, dc - z.r);
+      const p = d > 0 ? [c[0] + ((q.x - c[0]) * z.r) / dc, c[1] + ((q.y - c[1]) * z.r) / dc] : [q.x, q.y];
+      if (!best || d < best.d) best = { d, p, inside: d === 0 };
+    } else if (z.c && z.r) {
       const c = P.xy(z.c[0], z.c[1]), dc = Math.hypot(c[0], c[1]), d = Math.max(0, dc - z.r);
       const p = dc ? [(c[0] * d) / dc, (c[1] * d) / dc] : [0, 0];
       if (!best || d < best.d) best = { d, p, inside: d === 0 };
@@ -409,7 +581,7 @@
 
   /* ================= מנחתים חקלאיים ושדות תעופה ================= */
   function analyzeAgri(P, airstrips) {
-    return (airstrips || []).map(a => ({ name: a.name, d: Math.hypot(...P.xy(a.lat, a.lon)), ops: a.ops, arp: a.arp }))
+    return (airstrips || []).map(a => ({ name: a.name, d: P.dPt(...P.xy(a.lat, a.lon)), ops: a.ops, arp: a.arp }))
       .sort((a, b) => a.d - b.d);
   }
   function analyzeAirfields(P, far, scanM) {
@@ -449,7 +621,7 @@
   }
   function nearestPlaces(P, far, n) {
     return (far.elements || []).filter(e => e.type === "node" && e.tags && e.tags.place && e.lat != null)
-      .map(e => ({ d: Math.hypot(...P.xy(e.lat, e.lon)), place: e.tags.place, name: nameOf(e.tags) }))
+      .map(e => ({ d: P.dPt(...P.xy(e.lat, e.lon)), place: e.tags.place, name: nameOf(e.tags) }))
       .sort((a, b) => a.d - b.d).slice(0, n || 5);
   }
 
@@ -613,8 +785,8 @@
       const q = notamQ(raw), g = notamGeometry(raw), lim = kind === "closure" ? nearM : obstNearM;
       let dc = null, edge = 0;
       if (g) {
-        if (g.kind === "circle") { const c = P.xy(g.c[0], g.c[1]); dc = Math.max(0, Math.hypot(c[0], c[1]) - g.r); }
-        else dc = polyNearest(g.pts.map(p => P.xy(p[0], p[1])), true).d;
+        if (g.kind === "circle") { const c = P.xy(g.c[0], g.c[1]); dc = Math.max(0, P.dPt(c[0], c[1]) - g.r); }
+        else dc = polyNearest(g.pts.map(p => P.xy(p[0], p[1])), true, P.route).d;
         edge = Math.max(0, dc - R);
         if (edge > lim) { excluded.push({ id: n.id, reason: "far" }); return; }
       }
@@ -698,10 +870,13 @@
   }
   function validateInput(inp, cfg) {
     const errs = [], push = (k, m) => errs.push({ field: k, msg: m });
-    if (!isFinite(inp.lat) || !isFinite(inp.lon)) push("coord", "יש להזין נקודת מרכז (או ללחוץ על המפה)");
-    else if (!(inp.lat >= 29 && inp.lat <= 34 && inp.lon >= 34 && inp.lon <= 36.5)) push("coord", "הנקודה מחוץ לתחום ישראל והסביבה");
     const lim = cfg.defaults;
-    if (!(inp.radius >= lim.min_radius_m && inp.radius <= lim.max_radius_m)) push("radius", "רדיוס בין " + lim.min_radius_m + " ל-" + fmtInt(lim.max_radius_m) + " מטר");
+    if (isRoute(inp)) validateRoute(inp, cfg).forEach(e => errs.push(e));   // נתיב: נקודות, אורך ורוחב במקום נקודת מרכז ורדיוס
+    else {
+      if (!isFinite(inp.lat) || !isFinite(inp.lon)) push("coord", "יש להזין נקודת מרכז (או ללחוץ על המפה)");
+      else if (!(inp.lat >= 29 && inp.lat <= 34 && inp.lon >= 34 && inp.lon <= 36.5)) push("coord", "הנקודה מחוץ לתחום ישראל והסביבה");
+      if (!(inp.radius >= lim.min_radius_m && inp.radius <= lim.max_radius_m)) push("radius", "רדיוס בין " + lim.min_radius_m + " ל-" + fmtInt(lim.max_radius_m) + " מטר");
+    }
     if (!(inp.heightM > 0 && inp.heightM <= 20000)) push("height", "יש להזין גובה במטרים");
     const a = parseDate(inp.dateFrom), b = parseDate(inp.dateTo);
     if (!a) push("dateFrom", "תאריך התחלה חסר");
@@ -786,8 +961,10 @@
   /* ================= הרכבת התוצאה המלאה ================= */
   // inp: קלט המשתמש. data: {zones, inpa, agri, notams, notamFetchedIso, near, far, ext, reverse}. now: Date
   function analyze(inp, data, cfg, now) {
-    const P = new Proj(inp.lat, inp.lon), R = inp.radius, th = cfg.thresholds;
+    const route = isRoute(inp), P = projFor(inp), R = areaWidth(inp), th = cfg.thresholds;
+    const A = route ? routeInfo(inp.area.pts) : null, aLat = route ? A.anchor[0] : inp.lat, aLon = route ? A.anchor[1] : inp.lon;   // נתיב: הנקודה לשעות הזריחה (עוגן על הקו)
     const res = { P, R, inp };
+    if (route) res.area = { kind: "route", pts: inp.area.pts, halfWidth: R, lat: aLat, lon: aLon, lengthM: A.lengthM, bbox: A.bbox };
     res.nearScan = analyzeNear(P, R, { elements: ((data.near && data.near.elements) || []).concat(manualElements(inp.manualItems)) }, th);
     res.zones = analyzeZones(P, R, { zones: data.zones && data.zones.zones, inpa: data.inpa }, th.near_zone_m, inp.heightM * M2FT, th.approx_margin_m);
     // הערת השוליים ¹ של נספח ב׳-1 (גובה מרבי; הפרדת 1,500/1,000 רגל מכלי טיס מאויש) — מצוטטת במלואה בכל פלט שמציג אזור כזה
@@ -802,7 +979,7 @@
     const prot = ((data.ext && data.ext.elements) || []).filter(e => e.tags && (e.tags.leisure === "nature_reserve" || e.tags.boundary === "national_park" || e.tags.boundary === "protected_area"))
       .map(e => { const r = elemDist(P, e); return r ? { name: nameOf(e.tags), d: r.d, id: e.type + "/" + e.id } : null; }).filter(Boolean);
     res.osmProtected = prot.sort((a, b) => a.d - b.d);
-    res.sun = dayNightTable(inp.lat, inp.lon, inp.dateFrom, inp.dateTo, inp.timeFrom, inp.timeTo);
+    res.sun = dayNightTable(aLat, aLon, inp.dateFrom, inp.dateTo, inp.timeFrom, inp.timeTo);
     res.ft = inp.heightM * M2FT;
     if (res.sun.length) {
       res.notams = analyzeNotams(P, R, data.notams, +res.sun[0].startUtc, +res.sun[res.sun.length - 1].endUtc, res.ft, th.notam_near_m, th.site_near_m);
@@ -867,7 +1044,7 @@
   return {
     M2FT, NM, HEB_DAY, ZONE_KIND, REQUIRED_CHECKS, MIRRORS,
     sha256Hex, userHash, userKey,
-    Proj, polyNearest, circlePoints, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, xmlClean, altText, fmtHM,
+    Proj, polyNearest, circlePoints, isRoute, routeInfo, projFor, areaWidth, roundPts, corridorRing, validateRoute, parseCoordList, routeLim, segSegDist, routeNearest, dms, dmsLat, dmsLon, fmtInt, fmtDist, trimNum, esc, xmlClean, altText, fmtHM,
     altRange, notamQ, manualElements, groupOf, COVERAGE_GROUPS, buildQueries, overpass, elemGeoms, elemDist, heLabel, classify, analyzeNear, analyzeZones, analyzeAgri, analyzeAirfields,
     suggestSiteName, nearestPlaces, analyzeBorders, sunTimes, localToUtc, dayNightTable, workingDaysBefore, dayName, ddmmyyyy, parseDate, parseTime, hhmm,
     ilToday, splitList, validPhone, matchKnownObstacles, knownSegments, KO_MAX, MAX_PEOPLE, ORG_MAX, ID_MAX, parseCoordInput, notamKind, notamGeometry, notamWindow, analyzeNotams, validateInput, analyze, gate, purposeHasVisible, purposeLen, PURPOSE_MAX
