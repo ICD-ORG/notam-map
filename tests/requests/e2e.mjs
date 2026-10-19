@@ -347,6 +347,8 @@ try {
     await page.waitForFunction(() => document.getElementById("e_run").textContent.length > 0, null, { timeout: 240000 });
     const msg = await page.textContent("#e_run"); const gateVis = await page.isVisible("#resultsSec");
     check("כשל ב-Overpass: הודעת שגיאה ואין 'מוכן לשליחה'", /לא הושלמו/.test(msg) && !gateVis, msg.slice(0, 160));
+    { const pr = (await page.innerText("#progress")).replace(/\s+/g, " ");
+      check("כשל ב-Overpass אצל מנהל: הפירוט הטכני נשאר כמו שהיה — שם המקור והשרת בהודעה ובשורת ההתקדמות", /Overpass/.test(msg) && /גבולות מדינה ושטחי טבע \(OpenStreetMap\)/.test(pr) && /overpass/.test(pr), msg.slice(0, 160) + " | " + pr.slice(0, 300)); }
     await ctx.close();
   }
 
@@ -360,6 +362,7 @@ try {
     const g = await page.textContent("#gate");
     check("בלי תצלום אוויר: לא מוכן לשליחה", /אינה מוכנה/.test(g) && /תמונת מפה/.test(g), g.replace(/\s+/g, " ").slice(0, 200));
     check("כפתורי ההפקה חסומים", (await page.isDisabled("#btnPrint")) && (await page.isDisabled("#btnCopy")), "");
+    check("כשל אריחים אצל מנהל: הפירוט הטכני נשאר — בבאנר השער וברשימת ההתקדמות (מספר אריחי רקע שלא נטענו)", /תמונת מפה[^:]*: \d+ אריחי רקע לא נטענו/.test(g.replace(/\s+/g, " ")) && /\d+ אריחי רקע לא נטענו/.test(await page.innerText("#progress")), g.replace(/\s+/g, " ").slice(0, 240));
     await ctx.close();
   }
 
@@ -3393,6 +3396,30 @@ try {
       check("תרחיש 20, מטיס עצמאי: בסעיף 5 אין מילה על הגשה מחדש של תכנית טיסה או על פנייה למודיעין טיס", !/תכנית|שנית|מודיעין|לפנות|הגש/.test(s.text.replace(/סיכום והגשה/g, "")), s.text);
       const f = palFolder(), wl = f ? await docxLines(f) : [], w = wordSec5(wl), sum = s && s.lis ? s.lis.map(l => "• " + l) : [];
       check("תרחיש 20, מטיס עצמאי: קובץ ה-Word שנשמר בדרייב נבנה לפי תצוגתו — ״5. סיכום והגשה״ ושתי הנקודות זהות למסך, בלי הפניות לפמ״ת ובלי הנוסח המלא", !!f && !!w && w.head === "5. סיכום והגשה" && JSON.stringify(w.body) === JSON.stringify(sum) && !PMT_REF.test(w.body.join("\n")) && !wl.some(l => FULL.test(l)), JSON.stringify(w)); }
+    { // סעיף 3 (רשימת ההתקדמות) אצל מטיס רגיל: שורה לכל נושא שנבדק, בלי שמות מקורות, שרתים, אלמנטים או אריחים — ואצל מי שיש לו תצוגה מתקדמת (עובד ארגון, מנהל) הפירוט כמו שהיה
+      const P = await pal.page.evaluate(() => [...document.querySelectorAll("#progress li")].map(li => li.innerText.replace(/\s+/g, " ").trim())), all = P.join(" | ");
+      const want = [/^✔ נבדקו \d+ מכשולים ותשתיות בסביבה$/, /^✔ נבדקו \d+ שדות תעופה, מנחתים וישובים$/, /^✔ נבדקו הגבולות הקרובים לאזור ההטסה ורשות הטבע והגנים באזור הקרוב להטסה$/, /^✔ זוהה המקום: .+/,
+        /^✔ נבדקו אזורי איסור והגבלה באזור ההטסה$/, /^✔ נבדקו שמורות טבע וגנים לאומיים$/, /^✔ נבדקו מנחתים חקלאיים$/, /^✔ נבדקו נוטמים \(סגירות מרחב אוויר ומכשולים שפורסמו\)$/, /^✔ נמצאו \d+ מכשולים ותשתיות עד פי 2 מהרדיוס · \d+ אזורי איסור בקרבה$/, /^✔ נוצרו ארבע תמונות מפה$/];
+      check("תרחיש 20, מטיס עצמאי: סעיף 3 מפרט מה נבדק — עשר שורות ✔ בניסוח הפשוט (עם מספרים בשתי שורות OSM, שם מקום מלא, פירוט כל בדיקות הניתוח והתוצאה)", P.length === want.length && want.every((re, i) => re.test(P[i])), all);
+      check("תרחיש 20, מטיס עצמאי: בסעיף 3 אין מקורות — לא OpenStreetMap, Nominatim, Overpass, שרתים, ״אלמנטים״ או אריחים", !/OpenStreetMap|Nominatim|overpass|אלמנט|אריח|HTTP/i.test(all), all); }
+    { // כשל טעינה אצל מטיס רגיל: ניסוח ניטרלי בלי הודעת השגיאה הטכנית ובלי שם שרת
+      const fp = await openAs("pal.pilot", "pal-pass-12345", { failExt: true });
+      await fillExample(fp.page, { org: "פל צילום" }); await fp.page.click("#runBtn");
+      await fp.page.waitForFunction(() => document.getElementById("e_run").textContent.length > 0, null, { timeout: 240000 });
+      const o = await fp.page.evaluate(() => ({ run: document.getElementById("e_run").textContent, lis: [...document.querySelectorAll("#progress li")].map(li => li.innerText.replace(/\s+/g, " ").trim()), results: getComputedStyle(document.getElementById("resultsSec")).display }));
+      const ext = o.lis.find(l => /^✖/.test(l));
+      check("תרחיש 20, מטיס עצמאי: כשל בטעינת נתוני המפה — בשורה ״גבולות ושטחי טבע באזור ההטסה — הנתונים לא נטענו, נסו שוב בעוד מספר דקות״, ובהודעה ליד הכפתור אותו ניסוח, בלי Overpass/HTTP/שרת, והבקשה לא מוכנה",
+        ext === "✖ גבולות ושטחי טבע באזור ההטסה הנתונים לא נטענו, נסו שוב בעוד מספר דקות" && o.run.startsWith("הבדיקות לא הושלמו: הנתונים לא נטענו, נסו שוב בעוד מספר דקות.") && !/overpass|HTTP|https?:|שרתי/i.test(o.run + o.lis.join(" ")) && o.results === "none", JSON.stringify(o).slice(0, 500));
+      await fp.ctx.close(); }
+    { // כשל באריחי המפה אצל מטיס רגיל: גם בבאנר השער (לא רק ברשימת ההתקדמות) ניסוח ניטרלי — בלי מספר אריחים ובלי הודעת שגיאה טכנית
+      const fp = await openAs("pal.pilot", "pal-pass-12345", { failTiles: true });
+      await fillExample(fp.page, { org: "פל צילום" }); await fp.page.click("#runBtn");
+      await fp.page.waitForFunction(() => document.querySelector("#gate .banner"), null, { timeout: 150000 });
+      await fp.page.waitForFunction(() => !window.__REQ.S.running && !window.__REQ.S.building, null, { timeout: 90000 });
+      const g = (await fp.page.textContent("#gate")).replace(/\s+/g, " "), pr = (await fp.page.innerText("#progress")).replace(/\s+/g, " ");
+      check("תרחיש 20, מטיס עצמאי: כשל באריחי המפה — בבאנר השער ״תמונת מפה ותצ״א עם רקע: הנתונים לא נטענו, נסו שוב בעוד מספר דקות״ וברשימת ההתקדמות ״תמונות המפה״ באותו ניסוח, בלי מספר אריחים",
+        /אינה מוכנה/.test(g) && /תמונת מפה ותצ״א עם רקע: הנתונים לא נטענו, נסו שוב בעוד מספר דקות/.test(g) && !/אריח|חסם|Error|HTTP/i.test(g) && /✖ תמונות המפה הנתונים לא נטענו, נסו שוב בעוד מספר דקות/.test(pr) && !/אריח/.test(pr), g.slice(0, 260) + " | " + pr.slice(0, 300));
+      await fp.ctx.close(); }
     { // כשל בבדיקה העצמית: הבקשה כבר אינה מוכנה, הפקדים נעולים, הבאנר ניטרלי (בלי פירוט טכני ובלי הוראות), והתיבה נשארת מוסתרת
       pst.fail = true; const okSelf = await pal.page.evaluate(() => window.__REQ.selfTest());
       const b = await banner(pal.page), gate = (await pal.page.textContent("#gate")).replace(/\s+/g, " "), t = await tools(pal.page), NEUTRAL = "הנתונים מתעדכנים כעת; נסו שוב בעוד מספר דקות, ואם זה נמשך פנו לתמיכה: " + SUPPORT + ".";
@@ -3466,6 +3493,8 @@ try {
     { const t = await tools(avi.page);
       check("תרחיש 20, עובד ארגון: ברירת המחדל תצוגה מתקדמת — הכלים הפנימיים גלויים ונגישים והבדיקה העצמית רצה", visible(t) && t.stN > 8 && t.stOk, JSON.stringify(t)); }
     await runReady(avi.page, { org: "אבי הפקות" });
+    { const pr = (await avi.page.innerText("#progress")).replace(/\s+/g, " ");
+      check("תרחיש 20, עובד ארגון (תצוגה מתקדמת): סעיף 3 כמו שהיה — שמות המקורות, השרתים, מספר האלמנטים והאריחים", /מכשולים ותשתיות בסביבה \(OpenStreetMap\)/.test(pr) && /overpass[\w.-]* · \d+ אלמנטים/.test(pr) && /שם המקום \(Nominatim\)/.test(pr) && /הרקע נטען \(\d+ אריחים לתקריב\)/.test(pr) && !/נבדקו \d+ מכשולים/.test(pr), pr.slice(0, 400)); }
     const aviFolder = () => folders().find(f => /^הארגון\//.test(folderPath(env, f)));
     { const s = await sec5(avi.page), wl = await docxLines(aviFolder()), w = wordSec5(wl);
       check("תרחיש 20, עובד ארגון: סעיף 5 המלא ״הגשה״ במסך (3.ד.4, ללא הסיכום) ובקובץ ה-Word שנשמר בדרייב", fullOk(s) && !!w && w.head === "5. הגשה" && w.body.some(l => FULL.test(l)) && !wl.includes("5. סיכום והגשה"), JSON.stringify([s && s.head, w && w.head])); }
@@ -3482,6 +3511,8 @@ try {
       await avi.page.waitForFunction(() => document.getElementById("stBox").hidden, null, { timeout: 15000 }); await autoDone(avi.page);
       const t = await tools(avi.page), s = await sec5(avi.page), r = await res0(avi.page), w = wordSec5(await docxLines(aviFolder()));
       check("תרחיש 20, עובד ארגון שכובתה לו התצוגה: ברענון הכלים מוסתרים, סעיף 5 הופך לסיכום (מסך ו-Word) — אבל חשבונו נשאר ארגוני (ברירות המחדל והשמירה בתיקיית ״הארגון״)", concealed(t) && summaryOk(s, r) && !!w && w.head === "5. סיכום והגשה" && n(avi.page, "saveBegin") === sb + 1 && (await avi.page.evaluate(() => window.ReqAuth.isOrg())) === true, JSON.stringify([t.isAdv, s && s.head, w && w.head])); }
+      { const pr = (await avi.page.innerText("#progress")).replace(/\s+/g, " ");
+        check("תרחיש 20, עובד ארגון שכובתה לו התצוגה: אחרי הרענון סעיף 3 מצויר מחדש בניסוח הפשוט — בלי שמות מקורות, שרתים, אלמנטים ואריחים שנשארו מההרצה שלפני השינוי", /נבדקו \d+ מכשולים ותשתיות בסביבה/.test(pr) && /נוצרו ארבע תמונות מפה/.test(pr) && !/OpenStreetMap|Nominatim|overpass|אלמנט|אריח/i.test(pr), pr.slice(0, 300)); }
     await avi.ctx.close();
 
     /* ---- ו. שרת בלי תצוגה מתקדמת (noAdv) ושרת ישן לגמרי (oldServer): בלי adv מהשרת הלקוח נשאר עם ברירת המחדל לפי סוג החשבון (מנהל כן; ארגוני כן; מטיס לא) — גם כשהמנהל כבר הכריע אחרת בשרת הקיים; חלון הניהול בלי עמודה ---- */

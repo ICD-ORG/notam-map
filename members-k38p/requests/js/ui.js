@@ -876,7 +876,7 @@
     if (S.stale) html += '<div class="banner no">' + (S.staleWhy === "data" ? "נתוני המפה או הנוטמים התעדכנו מאז הרצת הבדיקות." : "הנתונים בטופס השתנו מאז הרצת הבדיקות.") + ' יש ללחוץ שוב על "הרץ את כל הבדיקות" לפני שליחה.</div>';
     if (imgWait) html += '<div class="banner warn">מעדכן את ההדמיות לפי השינוי האחרון… (אפשר לשמור ולשלוח רק אחרי שהסתיים)</div>';
     html += showReady ? '<div class="banner ok">✔ כל הבדיקות הושלמו ללא כשל. הבקשה מוכנה לשליחה.</div>'
-      : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(f.label) + ": " + esc(statusMsg(S.statuses[f.key]) || f.msg) + "</li>").join("") + "</ul></div>";
+      : '<div class="banner no">✖ הבקשה אינה מוכנה לשליחה — בדיקות שלא הושלמו:<ul>' + g.failing.map(f => "<li>" + esc(isAdv() ? f.label : f.label.replace(" (OpenStreetMap)", "")) + ": " + esc(statusMsg(S.statuses[f.key]) || f.msg) + "</li>").join("") + "</ul></div>";
     html += w.map(x => '<div class="banner warn">' + x + "</div>").join("");
     if (!skipHtml && box._html !== html) { box.innerHTML = html; box._html = html; }   // לא מחליפים DOM זהה
     ["btnZip", "btnPrint", "btnDocx", "btnKml", "btnAerial", "btnStreet", "btnOverview", "btnRegion", "btnCopy", "btnDrive", "btnSend"].forEach(id => { $(id).disabled = !S.ready || ((id === "btnDrive" || id === "btnSend") && S.sending); });
@@ -940,10 +940,31 @@
       if (f) f.focus({ preventScroll: true });
     } catch (e) { /* גלילה/מיקוד הם נוחות בלבד — לעולם לא מפילים את ההרצה */ }
   }
+  const NOT_LOADED = "הנתונים לא נטענו, נסו שוב בעוד מספר דקות";
+  const MAP_FAIL = { maint: true, adv: true, user: NOT_LOADED };   // כשל תמונות המפה (אריחים, ייצוא): הפירוט הטכני במנהל ובתצוגה מתקדמת; מבקש רגיל מקבל את הניסוח הניטרלי גם בבאנר השער
+  let lastSteps = null, lastFail = null;   // ההרצה האחרונה: אם התצוגה המתקדמת של המשתמש משתנה אחריה (req-adv), הרשימה וההודעה ליד הכפתור מצוירות מחדש לפי התפקיד החדש
+  const planned = steps => steps.flatMap(x => isAdv() ? [{ s: x.s, t: x.t, m: x.m }] : plainSteps(x));
+  const runFailText = e => "הבדיקות לא הושלמו: " + (e.net && !isAdv() ? NOT_LOADED : e.message) + ". הבקשה אינה מסומנת כמוכנה לשליחה — אפשר להריץ שוב.";
+  // רשימת ההתקדמות למבקש רגיל: שורה לכל נושא שנבדק, בלי שמות מקורות, שרתים או אריחים; כשל — ניסוח ניטרלי (הפירוט הטכני נשאר למנהל ולתצוגה מתקדמת)
+  function plainSteps(x) {
+    const one = (waitT, okT, noT) => [{ s: x.s, t: x.s === "ok" ? okT : x.s === "wait" ? waitT : noT, m: x.s === "no" ? NOT_LOADED : "" }];
+    switch (x.k) {
+      case "osm_near": return one("בודקים מכשולים ותשתיות בסביבה…", "נבדקו " + x.v + " מכשולים ותשתיות בסביבה", "מכשולים ותשתיות בסביבה");
+      case "osm_far": return one("בודקים שדות תעופה, מנחתים וישובים…", "נבדקו " + x.v + " שדות תעופה, מנחתים וישובים", "שדות תעופה, מנחתים וישובים");
+      case "osm_ext": return one("בודקים גבולות ושטחי טבע…", "נבדקו הגבולות הקרובים לאזור ההטסה ורשות הטבע והגנים באזור הקרוב להטסה", "גבולות ושטחי טבע באזור ההטסה");
+      case "reverse": return one("מזהים את שם המקום…", x.v ? "זוהה המקום: " + x.v : "שם המקום נקבע לפי נתוני המפה או לפי מה שהוקלד", "שם המקום");
+      case "calc":
+        if (x.s !== "ok") return [{ s: x.s, t: x.s === "wait" ? "בודקים אזורי איסור, שמורות טבע, מנחתים ונוטמים…" : "בדיקת אזורי איסור, שמורות טבע, מנחתים ונוטמים", m: x.m }];
+        return ["נבדקו אזורי איסור והגבלה באזור ההטסה", "נבדקו שמורות טבע וגנים לאומיים", "נבדקו מנחתים חקלאיים", "נבדקו נוטמים (סגירות מרחב אוויר ומכשולים שפורסמו)"].map(t => ({ s: "ok", t, m: "" }))
+          .concat([{ s: "ok", t: "נמצאו " + x.v.obst + " מכשולים ותשתיות עד פי 2 מהרדיוס · " + x.v.zones + " אזורי איסור בקרבה", m: "" }]);
+      case "map": return one("יוצרים ארבע תמונות מפה…", "נוצרו ארבע תמונות מפה", "תמונות המפה");
+      default: return [{ s: x.s, t: x.t, m: x.m }];
+    }
+  }
   async function run() {
     if (S.running) return;
     if (!window.ReqAuth.loggedIn()) { window.ReqAuth.show(); return; }
-    $("e_run").textContent = "";
+    $("e_run").textContent = ""; lastFail = null;
     const inp0 = readInputs();
     const errs = C.validateInput(Object.assign({}, inp0, { siteName: inp0.siteName || "-" }), S.cfg);
     { const raw = $("coord").value.trim(); if (raw && !C.parseCoordInput(raw)) errs.push({ field: "coord", msg: "הנ״צ שהוקלד אינו חוקי — תקנו אותו או בחרו נקודה במפה (אחרת הבדיקות היו רצות על הנקודה הקודמת)" }); }
@@ -966,8 +987,10 @@
       { k: "osm_ext", t: "גבולות מדינה ושטחי טבע (OpenStreetMap)" }, { k: "reverse", t: "שם המקום (Nominatim)" },
       { k: "calc", t: "חישוב מרחקים ובדיקת א-17, רט״ג, מנחתים ונוטמים" }, { k: "map", t: "ארבע תמונות מפה עם רקע (תצ״א, מפת רחובות, הדמיה, מפת אזור)" }
     ].map(x => Object.assign(x, { s: "wait", m: "" }));
-    const upd = () => progress(steps.map(x => ({ s: x.s, t: x.t, m: x.m })));
-    const st = (k, s, m) => { const x = steps.find(y => y.k === k); x.s = s; x.m = m || ""; upd(); };
+    // מנהל ומשתמש עם תצוגה מתקדמת רואים את הפירוט הטכני (שרתים, מקורות, אריחים); מבקש רגיל — ניסוח פשוט: מה נבדק ומה נמצא, בלי שמות מקורות
+    const upd = () => progress(planned(steps));
+    lastSteps = steps; lastFail = null;
+    const st = (k, s, m, v) => { const x = steps.find(y => y.k === k); x.s = s; x.m = m || ""; x.v = v; upd(); };
     upd();
     // ניתוח חדש בדרך: בנייה שרצה על הניתוח הקודם הופכת למיושנת (buildSeq), ועריכה רכה שממתינה לא תפעל על תוצאה שנמחקת (clearTimeout) — ואז אין טיימר שיזרוק על S.res=null
     S.buildSeq++; S.building = false; clearTimeout(rebuildTimer); rebuildTimer = null; S.pending = false;
@@ -984,9 +1007,9 @@
       const results = await Promise.allSettled(qs.map(([k, key, sk], i) => (async () => {
         await wait(i * 1500);
         try {
-          const r = await C.overpass(q[k], fetchOpts); data[key] = r.data; st(sk, "ok", new URL(r.mirror).hostname + " · " + r.data.elements.length + " אלמנטים");
+          const r = await C.overpass(q[k], fetchOpts); data[key] = r.data; st(sk, "ok", new URL(r.mirror).hostname + " · " + r.data.elements.length + " אלמנטים", r.data.elements.length);
           setStatus(sk, true, "");
-        } catch (e) { st(sk, "no", e.message); setStatus(sk, false, e.message); throw e; }
+        } catch (e) { st(sk, "no", e.message); setStatus(sk, false, e.message, { maint: true, adv: true, user: NOT_LOADED }); try { e.net = true; } catch (x) { /* סימון בלבד */ } throw e; }
       })()));
       const failed = results.find(r => r.status === "rejected");
       if (failed) throw failed.reason;
@@ -994,7 +1017,7 @@
         const ctl = new AbortController(); setTimeout(() => ctl.abort(), 20000);
         const rr = await fetch("https://nominatim.openstreetmap.org/reverse?" + new URLSearchParams({ format: "jsonv2", lat: inp0.lat, lon: inp0.lon, zoom: 18, "accept-language": "he", addressdetails: 1 }), { signal: ctl.signal });
         if (!rr.ok) throw new Error("HTTP " + rr.status);
-        data.reverse = await rr.json(); st("reverse", "ok", data.reverse.display_name || "");
+        data.reverse = await rr.json(); st("reverse", "ok", data.reverse.display_name || "", data.reverse.display_name || "");
       } catch (e) { data.reverse = null; st("reverse", "ok", "לא התקבל שם מ-Nominatim — השם נגזר משכבות OpenStreetMap או מהקלדה"); }
       // שדות הסריקה (נקודה, רדיוס, גובה, מועדים) נלקחים מרגע הלחיצה — עליהם נשלפו נתוני OSM; שדות "רכים" (שם, מטרה, אנשי קשר, משתתפים, הערות) עשויים להשתנות בזמן ההרצה
       const inp = Object.assign(readInputs(), { lat: inp0.lat, lon: inp0.lon, radius: inp0.radius, heightM: inp0.heightM, dateFrom: inp0.dateFrom, dateTo: inp0.dateTo, timeFrom: inp0.timeFrom, timeTo: inp0.timeTo, manualItems: S.manual });
@@ -1012,13 +1035,13 @@
       S.res = res; S.scanKey = scanKeyOf(inp0);
       if (scanKey() !== S.scanKey) { S.stale = true; S.staleWhy = ""; }   // הטופס שונה בזמן ההרצה — הבקשה לא תסומן מוכנה
       partiesRebuild(data);   // ״דיווח לגורמים נוספים״: הרשימה מהניתוח הזה, ממוזגת עם הסימונים הקודמים של אותה בקשה (לא חוסמת דבר)
-      st("calc", "ok", "נמצאו " + res.nearScan.items.length + " מכשולים/תשתיות עד פי 2 מהרדיוס · " + (res.zones.inside.length + res.zones.near.length) + " אזורי איסור בקרבה");
+      st("calc", "ok", "נמצאו " + res.nearScan.items.length + " מכשולים/תשתיות עד פי 2 מהרדיוס · " + (res.zones.inside.length + res.zones.near.length) + " אזורי איסור בקרבה", { obst: res.nearScan.items.length, zones: res.zones.inside.length + res.zones.near.length });
       await buildMapImage(steps, st);
       S.report = true;
       renderAll();
       $("resultsSec").scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
-      $("e_run").textContent = "הבדיקות לא הושלמו: " + e.message + ". הבקשה אינה מסומנת כמוכנה לשליחה — אפשר להריץ שוב.";
+      lastFail = e; $("e_run").textContent = runFailText(e);
       if (S.res) { S.report = true; renderAll(); } else { $("resultsSec").style.display = "none"; }
     } finally { S.running = false; $("runBtn").disabled = false; }
   }
@@ -1038,11 +1061,11 @@
         const sites = [...new Set(out.map(x => x.site))];   // יותר משם אחד = השם שונה באמצע הציור; לא אמור לקרות (עריכה כזו מחליפה את הבנייה), ואם קרה — נכשל סגור
         S.imgs = imgs; S.imgSite = sites.length === 1 ? sites[0] : null;
         if (sites.length === 1 && out.every(x => x.background && !x.tainted)) { st && st("map", "ok", "הרקע נטען (" + imgs.aerial.tiles + " אריחים לתקריב)"); setStatus("map", true, ""); }
-        else { const why = sites.length > 1 ? "שם האתר שונה בזמן ציור התמונות" : out.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : out.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why); }
+        else { const why = sites.length > 1 ? "שם האתר שונה בזמן ציור התמונות" : out.some(x => x.tainted) ? "הדפדפן חסם יצוא תמונה" : out.reduce((a, x) => a + x.failedTiles, 0) + " אריחי רקע לא נטענו"; st && st("map", "no", why); setStatus("map", false, why, MAP_FAIL); }
         return true;
       } catch (e) {
         if (stale()) return false;
-        S.imgs = {}; S.imgSite = null; st && st("map", "no", e.message); setStatus("map", false, e.message);
+        S.imgs = {}; S.imgSite = null; st && st("map", "no", e.message); setStatus("map", false, e.message, MAP_FAIL);
         return true;
       } finally { if (seq === S.buildSeq) { S.building = false; syncPending(); } }
     })();
@@ -1665,6 +1688,8 @@
     // התצוגה המתקדמת של המשתמש המחובר השתנתה (המנהל החליף אותה; נקלטה ברענון me): הכלים הפנימיים מוצגים / מוסתרים, ואם יש בקשה — סעיף ההגשה בדף ובקובץ ה-Word משתנה איתה, ולכן התוצאות שנשמרו או נשלחו אינן הגרסה הנוכחית (clearOutcome; נשמרת שוב אוטומטית)
     document.addEventListener("req-adv", () => {
       applyRole();
+      if (lastSteps && !S.running) progress(planned(lastSteps));   // סעיף 3 לפי התפקיד החדש (נשלל — בלי הפירוט הטכני שנשאר מהרצה קודמת)
+      if (lastFail && !S.running && $("e_run").textContent) $("e_run").textContent = runFailText(lastFail);
       if (S.res && !S.resetting && !S.running) { clearOutcome(); renderAll(); }
     });
     try { if (window.ReqMyReq) window.ReqMyReq.hook({ loadBase: myreqLoadBase, busy: myreqBusy, inProgress: myreqInProgress }); } catch (e) { /* ״הבקשות שלי״ היא תוספת: כשל בחיבור לא עוצר את האתחול */ }
