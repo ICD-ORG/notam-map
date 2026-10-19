@@ -77,6 +77,7 @@
     addOrg: "סוג החשבון של המשתמש החדש. חשבון ארגוני (מסומן כברירת מחדל): נשלח בשם הארגון, התשובות והעותק חוזרים אל הארגון, ברירות המחדל של הארגון (גורם מבקש, אות קריאה ורישום) נטענות בטופס, והבקשות נשמרות בתיקיית ״הארגון״ בדרייב. בלי הסימון — מטיס עצמאי: נשלח בשם הגורם שהמטיס מצהיר עליו, התשובות והעותק חוזרים אליו, הארגון מקבל עותק סמוי לצורכי תמיכה בלבד, אין ברירות מחדל של הארגון, והבקשות נשמרות בתיקיית ״מטיסים״ תחת שם המשתמש. אפשר להחליף את הסוג אחר כך בטבלת המשתמשים.",
     type: "סוג החשבון קובע איך הבקשות של המשתמש נשלחות ואיפה הן נשמרות. ארגוני: שם השולח ״הארגון הישראלי לרב להב״, העותק והתשובות חוזרים אל הארגון, ברירות המחדל של הארגון נטענות בטופס (למי שאין לו ערך שמור), והבקשות נשמרות בתיקיית ״הארגון״ בדרייב. עצמאי: שם השולח הוא הגורם שהמטיס מצהיר עליו (בתוספת ״— דרך מערכת בקשות הטיסה״), העותק והתשובות חוזרים אל המטיס, הארגון מקבל עותק סמוי לצורכי תמיכה בלבד, אין ברירות מחדל של הארגון, והבקשות נשמרות בתיקיית ״מטיסים״ תחת שם המשתמש. ההחלפה חלה על בקשות חדשות בלבד — בקשות שכבר נשמרו נשארות בתיקייה שלהן. לא ניתן לשנות מנהל (מנהל הוא תמיד ארגוני).",
     adv: "תצוגה מתקדמת מציגה למשתמש את הכלים הפנימיים של המערכת: מגבלות המקורות, הבדיקה העצמית של המערכת וסעיף ההגשה המלא בדף הבדיקות ובקובץ ה-Word. בלעדיה המשתמש אינו רואה את מגבלות המקורות ואת הבדיקה העצמית (שממשיכה לרוץ ברקע ולחסום שליחה כשהיא נכשלת), ובמקום סעיף ההגשה המלא מופיע סיכום קצר. ברירת המחדל: חשבון ארגוני — כן, מטיס עצמאי — לא; ההחלפה כאן קובעת למשתמש הזה ערך משלו, גם למטיס שנרשם בעצמו. המשתמש רואה את השינוי בכניסה הבאה או ברענון מול השרת, ואינו מתנתק. חשבון מנהל תמיד רואה את התצוגה המתקדמת ואי אפשר לשנות זאת.",
+    prev: "מציג למנהל את דף הבקשות כפי שנרשם רגיל רואה אותו: בלי תצוגה מתקדמת, בלי הכלים הפנימיים ובלי הפירוט הטכני (שמות מקורות, שרתים). זו תצוגה בלבד — הבדיקות, השמירה והשליחה ממשיכות לפעול בחשבון המנהל כרגיל. לחיצה נוספת מחזירה לתצוגת מנהל; גם טעינה מחדש של הדף או התנתקות מחזירות אותה.",
     reset: "קובע למשתמש הנבחר סיסמה חדשה (לפחות 10 תווים). כל ההתחברויות הקיימות שלו מתבטלות, והוא צריך להיכנס מחדש עם הסיסמה החדשה.",
     wix: "בודק מול אתר הארגון (Wix) אילו הזמנות ששולמו קיימות לכתובת המייל שהוקלדה, ולכל הזמנה אם היא כבר נוצלה להרשמה ועל ידי מי, ואם היא זכאית להרשמה. פעולת אבחון בלבד — אינה משנה דבר."
   };
@@ -85,7 +86,8 @@
   const withHelp = (html, t, name) => '<span class="hw">' + html + hb(t, name) + "</span>";
 
   function save() { try { sessionStorage.setItem(KEY, JSON.stringify({ token: A.token, user: A.user, role: A.role, exp: A.exp })); } catch (e) { /* ignore */ } }
-  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; A.org = false; A.orgKnown = false; A.adv = false; A.advKnown = false; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
+  let preview = false;   // תצוגת ״נרשם רגיל״ למנהל (בזיכרון בלבד: טעינה מחדש והתנתקות מבטלות אותה) — משנה רק מה שמוצג, לא את החשבון בשרת
+  function clear() { A.token = ""; A.user = ""; A.role = ""; A.exp = 0; A.email = ""; A.copyTo = ""; A.copyToIsOwner = false; A.features = []; A.org = false; A.orgKnown = false; A.adv = false; A.advKnown = false; preview = false; try { sessionStorage.removeItem(KEY); } catch (e) { /* ignore */ } }
   function restore() { try { const s = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (s && s.token && s.exp > Date.now()) { A.token = s.token; A.user = s.user; A.role = s.role; A.exp = s.exp; return true; } } catch (e) { /* ignore */ } return false; }
 
   async function post(body) {
@@ -230,9 +232,15 @@
   /* ---------- שורת משתמש, החלפת סיסמה וניהול משתמשים ---------- */
   const isOrg = () => A.orgKnown ? A.org : A.role === "admin";   // סוג החשבון: ארגוני (השרת מדווח org; שרת ישן — מנהל = ארגוני) או מטיס עצמאי
   // תצוגה מתקדמת = הכלים הפנימיים (מגבלות המקורות, הבדיקה העצמית, סעיף ההגשה המלא בדף הבדיקות ובקובץ ה-Word). מנהל תמיד כן; אחרת הערך בפועל מהשרת (adv); שרת ישן בלי השדה — לפי סוג החשבון (isOrg). מנותק או אסימון שפג — לא (נכשל סגור)
-  const isAdv = () => A.loggedIn() && (A.role === "admin" || (A.advKnown ? A.adv : isOrg()));
+  const isAdv = () => A.loggedIn() && !preview && (A.role === "admin" || (A.advKnown ? A.adv : isOrg()));
   // רענון של משתמש שכבר מחובר (me, החלפת סיסמה): אם התצוגה המתקדמת השתנתה מאז (המנהל החליף אותה) — מודיעים ל-ui.js (req-adv) להציג מחדש. בכניסה עצמה אין צורך: req-auth בא אחריה
   const notifyAdv = was => { if (isAdv() !== was) document.dispatchEvent(new CustomEvent("req-adv", { detail: { adv: isAdv() } })); };
+  // מנהל בלבד: מעבר לתצוגת נרשם רגיל ובחזרה (התצוגה המתקדמת כבויה ותפקיד ״משתמש״ רק בדף; הטוקן והחשבון בשרת נשארים של המנהל). req-adv מצייר מחדש את הדף
+  function togglePreview() {
+    if (!A.loggedIn() || A.role !== "admin") return false;
+    const was = isAdv(); preview = !preview; renderBar(); notifyAdv(was);
+    return preview;
+  }
   // ״הבקשות שלי״ (js/myreq.js): לכל משתמש מחובר, רק כשהשרת מדווח myRequests והדגל features.myreq לא כבוי; שרת ישן — בלי כפתור (נכשל סגור)
   const myReqOn = () => !!(window.ReqMyReq && window.ReqMyReq.available && window.ReqMyReq.available(A.cfg, A.features));
   const myReqBtn = () => myReqOn() ? withHelp('<button type="button" id="ubMyReq">הבקשות שלי</button>', HELP.myreq, "הבקשות שלי") + " " : "";
@@ -241,12 +249,12 @@
     if (!bar) { bar = document.createElement("div"); bar.id = "userBar"; bar.className = "userBar"; const w = document.querySelector("header .wrap"); (w || document.body).appendChild(bar); }
     if (!A.token) { bar.innerHTML = ""; return; }
     const daysLeft = A.until ? Math.ceil((A.until - Date.now()) / 86400000) : null;
-    bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : isOrg() ? " (חשבון ארגוני)" : "") + '</span> ' +
+    bar.innerHTML = '<span>מחובר: <b>' + esc(A.user) + '</b>' + (A.role === "admin" ? " (מנהל)" : isOrg() ? " (חשבון ארגוני)" : "") + '</span> ' + (preview ? '<b class="prevTag" id="ubPrevTag">תצוגת נרשם רגיל — לצפייה בלבד</b> ' : "") +
       (A.until ? '<span id="ubSub">מנוי עד ' + esc(fmtD(A.until)) + (daysLeft <= 30 ? ' — <b>מסתיים בעוד ' + daysLeft + ' ימים</b>' + renewLink() : "") + '</span> ' : "") +
-      myReqBtn() + withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
+      myReqBtn() + withHelp('<button type="button" id="ubPass">החלפת סיסמה</button>', HELP.pass, "החלפת סיסמה") + (A.role === "admin" ? " " + withHelp('<button type="button" id="ubPrev"' + (preview ? ' class="primary"' : "") + '>' + (preview ? "חזרה לתצוגת מנהל" : "הצג כנרשם רגיל") + '</button>', HELP.prev, "הצג כנרשם רגיל") + " " + withHelp('<button type="button" id="ubAdmin">ניהול משתמשים</button>', HELP.admin, "ניהול משתמשים") : "") + " " + withHelp('<button type="button" id="ubOut">התנתק</button>', HELP.out, "התנתקות");
     $("ubPass").onclick = openPassword; $("ubOut").onclick = () => logout();
     if ($("ubMyReq")) $("ubMyReq").onclick = () => { try { window.ReqMyReq.open(); } catch (e) { /* תוספת: כשל בה לא פוגע בשאר הדף */ } };
-    if (A.role === "admin") $("ubAdmin").onclick = openAdmin;
+    if (A.role === "admin") { $("ubAdmin").onclick = openAdmin; $("ubPrev").onclick = () => { togglePreview(); }; }
   }
   function modal(html, cls) {   // cls (אופציונלי): מחלקה נוספת על תיבת החלון כבר ביצירתה (ללא היסט פריסה/מעבר עיצוב אחרי ההוספה) — js/myreq.js
     if (A.busy) return null;     // באמצע שמירה/שליחה לא מחליפים את החלון הפתוח
@@ -422,8 +430,10 @@
   A.loggedIn = () => !!A.token && A.exp > Date.now();
   A.getMailMode = () => A.mailMode;
   A.getMailTo = () => A.mailTo;
-  A.getRole = () => A.role;
+  A.getRole = () => (preview ? "user" : A.role);   // בתצוגת נרשם רגיל — ui.js מתנהג כמו אצל משתמש רגיל (בלי פירוט למנהל); A.role הפנימי נשאר של המנהל
   A.isOrg = isOrg;                            // חשבון ארגוני? השרת מדווח org; שרת ישן (בלי org) — מנהל = ארגוני
+  A.isPreview = () => preview;
+  A.togglePreview = togglePreview;
   A.isAdv = isAdv;                            // תצוגה מתקדמת? השרת מדווח adv; שרת ישן (בלי adv) — מנהל כן, אחרת לפי סוג החשבון; מנותק — לא
   A.getEmail = () => A.email;                  // כתובת המבקש השמורה בשרת ("" = אין)
   A.getCopyTo = () => A.copyTo;                // לאן יישלחו העותקים ו"שלח רק לעצמי" (email, ובלי כתובת — כתובת הבעלים)

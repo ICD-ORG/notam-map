@@ -572,7 +572,7 @@ try {
     check("לחיצה בתוך הבועה אינה סוגרת אותה", !!(await bubble()), ""); await page.keyboard.press("Escape");
     check("הלחצן בתוך ״פרטי המבקש״ (summary/label) לא מחליף את מצב התיבה", await (async () => { const was = await page.evaluate(() => document.getElementById("personBox").open); await hb("#addContact").click(); const now = await page.evaluate(() => document.getElementById("personBox").open); await page.keyboard.press("Escape"); return was === now; })(), "");
     // חלון ניהול המשתמשים (עם משתמש נוסף, כדי שיהיו כפתורי פעולה בשורה)
-    check("שורת המשתמש (מנהל): לחצני ״!״ ליד הבקשות שלי (שלב ב׳, כשהשרת מדווח myRequests), החלפת סיסמה, ניהול משתמשים והתנתקות", (await page.locator("#userBar .hbtn").count()) === 4 && (await page.locator(".hw:has(#ubMyReq) > .hbtn").count()) === 1, "");
+    check("שורת המשתמש (מנהל): לחצני ״!״ ליד הבקשות שלי (שלב ב׳, כשהשרת מדווח myRequests), הצג כנרשם רגיל, החלפת סיסמה, ניהול משתמשים והתנתקות", (await page.locator("#userBar .hbtn").count()) === 5 && (await page.locator(".hw:has(#ubMyReq) > .hbtn").count()) === 1, "");
     const envA = page._env, tokA = envA.call({ action: "login", user: ADMIN, pass: PASS }).token;
     envA.call({ action: "addUser", token: tokA, newUser: "dave.pilot", newPass: "dave-pass-12345" });
     await page.click("#ubAdmin"); await page.waitForSelector("#admBody .admTbl");
@@ -3530,6 +3530,56 @@ try {
     await adm.ctx.close();
   }
   /* ADV20-END */
+  /* PREVIEW-BEGIN */
+  /* ===== תרחיש ״הצג כנרשם רגיל״: כפתור למנהל בלבד בשורת המשתמש. במעבר — התצוגה המתקדמת כבויה ותפקיד ״משתמש״ בדף (הרשימה בסעיף 3 בניסוח הפשוט, הכלים הפנימיים מוסתרים, סעיף 5 הוא סיכום והגשה), תג בולט בשורה, ולחיצה נוספת מחזירה הכול; המצב בזיכרון בלבד (טעינה מחדש ממנה והתנתקות מאפסות) ולא משפיע על החשבון בשרת; מטיס ועובד ארגון אינם רואים את הכפתור ===== */
+  if (!LIVE) {
+    const first = await newPage(browser); const env = first.page._env; await first.ctx.close();
+    const admTok = env.call({ action: "login", user: ADMIN, pass: PASS }).token;
+    env.call({ action: "addUser", token: admTok, newUser: "pam.pilot", newPass: "pam-pass-12345", org: false });
+    env.call({ action: "addUser", token: admTok, newUser: "ora.worker", newPass: "ora-pass-12345" });
+    const openAs = async (user, pass) => { const popts = { env, autosave: true }, { ctx, page } = await newPage(browser, popts); await page.goto(APP); await page.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 }); await login(page, user, pass); return { ctx, page }; };
+    const st = page => page.evaluate(() => ({ adv: window.ReqAuth.isAdv(), role: window.ReqAuth.getRole(), preview: window.ReqAuth.isPreview(), btn: (document.getElementById("ubPrev") || {}).textContent || null, tag: !!document.getElementById("ubPrevTag"), lim: document.getElementById("limitsBox").hidden, selftest: document.getElementById("stBox").hidden, prog: document.getElementById("progress").innerText.replace(/\s+/g, " ")}));
+    const adm = await openAs(ADMIN, PASS), ap = adm.page;
+    { const o = await st(ap);
+      check("הצג כנרשם רגיל: מנהל לפני הלחיצה — תצוגה מתקדמת, תפקיד מנהל, כפתור ״הצג כנרשם רגיל״ בלי תג, והכלים הפנימיים גלויים", o.adv === true && o.role === "admin" && o.preview === false && o.btn === "הצג כנרשם רגיל" && !o.tag && !o.lim && !o.selftest, JSON.stringify(o));
+      check("הצג כנרשם רגיל: ל״!״ של הכפתור שם נגיש ייחודי והסבר שמזכיר שזו תצוגה בלבד ושהחשבון והשליחה לא משתנים", (await ap.locator('#userBar .hw:has(#ubPrev) > .hbtn').getAttribute("aria-label")) === "הסבר על: הצג כנרשם רגיל" && /תצוגה בלבד/.test(await ap.locator('#userBar .hw:has(#ubPrev) > .hbtn').getAttribute("data-help")), ""); }
+    await fillExample(ap); await ap.click("#runBtn"); await ap.waitForFunction(() => document.querySelector("#gate .banner") && !window.__REQ.S.running && !window.__REQ.S.building, null, { timeout: 240000 });
+    { const o = await st(ap);
+      check("הצג כנרשם רגיל: אחרי הרצה כמנהל סעיף 3 מפורט (OpenStreetMap, שרת, אלמנטים)", /\(OpenStreetMap\)/.test(o.prog) && /overpass/.test(o.prog) && /אלמנטים/.test(o.prog), o.prog.slice(0, 200)); }
+    await ap.click("#ubPrev"); await ap.waitForFunction(() => window.ReqAuth.isPreview() === true);
+    { const o = await st(ap), tools = await ap.evaluate(() => ({ lim: document.getElementById("limitsBox").getClientRects().length, st: document.getElementById("stBox").getClientRects().length, adminBtn: !!document.getElementById("ubAdmin"), manualMail: document.getElementById("manualMail") ? document.getElementById("manualMail").hidden : null }));
+      check("הצג כנרשם רגיל: במצב תצוגה — isAdv=false, getRole=״user״, כפתור ״חזרה לתצוגת מנהל״ (מודגש) ותג ״תצוגת נרשם רגיל — לצפייה בלבד״",
+        o.adv === false && o.role === "user" && o.preview === true && o.btn === "חזרה לתצוגת מנהל" && o.tag && /לצפייה בלבד/.test(await ap.textContent("#ubPrevTag")) && (await ap.locator("#ubPrev.primary").count()) === 1, JSON.stringify(o));
+      check("הצג כנרשם רגיל: סעיף 3 שכבר רץ מצויר מחדש בניסוח הפשוט (בלי OpenStreetMap / שרתים / אלמנטים / אריחים), והכלים הפנימיים (מגבלות המקורות, בדיקה עצמית) מוסתרים באמת", /נבדקו \d+ מכשולים ותשתיות בסביבה/.test(o.prog) && /נוצרו ארבע תמונות מפה/.test(o.prog) && !/OpenStreetMap|Nominatim|overpass|אלמנט|אריח/i.test(o.prog) && o.lim === true && o.selftest === true && tools.lim === 0 && tools.st === 0 && tools.manualMail === true, JSON.stringify([o.prog.slice(0, 160), o.lim, o.selftest, tools]));
+      const s5 = await ap.evaluate(() => { const h = [...document.querySelectorAll("#report .paper.checks h2")].find(x => /^5\. /.test(x.textContent.trim())); return h ? h.textContent.trim() : null; });
+      check("הצג כנרשם רגיל: סעיף 5 בדף הבדיקות הוא ״5. סיכום והגשה״ (כמו אצל נרשם רגיל) ולא ״הגשה״ המלא", s5 === "5. סיכום והגשה", String(s5)); }
+    { // המצב אינו משפיע על החשבון: אין שינוי בשרת, והטוקן נשאר של המנהל
+      const me = await ap.evaluate(async () => { const A = window.ReqAuth; return { role: A.getRole(), user: A.user }; });
+      check("הצג כנרשם רגיל: החשבון נשאר של המנהל — הכפתור ״ניהול משתמשים״ עדיין בשורה, והמצב לא נשמר ב-sessionStorage", (await ap.locator("#ubAdmin").count()) === 1 && !(await ap.evaluate(() => JSON.stringify(Object.assign({}, sessionStorage)).includes("preview"))), JSON.stringify(me)); }
+    await ap.click("#ubPrev"); await ap.waitForFunction(() => window.ReqAuth.isPreview() === false);
+    { const o = await st(ap);
+      check("הצג כנרשם רגיל: חזרה לתצוגת מנהל — התצוגה המתקדמת, התפקיד, הכפתור והרשימה המפורטת (כולל מה שרץ קודם) חוזרים, בלי תג", o.adv === true && o.role === "admin" && o.preview === false && o.btn === "הצג כנרשם רגיל" && !o.tag && !o.lim && !o.selftest && /\(OpenStreetMap\)/.test(o.prog), JSON.stringify([o.adv, o.role, o.btn, o.tag, o.lim, o.prog.slice(0, 80)])); }
+    await ap.click("#ubPrev"); await ap.waitForFunction(() => window.ReqAuth.isPreview() === true);
+    await ap.reload(); await ap.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    { const o = await st(ap);
+      check("הצג כנרשם רגיל: טעינה מחדש של הדף מחזירה לתצוגת מנהל (המצב לא נשמר)", o.preview === false && o.adv === true && o.role === "admin" && !o.tag, JSON.stringify([o.preview, o.adv, o.role])); }
+    await ap.click("#ubPrev"); await ap.waitForFunction(() => window.ReqAuth.isPreview() === true);
+    { const was = await ap.evaluate(() => window.ReqAuth.togglePreview());   // החלפה דרך ה-API כשהמצב פעיל: חוזר לכבוי
+      check("הצג כנרשם רגיל: togglePreview דרך ה-API מחליף מצב (פעיל ← כבוי)", was === false && (await ap.evaluate(() => window.ReqAuth.isPreview() === false && window.ReqAuth.isAdv() === true)), String(was)); }
+    await ap.click("#ubPrev"); await ap.waitForFunction(() => window.ReqAuth.isPreview() === true);
+    await ap.click("#ubOut"); await ap.waitForSelector("#authForm"); await ap.waitForFunction(() => window.__REQ_READY === true, null, { timeout: 60000 });
+    await login(ap, ADMIN, PASS);
+    { const o = await st(ap);
+      check("הצג כנרשם רגיל: התנתקות וכניסה מחדש — מצב התצוגה מאופס", o.preview === false && o.adv === true && o.role === "admin", JSON.stringify([o.preview, o.adv, o.role])); }
+    await adm.ctx.close();
+    for (const [u, pw, label] of [["pam.pilot", "pam-pass-12345", "מטיס עצמאי"], ["ora.worker", "ora-pass-12345", "עובד ארגון"]]) {
+      const w = await openAs(u, pw);
+      const o = await w.page.evaluate(() => ({ btn: !!document.getElementById("ubPrev"), api: window.ReqAuth.togglePreview(), prev: window.ReqAuth.isPreview(), adv: window.ReqAuth.isAdv() }));
+      check("הצג כנרשם רגיל: " + label + " — אין כפתור בשורה, ו-togglePreview דרך הקונסול לא עושה דבר (נשאר אותו מצב)", o.btn === false && o.api === false && o.prev === false, JSON.stringify(o));
+      await w.ctx.close();
+    }
+  }
+  /* PREVIEW-END */
   /* MYREQ-BEGIN */
   /* ===== תרחיש ״הבקשות שלי״ (שלב ב׳, U2): כפתור בשורת המשתמש (לכל משתמש מחובר, רק כשהשרת מדווח myRequests והדגל features.myreq לא כבוי), רשימה עם מצב וזמן שמירה, ״הצג״ (סיכום לקריאה בלבד), ״השתמש כבסיס לבקשה חדשה״ (נקודה, רדיוס, גובה, כלי טיס, מהות, מכשולים, תוספות ידניות;
      בלי תאריכים/שעות ובלי תוצאות בדיקה; מזהה בקשה חדש; אישור לפני החלפת בקשה בעבודה), ותמונת מצב (snapshot) בקובץ נתוני הבקשה — בלי פרטי מבקש, ולעולם לא חוסמת שמירה. כשהדגלים כבויים (או שרת ישן) — הדף כמו בשלב א׳ ===== */
