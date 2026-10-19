@@ -1626,7 +1626,7 @@ test("סקירה אחרונה: מרוץ שמירה אוטומטית מול חל�
   // עזרת ״שמור בדרייב״ (גלויה גם למטיס) לא מזכירה ״מנהל״
   const m = /btnDrive: "([^"]*)"/.exec(ui); assert.ok(m && /בעל המערכת בלבד/.test(m[1]) && !/למנהל בלבד/.test(m[1]));
   // גרסת הסקריפט הוקפצה כדי שמי שכבר גלש לא יקבל JS ישן
-  assert.match(html, /js\/ui\.js\?v=13/);
+  assert.match(html, /js\/ui\.js\?v=14/);
 });
 
 test("כניסה והרשמה: הפוקוס האוטומטי בלי גלילה (תיבת ההסבר הגבוהה בטלפון ב-landscape), וגרסת auth.js הוקפצה", () => {
@@ -3117,4 +3117,22 @@ test("ui.js: בקשה מעודכנת — doSend קודם בלי again; מעבר 
 test("recheck.js: תאריכי NOTAM מחוץ לטווח בקובץ פגום לא זורקים RangeError בהצגה (fmtZ)", () => {
   const rc = readReq("js/recheck.js");
   assert.match(rc, /const fmtZ = ms => \{ const d = new Date\(ms\); return isNaN\(d\.getTime\(\)\) \? "" : /);
+});
+
+test("סעיף 3 (רשימת ההתקדמות): מבקש רגיל מקבל ניסוח פשוט בלי מקורות; מנהל ותצוגה מתקדמת — הפירוט הקיים", () => {
+  const ui = readReq("js/ui.js");
+  // upd בוחרת לפי isAdv: הפירוט הטכני כמו שהיה למתקדם, plainSteps לשאר
+  assert.match(ui, /const upd = \(\) => progress\(steps\.flatMap\(x => isAdv\(\) \? \[\{ s: x\.s, t: x\.t, m: x\.m \}\] : plainSteps\(x\)\)\);/);
+  // הכותרות והפירוט הטכני של המתקדם לא השתנו
+  for (const t of ["מכשולים ותשתיות בסביבה (OpenStreetMap)", "שדות תעופה, מנחתים וישובים (OpenStreetMap)", "גבולות מדינה ושטחי טבע (OpenStreetMap)", "שם המקום (Nominatim)", "ארבע תמונות מפה עם רקע (תצ״א, מפת רחובות, הדמיה, מפת אזור)"]) assert.ok(ui.includes('t: "' + t + '"'), t);
+  assert.ok(ui.includes('" אלמנטים"') && ui.includes('"הרקע נטען ("'));
+  // הניסוח הפשוט: נתיבי plainSteps לא מזכירים מקורות
+  const ps = ui.slice(ui.indexOf("function plainSteps"), ui.indexOf("async function run()"));
+  assert.ok(ps.length > 500 && !/OpenStreetMap|Nominatim|overpass|אלמנט|אריח|mirror|hostname/i.test(ps), "plainSteps ללא שמות מקורות");
+  for (const t of ["נבדקו \" + x.v + \" מכשולים ותשתיות בסביבה", "נבדקו \" + x.v + \" שדות תעופה, מנחתים וישובים", "נבדקו הגבולות הקרובים לאזור ההטסה ורשות הטבע והגנים באזור הקרוב להטסה", "זוהה המקום: ", "נבדקו אזורי איסור והגבלה באזור ההטסה", "נבדקו שמורות טבע וגנים לאומיים", "נבדקו מנחתים חקלאיים", "נבדקו נוטמים (סגירות מרחב אוויר ומכשולים שפורסמו)", "נוצרו ארבע תמונות מפה"]) assert.ok(ps.includes(t), t);
+  // כשל טעינה: ניסוח ניטרלי אחד, גם בשורה, גם ליד הכפתור (כשל רשת מסומן e.net) וגם בבאנר השער; למנהל/מתקדם נשארת ההודעה המקורית
+  assert.match(ui, /const NOT_LOADED = "הנתונים לא נטענו, נסו שוב בעוד מספר דקות";/);
+  assert.match(ui, /setStatus\(sk, false, e\.message, \{ maint: true, adv: true, user: NOT_LOADED \}\);[^\n]*e\.net = true/);
+  assert.match(ui, /\(e\.net && !isAdv\(\) \? NOT_LOADED : e\.message\)/);
+  assert.match(ui, /isAdv\(\) \? f\.label : f\.label\.replace\(" \(OpenStreetMap\)", ""\)/);
 });
