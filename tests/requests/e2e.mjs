@@ -916,6 +916,21 @@ try {
       await page.fill("#adU", "dave.pilot"); await page.fill("#adP", "dave-pass-12345"); await page.click("#addForm button[type=submit]");
       await page.waitForFunction(() => document.querySelector("#admBody").textContent.includes("dave.pilot"));
       check("מנהל מוסיף משתמש מהממשק", !!page._env.call({ action: "login", user: "dave.pilot", pass: "dave-pass-12345" }).ok, "");
+      { // הוספת משתמש: כפתור הצג/הסתר סיסמה, הודעת שגיאה ממש מתחת לשורת ההוספה, ו-@ בשם משתמש נחסם בהודעה ברורה (בלי קריאה לשרת)
+        const typeOf = id => page.evaluate(i => document.getElementById(i).type, id), add0 = page._calls.actions.filter(a => a === "addUser").length;
+        await page.fill("#adP", "secret-pass-12345");
+        const t0 = await typeOf("adP"); await page.click('[data-pwtoggle="adP"]');
+        const t1 = await typeOf("adP"), b1 = await page.evaluate(() => { const b = document.querySelector('[data-pwtoggle="adP"]'); return [b.textContent, b.getAttribute("aria-pressed")]; });
+        await page.click('[data-pwtoggle="adP"]'); const t2 = await typeOf("adP");
+        check("הוספת משתמש: כפתור ״הצג״ מגלה את הסיסמה (type=text, ״הסתר״, aria-pressed) ולחיצה נוספת מסתירה שוב; גם בטופס האיפוס יש כפתור", t0 === "password" && t1 === "text" && b1.join() === "הסתר,true" && t2 === "password" && (await page.locator('[data-pwtoggle="rsP"]').count()) === 1, [t0, t1, t2, b1].join());
+        await page.fill("#adU", "israelgokh@gmail.com"); await page.click("#addForm button[type=submit]");
+        const em = await page.evaluate(() => { const m = document.getElementById("admErrAdd"), b = document.querySelector("#addForm button[type=submit]"); return { t: m.textContent, dy: Math.round(m.getBoundingClientRect().top - b.getBoundingClientRect().bottom) }; });
+        check("שם משתמש עם @: הודעה ברורה ממש מתחת לשורת ההוספה (עם הצעה israelgokh), בלי קריאה לשרת", /אינו יכול להכיל @/.test(em.t) && /israelgokh/.test(em.t) && em.dy >= 0 && em.dy < 40 && page._calls.actions.filter(a => a === "addUser").length === add0, JSON.stringify(em));
+        await page.fill("#adU", "ab"); await page.click("#addForm button[type=submit]");
+        await page.waitForFunction(() => /שם משתמש לא תקין/.test(document.getElementById("admErrAdd").textContent), null, { timeout: 10000 });
+        check("שם קצר מדי: שגיאת השרת מוצגת מתחת לשורת ההוספה ולא בשורת השגיאה הכללית שמתחת לאיפוס סיסמה", (await page.textContent("#admErr")) === "" && (await page.evaluate(() => document.getElementById("admErrAdd").compareDocumentPosition(document.getElementById("rstForm")) & Node.DOCUMENT_POSITION_FOLLOWING)) !== 0, "");
+        await page.fill("#adU", "dave.pilot"); await page.fill("#adP", "dave-pass-12345");   // חוזרים לערכים של המשך התרחיש
+      }
       // התחברות נוספת של dave בחלון אחר
       const ctx2 = await browser.newContext({ locale: "he-IL" }); const p2 = await ctx2.newPage();
       await p2.route(API, apiHandler(page._env, null, {}));
