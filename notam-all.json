@@ -1,10 +1,45 @@
 {
- "fetched_at": "20/10/2026 08:46 UTC",
- "fetched_iso": "2026-10-20T08:46:31Z",
- "listed": 118,
- "count": 118,
+ "fetched_at": "20/10/2026 17:47 UTC",
+ "fetched_iso": "2026-10-20T17:47:30Z",
+ "listed": 121,
+ "count": 121,
  "failed": [],
  "notams": [
+  {
+   "id": "A0842/26",
+   "loc": "LLLL",
+   "name": "ATS נתיב J14 סגור בין ZACCI-MEGID",
+   "heb": "ATS נתיב J14 סגור בין ZACCI-MEGID.\nבתוקף: מ-21/10/2026 14:00 UTC עד 22/10/2026 23:59 UTC",
+   "raw": "A0842/26 NOTAMN\nQ) LLLL/QANLC/I /NBO/E /050/060/3230N03510E008\nA) LLLL B) 2610211400 C) 2610222359\nE) ATS RTE J14 CLSD BTN ZACCI-MEGID.)"
+  },
+  {
+   "id": "C2207/26",
+   "loc": "LLLL",
+   "name": "UAS ACT תתקיים מדרום ל LLMG",
+   "heb": "UAS ACT תתקיים מדרום ל LLMG. אזור בתוך ברדיוס 1.5 מייל ימי שמרכזו בנ.צ. 32°32'56\"N 35°16'45\"E סגור מהקרקע ועד 4,000 רגל מעל פני הים לכל הטיסות. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-21/10/2026 14:00 UTC עד 22/10/2026 00:01 UTC",
+   "raw": "C2207/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/040/3233N03517E002\nA) LLLL B) 2610211400 C) 2610220001\nE) UAS ACT WILL TAKE PLACE S OF LLMG.\nAN AREA WI 1.5NM RADIUS CENTERED ON PSN 323256N0351645E\nCLSD FM GND UP TO 4,000FT AMSL TO ALL FLT.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 4000FT AMSL)"
+  },
+  {
+   "id": "C2206/26",
+   "loc": "LLLL",
+   "name": "אזור בין נקודות הציון הבאות סגור לכל הטיסות",
+   "heb": "אזור בין נקודות הציון הבאות סגור לכל הטיסות, כולל טיסות ריסוס חקלאיות מהקרקע ועד 5000 רגל מעל פני הים 33°11'02\"N 35°37'44\"E 33°12'12\"N 35°39'16\"E 33°11'26\"N 35°44'07\"E 33°08'30\"N 35°43'41\"E 33°08'15\"N 35°37'54\"E מומלצת זהירות.\nבתוקף: מ-27/10/2026 10:00 UTC עד 28/10/2026 03:30 UTC",
+   "raw": "C2206/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/050/3310N03541E004\nA) LLLL B) 2610271000 C) 2610280330\nE) AN AREA BTN FLW PSN CLSD TO ALL FLT,\nINCLUDING AGRICULTURE FLT FM GND UP TO 5000FT AMSL\n331102N0353744E 331212N0353916E 331126N0354407E\n330830N0354341E 330815N0353754E\nCTN ADZ.)"
+  },
+  {
+   "id": "C2205/26",
+   "loc": "LLLL",
+   "name": "אזור בין נקודות הציון הבאות סגור לכל הטיסות",
+   "heb": "אזור בין נקודות הציון הבאות סגור לכל הטיסות, כולל טיסות ריסוס חקלאיות מהקרקע ועד 5000 רגל מעל פני הים 33°13'38\"N 35°45'11\"E 33°11'24\"N 35°44'25\"E 33°11'12\"N 35°40'45\"E 33°10'08\"N 35°40'43\"E 33°09'12\"N 35°41'12\"E 33°07'51\"N 35°45'18\"E 33°09'27\"N 35°46'53\"E 33°12'25\"N 35°47'55\"E 33°13'12\"N 35°47'32\"E 33°13'41\"N 35°46'31\"E מומלצת זהירות.\nבתוקף: מ-28/10/2026 03:30 UTC עד 29/10/2026 03:30 UTC",
+   "raw": "C2205/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/050/3311N03544E004\nA) LLLL B) 2610280330 C) 2610290330\nE) AN AREA BTN FLW PSN CLSD TO ALL FLT,\nINCLUDING AGRICULTURE FLT FM GND UP TO 5000FT AMSL\n331338N0354511E 331124N0354425E 331112N0354045E\n331008N0354043E 330912N0354112E 330751N0354518E\n330927N0354653E 331225N0354755E 331312N0354732E\n331341N0354631E\nCTN ADZ.)"
+  },
+  {
+   "id": "C2204/26",
+   "loc": "LLLL",
+   "name": "KFAR-TAVOR",
+   "heb": "פעילות כטב\"מ תתקיים ב-KFAR-TAVOR. אזור בתוך ברדיוס 1.1 מייל ימי שמרכזו בנ.צ. 32°42'41\"N 35°24'29\"E סגור מהקרקע ועד 1,500 רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות. מומלצת זהירות.\nבתוקף: מ-21/10/2026 06:30 UTC עד 21/10/2026 14:30 UTC\nלו\"ז: 0630-0730 1330-1430",
+   "raw": "C2204/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3243N03524E001\nA) LLLL B) 2610210630 C) 2610211430\nD) 0630-0730 1330-1430\nE) UAS ACT WILL TAKE PLACE AT KFAR-TAVOR.\nAN AREA WI 1.1NM RADIUS CENTERED ON PSN 324241N0352429E\nCLSD FM GND UP TO 1,500FT AMSL TO ALL FLT INCLUDING\nAGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
+  },
   {
    "id": "C2203/26",
    "loc": "LLLL",
@@ -118,13 +153,6 @@
    "raw": "C2181/26 NOTAMN\nQ) LLLL/QOATT/IV/BO /AE/000/999/3236N03514E005\nA) LLMG B) 2611260001 C) 2612092359\nE) TRIGGER NOTAM - AIRAC DOM AIP AMDT 02/26 WEF 26 NOV 2026\nHEL LDG AND TAX PROCEDURES UPDATED.)"
   },
   {
-   "id": "A0834/26",
-   "loc": "LLER",
-   "name": "שדה תעופה סגור לכל הטיסות עקב עבודות",
-   "heb": "שדה תעופה סגור לכל הטיסות עקב עבודות. במקרה של חירום זמין בתוך 10 דקות אישור מוקדם מבקרת התעופה.\nבתוקף: מ-19/10/2026 10:05 UTC עד 20/10/2026 16:40 UTC\nלו\"ז: 19 1005-1105, 1205-1255, 1350-1445, 1545-1640, 20 1205-1255,",
-   "raw": "A0834/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/2944N03501E005\nA) LLER B) 2610191005 C) 2610201640\nD) 19 1005-1105, 1205-1255, 1350-1445, 1545-1640, 20 1205-1255,\n1350-1445, 1545-1640\nE) AD CLSD TO ALL FLT DUE WIP.\nIN CASE OF EMERG AVBL WI 10MIN PPR FM ATC.)"
-  },
-  {
    "id": "C2175/26",
    "loc": "LLLL",
    "name": "נתיב CVFR סגור DESHE-TAVOR",
@@ -144,13 +172,6 @@
    "name": "VOR/DME BSA תדר 114",
    "heb": "VOR/DME BSA תדר 114.300MHZ מושבת לצורך תחזוקה.\nבתוקף: מ-25/10/2026 06:00 UTC עד 25/10/2026 10:00 UTC",
    "raw": "A0833/26 NOTAMN\nQ) LLLL/QNMAS/IV/BO /E /000/999/3117N03443E025\nA) LLLL B) 2610250600 C) 2610251000\nE) VOR/DME BSA FREQ 114.300MHZ WITHDRAWN FOR MAINT.)"
-  },
-  {
-   "id": "A0832/26",
-   "loc": "LLBG",
-   "name": "מסלול 03/21 סגור עקב עבודות",
-   "heb": "מסלול 03/21 סגור עקב עבודות.\nבתוקף: מ-20/10/2026 06:00 UTC עד 20/10/2026 10:00 UTC",
-   "raw": "A0832/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2610200600 C) 2610201000\nE) RWY 03/21 CLSD DUE WIP.)"
   },
   {
    "id": "A0831/26",
