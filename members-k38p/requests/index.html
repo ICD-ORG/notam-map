@@ -224,6 +224,9 @@ body.authLocked > header ~ main, body.authLocked main { filter: blur(6px); point
 .admTbl { width: 100%; border-collapse: collapse; font-size: 13px; } .admTbl th, .admTbl td { border: 1px solid var(--line); padding: 5px 7px; text-align: right; }
 .userBar { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .userBar button { min-height: 30px; padding: 3px 10px; font-size: 12px; }
+.pwBox { display: flex; gap: 4px; align-items: stretch; }
+.pwBox input { flex: 1 1 auto; min-width: 0; }
+.pwBox .pwBtn { min-height: 0; padding: 3px 10px; font-size: 12px; flex: none; }
 .userBar .prevTag { color: #1a1204; background: var(--amber, #ffb84d); border-radius: 20px; padding: 2px 10px; font-size: 12px; }
 .admHelp { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }   /* מקרא ההסברים מעל הטבלה (כתוספת; ה-! שליד כל כפתור בשורה הוא העיקר) */
 .admTbl td.acts { vertical-align: top; }
@@ -452,7 +455,7 @@ button.hbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px;
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="vendor/jszip.min.js"></script>
 <script src="js/help.js?v=2"></script>
-<script src="js/auth.js?v=11"></script>
+<script src="js/auth.js?v=12"></script>
 <script src="js/sync.js?v=2"></script>
 <script src="js/core.js?v=9"></script>
 <script src="js/maplayers.js?v=2"></script>

@@ -83,6 +83,8 @@
   };
   // לחצן ״!״ מוכן; אם help.js לא נטען — כלום (הממשק ממשיך לעבוד). name = שם קצר סטטי לקורא מסך (aria-label="הסבר על: <שם>"); נקבע בכל אתר קריאה ולא נקרא מתווית הכפתור, שעשויה להשתנות (#admMode)
   const hb = (t, name) => (window.ReqHelp ? window.ReqHelp.btn(t, name) : "");
+  // כפתור הצג/הסתר לשדה סיסמה בחלון הניהול (המנהל מקליד סיסמה זמנית ורוצה לראות מה הקליד)
+  const pwToggle = id => '<button type="button" class="pwBtn" data-pwtoggle="' + id + '" aria-pressed="false" aria-label="הצג או הסתר את הסיסמה">הצג</button>';
   const withHelp = (html, t, name) => '<span class="hw">' + html + hb(t, name) + "</span>";
 
   function save() { try { sessionStorage.setItem(KEY, JSON.stringify({ token: A.token, user: A.user, role: A.role, exp: A.exp })); } catch (e) { /* ignore */ } }
@@ -362,10 +364,11 @@
           reqRows.map(x => '<tr><td>' + esc(fmt(x.saved)) + '</td><td dir="ltr">' + esc(x.user) + (x.lastUser && x.lastUser !== x.user ? " ← " + esc(x.lastUser) : "") + '</td>' + (split ? '<td data-kind="' + kindOf(x) + '">' + (kindOf(x) === "pilot" ? "מטיס" : "הארגון") + "</td>" : "") + '<td>' + esc(x.name) + '</td><td>' +
             (x.sentLive ? "✔ נשלחה למשרד נוטאם" + (x.sentLive > 1 ? " (" + x.sentLive + " פעמים)" : "") + (x.lastSent ? " · " + esc(fmt(x.lastSent.t)) : "") : (x.sentSelf || x.sentTest) ? [x.sentSelf ? "נשלחה לעצמו" : "", x.sentTest ? "נשלחה לבדיקה בלבד" : ""].filter(Boolean).join(" · ") : "נשמרה, לא נשלחה") + '</td><td><a href="' + esc(x.url) + '" target="_blank" rel="noopener">פתח</a></td></tr>').join("") + "</table>"
           : '<div class="small">' + (rq.ok ? (kindFilter && split ? "אין בקשות מהסוג הזה בין הבקשות שנטענו." : "אין בקשות ביומן.") : esc(msg(rq))) + "</div>") +
-        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px"><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + (split ? withHelp('<label class="small"><input type="checkbox" id="adO" checked> חשבון ארגוני</label>', HELP.addOrg, "חשבון ארגוני") : "") + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form>' +
-        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password" style="flex:1 1 180px">' + withHelp('<button type="submit">אפס</button>', HELP.reset, "קביעת סיסמה חדשה") + '</form><div class="err" id="admErr"></div>' +
+        '<h3 style="margin:14px 0 6px">הוספת משתמש</h3><form id="addForm" class="row"><input id="adU" type="text" placeholder="שם משתמש (באנגלית, ספרות, נקודה — בלי @)" dir="ltr" autocomplete="off" style="flex:1 1 160px"><span class="pwBox" style="flex:1 1 180px"><input id="adP" type="password" placeholder="סיסמה זמנית (10+ תווים)" dir="ltr" autocomplete="new-password">' + pwToggle("adP") + '</span><label class="small"><input type="checkbox" id="adA"> מנהל</label>' + (split ? withHelp('<label class="small"><input type="checkbox" id="adO" checked> חשבון ארגוני</label>', HELP.addOrg, "חשבון ארגוני") : "") + withHelp('<button class="primary" type="submit">הוסף</button>', HELP.add, "הוספת משתמש") + '</form><div class="err" id="admErrAdd" role="alert"></div>' +
+        '<h3 style="margin:14px 0 6px">איפוס סיסמה</h3><form id="rstForm" class="row"><input id="rsU" type="text" placeholder="שם משתמש" dir="ltr" autocomplete="off" style="flex:1 1 160px"><span class="pwBox" style="flex:1 1 180px"><input id="rsP" type="password" placeholder="סיסמה חדשה (10+ תווים)" dir="ltr" autocomplete="new-password">' + pwToggle("rsP") + '</span>' + withHelp('<button type="submit">אפס</button>', HELP.reset, "קביעת סיסמה חדשה") + '</form><div class="err" id="admErr" role="alert"></div>' +
         '<h3 style="margin:14px 0 6px">בדיקת כרטיס באתר (אבחון)</h3><form id="wxForm" class="row"><input id="wxE" type="email" placeholder="מייל הרכישה" dir="ltr" autocomplete="off" style="flex:1 1 220px">' + withHelp('<button type="submit">בדוק</button>', HELP.wix, "בדיקת כרטיס באתר") + '</form><div class="small" id="wxOut"></div>';
-      const fail = rr => { $("admErr").textContent = msg(rr); };
+      const fail = (rr, id) => { $(id || "admErr").textContent = msg(rr); };
+      body.querySelectorAll("[data-pwtoggle]").forEach(b => b.onclick = () => { const i = $(b.dataset.pwtoggle), show = i.type === "password"; i.type = show ? "text" : "password"; b.setAttribute("aria-pressed", show ? "true" : "false"); b.textContent = show ? "הסתר" : "הצג"; });
       if ($("admKind")) { $("admKind").value = kindFilter; $("admKind").onchange = () => { kindFilter = $("admKind").value; draw(); }; }
       body.querySelectorAll("[data-setorg]").forEach(b => b.onclick = async () => {
         const to = b.dataset.to === "1", who = b.dataset.setorg;
@@ -399,7 +402,12 @@
         if (toLive && !confirm(modeMsg)) return;
         const rr = await call("setMailMode", { mode: toLive ? "live" : "test" }); rr.ok ? draw() : fail(rr);
       };
-      $("addForm").onsubmit = async ev => { ev.preventDefault(); const rr = await call("addUser", { newUser: $("adU").value.trim(), newPass: $("adP").value, role: $("adA").checked ? "admin" : "user", org: $("adA").checked || !$("adO") || $("adO").checked }); rr.ok ? draw() : fail(rr); };
+      $("addForm").onsubmit = async ev => {
+        ev.preventDefault(); $("admErrAdd").textContent = "";
+        const nm = $("adU").value.trim();
+        if (nm.indexOf("@") >= 0) { $("admErrAdd").textContent = "שם משתמש אינו יכול להכיל @ (זה לא כתובת מייל). אפשר להקליד את החלק שלפני ה-@, למשל " + nm.split("@")[0].replace(/[^A-Za-z0-9._-]/g, "") + "."; $("adU").focus(); return; }
+        const rr = await call("addUser", { newUser: nm, newPass: $("adP").value, role: $("adA").checked ? "admin" : "user", org: $("adA").checked || !$("adO") || $("adO").checked }); rr.ok ? draw() : fail(rr, "admErrAdd");   // השגיאה מופיעה ממש מתחת לשורת ההוספה
+      };
       $("wxForm").onsubmit = async ev => {
         ev.preventDefault(); $("wxOut").textContent = "בודק…";
         const rr = await call("wixCheck", { email: $("wxE").value.trim() });
