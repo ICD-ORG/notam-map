@@ -1,10 +1,31 @@
 {
- "fetched_at": "20/10/2026 17:47 UTC",
- "fetched_iso": "2026-10-20T17:47:30Z",
- "listed": 121,
- "count": 121,
+ "fetched_at": "21/10/2026 08:47 UTC",
+ "fetched_iso": "2026-10-21T08:47:21Z",
+ "listed": 123,
+ "count": 123,
  "failed": [],
  "notams": [
+  {
+   "id": "C2210/26",
+   "loc": "LLLL",
+   "name": "KFAR-SABA",
+   "heb": "פעילות כטב\"מ תתקיים ב-KFAR-SABA בתוך LLHZ אזור אימונים NR 3, מהקרקע ועד 400 רגל מעל הקרקע. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 900 רגל מעל פני הים 32°10'38\"N 34°55'52\"E 32°10'15\"N 34°55'31\"E 32°10'23\"N 34°55'00\"E 32°11'00\"N 34°55'11\"E 32°11'12\"N 34°54'14\"E 32°11'44\"N 34°54'42\"E 32°11'43\"N 34°54'48\"E 32°11'41\"N 34°54'47\"E 32°11'32\"N 34°55'11\"E 32°11'26\"N 34°55'09\"E 32°11'22\"N 34°55'10\"E 32°11'14\"N 34°55'42\"E 32°10'45\"N 34°55'41\"E. מומלצת זהירות.\nבתוקף: מ-21/10/2026 08:37 UTC עד 31/12/2026 21:59 UTC",
+   "raw": "C2210/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/009/3211N03455E001\nA) LLLL B) 2610210837 C) 2612312159\nE) UAS ACT WILL TAKE PLACE AT KFAR-SABA WI LLHZ TRG AREA NR 3,\nFM GND UP TO 400FT AGL.\nAN AREA BTN FLW PSN CLSD FM GND UP TO 900FT AMSL\n321038N0345552E 321015N0345531E 321023N0345500E\n321100N0345511E 321112N0345414E 321144N0345442E\n321143N0345448E 321141N0345447E 321132N0345511E\n321126N0345509E 321122N0345510E 321114N0345542E\n321045N0345541E.\nCTN ADZ.\nF) GND G) 900FT AMSL)"
+  },
+  {
+   "id": "C2209/26",
+   "loc": "LLLL",
+   "name": "GVARAM",
+   "heb": "בלון קשור יופעל ב-GVARAM. אזור בתוך ברדיוס 0.4 מייל ימי שמרכזו בנ.צ. 31°36'12\"N 34°36'27\"E סגור מהקרקע ועד 1,800 רגל מעל פני הים, לכל הטיסות כולל טיסות ריסוס חקלאיות. מומלצת זהירות.\nבתוקף: מ-29/10/2026 06:00 UTC עד 29/10/2026 13:00 UTC",
+   "raw": "C2209/26 NOTAMN\nQ) LLLL/QWCLW/IV/M  /W /000/018/3136N03436E001\nA) LLLL B) 2610290600 C) 2610291300\nE) CAPTIVE BALLOON WILL TAKE PLACE AT GVARAM.\nAN AREA WI 0.4NM RADIUS CENTERED ON PSN 313612N0343627E\nCLSD FM GND UP TO 1,800FT AMSL, TO ALL FLT INCLUDING\nAGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 1800FT AMSL)"
+  },
+  {
+   "id": "C2208/26",
+   "loc": "LLLL",
+   "name": "מרחב פעילות צניחה חופשית TEIMAN ACT מ-11",
+   "heb": "מרחב פעילות צניחה חופשית TEIMAN ACT מ-11,000 רגל מעל פני הים. במקרה של חירום CLEAR THE AIRSPACE בתוך 5 דקות. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-23/10/2026 05:00 UTC עד 23/10/2026 11:00 UTC",
+   "raw": "C2208/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/110/3117N03443E004\nA) LLLL B) 2610230500 C) 2610231100\nE) PJE AIRSPACE TEIMAN ACT FM 11,000FT AMSL.\nIN CASE OF EMERG CLEAR THE AIRSPACE WI 5MIN.\nCTN ADZ.\nF) GND G) 11000FT AMSL)"
+  },
   {
    "id": "A0842/26",
    "loc": "LLLL",
@@ -333,13 +354,6 @@
    "name": "HACHULA-LAKE",
    "heb": "בלון קשור יופעל ב-HACHULA-LAKE DRG לילה, מהקרקע ועד 400 מטר מעל הקרקע. מואר ומסומן לשעות היום. אזור בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'22\"N 35°34'54\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים. במקרה חירום יונמך בתוך 10 דקות. מומלצת זהירות.\nבתוקף: מ-19/10/2026 16:00 UTC עד 23/10/2026 02:00 UTC\nלו\"ז: DAILY 0001-0200 1600-2359",
    "raw": "C2137/26 NOTAMN\nQ) LLLL/QWCLW/IV/M  /W /000/020/3306N03535E001\nA) LLLL B) 2610191600 C) 2610230200\nD) DAILY 0001-0200 1600-2359\nE) CAPTIVE BALLOON WILL TAKE PLACE AT HACHULA-LAKE DRG NGT,\nFM GND UP TO 400M AGL. LIT AND DAY MARKED.\nAN AREA WI 0.54NM RADIUS CENTERED ON PSN 330622N0353454E\nCLSD FM GND UP TO 2,000FT AMSL.\nIN CASE OF EMERG LOWERED WI 10MIN.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
-  },
-  {
-   "id": "C2136/26",
-   "loc": "LLLL",
-   "name": "HACHULA-LAKE",
-   "heb": "בלון קשור יופעל ב-HACHULA-LAKE, מהקרקע ועד 400 מטר מעל הקרקע. מואר ומסומן לשעות היום. אזור בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'46\"N 35°34'14\"E סגור מהקרקע ועד 2,200 רגל מעל פני הים. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. במקרה חירום יונמך בתוך 10 דקות. מומלצת זהירות.\nבתוקף: מ-20/10/2026 03:30 UTC עד 21/10/2026 08:00 UTC\nלו\"ז: DAILY 0330-0800",
-   "raw": "C2136/26 NOTAMN\nQ) LLLL/QWCLW/IV/M  /W /000/022/3307N03534E001\nA) LLLL B) 2610200330 C) 2610210800\nD) DAILY 0330-0800\nE) CAPTIVE BALLOON WILL TAKE PLACE AT HACHULA-LAKE,\nFM GND UP TO 400M AGL. LIT AND DAY MARKED.\nAN AREA WI 0.54NM RADIUS CENTERED ON PSN 330646N0353414E\nCLSD FM GND UP TO 2,200FT AMSL.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nIN CASE OF EMERG LOWERED WI 10MIN.\nCTN ADZ.\nF) GND G) 2200FT AMSL)"
   },
   {
    "id": "A0820/26",
