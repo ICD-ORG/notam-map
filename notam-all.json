@@ -1,10 +1,38 @@
 {
- "fetched_at": "21/10/2026 17:55 UTC",
- "fetched_iso": "2026-10-21T17:55:41Z",
- "listed": 125,
- "count": 125,
+ "fetched_at": "22/10/2026 08:49 UTC",
+ "fetched_iso": "2026-10-22T08:49:14Z",
+ "listed": 124,
+ "count": 124,
  "failed": [],
  "notams": [
+  {
+   "id": "C2223/26",
+   "loc": "LLLL",
+   "name": "GEZER POWER PLANT",
+   "heb": "אזור בתוך ברדיוס 1 ק\"מ שמרכזו בנ.צ. 31°54'55\"N 34°55'00\"E ב-GEZER POWER PLANT סגור מהקרקע ועד 800 רגל מעל פני הים, עקב GAS EMISSION. מומלצת זהירות.\nבתוקף: מ-24/10/2026 16:00 UTC עד 24/10/2026 19:00 UTC",
+   "raw": "C2223/26 NOTAMN\nQ) LLLL/QWSLW/IV/M  /W /000/008/3155N03455E001\nA) LLLL B) 2610241600 C) 2610241900\nE) AN AREA WI 1KM RADIUS CENTERED ON PSN 315455N0345500E\nAT GEZER POWER PLANT CLSD FM GND UP TO 800FT AMSL,\nDUE TO GAS EMISSION.\nCTN ADZ.\nF) GND G) 800FT AMSL)"
+  },
+  {
+   "id": "A0845/26",
+   "loc": "LLBG",
+   "name": "מסלול 08/26 סגור למעט מסלול INT",
+   "heb": "מסלול 08/26 סגור למעט מסלול INT, עקב עבודות.\nבתוקף: מ-28/10/2026 06:00 UTC עד 28/10/2026 12:00 UTC",
+   "raw": "A0845/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2610280600 C) 2610281200\nE) RWY 08/26 CLSD EXC RWY INT, DUE WIP.)"
+  },
+  {
+   "id": "A0844/26",
+   "loc": "LLBG",
+   "name": "ILS מסלול 12 C/S BG תדר 110",
+   "heb": "ILS מסלול 12 C/S BG תדר 110.300MHZ מושבת לצורך תחזוקה.\nבתוקף: מ-26/10/2026 07:00 UTC עד 26/10/2026 11:00 UTC",
+   "raw": "A0844/26 NOTAMN\nQ) LLLL/QISAS/I /NBO/A /000/999/3200N03454E005\nA) LLBG B) 2610260700 C) 2610261100\nE) ILS RWY 12 C/S BG FREQ 110.300MHZ WITHDRAWN FOR MAINT.)"
+  },
+  {
+   "id": "A0843/26",
+   "loc": "LLBG",
+   "name": "מסלול 12/30 סגור למעט מסלול INT עקב עבודות",
+   "heb": "מסלול 12/30 סגור למעט מסלול INT עקב עבודות.\nבתוקף: מ-26/10/2026 06:00 UTC עד 26/10/2026 11:00 UTC",
+   "raw": "A0843/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2610260600 C) 2610261100\nE) RWY 12/30 CLSD EXC RWY INT DUE WIP.)"
+  },
   {
    "id": "C2222/26",
    "loc": "LLLL",
@@ -97,13 +125,6 @@
    "raw": "A0842/26 NOTAMN\nQ) LLLL/QANLC/I /NBO/E /050/060/3230N03510E008\nA) LLLL B) 2610211400 C) 2610222359\nE) ATS RTE J14 CLSD BTN ZACCI-MEGID.)"
   },
   {
-   "id": "C2207/26",
-   "loc": "LLLL",
-   "name": "UAS ACT תתקיים מדרום ל LLMG",
-   "heb": "UAS ACT תתקיים מדרום ל LLMG. אזור בתוך ברדיוס 1.5 מייל ימי שמרכזו בנ.צ. 32°32'56\"N 35°16'45\"E סגור מהקרקע ועד 4,000 רגל מעל פני הים לכל הטיסות. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-21/10/2026 14:00 UTC עד 22/10/2026 00:01 UTC",
-   "raw": "C2207/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/040/3233N03517E002\nA) LLLL B) 2610211400 C) 2610220001\nE) UAS ACT WILL TAKE PLACE S OF LLMG.\nAN AREA WI 1.5NM RADIUS CENTERED ON PSN 323256N0351645E\nCLSD FM GND UP TO 4,000FT AMSL TO ALL FLT.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 4000FT AMSL)"
-  },
-  {
    "id": "C2206/26",
    "loc": "LLLL",
    "name": "אזור בין נקודות הציון הבאות סגור לכל הטיסות",
@@ -123,13 +144,6 @@
    "name": "MACCABIM",
    "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-MACCABIM, מהקרקע ועד 50 מטר מעל הקרקע. אזור בין נקודות הציון הבאות 31°53'51\"N 35°02'18\"E 31°53'11\"N 35°02'22\"E 31°53'11\"N 35°02'20\"E 31°53'20\"N 35°02'16\"E 31°53'19\"N 35°02'10\"E 31°53'23\"N 35°02'07\"E 31°53'28\"N 35°02'08\"E 31°53'29\"N 35°02'02\"E 31°53'36\"N 35°02'01\"E 31°53'36\"N 35°02'10\"E 31°53'46\"N 35°02'13\"E 31°53'48\"N 35°02'11\"E 31°53'53\"N 35°02'12\"E סגור מהקרקע ועד 1,050 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-01/11/2026 00:01 UTC עד 30/11/2026 21:59 UTC",
    "raw": "C2203/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/011/3154N03502E001\nA) LLLL B) 2611010001 C) 2611302159\nE) UAS/UAV ACT WILL TAKE PLACE AT MACCABIM, FM GND UP TO 50M AGL.\nAN AREA BTN FLW PSN 315351N0350218E 315311N0350222E\n315311N0350220E 315320N0350216E 315319N0350210E\n315323N0350207E 315328N0350208E 315329N0350202E\n315336N0350201E 315336N0350210E 315346N0350213E\n315348N0350211E 315353N0350212E\nCLSD FM GND UP TO 1,050FT AMSL.\nCTN ADZ.\nF) GND G) 1100FT AMSL)"
-  },
-  {
-   "id": "C2202/26",
-   "loc": "LLLL",
-   "name": "RISHON LEZION",
-   "heb": "UAS/UAV AIR-SHOW תתקיים ב-RISHON LEZION. אזור בתוך ברדיוס 0.17 מייל ימי שמרכזו בנ.צ. 315832E0344954E סגור מהקרקע ועד 50 מטר מעל הקרקע 360 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-21/10/2026 17:30 UTC עד 21/10/2026 20:00 UTC",
-   "raw": "C2202/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/004/3158N03445E001\nA) LLLL B) 2610211730 C) 2610212000\nE) UAS/UAV AIR-SHOW WILL TAKE PLACE AT RISHON LEZION.\nAN AREA WI 0.17NM RADIUS CENTERED ON PSN\n315832E0344954E CLSD FM GND UP TO 50M AGL 360FT AMSL.\nCTN ADZ.\nF) GND G) 360FT AMSL)"
   },
   {
    "id": "C2201/26",
@@ -158,13 +172,6 @@
    "name": "YERUHAM",
    "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM, מהקרקע ועד 600 מטר מעל הקרקע. אזור בתוך ברדיוס 0.3 מייל ימי שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-25/10/2026 03:30 UTC עד 29/10/2026 15:30 UTC\nלו\"ז: DAILY 0330-1530",
    "raw": "C2198/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2610250330 C) 2610291530\nD) DAILY 0330-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
-  },
-  {
-   "id": "C2197/26",
-   "loc": "LLLL",
-   "name": "נתיב CVFR סגור SORES-ESTOL-BSEMS-ZHRYA-GOVRN",
-   "heb": "נתיב CVFR סגור SORES-ESTOL-BSEMS-ZHRYA-GOVRN.\nבתוקף: מ-22/10/2026 07:20 UTC עד 22/10/2026 07:40 UTC",
-   "raw": "C2197/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/040/3142N03459E008\nA) LLLL B) 2610220720 C) 2610220740\nE) CVFR RTE CLSD  SORES-ESTOL-BSEMS-ZHRYA-GOVRN.)"
   },
   {
    "id": "C2196/26",
@@ -230,25 +237,11 @@
    "raw": "A0833/26 NOTAMN\nQ) LLLL/QNMAS/IV/BO /E /000/999/3117N03443E025\nA) LLLL B) 2610250600 C) 2610251000\nE) VOR/DME BSA FREQ 114.300MHZ WITHDRAWN FOR MAINT.)"
   },
   {
-   "id": "C2171/26",
-   "loc": "LLLL",
-   "name": "REVIVIM",
-   "heb": "פעילות צניחה חופשית תתקיים ב-REVIVIM. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 2,400 רגל מעל פני הים 31°07'12\"N 34°45'50\"E 31°05'11\"N 34°39'20\"E 31°04'55\"N 34°36'55\"E 30°59'31\"N 34°38'15\"E 31°00'35\"N 34°44'09\"E 31°03'59\"N 34°47'20\"E 31°07'12\"N 34°45'50\"E. טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה מומלצת זהירות.\nבתוקף: מ-22/10/2026 06:00 UTC עד 22/10/2026 08:00 UTC",
-   "raw": "C2171/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/024/3103N03442E006\nA) LLLL B) 2610220600 C) 2610220800\nE) PJE WILL TAKE PLACE AT REVIVIM.\nAN AREA BTN FLW PSN CLSD FM GND UP 2,400FT AMSL\n310712N0344550E 310511N0343920E 310455N0343655E\n305931N0343815E 310035N0344409E 310359N0344720E\n310712N0344550E.\nOPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC\nCTN ADZ.\nF) GND G) 2400FT AMSL)"
-  },
-  {
    "id": "C2170/26",
    "loc": "LLLL",
    "name": "CVFR ו- מסוקים נתיב סגור ב-1",
    "heb": "CVFR ו- מסוקים נתיב סגור ב-1,200 רגל, זמין BIDIRECTIONAL ב-800 רגל מעל פני הים בלבד TYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.\nבתוקף: מ-22/10/2026 04:15 UTC עד 22/10/2026 10:00 UTC\nלו\"ז: 0415-0530 0600-0650 0900-1000",
    "raw": "C2170/26 NOTAMN\nQ) LLLL/QARLT/IV/NBO/E /008/012/3155N03446E008\nA) LLLL B) 2610220415 C) 2610221000\nD) 0415-0530 0600-0650 0900-1000\nE) CVFR AND HEL RTE CLSD AT 1,200FT,\nAVBL BIDIRECTIONAL AT 800FT AMSL ONLY\nTYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.)"
-  },
-  {
-   "id": "C2169/26",
-   "loc": "LLLL",
-   "name": "CVFR ו- מסוקים נתיב סגור ב-1",
-   "heb": "CVFR ו- מסוקים נתיב סגור ב-1,200 רגל, זמין BIDIRECTIONAL ב-800 רגל מעל פני הים בלבד TYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.\nבתוקף: מ-21/10/2026 09:00 UTC עד 21/10/2026 18:00 UTC\nלו\"ז: 0900-1000 1700-1800",
-   "raw": "C2169/26 NOTAMN\nQ) LLLL/QARLT/IV/NBO/E /008/012/3155N03446E008\nA) LLLL B) 2610210900 C) 2610211800\nD) 0900-1000 1700-1800\nE) CVFR AND HEL RTE CLSD AT 1,200FT,\nAVBL BIDIRECTIONAL AT 800FT AMSL ONLY\nTYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.)"
   },
   {
    "id": "C2154/26",
