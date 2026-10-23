@@ -1,8 +1,8 @@
 {
- "fetched_at": "22/10/2026 17:52 UTC",
- "fetched_iso": "2026-10-22T17:52:07Z",
- "listed": 133,
- "count": 133,
+ "fetched_at": "23/10/2026 08:45 UTC",
+ "fetched_iso": "2026-10-23T08:45:18Z",
+ "listed": 129,
+ "count": 129,
  "failed": [],
  "notams": [
   {
@@ -209,13 +209,6 @@
    "raw": "C2208/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/110/3117N03443E004\nA) LLLL B) 2610230500 C) 2610231100\nE) PJE AIRSPACE TEIMAN ACT FM 11,000FT AMSL.\nIN CASE OF EMERG CLEAR THE AIRSPACE WI 5MIN.\nCTN ADZ.\nF) GND G) 11000FT AMSL)"
   },
   {
-   "id": "A0842/26",
-   "loc": "LLLL",
-   "name": "ATS נתיב J14 סגור בין ZACCI-MEGID",
-   "heb": "ATS נתיב J14 סגור בין ZACCI-MEGID.\nבתוקף: מ-21/10/2026 14:00 UTC עד 22/10/2026 23:59 UTC",
-   "raw": "A0842/26 NOTAMN\nQ) LLLL/QANLC/I /NBO/E /050/060/3230N03510E008\nA) LLLL B) 2610211400 C) 2610222359\nE) ATS RTE J14 CLSD BTN ZACCI-MEGID.)"
-  },
-  {
    "id": "C2206/26",
    "loc": "LLLL",
    "name": "אזור בין נקודות הציון הבאות סגור לכל הטיסות",
@@ -298,20 +291,6 @@
    "name": "TRIGGER NOTAM",
    "heb": "TRIGGER NOTAM - AIRAC AIP פנים-ארצי AMDT 02/26 בתוקף מ-26 NOV 2026 מסוקים נחיתה ו- TAX PROCEDURES UPDATED.\nבתוקף: מ-26/11/2026 00:01 UTC עד 09/12/2026 23:59 UTC",
    "raw": "C2181/26 NOTAMN\nQ) LLLL/QOATT/IV/BO /AE/000/999/3236N03514E005\nA) LLMG B) 2611260001 C) 2612092359\nE) TRIGGER NOTAM - AIRAC DOM AIP AMDT 02/26 WEF 26 NOV 2026\nHEL LDG AND TAX PROCEDURES UPDATED.)"
-  },
-  {
-   "id": "C2175/26",
-   "loc": "LLLL",
-   "name": "נתיב CVFR סגור DESHE-TAVOR",
-   "heb": "נתיב CVFR סגור DESHE-TAVOR.\nבתוקף: מ-18/10/2026 19:00 UTC עד 23/10/2026 03:20 UTC\nלו\"ז: DAILY 1900-2359 0001-0320",
-   "raw": "C2175/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3247N03529E007\nA) LLLL B) 2610181900 C) 2610230320\nD) DAILY 1900-2359 0001-0320\nE) CVFR RTE CLSD  DESHE-TAVOR.)"
-  },
-  {
-   "id": "C2174/26",
-   "loc": "LLLL",
-   "name": "YAVNEEL",
-   "heb": "אזור ב-YAVNEEL מהקרקע ועד 4,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 32°47'22\"N 35°29'36\"E 32°43'29\"N 35°30'43\"E 32°42'44\"N 35°26'11\"E 32°46'17\"N 35°26'20\"E טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-18/10/2026 19:00 UTC עד 23/10/2026 03:20 UTC\nלו\"ז: DAILY 1900-2359 0001-0320",
-   "raw": "C2174/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/040/3245N03528E003\nA) LLLL B) 2610181900 C) 2610230320\nD) DAILY 1900-2359 0001-0320\nE) AN AREA AT YAVNEEL FM GND UP TO 4,000FT AMSL CLSD TO ALL FLT\nBTN FLW PSN  324722N0352936E 324329N0353043E 324244N0352611E\n324617N0352620E\nOPS OF AGRICULTURE FLT WI 15MIN PPR FM ATC.\nCTN ADZ.)"
   },
   {
    "id": "A0833/26",
@@ -424,13 +403,6 @@
    "name": "שדה תעופה סגור לכל הטיסות כולל מסוקים",
    "heb": "שדה תעופה סגור לכל הטיסות כולל מסוקים, עקב עבודות. במקרה של חירום זמין בתוך 10 דקות.\nבתוקף: מ-03/11/2026 06:25 UTC עד 03/11/2026 11:00 UTC\nלו\"ז: 0625-0825 0930-1100",
    "raw": "A0824/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/3249N03503E005\nA) LLHA B) 2611030625 C) 2611031100\nD) 0625-0825 0930-1100\nE) AD CLSD TO ALL FLT INCLUDING HEL, DUE WIP.\nIN CASE OF EMERG AVBL WI 10MIN.)"
-  },
-  {
-   "id": "C2137/26",
-   "loc": "LLLL",
-   "name": "HACHULA-LAKE",
-   "heb": "בלון קשור יופעל ב-HACHULA-LAKE DRG לילה, מהקרקע ועד 400 מטר מעל הקרקע. מואר ומסומן לשעות היום. אזור בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'22\"N 35°34'54\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים. במקרה חירום יונמך בתוך 10 דקות. מומלצת זהירות.\nבתוקף: מ-19/10/2026 16:00 UTC עד 23/10/2026 02:00 UTC\nלו\"ז: DAILY 0001-0200 1600-2359",
-   "raw": "C2137/26 NOTAMN\nQ) LLLL/QWCLW/IV/M  /W /000/020/3306N03535E001\nA) LLLL B) 2610191600 C) 2610230200\nD) DAILY 0001-0200 1600-2359\nE) CAPTIVE BALLOON WILL TAKE PLACE AT HACHULA-LAKE DRG NGT,\nFM GND UP TO 400M AGL. LIT AND DAY MARKED.\nAN AREA WI 0.54NM RADIUS CENTERED ON PSN 330622N0353454E\nCLSD FM GND UP TO 2,000FT AMSL.\nIN CASE OF EMERG LOWERED WI 10MIN.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
   },
   {
    "id": "A0820/26",
