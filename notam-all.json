@@ -1,10 +1,24 @@
 {
- "fetched_at": "23/10/2026 17:43 UTC",
- "fetched_iso": "2026-10-23T17:43:19Z",
- "listed": 128,
- "count": 128,
+ "fetched_at": "24/10/2026 08:19 UTC",
+ "fetched_iso": "2026-10-24T08:19:43Z",
+ "listed": 130,
+ "count": 130,
  "failed": [],
  "notams": [
+  {
+   "id": "A0848/26",
+   "loc": "LLBG",
+   "name": "Q APRON",
+   "heb": "עגורן הוקם בתוך LLBG אזור בקרה, ב-Q APRON. ON נ.צ. 32°01'15\"N 34°53'52\"E מהקרקע ועד 81M 265 רגל מעל הקרקע. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-25/10/2026 09:00 UTC עד 25/10/2026 11:00 UTC",
+   "raw": "A0848/26 NOTAMN\nQ) LLLL/QOBCE/IV/M  /AE/000/003/3201N03454E001\nA) LLBG B) 2610250900 C) 2610251100\nE) CRANE ERECTED WI LLBG CTR, AT Q APRON.\nON PSN 320114.84N0345352.36E\nFM GND UP TO 81M 265FT AGL.\nCTN ADZ.)"
+  },
+  {
+   "id": "A0847/26",
+   "loc": "LLBG",
+   "name": "מסלול 21 סגור ל-נחיתה",
+   "heb": "מסלול 21 סגור ל-נחיתה, עקב עגורן ON FINAL 21. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-25/10/2026 09:00 UTC עד 25/10/2026 11:00 UTC",
+   "raw": "A0847/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2610250900 C) 2610251100\nE) RWY 21 CLSD FOR LDG, DUE CRANE ON FINAL 21.\nIN CASE OF EMERG LOWERED WI 30MIN.)"
+  },
   {
    "id": "C2257/26",
    "loc": "LLLL",
