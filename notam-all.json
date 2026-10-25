@@ -1,23 +1,79 @@
 {
- "fetched_at": "25/10/2026 08:37 UTC",
- "fetched_iso": "2026-10-25T08:37:31Z",
- "listed": 125,
- "count": 125,
+ "fetched_at": "25/10/2026 16:58 UTC",
+ "fetched_iso": "2026-10-25T16:58:45Z",
+ "listed": 131,
+ "count": 131,
  "failed": [],
  "notams": [
   {
-   "id": "A0848/26",
-   "loc": "LLBG",
-   "name": "Q APRON",
-   "heb": "עגורן הוקם בתוך LLBG אזור בקרה, ב-Q APRON. ON נ.צ. 32°01'15\"N 34°53'52\"E מהקרקע ועד 81M 265 רגל מעל הקרקע. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-25/10/2026 09:00 UTC עד 25/10/2026 11:00 UTC",
-   "raw": "A0848/26 NOTAMN\nQ) LLLL/QOBCE/IV/M  /AE/000/003/3201N03454E001\nA) LLBG B) 2610250900 C) 2610251100\nE) CRANE ERECTED WI LLBG CTR, AT Q APRON.\nON PSN 320114.84N0345352.36E\nFM GND UP TO 81M 265FT AGL.\nCTN ADZ.)"
+   "id": "C2269/26",
+   "loc": "LLLL",
+   "name": "מסוקים נתיב סגור GALIM-DAROM-ATLIT-HASID",
+   "heb": "מסוקים נתיב סגור GALIM-DAROM-ATLIT-HASID. ATLIT-FRDIS. HOTRM-LLLV. FRDIS-LLLV. SDTYM-LLLV.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2269/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /010/025/3243N03458E008\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) HEL RTE CLSD\nGALIM-DAROM-ATLIT-HASID.\nATLIT-FRDIS.\nHOTRM-LLLV.\nFRDIS-LLLV.\nSDTYM-LLLV.)"
   },
   {
-   "id": "A0847/26",
-   "loc": "LLBG",
-   "name": "מסלול 21 סגור ל-נחיתה",
-   "heb": "מסלול 21 סגור ל-נחיתה, עקב עגורן ON FINAL 21. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-25/10/2026 09:00 UTC עד 25/10/2026 11:00 UTC",
-   "raw": "A0847/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2610250900 C) 2610251100\nE) RWY 21 CLSD FOR LDG, DUE CRANE ON FINAL 21.\nIN CASE OF EMERG LOWERED WI 30MIN.)"
+   "id": "C2268/26",
+   "loc": "LLLL",
+   "name": "ULTRALIGHT נתיב סגור DAROM-HOTRM-BOREN-FRDIS",
+   "heb": "ULTRALIGHT נתיב סגור DAROM-HOTRM-BOREN-FRDIS.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2268/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /010/025/3243N03458E008\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) ULTRALIGHT RTE CLSD\nDAROM-HOTRM-BOREN-FRDIS.)"
+  },
+  {
+   "id": "C2267/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור GALIM-DAROM-HOTRM-BOREN-FRDIS",
+   "heb": "נתיב CVFR סגור GALIM-DAROM-HOTRM-BOREN-FRDIS.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2267/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /010/025/3243N03458E008\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) CVFR RTE CLSD\nGALIM-DAROM-HOTRM-BOREN-FRDIS.)"
+  },
+  {
+   "id": "C2264/26",
+   "loc": "LLLL",
+   "name": "מסוקים נתיב סגור GALIM-SUVAS",
+   "heb": "מסוקים נתיב סגור GALIM-SUVAS. GALIM-KONFO. GALIM-DAFNA. GALIM-MERVA. GALIM-INBAR.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2264/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /005/015/3234N03425E034\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) HEL RTE CLSD\nGALIM-SUVAS.\nGALIM-KONFO.\nGALIM-DAFNA.\nGALIM-MERVA.\nGALIM-INBAR.)"
+  },
+  {
+   "id": "A0849/26",
+   "loc": "LLLL",
+   "name": "ATS נתיב סגור P68 בין GALIM-MERVA",
+   "heb": "ATS נתיב סגור P68 בין GALIM-MERVA. Q17 בין ATLIT-ZAHAV. J15 NAT-ATLIT. Q28 GALIM-ATLIT.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "A0849/26 NOTAMN\nQ) LLLL/QANLC/I /NBO/E /030/120/3235N03448E018\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) ATS RTE CLSD\nP68 BTN GALIM-MERVA.\nQ17 BTN ATLIT-ZAHAV.\nJ15 NAT-ATLIT.\nQ28 GALIM-ATLIT.)"
+  },
+  {
+   "id": "C2263/26",
+   "loc": "LLLV",
+   "name": "AIRSRRIP סגור",
+   "heb": "AIRSRRIP סגור.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2263/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/3236N03448E005\nA) LLLV B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) AIRSRRIP CLSD.)"
+  },
+  {
+   "id": "C2262/26",
+   "loc": "LLBO",
+   "name": "AIRSTRIP סגור לכל הטיסות",
+   "heb": "AIRSTRIP סגור לכל הטיסות.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2262/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/3239N03456E005\nA) LLBO B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) AIRSTRIP CLSD TO ALL FLT.)"
+  },
+  {
+   "id": "C2261/26",
+   "loc": "LLLL",
+   "name": "אזור בין נקודות הציון הבאות סגור לכל הטיסות",
+   "heb": "אזור בין נקודות הציון הבאות סגור לכל הטיסות, מהקרקע ועד 12,000 רגל מעל פני הים 32°33'34\"N 34°54'09\"E 32°47'16\"N 34°56'50\"E 32°47'34\"N 34°56'30\"E 32°49'38\"N 34°55'58\"E 33°00'07\"N 34°57'04\"E 33°04'23\"N 34°49'03\"E 33°05'39\"N 34°28'18\"E 33°06'07\"N 34°21'35\"E 32°40'29\"N 34°18'02\"E מומלצת זהירות.\nבתוקף: מ-28/10/2026 07:45 UTC עד 28/10/2026 13:30 UTC\nלו\"ז: 0745-1030 1230-1330",
+   "raw": "C2261/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/120/3250N03438E022\nA) LLLL B) 2610280745 C) 2610281330\nD) 0745-1030 1230-1330\nE) AN AREA BTN FLW PSN CLSD TO ALL FLT, FM GND UP TO 12,000FT AMSL\n323334N0345409E 324716N0345650E 324734N0345630E\n324938N0345558E 330007N0345704E 330423N0344903E\n330539N0342818E 330607N0342135E 324029N0341802E\nCTN ADZ.)"
+  },
+  {
+   "id": "C2260/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 3,200 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-01/11/2026 03:30 UTC עד 05/11/2026 15:20 UTC\nלו\"ז: DAILY 0330-1520",
+   "raw": "C2260/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/032/3057N03456E002\nA) LLLL B) 2611010330 C) 2611051520\nD) DAILY 0330-1520\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 3,200FT AMSL.\nCTN ADZ.\nF) GND G) 3200FT AMSL)"
+  },
+  {
+   "id": "C2259/26",
+   "loc": "LLLL",
+   "name": "HACHULA-LAKE",
+   "heb": "אזור ב-HACHULA-LAKE בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'51\"N 35°36'18\"E סגור מהקרקע ועד 660 רגל מעל הקרקע לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-28/10/2026 05:00 UTC עד 29/10/2026 13:00 UTC\nלו\"ז: DAILY 0500-1300",
+   "raw": "C2259/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/007/3307N03536E001\nA) LLLL B) 2610280500 C) 2610291300\nD) DAILY 0500-1300\nE) AN AREA AT HACHULA-LAKE WI 0.54NM RADIUS CENTERED ON\nPSN 330651N0353618E CLSD FM GND UP TO 660FT AGL\nTO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN\nPPR FM ATC.\nCTN ADZ.)"
   },
   {
    "id": "C2256/26",
@@ -272,13 +328,6 @@
    "raw": "C2181/26 NOTAMN\nQ) LLLL/QOATT/IV/BO /AE/000/999/3236N03514E005\nA) LLMG B) 2611260001 C) 2612092359\nE) TRIGGER NOTAM - AIRAC DOM AIP AMDT 02/26 WEF 26 NOV 2026\nHEL LDG AND TAX PROCEDURES UPDATED.)"
   },
   {
-   "id": "A0833/26",
-   "loc": "LLLL",
-   "name": "VOR/DME BSA תדר 114",
-   "heb": "VOR/DME BSA תדר 114.300MHZ מושבת לצורך תחזוקה.\nבתוקף: מ-25/10/2026 06:00 UTC עד 25/10/2026 10:00 UTC",
-   "raw": "A0833/26 NOTAMN\nQ) LLLL/QNMAS/IV/BO /E /000/999/3117N03443E025\nA) LLLL B) 2610250600 C) 2610251000\nE) VOR/DME BSA FREQ 114.300MHZ WITHDRAWN FOR MAINT.)"
-  },
-  {
    "id": "C2154/26",
    "loc": "LLRS",
    "name": "TRIGGER NOTAM",
@@ -389,13 +438,6 @@
    "name": "LNAV/VNAV OCA(H) ל-RNP מסלול 19 (MAP GRADIENT 2",
    "heb": "LNAV/VNAV OCA(H) ל-RNP מסלול 19 (MAP GRADIENT 2.5 PERCENTAGE) שונה ל 730(460) ל-ALL CAT. AIP ישראל, PART שדה תעופה, CHART שדה תעופה 2 LLER IAC-19RNP. ראו.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-11/10/2026 14:18 UTC (קבוע)",
    "raw": "A0820/26 NOTAMR A0819/26\nQ) LLLL/QPOCH/I /NBO/A /000/999/2944N03501E005\nA) LLER B) 2610111418 C) PERM\nE) LNAV/VNAV OCA(H) FOR RNP RWY 19 (MAP GRADIENT 2.5 PERCENTAGE)\nCHG TO 730(460) FOR ALL CAT.\nISRAEL AIP, PART AD, CHART AD 2 LLER IAC-19RNP. REF.)"
-  },
-  {
-   "id": "C2097/26",
-   "loc": "LLIB",
-   "name": "שדה תעופה סגור לכל הטיסות",
-   "heb": "שדה תעופה סגור לכל הטיסות, עקב עבודות. הפעלת מסוקים זמין באישור מוקדם מבקרת התעופה. במקרה של חירום או MEDEVAC מסוקים זמין בתוך 10 דקות.\nבתוקף: מ-25/10/2026 07:00 UTC עד 25/10/2026 10:00 UTC",
-   "raw": "C2097/26 NOTAMN\nQ) LLLL/QFALT/IV/NBO/A /000/999/3259N03534E005\nA) LLIB B) 2610250700 C) 2610251000\nE) AD CLSD TO ALL FLT, DUE WIP.\nOPS OF HEL AVBL BY PPR FM ATC.\nIN CASE OF EMERG OR MEDEVAC HEL AVBL WI 10MIN.)"
   },
   {
    "id": "C2095/26",
