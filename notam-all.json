@@ -1,10 +1,59 @@
 {
- "fetched_at": "03/11/2026 11:10 UTC",
- "fetched_iso": "2026-11-03T11:10:30Z",
- "listed": 109,
- "count": 109,
+ "fetched_at": "03/11/2026 19:58 UTC",
+ "fetched_iso": "2026-11-03T19:58:31Z",
+ "listed": 113,
+ "count": 113,
  "failed": [],
  "notams": [
+  {
+   "id": "C2347/26",
+   "loc": "LLLL",
+   "name": "BAT-SHLOMO",
+   "heb": "אזור ב-BAT-SHLOMO בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 32°37'21\"N 35°00'02\"E סגור מהקרקע ועד 2,200 רגל מעל פני הים לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-09/11/2026 05:00 UTC עד 09/11/2026 15:00 UTC",
+   "raw": "C2347/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/022/3237N03500E001\nA) LLLL B) 2611090500 C) 2611091500\nE) AN AREA AT BAT-SHLOMO WI 0.54NM RADIUS CENTERED ON\nPSN 323721N0350002E CLSD FM GND UP TO 2,200FT AMSL\nTO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN\nPPR FM ATC.\nCTN ADZ.)"
+  },
+  {
+   "id": "C2346/26",
+   "loc": "LLLL",
+   "name": "בועת זעירים SHIVTA (BSVTA) סגור",
+   "heb": "בועת זעירים SHIVTA (BSVTA) סגור.\nבתוקף: מ-06/11/2026 04:00 UTC עד 06/11/2026 12:00 UTC",
+   "raw": "C2346/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/020/3101N03432E016\nA) LLLL B) 2611060400 C) 2611061200\nE) ULTRALIGHT BUBBLE SHIVTA (BSVTA) CLSD .)"
+  },
+  {
+   "id": "C2345/26",
+   "loc": "LLLL",
+   "name": "SHUNRAH",
+   "heb": "פעילות צניחה חופשית תתקיים ב-SHUNRAH. אזור מהקרקע ועד 2,800 רגל מעל פני הים סגור בין נקודות הציון הבאות 30°54'16\"N 34°28'43\"E 30°54'36\"N 34°25'31\"E 30°57'21\"N 34°24'33\"E 31°00'25\"N 34°34'07\"E 30°56'42\"N 34°35'28\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-08/11/2026 10:00 UTC עד 10/11/2026 11:00 UTC\nלו\"ז: 08 1000-1100, 09 0600-0700 1000-1100 1800-1930,  10 0600-0700",
+   "raw": "C2345/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/028/3057N03430E005\nA) LLLL B) 2611081000 C) 2611101100\nD) 08 1000-1100, 09 0600-0700 1000-1100 1800-1930,  10 0600-0700\n1000-1100\nE) PJE WILL TAKE PLACE AT SHUNRAH.\nAN AREA FM GND UP TO 2,800FT AMSL CLSD BTN FLW PSN\n305416N0342843E 305436N0342531E 305721N0342433E\n310025N0343407E 305642N0343528E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 2800FT AMSL)"
+  },
+  {
+   "id": "C2344/26",
+   "loc": "LLLL",
+   "name": "KELACH",
+   "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-09/11/2026 06:00 UTC עד 09/11/2026 15:00 UTC",
+   "raw": "C2344/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611090600 C) 2611091500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
+  },
+  {
+   "id": "A0884/26",
+   "loc": "LLBG",
+   "name": "Q APRON",
+   "heb": "עגורן הוקם בתוך LLBG אזור בקרה, ב-Q APRON. ON נ.צ. 32°01'15\"N 34°53'52\"E מהקרקע ועד 40M 131 רגל מעל הקרקע. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
+   "raw": "A0884/26 NOTAMN\nQ) LLLL/QOBCE/IV/M  /AE/000/002/3201N03454E001\nA) LLBG B) 2611041100 C) 2611041400\nE) CRANE ERECTED WI LLBG CTR, AT Q APRON.\nON PSN 320114.84N0345352.36E\nFM GND UP TO 40M 131FT AGL.\nCTN ADZ.)"
+  },
+  {
+   "id": "A0883/26",
+   "loc": "LLBG",
+   "name": "מסלול 26 סגור ל-נחיתה",
+   "heb": "מסלול 26 סגור ל-נחיתה, עקב עגורן ON FINAL 26 ל-AIRCRAFT RECOVERY DRILL. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
+   "raw": "A0883/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611041100 C) 2611041400\nE) RWY 26 CLSD FOR LDG, DUE CRANE ON FINAL 26 FOR AIRCRAFT\nRECOVERY DRILL. IN CASE OF EMERG LOWERED WI 30MIN.)"
+  },
+  {
+   "id": "A0881/26",
+   "loc": "LLBG",
+   "name": "מסלול 03/21 סגור למעט מסלול INT 03/30",
+   "heb": "מסלול 03/21 סגור למעט מסלול INT 03/30, עקב עגורן ON FINAL 26 ל-AIRCRAFT RECOVERY DRILL. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
+   "raw": "A0881/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611041100 C) 2611041400\nE) RWY 03/21 CLSD EXC RWY INT 03/30, DUE CRANE ON FINAL 26 FOR\nAIRCRAFT RECOVERY DRILL. IN CASE OF EMERG LOWERED WI 30MIN.)"
+  },
   {
    "id": "C2343/26",
    "loc": "LLLL",
@@ -39,13 +88,6 @@
    "name": "KOHAV-MICHAL",
    "heb": "פעילות כטב\"מ תתקיים ב-KOHAV-MICHAL. אזור בתוך ברדיוס 0.6 מייל ימי שמרכזו בנ.צ. 31°37'58\"N 34°39'29\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-04/11/2026 07:00 UTC עד 04/11/2026 16:00 UTC",
    "raw": "C2337/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/020/3138N03439E001\nA) LLLL B) 2611040700 C) 2611041600\nE) UAS ACT WILL TAKE PLACE AT KOHAV-MICHAL.\nAN AREA WI 0.6NM RADIUS CENTERED ON PSN 313758N0343929E\nCLSD FM GND UP TO 2,000FT AMSL TO ALL FLT, OPS OF\nAGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
-  },
-  {
-   "id": "C2335/26",
-   "loc": "LLLL",
-   "name": "TZEELIM",
-   "heb": "אזור ב-TZEELIM בין נקודות הציון הבאות סגור מהקרקע ועד 1,500 AMSL לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. 31°15'48\"N 34°30'54\"E 31°15'36\"N 34°31'57\"E 31°11'05\"N 34°31'47\"E 31°10'50\"N 34°30'52\"E. מומלצת זהירות.)\nבתוקף: מ-03/11/2026 06:00 UTC עד 03/11/2026 16:00 UTC",
-   "raw": "C2335/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/015/3113N03431E003\nA) LLLL B) 2611030600 C) 2611031600\nE) AN AREA AT TZEELIM BTN FLW PSN CLSD FM GND UP TO 1,500 AMSL TO\nALL\nFLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\n311548N0343054E 311536N0343157E 311105N343147E\n311050N0343052E.\nCTN ADZ.))"
   },
   {
    "id": "C2333/26",
@@ -116,13 +158,6 @@
    "name": "מסלול 08/26 סגור למעט מסלול INT",
    "heb": "מסלול 08/26 סגור למעט מסלול INT, עקב עבודות.\nבתוקף: מ-04/11/2026 07:00 UTC עד 04/11/2026 11:00 UTC",
    "raw": "A0873/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611040700 C) 2611041100\nE) RWY 08/26 CLSD EXC RWY INT, DUE WIP.)"
-  },
-  {
-   "id": "A0872/26",
-   "loc": "LLBG",
-   "name": "מסלול 03/21 סגור עקב עבודות",
-   "heb": "מסלול 03/21 סגור עקב עבודות.\nבתוקף: מ-03/11/2026 06:00 UTC עד 03/11/2026 12:00 UTC",
-   "raw": "A0872/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611030600 C) 2611031200\nE) RWY 03/21 CLSD DUE WIP.)"
   },
   {
    "id": "C2323/26",
@@ -284,13 +319,6 @@
    "name": "CHECKLIST YEAR=2026 0056 0116 0117 0281 0457 061…",
    "heb": "CHECKLIST YEAR=2026 0056 0116 0117 0281 0457 0616 0622 0691 0693 0694 0701 0710 0719 0720 0738 0739 0740 0741 0742 0762 0764 0798 0802 0820 0824 0825 0826 0827 0828 0829 0850 0851 0854 0855 0856 0857 LATEST PUBLICATIONS AIP AIRAC AMDT IFR 002/2026 תאריך כניסה לתוקף 26 NOV 26 AIP AIRAC SUP IFR 004/2026 תאריך כניסה לתוקף 14 MAY 26 AIC IFR A001/2026 תאריך כניסה לתוקף 05 FEB 26 AIC CHECKLIST AIP IFR A001/2026 AIP VFR אין AIP MIL אין SUP CHECKLIST AIP IFR אין AIP VFR אין AIP MIL אין\nבתוקף: מ-29/10/2026 07:08 UTC עד 29/11/2026 07:08 UTC",
    "raw": "A0858/26 NOTAMR A0805/26\nQ) LLLL/QKKKK/K /K  /K /000/999/3124N03520E999\nA) LLLL B) 2610290708 C) 2611290708EST\nE) CHECKLIST\nYEAR=2026 0056 0116 0117 0281 0457 0616 0622 0691 0693 0694 0701 0710\n0719 0720 0738 0739 0740 0741 0742 0762 0764 0798 0802 0820\n0824 0825 0826 0827 0828 0829 0850 0851 0854 0855 0856 0857\nLATEST PUBLICATIONS\nAIP AIRAC AMDT IFR 002/2026 EFFECTIVE DATE 26 NOV 26\nAIP AIRAC SUP IFR 004/2026 EFFECTIVE DATE 14 MAY 26\nAIC IFR A001/2026 EFFECTIVE DATE 05 FEB 26\nAIC CHECKLIST\nAIP IFR\nA001/2026\nAIP VFR\nNIL\nAIP MIL\nNIL\nSUP CHECKLIST\nAIP IFR\nNIL\nAIP VFR\nNIL\nAIP MIL\nNIL)"
-  },
-  {
-   "id": "C2296/26",
-   "loc": "LLLL",
-   "name": "בועת זעירים A-WEST (BMGWA) סגור",
-   "heb": "בועת זעירים A-WEST (BMGWA) סגור.\nבתוקף: מ-03/11/2026 07:30 UTC עד 03/11/2026 15:30 UTC\nלו\"ז: 0730-0830 1430-1530",
-   "raw": "C2296/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/020/3242N03521E006\nA) LLLL B) 2611030730 C) 2611031530\nD) 0730-0830 1430-1530\nE) ULTRALIGHT BUBBLE A-WEST (BMGWA) CLSD.)"
   },
   {
    "id": "A0857/26",
