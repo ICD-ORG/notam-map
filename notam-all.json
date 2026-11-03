@@ -1,10 +1,38 @@
 {
- "fetched_at": "02/11/2026 22:08 UTC",
- "fetched_iso": "2026-11-02T22:08:55Z",
+ "fetched_at": "03/11/2026 11:10 UTC",
+ "fetched_iso": "2026-11-03T11:10:30Z",
  "listed": 109,
  "count": 109,
  "failed": [],
  "notams": [
+  {
+   "id": "C2343/26",
+   "loc": "LLLL",
+   "name": "JULIS",
+   "heb": "פעילות כטב\"מ תתקיים ב-JULIS. אזור מהקרקע ועד 1000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°41'57\"N 34°40'54\"E, ברדיוס 0.6 מייל ימי. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-03/11/2026 11:00 UTC עד 05/11/2026 17:00 UTC\nלו\"ז: 03 1100-1700, 04 05 DAILY 0730-1700",
+   "raw": "C2343/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3142N03441E001\nA) LLLL B) 2611031100 C) 2611051700\nD) 03 1100-1700, 04 05 DAILY 0730-1700\nE) UAS ACT WILL TAKE PLACE AT JULIS.\nAN AREA FM GND UP TO 1000FT AMSL CLSD TO ALL FLT\nBTN FLW PSN  314157N0344054E, RADIUS 0.6NM.\nOPS OF AGRICULTURE FLT WI 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 650FT AMSL)"
+  },
+  {
+   "id": "C2342/26",
+   "loc": "LLLL",
+   "name": "YERUHAM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM, מהקרקע ועד 600 מטר מעל הקרקע. אזור בתוך ברדיוס 0.3 מייל ימי שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-09/11/2026 03:40 UTC עד 12/11/2026 15:30 UTC\nלו\"ז: DAILY 0340-1530",
+   "raw": "C2342/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2611090340 C) 2611121530\nD) DAILY 0340-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
+  },
+  {
+   "id": "C2341/26",
+   "loc": "LLLL",
+   "name": "REVIVIM",
+   "heb": "פעילות צניחה חופשית תתקיים ב-REVIVIM. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 2,400 רגל מעל פני הים 31°07'12\"N 34°45'50\"E 31°05'11\"N 34°39'20\"E 31°04'55\"N 34°36'55\"E 30°59'31\"N 34°38'15\"E 31°00'35\"N 34°44'09\"E 31°03'59\"N 34°47'20\"E 31°07'12\"N 34°45'50\"E. טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה מומלצת זהירות.\nבתוקף: מ-08/11/2026 10:00 UTC עד 10/11/2026 11:00 UTC\nלו\"ז: 08 1000-1100 1500-1700, 09 0600-0800 1000-1100 1800-1900,  10",
+   "raw": "C2341/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/024/3103N03442E006\nA) LLLL B) 2611081000 C) 2611101100\nD) 08 1000-1100 1500-1700, 09 0600-0800 1000-1100 1800-1900,  10\n0600-0700 1000-1100\nE) PJE WILL TAKE PLACE AT REVIVIM.\nAN AREA BTN FLW PSN CLSD FM GND UP 2,400FT AMSL\n310712N0344550E 310511N0343920E 310455N0343655E\n305931N0343815E 310035N0344409E 310359N0344720E\n310712N0344550E.\nOPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC\nCTN ADZ.\nF) GND G) 2400FT AMSL)"
+  },
+  {
+   "id": "C2339/26",
+   "loc": "LLLL",
+   "name": "CVFR ו- מסוקים נתיב סגור ב-1",
+   "heb": "CVFR ו- מסוקים נתיב סגור ב-1,200 רגל, זמין BIDIRECTIONAL ב-800 רגל מעל פני הים בלבד TYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.\nבתוקף: מ-08/11/2026 10:00 UTC עד 10/11/2026 11:00 UTC\nלו\"ז: 08 1000-1100 1500-1700, 09 0600-0700 1000-1100 1800-1930,  10",
+   "raw": "C2339/26 NOTAMN\nQ) LLLL/QARLT/IV/NBO/E /008/012/3155N03446E008\nA) LLLL B) 2611081000 C) 2611101100\nD) 08 1000-1100 1500-1700, 09 0600-0700 1000-1100 1800-1930,  10\n0600-0700 1000-1100\nE) CVFR AND HEL RTE CLSD AT 1,200FT,\nAVBL BIDIRECTIONAL AT 800FT AMSL ONLY\nTYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.)"
+  },
   {
    "id": "C2337/26",
    "loc": "LLLL",
@@ -25,20 +53,6 @@
    "name": "KELACH",
    "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-10/11/2026 06:00 UTC עד 12/11/2026 15:00 UTC\nלו\"ז: DAILY 0600-1500",
    "raw": "C2333/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611100600 C) 2611121500\nD) DAILY 0600-1500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
-  },
-  {
-   "id": "C2332/26",
-   "loc": "LLLL",
-   "name": "CVFR ו- מסוקים נתיב סגור ב-1",
-   "heb": "CVFR ו- מסוקים נתיב סגור ב-1,200 רגל, זמין BIDIRECTIONAL ב-800 רגל מעל פני הים בלבד TYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.\nבתוקף: מ-09/11/2026 10:00 UTC עד 11/11/2026 11:00 UTC\nלו\"ז: NOV 09 1000-1100 1500-1700, NOV 10 0600-0700 1000-1100 1800-1930,",
-   "raw": "C2332/26 NOTAMN\nQ) LLLL/QARLT/IV/NBO/E /008/012/3155N03446E008\nA) LLLL B) 2611091000 C) 2611111100\nD) NOV 09 1000-1100 1500-1700, NOV 10 0600-0700 1000-1100 1800-1930,\nNOV 11 0600-0700 1000-1100\nE) CVFR AND HEL RTE CLSD AT 1,200FT,\nAVBL BIDIRECTIONAL AT 800FT AMSL ONLY\nTYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.)"
-  },
-  {
-   "id": "C2331/26",
-   "loc": "LLLL",
-   "name": "REVIVIM",
-   "heb": "פעילות צניחה חופשית תתקיים ב-REVIVIM. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 2,400 רגל מעל פני הים 31°07'12\"N 34°45'50\"E 31°05'11\"N 34°39'20\"E 31°04'55\"N 34°36'55\"E 30°59'31\"N 34°38'15\"E 31°00'35\"N 34°44'09\"E 31°03'59\"N 34°47'20\"E 31°07'12\"N 34°45'50\"E. טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה מומלצת זהירות.\nבתוקף: מ-09/11/2026 10:00 UTC עד 11/11/2026 11:00 UTC\nלו\"ז: 09 1000-1100 1500-1700, 10 0600-0800 1000-1100 1800-1900, 11",
-   "raw": "C2331/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/024/3103N03442E006\nA) LLLL B) 2611091000 C) 2611111100\nD) 09 1000-1100 1500-1700, 10 0600-0800 1000-1100 1800-1900, 11\n0600-0700 1000-1100\nE) PJE WILL TAKE PLACE AT REVIVIM.\nAN AREA BTN FLW PSN CLSD FM GND UP 2,400FT AMSL\n310712N0344550E 310511N0343920E 310455N0343655E\n305931N0343815E 310035N0344409E 310359N0344720E\n310712N0344550E.\nOPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC\nCTN ADZ.\nF) GND G) 2400FT AMSL)"
   },
   {
    "id": "C2330/26",
@@ -279,13 +293,6 @@
    "raw": "C2296/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/020/3242N03521E006\nA) LLLL B) 2611030730 C) 2611031530\nD) 0730-0830 1430-1530\nE) ULTRALIGHT BUBBLE A-WEST (BMGWA) CLSD.)"
   },
   {
-   "id": "C2295/26",
-   "loc": "LLLL",
-   "name": "נתיב CVFR סגור TAVOR-DESHE",
-   "heb": "נתיב CVFR סגור TAVOR-DESHE.\nבתוקף: מ-02/11/2026 23:00 UTC עד 03/11/2026 03:00 UTC",
-   "raw": "C2295/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3247N03529E007\nA) LLLL B) 2611022300 C) 2611030300\nE) CVFR RTE CLSD  TAVOR-DESHE.)"
-  },
-  {
    "id": "A0857/26",
    "loc": "LLHA",
    "name": "תרגילי מעגל אסורים",
@@ -501,13 +508,6 @@
    "name": "כלי טיס STAND A2 סגור עקב עבודות",
    "heb": "כלי טיס STAND A2 סגור עקב עבודות.\nבתוקף: מ-23/11/2026 00:01 UTC עד 31/12/2026 21:59 UTC",
    "raw": "A0825/26 NOTAMN\nQ) LLLL/QMPLC/IV/BO /A /000/999/3249N03503E005\nA) LLHA B) 2611230001 C) 2612312159\nE) ACFT STAND A2 CLSD DUE WIP.)"
-  },
-  {
-   "id": "A0824/26",
-   "loc": "LLHA",
-   "name": "שדה תעופה סגור לכל הטיסות כולל מסוקים",
-   "heb": "שדה תעופה סגור לכל הטיסות כולל מסוקים, עקב עבודות. במקרה של חירום זמין בתוך 10 דקות.\nבתוקף: מ-03/11/2026 06:25 UTC עד 03/11/2026 11:00 UTC\nלו\"ז: 0625-0825 0930-1100",
-   "raw": "A0824/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/3249N03503E005\nA) LLHA B) 2611030625 C) 2611031100\nD) 0625-0825 0930-1100\nE) AD CLSD TO ALL FLT INCLUDING HEL, DUE WIP.\nIN CASE OF EMERG AVBL WI 10MIN.)"
   },
   {
    "id": "A0820/26",
