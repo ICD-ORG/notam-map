@@ -1,10 +1,31 @@
 {
- "fetched_at": "04/11/2026 11:20 UTC",
- "fetched_iso": "2026-11-04T11:20:50Z",
- "listed": 115,
- "count": 115,
+ "fetched_at": "04/11/2026 20:17 UTC",
+ "fetched_iso": "2026-11-04T20:17:43Z",
+ "listed": 113,
+ "count": 113,
  "failed": [],
  "notams": [
+  {
+   "id": "C2354/26",
+   "loc": "LLLL",
+   "name": "GOLAN HEIGHTS",
+   "heb": "אזור ב-GOLAN HEIGHTS בין נקודות הציון הבאות סגור מהקרקע ועד 6,000 AMSL לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. 33°05'22\"N 35°45'55\"E 33°13'06\"N 35°45'02\"E 33°13'10\"N 35°48'52\"E 33°12'09\"N 35°48'53\"E 33°11'25\"N 35°50'08\"E 33°09'51\"N 35°50'26\"E 33°07'32\"N 35°48'57\"E 33°06'38\"N 35°48'50\"E. מומלצת זהירות.\nבתוקף: מ-08/11/2026 13:10 UTC עד 09/11/2026 13:40 UTC\nלו\"ז: 08 1310-1400, 09 1045-1115 1310-1340",
+   "raw": "C2354/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/060/3309N03547E005\nA) LLLL B) 2611081310 C) 2611091340\nD) 08 1310-1400, 09 1045-1115 1310-1340\nE) AN AREA AT GOLAN HEIGHTS BTN FLW PSN CLSD FM GND UP TO 6,000 AMSL\nTO\nALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\n330522N0354555E 331306N0354502E 331310N0354852E\n331209N0354853E 331125N0355008E 330951N0355026E\n330732N0354857E 330638N0354850E.\nCTN ADZ.)"
+  },
+  {
+   "id": "C2353/26",
+   "loc": "LLLL",
+   "name": "NES-HARIM",
+   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-NES-HARIM. אזור בין נקודות הציון הבאות סגור מהקרקע ועד 3,000 רגל מעל פני הים 31°42'52\"N 35°02'53\"E 31°43'11\"N 35°01'58\"E 31°44'21\"N 35°02'06\"E 31°45'26\"N 35°02'39\"E 31°46'14\"N 35°04'15\"E 31°46'05\"N 35°06'05\"E 31°45'33\"N 35°06'25\"E 31°42'49\"N 35°06'25\"E 31°41'59\"N 35°05'14\"E 31°41'26\"N 35°03'56\"E מומלצת זהירות.\nבתוקף: מ-05/11/2026 09:00 UTC עד 30/11/2026 17:00 UTC\nלו\"ז: SUN-THU 0900-1700",
+   "raw": "C2353/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/030/3144N03505E003\nA) LLLL B) 2611050900 C) 2611301700\nD) SUN-THU 0900-1700\nE) UAS/UAV ACT WILL TAKE PLACE AT NES-HARIM.\nAN AREA BTN THE FLW PSN CLSD FM GND UP TO 3,000FT AMSL\n314252N0350253E 314311N0350158E 314421N0350206E\n314526N0350239E 314614N0350415E 314605N0350605E\n314533N0350625E 314249N0350625E 314159N0350514E\n314126N0350356E\nCTN ADZ.\nF) GND G) 3000FT AMSL)"
+  },
+  {
+   "id": "C2352/26",
+   "loc": "LLLL",
+   "name": "מרחב פעילות צניחה חופשית METZADA ACT מ-8",
+   "heb": "מרחב פעילות צניחה חופשית METZADA ACT מ-8,000 רגל מעל פני הים. הפעלה באישור מוקדם מבקרת התעופה בלבד.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-12/11/2026 10:30 UTC עד 13/11/2026 12:00 UTC\nלו\"ז: 12 1030-1510, 13 0700-1200",
+   "raw": "C2352/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3120N03523E003\nA) LLLL B) 2611121030 C) 2611131200\nD) 12 1030-1510, 13 0700-1200\nE) PJE AIRSPACE METZADA ACT FM 8,000FT AMSL.\nOPR BY PPR FM ATC ONLY.\nF) GND G) 8000FT AMSL)"
+  },
   {
    "id": "C2351/26",
    "loc": "LLLL",
@@ -18,13 +39,6 @@
    "name": "HACHULA-LAKE",
    "heb": "אזור ב-HACHULA-LAKE בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'51\"N 35°36'18\"E סגור מהקרקע ועד 660 רגל מעל הקרקע לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-09/11/2026 05:00 UTC עד 10/11/2026 13:00 UTC\nלו\"ז: DAILY 0500-1300",
    "raw": "C2350/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/007/3307N03536E001\nA) LLLL B) 2611090500 C) 2611101300\nD) DAILY 0500-1300\nE) AN AREA AT HACHULA-LAKE WI 0.54NM RADIUS CENTERED ON\nPSN 330651N0353618E CLSD FM GND UP TO 660FT AGL\nTO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN\nPPR FM ATC.\nCTN ADZ.)"
-  },
-  {
-   "id": "C2349/26",
-   "loc": "LLLL",
-   "name": "BEIT-RIMON",
-   "heb": "אזור ב-BEIT-RIMON מהקרקע ועד 2,200 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 32°46'20\"N 35°18'07\"E 32°47'02\"N 35°18'03\"E 32°47'04\"N 35°18'40\"E 32°46'21\"N 35°18'47\"E טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-04/11/2026 08:00 UTC עד 04/11/2026 14:00 UTC",
-   "raw": "C2349/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/022/3247N03518E001\nA) LLLL B) 2611040800 C) 2611041400\nE) AN AREA AT BEIT-RIMON FM GND UP TO 2,200FT AMSL CLSD TO\nALL FLT BTN FLW PSN  324620N0351807E 324702N0351803E\n324704N0351840E 324621N0351847E\nOPS OF AGRICULTURE FLT WI 15MIN PPR FM ATC.\nCTN ADZ.)"
   },
   {
    "id": "C2348/26",
@@ -62,27 +76,6 @@
    "raw": "C2344/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611090600 C) 2611091500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
   },
   {
-   "id": "A0884/26",
-   "loc": "LLBG",
-   "name": "Q APRON",
-   "heb": "עגורן הוקם בתוך LLBG אזור בקרה, ב-Q APRON. ON נ.צ. 32°01'15\"N 34°53'52\"E מהקרקע ועד 40M 131 רגל מעל הקרקע. מומלצת זהירות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
-   "raw": "A0884/26 NOTAMN\nQ) LLLL/QOBCE/IV/M  /AE/000/002/3201N03454E001\nA) LLBG B) 2611041100 C) 2611041400\nE) CRANE ERECTED WI LLBG CTR, AT Q APRON.\nON PSN 320114.84N0345352.36E\nFM GND UP TO 40M 131FT AGL.\nCTN ADZ.)"
-  },
-  {
-   "id": "A0883/26",
-   "loc": "LLBG",
-   "name": "מסלול 26 סגור ל-נחיתה",
-   "heb": "מסלול 26 סגור ל-נחיתה, עקב עגורן ON FINAL 26 ל-AIRCRAFT RECOVERY DRILL. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
-   "raw": "A0883/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611041100 C) 2611041400\nE) RWY 26 CLSD FOR LDG, DUE CRANE ON FINAL 26 FOR AIRCRAFT\nRECOVERY DRILL. IN CASE OF EMERG LOWERED WI 30MIN.)"
-  },
-  {
-   "id": "A0881/26",
-   "loc": "LLBG",
-   "name": "מסלול 03/21 סגור למעט מסלול INT 03/30",
-   "heb": "מסלול 03/21 סגור למעט מסלול INT 03/30, עקב עגורן ON FINAL 26 ל-AIRCRAFT RECOVERY DRILL. במקרה חירום יונמך בתוך 30 דקות.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-04/11/2026 11:00 UTC עד 04/11/2026 14:00 UTC",
-   "raw": "A0881/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611041100 C) 2611041400\nE) RWY 03/21 CLSD EXC RWY INT 03/30, DUE CRANE ON FINAL 26 FOR\nAIRCRAFT RECOVERY DRILL. IN CASE OF EMERG LOWERED WI 30MIN.)"
-  },
-  {
    "id": "C2343/26",
    "loc": "LLLL",
    "name": "JULIS",
@@ -109,13 +102,6 @@
    "name": "CVFR ו- מסוקים נתיב סגור ב-1",
    "heb": "CVFR ו- מסוקים נתיב סגור ב-1,200 רגל, זמין BIDIRECTIONAL ב-800 רגל מעל פני הים בלבד TYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.\nבתוקף: מ-08/11/2026 10:00 UTC עד 10/11/2026 11:00 UTC\nלו\"ז: 08 1000-1100 1500-1700, 09 0600-0700 1000-1100 1800-1930,  10",
    "raw": "C2339/26 NOTAMN\nQ) LLLL/QARLT/IV/NBO/E /008/012/3155N03446E008\nA) LLLL B) 2611081000 C) 2611101100\nD) 08 1000-1100 1500-1700, 09 0600-0700 1000-1100 1800-1930,  10\n0600-0700 1000-1100\nE) CVFR AND HEL RTE CLSD AT 1,200FT,\nAVBL BIDIRECTIONAL AT 800FT AMSL ONLY\nTYONA-SUPER-NTAIM-BOVED-NAGID-YAVNE-ZASHD.)"
-  },
-  {
-   "id": "C2337/26",
-   "loc": "LLLL",
-   "name": "KOHAV-MICHAL",
-   "heb": "פעילות כטב\"מ תתקיים ב-KOHAV-MICHAL. אזור בתוך ברדיוס 0.6 מייל ימי שמרכזו בנ.צ. 31°37'58\"N 34°39'29\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-04/11/2026 07:00 UTC עד 04/11/2026 16:00 UTC",
-   "raw": "C2337/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/020/3138N03439E001\nA) LLLL B) 2611040700 C) 2611041600\nE) UAS ACT WILL TAKE PLACE AT KOHAV-MICHAL.\nAN AREA WI 0.6NM RADIUS CENTERED ON PSN 313758N0343929E\nCLSD FM GND UP TO 2,000FT AMSL TO ALL FLT, OPS OF\nAGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
   },
   {
    "id": "C2333/26",
