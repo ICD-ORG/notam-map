@@ -1,10 +1,38 @@
 {
- "fetched_at": "03/11/2026 19:58 UTC",
- "fetched_iso": "2026-11-03T19:58:31Z",
- "listed": 113,
- "count": 113,
+ "fetched_at": "04/11/2026 11:20 UTC",
+ "fetched_iso": "2026-11-04T11:20:50Z",
+ "listed": 115,
+ "count": 115,
  "failed": [],
  "notams": [
+  {
+   "id": "C2351/26",
+   "loc": "LLLL",
+   "name": "KOHAV-MICHAL",
+   "heb": "פעילות כטב\"מ תתקיים ב-KOHAV-MICHAL. אזור בתוך ברדיוס 0.6 מייל ימי שמרכזו בנ.צ. 31°37'58\"N 34°39'29\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-05/11/2026 07:00 UTC עד 05/11/2026 16:00 UTC",
+   "raw": "C2351/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/020/3138N03439E001\nA) LLLL B) 2611050700 C) 2611051600\nE) UAS ACT WILL TAKE PLACE AT KOHAV-MICHAL.\nAN AREA WI 0.6NM RADIUS CENTERED ON PSN 313758N0343929E\nCLSD FM GND UP TO 2,000FT AMSL TO ALL FLT, OPS OF\nAGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
+  },
+  {
+   "id": "C2350/26",
+   "loc": "LLLL",
+   "name": "HACHULA-LAKE",
+   "heb": "אזור ב-HACHULA-LAKE בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'51\"N 35°36'18\"E סגור מהקרקע ועד 660 רגל מעל הקרקע לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-09/11/2026 05:00 UTC עד 10/11/2026 13:00 UTC\nלו\"ז: DAILY 0500-1300",
+   "raw": "C2350/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/007/3307N03536E001\nA) LLLL B) 2611090500 C) 2611101300\nD) DAILY 0500-1300\nE) AN AREA AT HACHULA-LAKE WI 0.54NM RADIUS CENTERED ON\nPSN 330651N0353618E CLSD FM GND UP TO 660FT AGL\nTO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN\nPPR FM ATC.\nCTN ADZ.)"
+  },
+  {
+   "id": "C2349/26",
+   "loc": "LLLL",
+   "name": "BEIT-RIMON",
+   "heb": "אזור ב-BEIT-RIMON מהקרקע ועד 2,200 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 32°46'20\"N 35°18'07\"E 32°47'02\"N 35°18'03\"E 32°47'04\"N 35°18'40\"E 32°46'21\"N 35°18'47\"E טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-04/11/2026 08:00 UTC עד 04/11/2026 14:00 UTC",
+   "raw": "C2349/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/022/3247N03518E001\nA) LLLL B) 2611040800 C) 2611041400\nE) AN AREA AT BEIT-RIMON FM GND UP TO 2,200FT AMSL CLSD TO\nALL FLT BTN FLW PSN  324620N0351807E 324702N0351803E\n324704N0351840E 324621N0351847E\nOPS OF AGRICULTURE FLT WI 15MIN PPR FM ATC.\nCTN ADZ.)"
+  },
+  {
+   "id": "C2348/26",
+   "loc": "LLIB",
+   "name": "שדה תעופה סגור לכל הטיסות",
+   "heb": "שדה תעופה סגור לכל הטיסות, עקב עבודות. הפעלת מסוקים זמין באישור מוקדם מבקרת התעופה. במקרה של חירום או MEDEVAC מסוקים זמין בתוך 10 דקות.\nבתוקף: מ-22/11/2026 07:00 UTC עד 22/11/2026 10:00 UTC",
+   "raw": "C2348/26 NOTAMN\nQ) LLLL/QFALT/IV/NBO/A /000/999/3259N03534E005\nA) LLIB B) 2611220700 C) 2611221000\nE) AD CLSD TO ALL FLT, DUE WIP.\nOPS OF HEL AVBL BY PPR FM ATC.\nIN CASE OF EMERG OR MEDEVAC HEL AVBL WI 10MIN.)"
+  },
   {
    "id": "C2347/26",
    "loc": "LLLL",
@@ -144,20 +172,6 @@
    "name": "KELACH",
    "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-02/11/2026 06:00 UTC עד 05/11/2026 15:00 UTC\nלו\"ז: DAILY 0600-1500",
    "raw": "C2324/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611020600 C) 2611051500\nD) DAILY 0600-1500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
-  },
-  {
-   "id": "A0874/26",
-   "loc": "LLBG",
-   "name": "ILS מסלול 26 C/S BA תדר 108",
-   "heb": "ILS מסלול 26 C/S BA תדר 108.700MHZ מושבת לצורך תחזוקה.\nבתוקף: מ-04/11/2026 07:00 UTC עד 04/11/2026 09:00 UTC",
-   "raw": "A0874/26 NOTAMN\nQ) LLLL/QISAS/I /NBO/A /000/999/3201N03451E005\nA) LLBG B) 2611040700 C) 2611040900\nE) ILS RWY 26 C/S BA FREQ 108.700MHZ WITHDRAWN FOR MAINT.)"
-  },
-  {
-   "id": "A0873/26",
-   "loc": "LLBG",
-   "name": "מסלול 08/26 סגור למעט מסלול INT",
-   "heb": "מסלול 08/26 סגור למעט מסלול INT, עקב עבודות.\nבתוקף: מ-04/11/2026 07:00 UTC עד 04/11/2026 11:00 UTC",
-   "raw": "A0873/26 NOTAMN\nQ) LLLL/QMRLC/IV/NBO/A /000/999/3201N03453E005\nA) LLBG B) 2611040700 C) 2611041100\nE) RWY 08/26 CLSD EXC RWY INT, DUE WIP.)"
   },
   {
    "id": "C2323/26",
