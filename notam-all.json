@@ -1,10 +1,80 @@
 {
- "fetched_at": "04/11/2026 20:17 UTC",
- "fetched_iso": "2026-11-04T20:17:43Z",
- "listed": 113,
- "count": 113,
+ "fetched_at": "05/11/2026 11:19 UTC",
+ "fetched_iso": "2026-11-05T11:19:07Z",
+ "listed": 122,
+ "count": 122,
  "failed": [],
  "notams": [
+  {
+   "id": "C2364/26",
+   "loc": "LLLL",
+   "name": "ULTRALIGHT נתיב סגור עקב IFR ACT בתוך LLEK MACHZ…",
+   "heb": "ULTRALIGHT נתיב סגור עקב IFR ACT בתוך LLEK MACHZ-MKGAT-NAHLA-NAHEM-GEFFN-ZHRYA.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-10/11/2026 11:00 UTC עד 10/11/2026 11:50 UTC",
+   "raw": "C2364/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /008/015/3138N03450E009\nA) LLLL B) 2611101100 C) 2611101150\nE) ULTRALIGHT RTE CLSD DUE IFR ACT WI LLEK\nMACHZ-MKGAT-NAHLA-NAHEM-GEFFN-ZHRYA.)"
+  },
+  {
+   "id": "C2363/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור עקב IFR ACT בתוך LLEK REVAH-NOAAM…",
+   "heb": "נתיב CVFR סגור עקב IFR ACT בתוך LLEK REVAH-NOAAM-GOVRN-ZHRYA.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-10/11/2026 11:00 UTC עד 10/11/2026 11:50 UTC",
+   "raw": "C2363/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3139N03451E008\nA) LLLL B) 2611101100 C) 2611101150\nE) CVFR RTE CLSD DUE IFR ACT WI LLEK  REVAH-NOAAM-GOVRN-ZHRYA.)"
+  },
+  {
+   "id": "C2362/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור EVLYM-AHIUD-AAKKO",
+   "heb": "נתיב CVFR סגור EVLYM-AHIUD-AAKKO.\nבתוקף: מ-10/11/2026 03:40 UTC עד 10/11/2026 05:30 UTC",
+   "raw": "C2362/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /015/020/3253N03508E004\nA) LLLL B) 2611100340 C) 2611100530\nE) CVFR RTE CLSD  EVLYM-AHIUD-AAKKO.)"
+  },
+  {
+   "id": "C2361/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור TAVOR-DESHE",
+   "heb": "נתיב CVFR סגור TAVOR-DESHE.\nבתוקף: מ-09/11/2026 23:00 UTC עד 10/11/2026 03:00 UTC",
+   "raw": "C2361/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3247N03529E007\nA) LLLL B) 2611092300 C) 2611100300\nE) CVFR RTE CLSD  TAVOR-DESHE.)"
+  },
+  {
+   "id": "C2360/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור TAVOR-DESHE",
+   "heb": "נתיב CVFR סגור TAVOR-DESHE.\nבתוקף: מ-08/11/2026 23:00 UTC עד 09/11/2026 03:00 UTC",
+   "raw": "C2360/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3247N03529E007\nA) LLLL B) 2611082300 C) 2611090300\nE) CVFR RTE CLSD  TAVOR-DESHE.)"
+  },
+  {
+   "id": "C2359/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור EVLYM-AHIUD-AAKKO",
+   "heb": "נתיב CVFR סגור EVLYM-AHIUD-AAKKO.\nבתוקף: מ-09/11/2026 03:40 UTC עד 09/11/2026 05:10 UTC",
+   "raw": "C2359/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /015/020/3253N03508E004\nA) LLLL B) 2611090340 C) 2611090510\nE) CVFR RTE CLSD  EVLYM-AHIUD-AAKKO.)"
+  },
+  {
+   "id": "C2358/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור RUHOT-OVDAT-BOKER-TLLIM",
+   "heb": "נתיב CVFR סגור RUHOT-OVDAT-BOKER-TLLIM. BOKER-YRUHM. ULTRALIGHT נתיב סגור RUHOT-KNFHA-OVDAT-BOKER-TLLIM.\nבתוקף: מ-09/11/2026 17:00 UTC עד 09/11/2026 17:30 UTC",
+   "raw": "C2358/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /027/045/3050N03450E011\nA) LLLL B) 2611091700 C) 2611091730\nE) CVFR RTE CLSD\nRUHOT-OVDAT-BOKER-TLLIM.\nBOKER-YRUHM.\nULTRALIGHT RTE CLSD\nRUHOT-KNFHA-OVDAT-BOKER-TLLIM.)"
+  },
+  {
+   "id": "C2356/26",
+   "loc": "LLLL",
+   "name": "נתיב CVFR סגור עקב IFR ACT בתוך LLEK REVAH-NOAAM…",
+   "heb": "נתיב CVFR סגור עקב IFR ACT בתוך LLEK REVAH-NOAAM-GOVRN-ZHRYA.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-08/11/2026 12:50 UTC עד 08/11/2026 13:30 UTC",
+   "raw": "C2356/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3139N03451E008\nA) LLLL B) 2611081250 C) 2611081330\nE) CVFR RTE CLSD DUE IFR ACT WI LLEK  REVAH-NOAAM-GOVRN-ZHRYA.)"
+  },
+  {
+   "id": "C2357/26",
+   "loc": "LLLL",
+   "name": "ULTRALIGHT נתיב סגור עקב IFR ACT בתוך LLEK MACHZ…",
+   "heb": "ULTRALIGHT נתיב סגור עקב IFR ACT בתוך LLEK MACHZ-MKGAT-NAHLA-NAHEM-GEFFN-ZHRYA.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-08/11/2026 12:50 UTC עד 08/11/2026 13:30 UTC",
+   "raw": "C2357/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /008/015/3138N03450E009\nA) LLLL B) 2611081250 C) 2611081330\nE) ULTRALIGHT RTE CLSD DUE IFR ACT WI LLEK\nMACHZ-MKGAT-NAHLA-NAHEM-GEFFN-ZHRYA.)"
+  },
+  {
+   "id": "A0885/26",
+   "loc": "LLER",
+   "name": "VOR/DME RAM תדר 113",
+   "heb": "VOR/DME RAM תדר 113.850MHZ מושבת לצורך תחזוקה.\nבתוקף: מ-12/11/2026 07:00 UTC עד 12/11/2026 11:00 UTC",
+   "raw": "A0885/26 NOTAMN\nQ) LLLL/QNMAS/IV/BO /AE/000/999/2945N03501E025\nA) LLER B) 2611120700 C) 2611121100\nE) VOR/DME RAM FREQ 113.850MHZ WITHDRAWN FOR MAINT.)"
+  },
   {
    "id": "C2354/26",
    "loc": "LLLL",
@@ -158,13 +228,6 @@
    "name": "KELACH",
    "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-02/11/2026 06:00 UTC עד 05/11/2026 15:00 UTC\nלו\"ז: DAILY 0600-1500",
    "raw": "C2324/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611020600 C) 2611051500\nD) DAILY 0600-1500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
-  },
-  {
-   "id": "C2323/26",
-   "loc": "LLLL",
-   "name": "נתיב CVFR סגור TAVOR-DESHE",
-   "heb": "נתיב CVFR סגור TAVOR-DESHE.\nבתוקף: מ-03/11/2026 23:00 UTC עד 05/11/2026 03:00 UTC\nלו\"ז: DAILY 2300-0300",
-   "raw": "C2323/26 NOTAMN\nQ) LLLL/QARLC/IV/NBO/E /025/030/3247N03529E007\nA) LLLL B) 2611032300 C) 2611050300\nD) DAILY 2300-0300\nE) CVFR RTE CLSD  TAVOR-DESHE.)"
   },
   {
    "id": "A0871/26",
