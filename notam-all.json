@@ -1,10 +1,17 @@
 {
- "fetched_at": "05/11/2026 11:19 UTC",
- "fetched_iso": "2026-11-05T11:19:07Z",
- "listed": 122,
- "count": 122,
+ "fetched_at": "05/11/2026 20:29 UTC",
+ "fetched_iso": "2026-11-05T20:29:07Z",
+ "listed": 118,
+ "count": 118,
  "failed": [],
  "notams": [
+  {
+   "id": "C2365/26",
+   "loc": "LLLL",
+   "name": "ASHKELON",
+   "heb": "פעילות כטב\"מ תתקיים ב-ASHKELON. אזור בתוך ברדיוס 0.5 מייל ימי שמרכזו בנ.צ. 31°40'37\"N 34°33'23\"E סגור מהקרקע ועד 1,500 רגל מעל פני הים לכל הטיסות כולל טיסות ריסוס חקלאיות. מומלצת זהירות.\nבתוקף: מ-05/11/2026 14:00 UTC עד 12/11/2026 23:59 UTC\nלו\"ז: 1400-2359",
+   "raw": "C2365/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3140N03433E001\nA) LLLL B) 2611051400 C) 2611122359\nD) 1400-2359\nE) UAS ACT WILL TAKE PLACE AT ASHKELON.\nAN AREA WI 0.5NM RADIUS CENTERED ON PSN 314037N0343323E\nCLSD FM GND UP TO 1,500FT AMSL TO ALL FLT INCLUDING\nAGRICULTURE FLT.\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
+  },
   {
    "id": "C2364/26",
    "loc": "LLLL",
@@ -97,13 +104,6 @@
    "raw": "C2352/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3120N03523E003\nA) LLLL B) 2611121030 C) 2611131200\nD) 12 1030-1510, 13 0700-1200\nE) PJE AIRSPACE METZADA ACT FM 8,000FT AMSL.\nOPR BY PPR FM ATC ONLY.\nF) GND G) 8000FT AMSL)"
   },
   {
-   "id": "C2351/26",
-   "loc": "LLLL",
-   "name": "KOHAV-MICHAL",
-   "heb": "פעילות כטב\"מ תתקיים ב-KOHAV-MICHAL. אזור בתוך ברדיוס 0.6 מייל ימי שמרכזו בנ.צ. 31°37'58\"N 34°39'29\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים לכל הטיסות, טיסות ריסוס חקלאיות יתאפשרו באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-05/11/2026 07:00 UTC עד 05/11/2026 16:00 UTC",
-   "raw": "C2351/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/020/3138N03439E001\nA) LLLL B) 2611050700 C) 2611051600\nE) UAS ACT WILL TAKE PLACE AT KOHAV-MICHAL.\nAN AREA WI 0.6NM RADIUS CENTERED ON PSN 313758N0343929E\nCLSD FM GND UP TO 2,000FT AMSL TO ALL FLT, OPS OF\nAGRICULTURE FLT AVBL WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
-  },
-  {
    "id": "C2350/26",
    "loc": "LLLL",
    "name": "HACHULA-LAKE",
@@ -146,13 +146,6 @@
    "raw": "C2344/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611090600 C) 2611091500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
   },
   {
-   "id": "C2343/26",
-   "loc": "LLLL",
-   "name": "JULIS",
-   "heb": "פעילות כטב\"מ תתקיים ב-JULIS. אזור מהקרקע ועד 1000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°41'57\"N 34°40'54\"E, ברדיוס 0.6 מייל ימי. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-03/11/2026 11:00 UTC עד 05/11/2026 17:00 UTC\nלו\"ז: 03 1100-1700, 04 05 DAILY 0730-1700",
-   "raw": "C2343/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/010/3142N03441E001\nA) LLLL B) 2611031100 C) 2611051700\nD) 03 1100-1700, 04 05 DAILY 0730-1700\nE) UAS ACT WILL TAKE PLACE AT JULIS.\nAN AREA FM GND UP TO 1000FT AMSL CLSD TO ALL FLT\nBTN FLW PSN  314157N0344054E, RADIUS 0.6NM.\nOPS OF AGRICULTURE FLT WI 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 650FT AMSL)"
-  },
-  {
    "id": "C2342/26",
    "loc": "LLLL",
    "name": "YERUHAM",
@@ -179,13 +172,6 @@
    "name": "KELACH",
    "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-10/11/2026 06:00 UTC עד 12/11/2026 15:00 UTC\nלו\"ז: DAILY 0600-1500",
    "raw": "C2333/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611100600 C) 2611121500\nD) DAILY 0600-1500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
-  },
-  {
-   "id": "C2330/26",
-   "loc": "LLLL",
-   "name": "YERUHAM",
-   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM, מהקרקע ועד 600 מטר מעל הקרקע. אזור בתוך ברדיוס 0.3 מייל ימי שמרכזו בנ.צ. 30°58'19\"N 34°56'01\"E סגור מהקרקע ועד 3,700 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-02/11/2026 03:30 UTC עד 05/11/2026 15:30 UTC\nלו\"ז: DAILY 0330-1530",
-   "raw": "C2330/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/037/3058N03456E001\nA) LLLL B) 2611020330 C) 2611051530\nD) DAILY 0330-1530\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM, FM GND UP TO 600M AGL.\nAN AREA WI 0.3NM RADIUS CENTERED ON PSN 305819N0345601E\nCLSD FM GND UP TO 3,700FT AMSL.\nCTN ADZ.\nF) GND G) 3700FT AMSL)"
   },
   {
    "id": "C2329/26",
@@ -221,13 +207,6 @@
    "name": "HACHULA-LAKE",
    "heb": "בלון קשור יופעל ב-HACHULA-LAKE DRG לילה, מהקרקע ועד 400 מטר מעל הקרקע. מואר ומסומן לשעות היום. אזור בתוך ברדיוס 0.54 מייל ימי שמרכזו בנ.צ. 33°06'22\"N 35°34'54\"E סגור מהקרקע ועד 2,000 רגל מעל פני הים. במקרה חירום יונמך בתוך 10 דקות. מומלצת זהירות.\nבתוקף: מ-09/11/2026 15:00 UTC עד 12/11/2026 23:59 UTC\nלו\"ז: 09 1500-2359, 10-12 DAILY 1500-2359",
    "raw": "C2325/26 NOTAMN\nQ) LLLL/QWCLW/IV/M  /W /000/020/3306N03535E001\nA) LLLL B) 2611091500 C) 2611122359\nD) 09 1500-2359, 10-12 DAILY 1500-2359\nE) CAPTIVE BALLOON WILL TAKE PLACE AT HACHULA-LAKE DRG NGT,\nFM GND UP TO 400M AGL. LIT AND DAY MARKED.\nAN AREA WI 0.54NM RADIUS CENTERED ON PSN 330622N0353454E\nCLSD FM GND UP TO 2,000FT AMSL.\nIN CASE OF EMERG LOWERED WI 10MIN.\nCTN ADZ.\nF) GND G) 2000FT AMSL)"
-  },
-  {
-   "id": "C2324/26",
-   "loc": "LLLL",
-   "name": "KELACH",
-   "heb": "פעילות צניחה חופשית תתקיים ב-KELACH. אזור מהקרקע ועד 8,000 רגל מעל פני הים סגור לכל הטיסות בין נקודות הציון הבאות 31°32'00\"N 34°53'19\"E 31°31'59\"N 34°47'33\"E 31°26'02\"N 34°47'30\"E 31°24'44\"N 34°50'24\"E 31°26'02\"N 34°53'11\"E. טיסות ריסוס חקלאיות באישור מוקדם של 15 דקות מבקרת התעופה. מומלצת זהירות.\nבתוקף: מ-02/11/2026 06:00 UTC עד 05/11/2026 15:00 UTC\nלו\"ז: DAILY 0600-1500",
-   "raw": "C2324/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3129N03450E005\nA) LLLL B) 2611020600 C) 2611051500\nD) DAILY 0600-1500\nE) PJE WILL TAKE PLACE AT KELACH.\nAN AREA FM GND UP TO 8,000FT AMSL CLSD TO ALL FLT BTN FLW PSN\n313200N0345319E 313159N0344733E 312602N0344730E\n312444N0345024E 312602N0345311E.\nOPS OF AGRICULTURE FLT WITH 15MIN PPR FM ATC.\nCTN ADZ.\nF) GND G) 8000FT AMSL)"
   },
   {
    "id": "A0871/26",
@@ -431,13 +410,6 @@
    "name": "NESHER",
    "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-NESHER בתוך LLHA אזור בקרה מהקרקע ועד 460 מטר מעל הקרקע 1,510 רגל מעל פני הים, בין נקודות הציון הבאות 32°46'37\"N 35°01'34\"E 32°46'29\"N 35°00'37\"E 32°45'52\"N 35°00'43\"E 32°45'14\"N 35°01'31\"E 32°45'13\"N 35°02'43\"E 32°45'59\"N 35°02'45\"E 32°46'17\"N 35°02'07\"E. מומלצת זהירות.\nבתוקף: מ-01/11/2026 00:01 UTC עד 30/11/2026 21:59 UTC",
    "raw": "C2270/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/015/3246N03502E002\nA) LLLL B) 2611010001 C) 2611302159\nE) UAS/UAV ACT WILL TAKE PLACE AT NESHER WI LLHA CTR\nFM GND UP TO 460M AGL 1,510FT AMSL, BTN FLW PSN\n324637N0350134E 324629N0350037E 324552N0350043E\n324514N0350131E 324513N0350243E 324559N0350245E\n324617N0350207E.\nCTN ADZ.\nF) GND G) 1500FT AMSL)"
-  },
-  {
-   "id": "C2260/26",
-   "loc": "LLLL",
-   "name": "YERUHAM",
-   "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 3,200 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-01/11/2026 03:30 UTC עד 05/11/2026 15:20 UTC\nלו\"ז: DAILY 0330-1520",
-   "raw": "C2260/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/032/3057N03456E002\nA) LLLL B) 2611010330 C) 2611051520\nD) DAILY 0330-1520\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 3,200FT AMSL.\nCTN ADZ.\nF) GND G) 3200FT AMSL)"
   },
   {
    "id": "C2250/26",
