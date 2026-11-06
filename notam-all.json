@@ -1,8 +1,8 @@
 {
- "fetched_at": "06/11/2026 11:16 UTC",
- "fetched_iso": "2026-11-06T11:16:18Z",
- "listed": 118,
- "count": 118,
+ "fetched_at": "06/11/2026 19:51 UTC",
+ "fetched_iso": "2026-11-06T19:51:50Z",
+ "listed": 116,
+ "count": 116,
  "failed": [],
  "notams": [
   {
@@ -125,13 +125,6 @@
    "raw": "C2347/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/022/3237N03500E001\nA) LLLL B) 2611090500 C) 2611091500\nE) AN AREA AT BAT-SHLOMO WI 0.54NM RADIUS CENTERED ON\nPSN 323721N0350002E CLSD FM GND UP TO 2,200FT AMSL\nTO ALL FLT, OPS OF AGRICULTURE FLT AVBL WITH 15MIN\nPPR FM ATC.\nCTN ADZ.)"
   },
   {
-   "id": "C2346/26",
-   "loc": "LLLL",
-   "name": "בועת זעירים SHIVTA (BSVTA) סגור",
-   "heb": "בועת זעירים SHIVTA (BSVTA) סגור.\nבתוקף: מ-06/11/2026 04:00 UTC עד 06/11/2026 12:00 UTC",
-   "raw": "C2346/26 NOTAMN\nQ) LLLL/QAELC/IV/NBO/E /000/020/3101N03432E016\nA) LLLL B) 2611060400 C) 2611061200\nE) ULTRALIGHT BUBBLE SHIVTA (BSVTA) CLSD .)"
-  },
-  {
    "id": "C2345/26",
    "loc": "LLLL",
    "name": "SHUNRAH",
@@ -179,13 +172,6 @@
    "name": "YERUHAM",
    "heb": "פעילות כטב\"מ/רחפנים תתקיים ב-YERUHAM. אזור בין נקודות הציון הבאות 30°58'30\"N 34°55'51\"E 30°58'23\"N 34°56'44\"E 30°58'03\"N 34°57'08\"E 30°57'09\"N 34°56'49\"E 30°56'24\"N 34°56'14\"E 30°56'52\"N 34°54'53\"E סגור מהקרקע ועד 3,200 רגל מעל פני הים. מומלצת זהירות.\nבתוקף: מ-08/11/2026 03:30 UTC עד 12/11/2026 15:10 UTC\nלו\"ז: DAILY 0330-1510",
    "raw": "C2329/26 NOTAMN\nQ) LLLL/QWULW/IV/BO /W /000/032/3057N03456E002\nA) LLLL B) 2611080330 C) 2611121510\nD) DAILY 0330-1510\nE) UAS/UAV ACT WILL TAKE PLACE AT YERUHAM.\nAN AREA BTN FLW PSN 305830N0345551E 305823N0345644E\n305803N0345708E 305709N0345649E 305624N0345614E\n305652N0345453E CLSD FM GND UP TO 3,200FT AMSL.\nCTN ADZ.\nF) GND G) 3200FT AMSL)"
-  },
-  {
-   "id": "C2328/26",
-   "loc": "LLLL",
-   "name": "מרחב פעילות צניחה חופשית METZADA ACT מ-8",
-   "heb": "מרחב פעילות צניחה חופשית METZADA ACT מ-8,000 רגל מעל פני הים. הפעלה באישור מוקדם מבקרת התעופה בלבד.\n⚠ תרגום אוטומטי חלקי — יש לקרוא גם את הנוטמ המקורי.\nבתוקף: מ-05/11/2026 11:00 UTC עד 06/11/2026 12:00 UTC\nלו\"ז: 05 1100-1145 1215-1520, 06 0700-1200",
-   "raw": "C2328/26 NOTAMN\nQ) LLLL/QWPLW/IV/M  /W /000/080/3120N03523E003\nA) LLLL B) 2611051100 C) 2611061200\nD) 05 1100-1145 1215-1520, 06 0700-1200\nE) PJE AIRSPACE METZADA ACT FM 8,000FT AMSL.\nOPR BY PPR FM ATC ONLY.\nF) GND G) 8000FT AMSL)"
   },
   {
    "id": "C2327/26",
