@@ -1,10 +1,17 @@
 {
- "fetched_at": "07/11/2026 17:57 UTC",
- "fetched_iso": "2026-11-07T17:57:29Z",
- "listed": 116,
- "count": 116,
+ "fetched_at": "08/11/2026 10:39 UTC",
+ "fetched_iso": "2026-11-08T10:39:24Z",
+ "listed": 117,
+ "count": 117,
  "failed": [],
  "notams": [
+  {
+   "id": "A0886/26",
+   "loc": "LLER",
+   "name": "שדה תעופה סגור לכל הטיסות עקב עבודות",
+   "heb": "שדה תעופה סגור לכל הטיסות עקב עבודות. במקרה של חירום זמין בתוך 5 דקות אישור מוקדם מבקרת התעופה.\nבתוקף: מ-09/11/2026 11:05 UTC עד 09/11/2026 12:10 UTC",
+   "raw": "A0886/26 NOTAMN\nQ) LLLL/QFALC/IV/NBO/A /000/999/2944N03501E005\nA) LLER B) 2611091105 C) 2611091210\nE) AD CLSD TO ALL FLT DUE WIP.\nIN CASE OF EMERG AVBL WI 5MIN PPR FM ATC.)"
+  },
   {
    "id": "C2365/26",
    "loc": "LLLL",
